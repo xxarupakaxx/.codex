@@ -36,8 +36,8 @@ allowed-tools: Read, Write, Glob, Grep, AskUserQuestion
 |------|--------|-------|
 | Tier 1 | アーキ/性能レビュー（標準・常時呼ばれる） | 省略（親セッション継承） |
 | Tier 2 | 品質・テスト・観測性・a11y 等の追加レビュー | 省略（親セッション継承） |
-| Tier 3 | セキュリティ・PRDレビュー・複雑判断 | `model: "opus"` を検討 |
-| Explorer | ファイル検索・パターンマッチ | `model: "sonnet"` で軽量に |
+| Tier 3 | セキュリティ・PRDレビュー・複雑判断 | `model: "gpt-5.5"` を検討 |
+| Explorer | ファイル検索・パターンマッチ | `model: "gpt-5.5"` で軽量に |
 
 判定指針: `~/.claude/rules/model-routing.md` を参照。
 
