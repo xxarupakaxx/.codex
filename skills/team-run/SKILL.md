@@ -54,14 +54,14 @@ Codex 側ではスキル本文を読んでから、その指示を現在の tool
 
 ## Claude 用語との対応
 
-| 旧 Agent Teams 用語 | Codex で使うもの |
+| 旧 Agent Teams 概念 | Codex で使うもの |
 |---------------------|------------------|
-| `TeamCreate` | 不要。`goal` + Team Journal + `spawn_agent` で管理 |
-| `Agent({team_name, ...})` | `multi_agent_v1.spawn_agent({agent_type, message})` |
-| `SendMessage` | sub-agent final message / `wait_agent` 結果。lead への共有は compact に制限 |
-| `TaskCreate` / `TaskUpdate` | Team Journal と計画チェックリスト |
-| `Workflow tool` | `multi_tool_use.parallel` または複数 `spawn_agent` |
-| `Skill(...)` | 利用可能な skill を読み、Codex tool にマッピングして実行 |
+| team creation | 不要。`goal` + Team Journal + `spawn_agent` で管理 |
+| teammate spawn | `multi_agent_v1.spawn_agent` |
+| teammate-to-lead message | sub-agent final message / `wait_agent` 結果。lead への共有は compact に制限 |
+| task list updates | Team Journal と計画チェックリスト |
+| workflow fan-out | `multi_tool_use.parallel` または複数 `spawn_agent` |
+| skill invocation | 利用可能な skill を読み、Codex tool にマッピングして実行 |
 
 ## Agent Role Routing
 

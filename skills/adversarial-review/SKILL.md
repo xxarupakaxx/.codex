@@ -11,17 +11,17 @@ context: current
 通常レビューでは検出しづらい「reviewer のバイアス」を相互チェックするため、
 Red（悲観派）→ Blue（楽観派）→ Auditor（審判）の順で 3 段レビューを行う。
 
-## モデル選択（コスト最適化）
+## Codex role 選択（コスト最適化）
 
-Agent Tool では通常 `model` を省略し、親セッションのモデルを継承させる:
+Codex では `multi_agent_v1.spawn_agent` の role 既定 model/service_tier を優先する:
 
-| エージェント | subagent_type / model | 役割 |
+| エージェント | Codex agent_type | 役割 |
 |------------|-------|------|
-| `red-reviewer` | `Agent(subagent_type: "red-reviewer")` — model省略（親継承） | 攻撃側（広く速く懸念列挙） |
-| `blue-reviewer` | `Agent(subagent_type: "blue-reviewer")` — model省略（親継承） | 防御側（Red の反論検証） |
-| `auditor-reviewer` | `Agent(subagent_type: "auditor-reviewer", model: "gpt-5.5")` | 審判（最終判定・Read で独立検証） |
+| `red-reviewer` | `spawn_agent(agent_type: "red-reviewer")` | 攻撃側（広く速く懸念列挙） |
+| `blue-reviewer` | `spawn_agent(agent_type: "blue-reviewer")` | 防御側（Red の反論検証） |
+| `auditor-reviewer` | `spawn_agent(agent_type: "auditor-reviewer")` | 審判（最終判定・Read で独立検証） |
 
-> model 指定は審判（Auditor）の `model: "gpt-5.5"` のみ。Red/Blue は省略して親セッション継承。
+> role 定義側で `gpt-5.4` / `gpt-5.5` と `service_tier = "priority"` を管理する。custom/default agent を使う場合のみ `model` と `service_tier` を明示する。
 
 ## アンチ多数決原則（CRITICAL）
 
@@ -116,10 +116,10 @@ ADOPT の全件修正後、再度 Adversarial Review を回す（最大 2 サイ
 
 ## コスト試算（参考）
 
-- Red: `Agent(subagent_type: "red-reviewer")` — model省略（親継承）
-- Blue: `Agent(subagent_type: "blue-reviewer")` — model省略（親継承）
-- Auditor: `Agent(subagent_type: "auditor-reviewer", model: "gpt-5.5")`
-- **方針**: model 指定は Auditor のみ。Red/Blue は省略して親セッション継承
+- Red: `spawn_agent(agent_type: "red-reviewer")`
+- Blue: `spawn_agent(agent_type: "blue-reviewer")`
+- Auditor: `spawn_agent(agent_type: "auditor-reviewer")`
+- **方針**: role 既定の model/service_tier を使う
 
 ## 禁止事項
 
