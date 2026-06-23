@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';">
+  <title>Diagram Viewer - MCP App</title>
+  <style>
+    :root {
+      --bg: #1a1a2e;
+      --surface: #16213e;
+      --text: #eee;
+      --text-muted: #888;
+      --accent: #0f4c75;
+      --accent-hover: #3282b8;
+      --border: #333;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+      padding: 20px;
+      height: 100vh;
+      overflow: hidden;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+    }
+
+    header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+      padding-bottom: 10px;
+      border-bottom: 1px solid var(--border);
+      flex-shrink: 0;
+    }
+
+    h1 {
+      font-size: 1.5rem;
+    }
+
+    .header-controls {
+      display: flex;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .status {
+      font-size: 0.8rem;
+      color: var(--text-muted);
+    }
+
+    .status.connected {
+      color: #4caf50;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+    }
+
+    .controls button {
+      padding: 6px 12px;
+      background: var(--accent);
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: background 0.2s;
+    }
+
+    .controls button:hover {
+      background: var(--accent-hover);
+    }
+
+    #diagram-container {
+      background: var(--surface);
+      border-radius: 8px;
+      flex: 1;
+      overflow: hidden;
+      position: relative;
+    }
+
+    #diagram-wrapper {
+      width: 100%;
+      height: 100%;
+      overflow: auto;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    #diagram {
+      transform-origin: center center;
+      transition: transform 0.1s ease-out;
+    }
+
+    #diagram svg {
+      max-width: none !important;
+      height: auto !important;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: var(--text-muted);
+    }
+
+    .error {
+      text-align: center;
+      padding: 40px;
+      color: #f44336;
+    }
+
+    #code-panel {
+      margin-top: 15px;
+      flex-shrink: 0;
+    }
+
+    #code-panel.collapsed {
+      display: none;
+    }
+
+    #code-toggle {
+      background: transparent;
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 4px 10px;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 0.8rem;
+    }
+
+    #code-toggle:hover {
+      border-color: var(--accent);
+      color: var(--text);
+    }
+
+    #mermaid-code {
+      background: #0d1117;
+      padding: 15px;
+      border-radius: 6px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 0.85rem;
+      white-space: pre-wrap;
+      word-break: break-all;
+      max-height: 200px;
+      overflow-y: auto;
+      color: #c9d1d9;
+    }
+
+    .zoom-info {
+      font-size: 0.75rem;
+      color: var(--text-muted);
+      padding: 4px 8px;
+      background: var(--bg);
+      border-radius: 4px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <header>
+      <h1 id="title">Diagram Viewer</h1>
+      <div class="header-controls">
+        <span id="status" class="status">Waiting for diagram...</span>
+        <div class="controls">
+          <button id="zoom-in">+</button>
+          <span class="zoom-info" id="zoom-level">100%</span>
+          <button id="zoom-out">-</button>
+          <button id="zoom-reset">Reset</button>
+          <button id="code-toggle">Code</button>
+        </div>
+      </div>
+    </header>
+
+    <div id="diagram-container">
+      <div id="diagram-wrapper">
+        <div id="diagram">
+          <div class="loading">Mermaid diagram will appear here</div>
+        </div>
+      </div>
+    </div>
+
+    <div id="code-panel" class="collapsed">
+      <pre id="mermaid-code"></pre>
+    </div>
+  </div>
+
+  <script type="module">
+    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+
+    // Initialize mermaid
+    mermaid.initialize({
+      startOnLoad: false,
+      theme: 'dark',
+      securityLevel: 'strict',
+      flowchart: {
+        useMaxWidth: false,
+        htmlLabels: true,
+      },
+      sequence: {
+        useMaxWidth: false,
+      },
+      state: {
+        useMaxWidth: false,
+      },
+    });
+
+    // Trusted origins whitelist
+    const TRUSTED_ORIGINS = [
+      'https://claude.ai',
+      'https://www.claude.ai',
+      'vscode-webview://',
+      'file://'
+    ];
+
+    function isTrustedOrigin(origin) {
+      if (!origin) return false;
+      return TRUSTED_ORIGINS.some(trusted => {
+        if (trusted.endsWith('://')) {
+          return origin.startsWith(trusted);
+        }
+        return origin === trusted;
+      });
+    }
+
+    // MCP App client
+    class MCPAppClient {
+      constructor() {
+        this.connected = false;
+        this.pendingMessages = [];
+        this.onContentReceived = null;
+        this.parentOrigin = null;
+
+        window.addEventListener('message', (event) => this.handleMessage(event));
+        this.sendToParent({ type: 'app-ready', name: 'Diagram Viewer', version: '1.0.0' });
+      }
+
+      handleMessage(event) {
+        if (!isTrustedOrigin(event.origin) && event.origin !== '') {
+          console.warn(`Rejected message from untrusted origin: ${event.origin}`);
+          return;
+        }
+
+        const data = event.data;
+        if (!data || typeof data !== 'object') return;
+
+        if (data.type === 'connected' && event.origin) {
+          this.parentOrigin = event.origin;
+        }
+
+        switch (data.type) {
+          case 'tool-result':
+            if (data.content && this.onContentReceived) {
+              const textContent = data.content.find(c => c.type === 'text');
+              if (textContent) {
+                this.onContentReceived(textContent.text);
+              }
+            }
+            break;
+
+          case 'connected':
+            this.connected = true;
+            this.updateStatus(true);
+            this.pendingMessages.forEach(msg => this.sendToParent(msg));
+            this.pendingMessages = [];
+            break;
+        }
+      }
+
+      sendToParent(message) {
+        if (window.parent !== window) {
+          const targetOrigin = this.parentOrigin || '*';
+          window.parent.postMessage(message, targetOrigin);
+        }
+      }
+
+      updateStatus(connected) {
+        const statusEl = document.getElementById('status');
+        if (connected) {
+          statusEl.textContent = 'Connected';
+          statusEl.classList.add('connected');
+        } else {
+          statusEl.textContent = 'Disconnected';
+          statusEl.classList.remove('connected');
+        }
+      }
+    }
+
+    // Initialize
+    const app = new MCPAppClient();
+    const diagramEl = document.getElementById('diagram');
+    const titleEl = document.getElementById('title');
+    const codePanel = document.getElementById('code-panel');
+    const mermaidCodeEl = document.getElementById('mermaid-code');
+    const zoomLevelEl = document.getElementById('zoom-level');
+
+    let currentZoom = 1;
+    let currentMermaidCode = '';
+
+    // Zoom controls
+    function updateZoom() {
+      diagramEl.style.transform = `scale(${currentZoom})`;
+      zoomLevelEl.textContent = `${Math.round(currentZoom * 100)}%`;
+    }
+
+    document.getElementById('zoom-in').addEventListener('click', () => {
+      currentZoom = Math.min(currentZoom + 0.25, 3);
+      updateZoom();
+    });
+
+    document.getElementById('zoom-out').addEventListener('click', () => {
+      currentZoom = Math.max(currentZoom - 0.25, 0.25);
+      updateZoom();
+    });
+
+    document.getElementById('zoom-reset').addEventListener('click', () => {
+      currentZoom = 1;
+      updateZoom();
+    });
+
+    // Code toggle
+    document.getElementById('code-toggle').addEventListener('click', () => {
+      codePanel.classList.toggle('collapsed');
+    });
+
+    // Render mermaid diagram
+    async function renderDiagram(mermaidCode) {
+      try {
+        currentMermaidCode = mermaidCode;
+        mermaidCodeEl.textContent = mermaidCode;
+
+        // Generate unique ID for this render
+        const id = `mermaid-${Date.now()}`;
+
+        // Render the diagram
+        const { svg } = await mermaid.render(id, mermaidCode);
+        diagramEl.innerHTML = svg;
+
+        app.updateStatus(true);
+      } catch (error) {
+        diagramEl.innerHTML = `<div class="error">
+          <h3>Render Error</h3>
+          <p>${escapeHtml(error.message)}</p>
+        </div>`;
+        console.error('Mermaid render error:', error);
+      }
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    // Handle content from MCP server
+    app.onContentReceived = (jsonText) => {
+      try {
+        const data = JSON.parse(jsonText);
+        if (data.title) {
+          titleEl.textContent = data.title;
+        }
+        if (data.mermaidCode) {
+          renderDiagram(data.mermaidCode);
+        }
+      } catch (error) {
+        console.error('Failed to parse content:', error);
+        diagramEl.innerHTML = `<div class="error">
+          <h3>Parse Error</h3>
+          <p>Failed to parse diagram data</p>
+        </div>`;
+      }
+    };
+
+    // Demo mode for standalone testing
+    if (window.parent === window) {
+      document.getElementById('status').textContent = 'Standalone Mode';
+
+      const demoMermaid = `stateDiagram-v2
+    [*] --> Idle
+    Idle --> Processing : Start
+    Processing --> Success : Complete
+    Processing --> Error : Fail
+    Success --> [*]
+    Error --> Idle : Retry`;
+
+      setTimeout(() => {
+        titleEl.textContent = 'Demo State Diagram';
+        renderDiagram(demoMermaid);
+      }, 500);
+    }
+  </script>
+</body>
+</html>

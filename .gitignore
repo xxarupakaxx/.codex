@@ -31,16 +31,27 @@ process_manager/
 node_repl/
 automations/
 computer-use/
-plugins/
-plugins/cache/
+/plugins/
+/plugins/cache/
 pets/
 skills/.system/
 claude-compat/config/
 claude-compat/hooks.claude-settings.json
+claude-compat/mcp-servers/**/node_modules/
+claude-compat/mcp-servers/**/dist/
+claude-compat/plugins/cache/
+claude-compat/plugins/data/
+claude-compat/plugins/marketplaces/
+claude-compat/plugins/**/.git/
+claude-compat/plugins/**/.DS_Store
+claude-compat/plugins/.last_inuse_sweep
+claude-compat/plugins/plugin-catalog-cache.json
 
 # Local secrets
 config.toml
 settings.json
 user.json
+config/user.json
+config/*.local.json
 *.backup-*
 .DS_Store

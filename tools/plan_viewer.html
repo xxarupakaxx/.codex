@@ -1,0 +1,1202 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Plan Viewer</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #1a1a2e;
+      --bg-secondary: #16213e;
+      --bg-card: #0f3460;
+      --text-primary: #eaeaea;
+      --text-secondary: #a0a0a0;
+      --accent: #e94560;
+      --accent-hover: #ff6b6b;
+      --border: #2a2a4a;
+      --success: #4ade80;
+      --warning: #fbbf24;
+    }
+
+    [data-theme="light"] {
+      --bg-primary: #f5f5f5;
+      --bg-secondary: #ffffff;
+      --bg-card: #e8e8e8;
+      --text-primary: #1a1a1a;
+      --text-secondary: #666666;
+      --accent: #e94560;
+      --accent-hover: #d63050;
+      --border: #dddddd;
+      --success: #22c55e;
+      --warning: #f59e0b;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    header {
+      background: var(--bg-secondary);
+      padding: 15px 20px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-top {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 10px;
+    }
+
+    header h1 {
+      font-size: 1.3rem;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .file-name {
+      font-weight: normal;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      transition: background 0.2s;
+      display: flex;
+      align-items: center;
+      gap: 5px;
+    }
+
+    button:hover {
+      background: var(--accent-hover);
+    }
+
+    button.secondary {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+    }
+
+    button.secondary:hover {
+      background: var(--border);
+    }
+
+    .theme-toggle {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.1rem;
+      padding: 0;
+    }
+
+    .main-layout {
+      display: grid;
+      grid-template-columns: 220px 1fr 320px;
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    @media (max-width: 1100px) {
+      .main-layout {
+        grid-template-columns: 1fr 300px;
+      }
+      .toc-panel {
+        display: none;
+      }
+    }
+
+    @media (max-width: 800px) {
+      .main-layout {
+        grid-template-columns: 1fr;
+      }
+      .comments-panel {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        height: 50vh;
+        border-radius: 20px 20px 0 0;
+        transform: translateY(calc(100% - 50px));
+        transition: transform 0.3s;
+      }
+      .comments-panel.expanded {
+        transform: translateY(0);
+      }
+    }
+
+    /* TOC Panel */
+    .toc-panel {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 15px;
+      border: 1px solid var(--border);
+      height: fit-content;
+      position: sticky;
+      top: 90px;
+      max-height: calc(100vh - 110px);
+      overflow-y: auto;
+    }
+
+    .toc-panel h2 {
+      font-size: 0.9rem;
+      color: var(--accent);
+      margin-bottom: 12px;
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .toc-list {
+      list-style: none;
+    }
+
+    .toc-list li {
+      margin-bottom: 4px;
+    }
+
+    .toc-list a {
+      color: var(--text-secondary);
+      text-decoration: none;
+      font-size: 0.8rem;
+      display: block;
+      padding: 4px 8px;
+      border-radius: 4px;
+      transition: all 0.2s;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    .toc-list a:hover {
+      background: var(--bg-card);
+      color: var(--text-primary);
+    }
+
+    .toc-list a.active {
+      background: var(--accent);
+      color: white;
+    }
+
+    .toc-list .toc-h3 {
+      padding-left: 16px;
+      font-size: 0.75rem;
+    }
+
+    /* Document Panel */
+    .document-panel {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 24px;
+      border: 1px solid var(--border);
+      min-height: 500px;
+    }
+
+    /* Drop Zone */
+    .drop-zone {
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 60px 20px;
+      text-align: center;
+      transition: all 0.3s;
+    }
+
+    .drop-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(233, 69, 96, 0.1);
+    }
+
+    .drop-zone-icon {
+      font-size: 3rem;
+      margin-bottom: 15px;
+    }
+
+    .drop-zone p {
+      color: var(--text-secondary);
+      margin-bottom: 15px;
+    }
+
+    .drop-zone input[type="file"] {
+      display: none;
+    }
+
+    /* Comments Panel */
+    .comments-panel {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 15px;
+      border: 1px solid var(--border);
+      height: fit-content;
+      position: sticky;
+      top: 90px;
+      max-height: calc(100vh - 110px);
+      display: flex;
+      flex-direction: column;
+    }
+
+    .comments-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 12px;
+    }
+
+    .comments-header h2 {
+      font-size: 1rem;
+      color: var(--accent);
+    }
+
+    .comment-count {
+      background: var(--bg-card);
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.75rem;
+    }
+
+    .comment-search {
+      margin-bottom: 12px;
+    }
+
+    .comment-search input {
+      width: 100%;
+      padding: 8px 12px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      color: var(--text-primary);
+      font-size: 0.85rem;
+    }
+
+    .comment-search input:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .comment-form {
+      margin-bottom: 12px;
+    }
+
+    .comment-form textarea {
+      width: 100%;
+      min-height: 70px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 10px;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 0.85rem;
+      resize: vertical;
+      margin-bottom: 8px;
+    }
+
+    .comment-form textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    .selected-section-badge {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-bottom: 8px;
+      padding: 4px 8px;
+      background: var(--bg-card);
+      border-radius: 4px;
+      display: none;
+    }
+
+    .selected-section-badge.visible {
+      display: block;
+    }
+
+    .comment-list {
+      flex: 1;
+      overflow-y: auto;
+      min-height: 100px;
+    }
+
+    .comment-item {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 10px;
+      margin-bottom: 8px;
+      font-size: 0.85rem;
+    }
+
+    .comment-item .section-ref {
+      font-size: 0.7rem;
+      color: var(--accent);
+      margin-bottom: 4px;
+      cursor: pointer;
+    }
+
+    .comment-item .section-ref:hover {
+      text-decoration: underline;
+    }
+
+    .comment-item .content {
+      margin-bottom: 6px;
+      word-break: break-word;
+    }
+
+    .comment-item .meta {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .comment-item .delete-btn {
+      background: none;
+      border: none;
+      color: var(--text-secondary);
+      cursor: pointer;
+      padding: 0;
+      font-size: 0.7rem;
+    }
+
+    .comment-item .delete-btn:hover {
+      color: var(--accent);
+    }
+
+    /* Markdown Content Styling */
+    .markdown-content h1 {
+      font-size: 1.6rem;
+      border-bottom: 2px solid var(--accent);
+      padding-bottom: 10px;
+      margin-bottom: 20px;
+    }
+
+    .markdown-content h2 {
+      font-size: 1.3rem;
+      color: var(--accent);
+      margin-top: 28px;
+      margin-bottom: 12px;
+      scroll-margin-top: 100px;
+    }
+
+    .markdown-content h3 {
+      font-size: 1.1rem;
+      margin-top: 20px;
+      margin-bottom: 10px;
+      scroll-margin-top: 100px;
+    }
+
+    .markdown-content p {
+      margin-bottom: 12px;
+    }
+
+    .markdown-content ul, .markdown-content ol {
+      margin-left: 25px;
+      margin-bottom: 12px;
+    }
+
+    .markdown-content li {
+      margin-bottom: 6px;
+    }
+
+    .markdown-content code {
+      background: var(--bg-card);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 0.85em;
+    }
+
+    .markdown-content pre {
+      background: var(--bg-card);
+      padding: 14px;
+      border-radius: 8px;
+      overflow-x: auto;
+      margin-bottom: 12px;
+    }
+
+    .markdown-content pre code {
+      background: none;
+      padding: 0;
+    }
+
+    .markdown-content table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-bottom: 15px;
+    }
+
+    .markdown-content th, .markdown-content td {
+      border: 1px solid var(--border);
+      padding: 8px 12px;
+      text-align: left;
+    }
+
+    .markdown-content th {
+      background: var(--bg-card);
+    }
+
+    .markdown-content blockquote {
+      border-left: 3px solid var(--accent);
+      padding-left: 15px;
+      margin: 15px 0;
+      color: var(--text-secondary);
+    }
+
+    /* Commentable Section */
+    .commentable-section {
+      position: relative;
+      padding: 8px 12px;
+      margin: -8px -12px;
+      border-radius: 8px;
+      transition: background 0.2s;
+      cursor: pointer;
+    }
+
+    .commentable-section:hover {
+      background: rgba(233, 69, 96, 0.08);
+    }
+
+    .commentable-section.has-comments {
+      border-left: 3px solid var(--accent);
+      padding-left: 12px;
+      margin-left: -15px;
+    }
+
+    .commentable-section.selected {
+      background: rgba(233, 69, 96, 0.12);
+      outline: 2px solid var(--accent);
+    }
+
+    .comment-indicator {
+      position: absolute;
+      right: 8px;
+      top: 8px;
+      background: var(--accent);
+      color: white;
+      min-width: 22px;
+      height: 22px;
+      border-radius: 11px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 0.7rem;
+      padding: 0 6px;
+      opacity: 0;
+      transition: opacity 0.2s;
+    }
+
+    .commentable-section:hover .comment-indicator,
+    .commentable-section.has-comments .comment-indicator {
+      opacity: 1;
+    }
+
+    /* Mermaid Diagram */
+    .mermaid-container {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 15px 0;
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    [data-theme="light"] .mermaid-container {
+      background: #f8f8f8;
+    }
+
+    /* Status Badge */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .status-badge.success {
+      background: rgba(74, 222, 128, 0.2);
+      color: var(--success);
+    }
+
+    .status-badge.warning {
+      background: rgba(251, 191, 36, 0.2);
+      color: var(--warning);
+    }
+
+    /* Toast Notification */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--bg-card);
+      border: 1px solid var(--accent);
+      padding: 10px 20px;
+      border-radius: 8px;
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 1000;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* Empty State */
+    .empty-state {
+      text-align: center;
+      padding: 20px;
+      color: var(--text-secondary);
+      font-size: 0.9rem;
+    }
+
+    /* Checkbox styling */
+    .markdown-content input[type="checkbox"] {
+      margin-right: 8px;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-top">
+      <h1>
+        Plan Viewer
+        <span class="file-name" id="file-name"></span>
+      </h1>
+      <div class="controls">
+        <span class="status-badge success" id="db-status">DB: 接続中...</span>
+        <button class="theme-toggle" onclick="toggleTheme()" title="テーマ切替">🌙</button>
+      </div>
+    </div>
+    <div class="controls">
+      <button onclick="document.getElementById('file-input').click()">ファイルを開く</button>
+      <button class="secondary" onclick="exportComments()">コメント出力</button>
+      <button class="secondary" onclick="importComments()">コメント読込</button>
+      <button class="secondary" onclick="clearAllComments()">クリア</button>
+      <input type="file" id="file-input" accept=".md,.markdown,.txt" onchange="handleFileSelect(event)">
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="main-layout">
+      <div class="toc-panel" id="toc-panel">
+        <h2>📑 目次</h2>
+        <ul class="toc-list" id="toc-list">
+          <li><span class="empty-state">ファイルを読み込んでください</span></li>
+        </ul>
+      </div>
+
+      <div class="document-panel">
+        <div id="markdown-content" class="markdown-content">
+          <div class="drop-zone" id="drop-zone">
+            <div class="drop-zone-icon">📄</div>
+            <p>Markdownファイル（.md）をドラッグ&ドロップ</p>
+            <p>または</p>
+            <button onclick="document.getElementById('file-input').click()">ファイルを選択</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="comments-panel" id="comments-panel">
+        <div class="comments-header">
+          <h2>💬 コメント</h2>
+          <span class="comment-count" id="comment-count">0</span>
+        </div>
+        <div class="comment-search">
+          <input type="text" id="comment-search" placeholder="コメントを検索..." oninput="filterComments()">
+        </div>
+        <div class="comment-form">
+          <div class="selected-section-badge" id="selected-section-badge"></div>
+          <textarea id="comment-input" placeholder="セクションを選択してコメント..."></textarea>
+          <button onclick="addComment()">追加</button>
+        </div>
+        <div id="comment-list" class="comment-list">
+          <div class="empty-state">コメントはありません</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <input type="file" id="import-input" accept=".json" style="display:none" onchange="handleImportComments(event)">
+
+  <script>
+    // ========== Configuration ==========
+    const DB_NAME = 'PlanViewerDB';
+    const DB_VERSION = 2;
+    const STORE_NAME = 'comments';
+    let db = null;
+    let selectedSection = null;
+    let allComments = [];
+    let currentFileName = '';
+
+    // ========== Theme ==========
+    function toggleTheme() {
+      const body = document.body;
+      const isDark = body.getAttribute('data-theme') !== 'light';
+      body.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      document.querySelector('.theme-toggle').textContent = isDark ? '☀️' : '🌙';
+      localStorage.setItem('theme', isDark ? 'light' : 'dark');
+
+      // Re-initialize mermaid with new theme
+      if (document.querySelector('.mermaid svg')) {
+        reinitializeMermaid();
+      }
+    }
+
+    function loadTheme() {
+      const saved = localStorage.getItem('theme');
+      if (saved === 'light') {
+        document.body.setAttribute('data-theme', 'light');
+        document.querySelector('.theme-toggle').textContent = '☀️';
+      }
+    }
+
+    // ========== IndexedDB ==========
+    async function initDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+        request.onerror = () => {
+          updateDBStatus(false);
+          reject(request.error);
+        };
+
+        request.onsuccess = () => {
+          db = request.result;
+          updateDBStatus(true);
+          resolve(db);
+        };
+
+        request.onupgradeneeded = (event) => {
+          const database = event.target.result;
+          if (!database.objectStoreNames.contains(STORE_NAME)) {
+            const store = database.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+            store.createIndex('sectionId', 'sectionId', { unique: false });
+            store.createIndex('fileName', 'fileName', { unique: false });
+            store.createIndex('createdAt', 'createdAt', { unique: false });
+          }
+        };
+      });
+    }
+
+    function updateDBStatus(connected) {
+      const el = document.getElementById('db-status');
+      el.textContent = connected ? 'DB: OK' : 'DB: Error';
+      el.className = `status-badge ${connected ? 'success' : 'warning'}`;
+    }
+
+    async function saveComment(sectionId, sectionTitle, content) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction([STORE_NAME], 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const comment = {
+          sectionId,
+          sectionTitle,
+          content,
+          fileName: currentFileName,
+          createdAt: new Date().toISOString()
+        };
+        const req = store.add(comment);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function getComments() {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction([STORE_NAME], 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.getAll();
+        req.onsuccess = () => {
+          // Filter by current file if one is loaded
+          let comments = req.result;
+          if (currentFileName) {
+            comments = comments.filter(c => c.fileName === currentFileName);
+          }
+          resolve(comments);
+        };
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function deleteComment(id) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction([STORE_NAME], 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.delete(id);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function clearComments() {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction([STORE_NAME], 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const index = store.index('fileName');
+        const req = index.openCursor(IDBKeyRange.only(currentFileName));
+        req.onsuccess = (e) => {
+          const cursor = e.target.result;
+          if (cursor) {
+            store.delete(cursor.primaryKey);
+            cursor.continue();
+          } else {
+            resolve();
+          }
+        };
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    // ========== File Handling ==========
+    function setupDropZone() {
+      const dropZone = document.getElementById('drop-zone');
+      const docPanel = document.querySelector('.document-panel');
+
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(event => {
+        docPanel.addEventListener(event, preventDefaults, false);
+      });
+
+      function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+
+      ['dragenter', 'dragover'].forEach(event => {
+        docPanel.addEventListener(event, () => {
+          if (dropZone) dropZone.classList.add('dragover');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(event => {
+        docPanel.addEventListener(event, () => {
+          if (dropZone) dropZone.classList.remove('dragover');
+        });
+      });
+
+      docPanel.addEventListener('drop', handleDrop);
+    }
+
+    function handleDrop(e) {
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        loadFile(files[0]);
+      }
+    }
+
+    function handleFileSelect(e) {
+      const files = e.target.files;
+      if (files.length > 0) {
+        loadFile(files[0]);
+      }
+    }
+
+    function loadFile(file) {
+      if (!file.name.match(/\.(md|markdown|txt)$/i)) {
+        showToast('Markdownファイル(.md)を選択してください');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = (e) => {
+        currentFileName = file.name;
+        document.getElementById('file-name').textContent = `- ${file.name}`;
+        processMarkdown(e.target.result);
+        showToast(`${file.name} を読み込みました`);
+      };
+      reader.readAsText(file);
+    }
+
+    // ========== Markdown Processing ==========
+    function processMarkdown(markdown) {
+      // Handle mermaid code blocks
+      const processed = markdown.replace(
+        /```mermaid\n([\s\S]*?)```/g,
+        '<div class="mermaid-container"><div class="mermaid">$1</div></div>'
+      );
+
+      renderMarkdown(processed);
+      buildTOC();
+      renderCommentList();
+    }
+
+    function renderMarkdown(markdown) {
+      marked.setOptions({
+        breaks: true,
+        gfm: true
+      });
+
+      let html = marked.parse(markdown);
+      const tempDiv = document.createElement('div');
+      tempDiv.innerHTML = html;
+
+      let sectionId = 0;
+      const sections = [];
+
+      // Process headings into commentable sections
+      tempDiv.querySelectorAll('h2, h3').forEach(heading => {
+        const wrapper = document.createElement('div');
+        wrapper.className = 'commentable-section';
+        wrapper.id = `section-${sectionId}`;
+        wrapper.dataset.sectionId = `section-${sectionId}`;
+        wrapper.dataset.sectionTitle = heading.textContent;
+        sectionId++;
+
+        // Collect content until next heading
+        let sibling = heading.nextSibling;
+        const content = [heading.cloneNode(true)];
+
+        while (sibling && !['H1', 'H2', 'H3'].includes(sibling.nodeName)) {
+          content.push(sibling.cloneNode(true));
+          sibling = sibling.nextSibling;
+        }
+
+        content.forEach(node => wrapper.appendChild(node));
+
+        // Add comment indicator
+        const indicator = document.createElement('div');
+        indicator.className = 'comment-indicator';
+        indicator.textContent = '+';
+        wrapper.appendChild(indicator);
+
+        sections.push({ heading, wrapper });
+      });
+
+      // Build result
+      const result = document.createElement('div');
+      const h1 = tempDiv.querySelector('h1');
+      if (h1) result.appendChild(h1.cloneNode(true));
+
+      // Add intro content
+      let firstSection = sections[0]?.heading;
+      if (firstSection) {
+        let node = h1 ? h1.nextSibling : tempDiv.firstChild;
+        while (node && node !== firstSection) {
+          if (node.nodeType === 1) result.appendChild(node.cloneNode(true));
+          node = node.nextSibling;
+        }
+      }
+
+      sections.forEach(s => result.appendChild(s.wrapper));
+
+      document.getElementById('markdown-content').innerHTML = result.innerHTML;
+
+      // Attach click handlers
+      document.querySelectorAll('.commentable-section').forEach(section => {
+        section.onclick = () => selectSection(section);
+      });
+
+      // Initialize Mermaid
+      reinitializeMermaid();
+    }
+
+    function reinitializeMermaid() {
+      const theme = document.body.getAttribute('data-theme') === 'light' ? 'default' : 'dark';
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: theme,
+        securityLevel: 'loose'
+      });
+
+      document.querySelectorAll('.mermaid').forEach((el, i) => {
+        const code = el.textContent || el.getAttribute('data-code');
+        if (code && !el.querySelector('svg')) {
+          el.setAttribute('data-code', code);
+          mermaid.render(`mermaid-${i}-${Date.now()}`, code).then(result => {
+            el.innerHTML = result.svg;
+          }).catch(err => {
+            console.error('Mermaid error:', err);
+          });
+        }
+      });
+    }
+
+    // ========== TOC ==========
+    function buildTOC() {
+      const tocList = document.getElementById('toc-list');
+      const headings = document.querySelectorAll('.markdown-content h2, .markdown-content h3');
+
+      if (headings.length === 0) {
+        tocList.innerHTML = '<li><span class="empty-state">見出しがありません</span></li>';
+        return;
+      }
+
+      tocList.innerHTML = Array.from(headings).map((h, i) => {
+        const level = h.tagName.toLowerCase();
+        const section = h.closest('.commentable-section');
+        const id = section?.id || `heading-${i}`;
+        return `<li><a href="#${id}" class="toc-${level}" onclick="scrollToSection('${id}')">${h.textContent}</a></li>`;
+      }).join('');
+
+      // Setup intersection observer for active state
+      setupTOCObserver();
+    }
+
+    function setupTOCObserver() {
+      const observer = new IntersectionObserver((entries) => {
+        entries.forEach(entry => {
+          if (entry.isIntersecting) {
+            document.querySelectorAll('.toc-list a').forEach(a => a.classList.remove('active'));
+            const link = document.querySelector(`.toc-list a[href="#${entry.target.id}"]`);
+            if (link) link.classList.add('active');
+          }
+        });
+      }, { threshold: 0.3, rootMargin: '-100px 0px -50% 0px' });
+
+      document.querySelectorAll('.commentable-section').forEach(section => {
+        observer.observe(section);
+      });
+    }
+
+    function scrollToSection(id) {
+      event.preventDefault();
+      const el = document.getElementById(id);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        selectSection(el);
+      }
+    }
+
+    // ========== Comments UI ==========
+    function selectSection(section) {
+      document.querySelectorAll('.commentable-section.selected').forEach(el => {
+        el.classList.remove('selected');
+      });
+
+      section.classList.add('selected');
+      selectedSection = section;
+
+      const badge = document.getElementById('selected-section-badge');
+      badge.textContent = `📍 ${section.dataset.sectionTitle}`;
+      badge.classList.add('visible');
+
+      document.getElementById('comment-input').focus();
+    }
+
+    async function renderCommentList() {
+      allComments = await getComments();
+      const searchTerm = document.getElementById('comment-search').value.toLowerCase();
+
+      let filtered = allComments;
+      if (searchTerm) {
+        filtered = allComments.filter(c =>
+          c.content.toLowerCase().includes(searchTerm) ||
+          c.sectionTitle.toLowerCase().includes(searchTerm)
+        );
+      }
+
+      document.getElementById('comment-count').textContent = allComments.length;
+
+      // Update section indicators
+      const counts = {};
+      allComments.forEach(c => {
+        counts[c.sectionId] = (counts[c.sectionId] || 0) + 1;
+      });
+
+      document.querySelectorAll('.commentable-section').forEach(section => {
+        const count = counts[section.dataset.sectionId] || 0;
+        const indicator = section.querySelector('.comment-indicator');
+        if (indicator) {
+          indicator.textContent = count || '+';
+          section.classList.toggle('has-comments', count > 0);
+        }
+      });
+
+      // Render list
+      const listEl = document.getElementById('comment-list');
+      if (filtered.length === 0) {
+        listEl.innerHTML = '<div class="empty-state">' +
+          (searchTerm ? '検索結果がありません' : 'コメントはありません') + '</div>';
+        return;
+      }
+
+      listEl.innerHTML = filtered
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .map(c => `
+          <div class="comment-item">
+            <div class="section-ref" onclick="scrollToSection('${c.sectionId}')">📍 ${escapeHtml(c.sectionTitle)}</div>
+            <div class="content">${escapeHtml(c.content)}</div>
+            <div class="meta">
+              <span>${formatDate(c.createdAt)}</span>
+              <button class="delete-btn" onclick="handleDeleteComment(${c.id})">削除</button>
+            </div>
+          </div>
+        `).join('');
+    }
+
+    function filterComments() {
+      renderCommentList();
+    }
+
+    async function addComment() {
+      const input = document.getElementById('comment-input');
+      const content = input.value.trim();
+
+      if (!content) {
+        showToast('コメントを入力してください');
+        return;
+      }
+
+      if (!selectedSection) {
+        showToast('セクションを選択してください');
+        return;
+      }
+
+      await saveComment(
+        selectedSection.dataset.sectionId,
+        selectedSection.dataset.sectionTitle,
+        content
+      );
+
+      input.value = '';
+      await renderCommentList();
+      showToast('コメントを追加しました');
+    }
+
+    async function handleDeleteComment(id) {
+      await deleteComment(id);
+      await renderCommentList();
+      showToast('削除しました');
+    }
+
+    async function clearAllComments() {
+      if (!currentFileName) {
+        showToast('ファイルが読み込まれていません');
+        return;
+      }
+      if (confirm(`${currentFileName}のコメントを全て削除しますか？`)) {
+        await clearComments();
+        await renderCommentList();
+        showToast('コメントをクリアしました');
+      }
+    }
+
+    async function exportComments() {
+      const comments = await getComments();
+      if (comments.length === 0) {
+        showToast('エクスポートするコメントがありません');
+        return;
+      }
+      const data = JSON.stringify(comments, null, 2);
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `comments-${currentFileName || 'plan'}-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('エクスポートしました');
+    }
+
+    function importComments() {
+      document.getElementById('import-input').click();
+    }
+
+    async function handleImportComments(e) {
+      const file = e.target.files[0];
+      if (!file) return;
+
+      const reader = new FileReader();
+      reader.onload = async (ev) => {
+        try {
+          const comments = JSON.parse(ev.target.result);
+          const tx = db.transaction([STORE_NAME], 'readwrite');
+          const store = tx.objectStore(STORE_NAME);
+
+          for (const c of comments) {
+            delete c.id; // Let IndexedDB assign new IDs
+            store.add(c);
+          }
+
+          await renderCommentList();
+          showToast(`${comments.length}件のコメントをインポートしました`);
+        } catch (err) {
+          showToast('インポートエラー: 無効なJSONファイルです');
+        }
+      };
+      reader.readAsText(file);
+      e.target.value = '';
+    }
+
+    // ========== Utilities ==========
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatDate(iso) {
+      return new Date(iso).toLocaleString('ja-JP', {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+
+    // ========== Initialize ==========
+    document.addEventListener('DOMContentLoaded', async () => {
+      loadTheme();
+      setupDropZone();
+      try {
+        await initDB();
+        await renderCommentList();
+      } catch (err) {
+        console.error('Init error:', err);
+        showToast('初期化エラー');
+      }
+    });
+  </script>
+</body>
+</html>
