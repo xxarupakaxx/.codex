@@ -60,7 +60,7 @@ Phase 0 ─→ Phase 1 ─→ Phase 2 ─→ Phase 3 ─→ Phase 4 ─→ Phase
 | `/blueprint` | スキル | 多セッション・多PRの設計図（WU分割 + Cold-Start Brief + 依存DAG） | Phase 0の前（大規模時） |
 | `autonomous-loops` | スキル | 実行パターン集（Sequential / PR Loop / DAG） | 3（実行戦略） |
 | `subagent-driven-development` | スキル | タスクごとにサブエージェント + レビュー | 3（3+独立タスク時） |
-| `agent-teams` | スキル | 複数Claude Codeインスタンスで並列実行 | 3（10+ファイル時） |
+| `/team-run` | スキル | Goal + Team Journal + `spawn_agent` で複数 role を協調実行 | 3（10+ファイル時） |
 | `iterative-retrieval` | スキル | 検索結果が不十分な時の段階的リファインメント | 全Phase（状況発生時） |
 | `search-first` | スキル | 実装前の既存ツール検索（車輪の再発明防止） | 1, 2（新機能実装時） |
 | `/checkpoint` + `/verify` | スキル | 合格基準定義→自動検証ループ | 4（品質確認自動化） |
@@ -289,8 +289,8 @@ AskUserQuestionで計画の承認を得てからPhase 2.5に進む。
 | タスクが少数・密結合 | **デフォルト（逐次）** | なし（手動で1タスクずつ） |
 | 3+個の独立タスク（1セッション内） | **サブエージェント駆動** | `subagent-driven-development` |
 | レビュー→修正→再レビューの繰り返し | **PRループ** | `autonomous-loops`（パターン2） |
-| Blueprint WUの依存順実行 | **DAGオーケストレーション** | `autonomous-loops`（パターン3）+ `agent-teams` |
-| 10+ファイルの同時変更 | **Agent Teams** | `agent-teams` |
+| Blueprint WUの依存順実行 | **DAGオーケストレーション** | `autonomous-loops`（パターン3）+ `/team-run` |
+| 10+ファイルの同時変更 | **Codex team-run** | `/team-run` |
 
 **判断フロー:**
 ```
@@ -298,7 +298,7 @@ AskUserQuestionで計画の承認を得てからPhase 2.5に進む。
   ↓ NO
 Blueprint WUの実行？ → YES → DAGオーケストレーション
   ↓ NO
-10+ファイル同時変更？ → YES → agent-teams
+10+ファイル同時変更？ → YES → /team-run
   ↓ NO
 デフォルト（逐次実行）
 ```

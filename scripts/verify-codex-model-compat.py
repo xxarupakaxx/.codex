@@ -48,6 +48,8 @@ BANNED_MODEL_RE = re.compile(
     rf"(?<!{MODEL_BOUNDARY}){CLAUDE_MODEL_TOKEN}(?!{MODEL_BOUNDARY})",
     re.IGNORECASE,
 )
+EXPLICIT_CODEX_MODEL_RE = re.compile(r"\bmodel\s*[:=]\s*[\"'`]gpt-5\.[45][\"'`]")
+SERVICE_TIER_RE = re.compile(r"\bservice_tier\s*[:=]\s*[\"'`]priority[\"'`]")
 
 
 def iter_active_files(root: Path):
@@ -75,9 +77,19 @@ def check_text(root: Path) -> list[str]:
             text = path.read_text()
         except UnicodeDecodeError:
             continue
-        for lineno, line in enumerate(text.splitlines(), start=1):
+        lines = text.splitlines()
+        for index, line in enumerate(lines):
+            lineno = index + 1
             if BANNED_MODEL_RE.search(line):
                 violations.append(f"{path.relative_to(root)}:{lineno}: {line.strip()}")
+            if EXPLICIT_CODEX_MODEL_RE.search(line):
+                window_start = max(0, index - 1)
+                window_end = min(len(lines), index + 4)
+                nearby = "\n".join(lines[window_start:window_end])
+                if not SERVICE_TIER_RE.search(nearby):
+                    violations.append(
+                        f"{path.relative_to(root)}:{lineno}: explicit model without nearby service_tier priority: {line.strip()}"
+                    )
     return violations
 
 
@@ -112,7 +124,7 @@ def main() -> int:
         all_violations.extend(f"{root}: {violation}" for violation in violations)
 
     if all_violations:
-        print("Claude-only model aliases found in Codex-active files:", file=sys.stderr)
+        print("Codex model compatibility violations found:", file=sys.stderr)
         for violation in all_violations:
             print(f"  {violation}", file=sys.stderr)
         return 1

@@ -1,17 +1,17 @@
 # Agent Template Reference
 
-`~/.claude/agents/<name>.md` の生成テンプレート集。`create-subagent` スキルから参照される。
+`agents/<name>.toml` の生成テンプレート集。`create-subagent` スキルから参照される。
 
 ## 基本テンプレート
 
-```markdown
----
-name: <kebab-case-name>
-description: "<50-200字。何を検出/分析/生成するか。trigger語を3個以上含める>"
-tools: [Read, Grep, Glob, WebSearch, Write]
-# model: 省略推奨（親セッション継承）。判定・レビューなら "gpt-5.5"、軽量なら "gpt-5.5"
----
+```toml
+name = "<kebab-case-name>"
+description = "<50-200字。何を検出/分析/生成するか。trigger語を3個以上含める>"
+# modelは省略推奨。customで明示する場合はservice_tierも必須。
+# model = "gpt-5.4"
+# service_tier = "priority"
 
+developer_instructions = """
 # <Agent Display Name>
 
 <1-2 段落で役割を説明>
@@ -42,6 +42,7 @@ tools: [Read, Grep, Glob, WebSearch, Write]
 
 - 並列起動可: <他のレビューアーと並列実行可能か>
 - 入力依存: <別エージェントの出力に依存するか>
+"""
 ```
 
 ## レビューアーのスコアリングルーブリック例
@@ -73,6 +74,6 @@ Total: <重み付き合計>/<max>
 
 ## model 選択
 
-Claude Code Agent Tool では通常 `model` を省略し、親セッションのモデルを継承させる。判定・レビューには `model: "gpt-5.5"`、軽量タスクには `model: "gpt-5.5"` を明示。
+Codex の `multi_agent_v1.spawn_agent` では通常 `agent_type` の role 既定を使う。custom/default sub-agent で判定・レビュー向けに明示する場合は `model = "gpt-5.5"` と `service_tier = "priority"` を併記する。軽量タスクは既存 role または model 省略を優先する。
 
-詳細: `~/.claude/rules/model-routing.md`
+詳細: `rules/model-routing.md`

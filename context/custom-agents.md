@@ -58,6 +58,8 @@ Codex の multi-agent tool で `agent_type` に指定:
 
 ```
 multi_agent_v1.spawn_agent(agent_type: "arch-reviewer", message: "...")
+multi_agent_v1.wait_agent(targets: ["<agent-id>"])
+multi_agent_v1.close_agent(target: "<agent-id>")
 ```
 
 ## 例: レビュワーエージェント

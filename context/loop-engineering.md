@@ -5,7 +5,7 @@
 
 ## 実行モデル（正典）
 
-**指揮者 = Codex。** オーケストレーションは Codex で利用できる機構に一本化する。Claude Code 専用の Agent tool / Agent Teams API は正典では使わない。
+**指揮者 = Codex。** オーケストレーションは Codex で利用できる機構に一本化する。Claude Code 専用の team coordination API は正典では使わない。
 
 | 用途 | 機構 |
 |------|------|

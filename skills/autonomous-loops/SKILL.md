@@ -13,7 +13,7 @@ description: "自律ループパターン集。シーケンシャルパイプラ
 |---------|---------|
 | 1. シーケンシャルパイプライン | `Workflow` tool の `pipeline()` |
 | 2. PRループ（レビュー→修正→再レビュー） | `workflows/pr-review-loop.js`（または `auto-reviewing-pre-pr` を手動ループ） |
-| 3. DAGオーケストレーション | `Workflow` tool の `parallel()`/`pipeline()`（依存順に段組み）、エージェント間協調が要るなら `/team-run`（Agent Teams） |
+| 3. DAGオーケストレーション | `Workflow` tool の `parallel()`/`pipeline()`（依存順に段組み）、エージェント間協調が要るなら Codex `/team-run` |
 
 ## パターン1: シーケンシャルパイプライン
 
@@ -74,7 +74,7 @@ PR-Loop:
                                    [E: Tests]
 ```
 
-**使用場面**: `Workflow` tool で依存順に `parallel()` を段組みする（`blueprint`の依存グラフ実行）。エージェント間の往復協調が要る場合は `/team-run`（Agent Teams）
+**使用場面**: `Workflow` tool で依存順に `parallel()` を段組みする（`blueprint`の依存グラフ実行）。エージェント間の往復協調が要る場合は Codex `/team-run`
 
 ```markdown
 DAG:
