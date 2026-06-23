@@ -246,9 +246,9 @@ Summary ──→ Slack日次サマリー投稿
 | 重い実装 | `implementer` / `worker` に write scope を明示 | `gpt-5.5` + `priority` |
 | 専門レビュー | `arch-reviewer` 等 | role既定 |
 | 過去知見検索 | `learnings-researcher` | role既定 |
-| パイプライン制御 | `Workflow({script: ...})` | — |
+| パイプライン制御 | `multi_tool_use.parallel` + `multi_agent_v1.wait_agent` | — |
 
-詳細: `~/.claude/rules/model-routing.md`（Single Source of Truth）
+詳細: `rules/model-routing.md`（model / service_tier の SSoT）。plugin / skill / agent role の選択は `context/agent-team-routing.md` を参照する。
 
 ## ファイル配置
 

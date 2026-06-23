@@ -8,6 +8,7 @@ Codex で sub-agent を起動する際のモデル/role選択ルール。
 - role に model/service_tier が設定されている場合は role 既定を使う。
 - `default` / custom sub-agent で model を明示する場合は、`service_tier = "priority"` も必ず明示する。
 - Claude-only model aliases or slugs are not valid in Codex examples or prompts.
+- plugin / skill / agent role の選択は `context/agent-team-routing.md` を参照する。このファイルは model / service_tier 方針に集中する。
 
 ## Codex Model Pairs
 
@@ -29,6 +30,7 @@ Codex で sub-agent を起動する際のモデル/role選択ルール。
 | 専門レビュー | `arch-reviewer` / `security-reviewer` / `code-quality-reviewer` / `test-reviewer` 等 | role既定 |
 | 過去知見検索 | `learnings-researcher` | role既定 (`gpt-5.4`, `priority`) |
 | ローカル並列実行 | `multi_tool_use.parallel` | modelなし |
+| plugin / skill ルーティング | `context/agent-team-routing.md` | modelなし |
 
 ## 判断フロー
 
