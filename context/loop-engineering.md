@@ -1,21 +1,21 @@
 # Loop Engineering System — リファレンスドキュメント
 
-> 自律的な開発・レビューループを実現するClaude Code設定群の全体像。
+> 自律的な開発・レビューループを実現する Codex 設定群の全体像。
 > このドキュメント単体でシステムの理解・セットアップ・運用が可能。
 
 ## 実行モデル（正典）
 
-**指揮者 = Claude Code。** オーケストレーションは以下の Claude-native 機構に一本化する（Codex spawn_agent は重い実装の委任先として補助的に使う）。
+**指揮者 = Codex。** オーケストレーションは Codex で利用できる機構に一本化する。Claude Code 専用の Agent tool / Agent Teams API は正典では使わない。
 
 | 用途 | 機構 |
 |------|------|
-| パイプライン制御・並列fan-out | **Workflow tool**（`agent()`/`parallel()`/`pipeline()`）※既定 |
-| エージェント間の自律協調（複数ターン） | **Agent Teams**（`/team-run` → `TeamCreate`/`SendMessage`/共有タスクリスト） |
-| 専門レビュー・調査・軽量ワーカー | **Agent(subagent_type / model)** |
-| 重い実装の委任 | `Agent(subagent_type: "codex:codex-rescue")` |
-| 異ベンダー視点のレビュー | `Agent(subagent_type: "cursor:cursor-rescue")` |
+| ローカル並列実行・独立コマンド | `multi_tool_use.parallel` |
+| 専門レビュー・調査・軽量ワーカー | `multi_agent_v1.spawn_agent(agent_type: "...")` |
+| 複数ターンの協調 | `/team-run` + Goal + Team Journal + `spawn_agent` |
+| 重い実装の委任 | `implementer` / `worker` role に write scope を明示して `spawn_agent` |
+| プラグイン由来の運用規律 | Superpowers skills（計画・レビュー・完了前検証など） |
 
-> **Workflow と Agent Teams の使い分け**: 大半のLoopタスクは Workflow（親が一括投入する並列fan-out、ワーカーは独立・短命）で足りる。エージェント同士が `SendMessage` で往復対話し、共有タスクリストから自律的に仕事を取り、**複数ターンに渡って協調**する必要がある場合のみ Agent Teams（`/team-run`、team-lead = main session）を使う。`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` で有効。`teams/` 配下に実行時状態が生成される（完了後の整理対象）。
+> **parallel と team-run の使い分け**: 独立した読み取り・検証は `multi_tool_use.parallel` で足りる。複数ロールが状態を共有しながら継続判断する場合だけ `/team-run` を使い、Goal と Team Journal で目的・担当・未解決事項を同期する。
 
 ## 現状ステータス（2026-06-17 時点）
 
@@ -83,27 +83,27 @@ Layer 3: Project Override   (<repo>/.claude/ — PJごと)
 |------|------|
 | **目的** | ワークフロー全体制御、タスク分解、適切なエージェントへの委任 |
 | **出力形式** | Orchestration Report（委任先・理由・結果のJSON構造） |
-| **ツール** | Agent, Workflow, Read, Grep, Glob, Bash, Write, Edit, TaskCreate, TaskUpdate |
+| **ツール** | `multi_agent_v1.spawn_agent`, `multi_tool_use.parallel`, Read/Grep/Glob相当, Bash, Write/Edit相当, Team Journal |
 | **境界** | 直接コード編集しない。実装はimplementerに委任 |
-| **モデル** | gpt-5.5 |
+| **モデル** | `gpt-5.5` + `priority` |
 
 ### implementer
 | 項目 | 内容 |
 |------|------|
 | **目的** | コード実装（implement → verify → fix ループ、最大3回） |
 | **出力形式** | 変更ファイル一覧 + テスト結果 + 差分サマリー |
-| **ツール** | Read, Edit, Write, Bash, Agent(codex/cursor) |
+| **ツール** | Read/Edit/Write相当, Bash, bounded write scope |
 | **境界** | 自分のworktree内のみ。他worktreeへの書き込み禁止 |
-| **モデル** | gpt-5.5 |
+| **モデル** | `gpt-5.5` + `priority` |
 
 ### cost-monitor
 | 項目 | 内容 |
 |------|------|
 | **目的** | トークン使用量追跡、コスト見積もり、閾値超過アラート |
 | **出力形式** | CostReport JSON（date, total_cost_usd, breakdown, alert_level, recommendations） |
-| **ツール** | Read, Bash(ccusage), Grep |
+| **ツール** | Codex logs/state 読み取り, Grep, 集計コマンド |
 | **境界** | 読み取り専用。設定変更の提案のみ（実行しない） |
-| **モデル** | gpt-5.5 |
+| **モデル** | `gpt-5.5` + `priority` |
 
 ### minutes-classifier
 | 項目 | 内容 |
@@ -112,7 +112,7 @@ Layer 3: Project Override   (<repo>/.claude/ — PJごと)
 | **出力形式** | 分類結果JSON（items[].type: auto_execute/human_action/info_only） |
 | **ツール** | Read, Grep, Write, Bash |
 | **境界** | 曖昧なものはhuman_actionに分類（安全側）。金額・契約・人事は必ずhuman_action |
-| **モデル** | gpt-5.5 |
+| **モデル** | `gpt-5.5` + `priority` |
 
 ### jira-spec-writer
 | 項目 | 内容 |
@@ -160,7 +160,7 @@ Implement ──→ parallel([plan-a(worktree), plan-b(worktree)])
     │
 Test ──────→ parallel([test-a, test-b])
     │
-Judge ─────→ parallel([judge-correctness(gpt-5.5), judge-maintainability(gpt-5.5), judge-performance(gpt-5.5)])
+Judge ─────→ parallel([judge-correctness(gpt-5.5/priority), judge-maintainability(gpt-5.5/priority), judge-performance(gpt-5.5/priority)])
     │
 Decide ────→ 多数決 + 加重スコア平均 → winner(A/B/tie)
 ```
@@ -169,7 +169,7 @@ Decide ────→ 多数決 + 加重スコア平均 → winner(A/B/tie)
 ```
 Gather ──→ parallel([jira-tickets, calendar-events, carryover-tasks, pr-reviews])
     │
-Plan ────→ daily-planner(gpt-5.5) → DailyPlan JSON
+Plan ────→ daily-planner(gpt-5.5/priority) → DailyPlan JSON
     │
 Notify ──→ Slack投稿
 ```
@@ -180,7 +180,7 @@ args: {ticketKey, useTournament?}
 
 Analyze ──→ チケット分析 → complexity(simple/medium/complex)
     │
-Spec ─────→ jira-spec-writer(gpt-5.5) → 仕様書ドラフト
+Spec ─────→ jira-spec-writer(gpt-5.5/priority) → 仕様書ドラフト
     │
 Implement ─→ simple: 直接実装(worktree)
              medium: pipeline(subtasks, impl→test→review)
@@ -236,16 +236,16 @@ Summary ──→ Slack日次サマリー投稿
 
 > **`/pr-watch` 監視と `scheduled-tasks/pr-review` の役割差**: `/pr-watch <PR>` は起動時に `/loop 30m /pr-watch <PR>` を自動開始し、**現セッション中**に特定PR1本を30分おき能動監視する（team-run成果のコンテキストを引き継げる／`Esc` で停止）。2回目以降の呼び出しは state の `loop_active: true` により二重起動を防止。一方 `scheduled-tasks/pr-review` は**全 watch_repos** を毎時バッチ巡回（アプリ起動中のベストエフォート）。CI失敗の自動修正（`gh pr checks`→失敗ログ→修正→push）は `/pr-watch` のみが行う。
 
-## マルチモデルディスパッチ
+## Codex role ディスパッチ
 
-| 用途 | 呼び出し方法 | モデル |
-|------|---------|--------|
-| コードベース探索 | `Agent(subagent_type: "Explore")` | gpt-5.5 |
-| 軽量ワーカー | `Agent(model: "gpt-5.5")` | gpt-5.5 |
-| 判定・設計判断・レビュー | `Agent(model: "gpt-5.5")` | gpt-5.5 |
-| 重い実装 | `Agent(subagent_type: "codex:codex-rescue")` | gpt-5.x（Codex側で管理） |
-| 専門レビュー | `Agent(subagent_type: "arch-reviewer")` 等 | 継承 |
-| 過去知見検索 | `Agent(subagent_type: "learnings-researcher")` | 継承 |
+| 用途 | 呼び出し方法 | モデル方針 |
+|------|---------|------------|
+| コードベース探索 | `spawn_agent(agent_type: "explorer")` / `architecture-explorer` | role既定 |
+| 軽量ワーカー | `spawn_agent(agent_type: "worker")` | role既定 |
+| 判定・設計判断・レビュー | `technical-evaluator` / `go-nogo-advisor` / reviewer role | role既定 |
+| 重い実装 | `implementer` / `worker` に write scope を明示 | `gpt-5.5` + `priority` |
+| 専門レビュー | `arch-reviewer` 等 | role既定 |
+| 過去知見検索 | `learnings-researcher` | role既定 |
 | パイプライン制御 | `Workflow({script: ...})` | — |
 
 詳細: `~/.claude/rules/model-routing.md`（Single Source of Truth）
@@ -304,7 +304,7 @@ which claude
 # GitHub CLI
 gh auth status
 
-# Codex（オプション — codex:codex-rescue 経由で委任）
+# Codex CLI（オプション — ローカル確認用）
 which codex
 
 # Cursor Agent（オプション）
@@ -365,7 +365,7 @@ grep "stop-harness-improve" ~/.claude/settings.json
 | ok | $0-5 | 通常運用 |
 | info | $5-15 | 日報に記載 |
 | warning | $15-30 | モデルダウングレード検討 |
-| critical | $30+ | 即時対応、gpt-5.5→gpt-5.5への切替 |
+| critical | $30+ | 即時対応、`gpt-5.5` 対象を重要判断に絞り routine は `gpt-5.4` role へ寄せる |
 
 ### コスト追跡データ
 - 日次ログ: `~/.claude/.local/cost-track/YYYYMMDD.log`

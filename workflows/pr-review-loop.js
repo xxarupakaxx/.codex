@@ -134,7 +134,7 @@ ${JSON.stringify(high, null, 2)}
 ## ルール
 - 指摘箇所のみ surgical に修正する（依頼外の改変をしない）
 - 修正後はプロジェクトのテスト/lint/typecheckを実行して通す
-- 重い実装は codex に委任してよい: Agent(subagent_type: "codex:codex-rescue")
+- 重い実装は implementer/worker role に write scope を明示して委任してよい
 - 修正できたら git commit する（fix: で始まる日本語メッセージ）
 - 修正不能な指摘があれば理由を明記して返す`,
     { label: `fix:r${round}`, phase: 'Fix' }
