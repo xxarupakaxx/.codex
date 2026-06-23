@@ -19,9 +19,9 @@ Agent Tool では通常 `model` を省略し、親セッションのモデルを
 |------------|-------|------|
 | `red-reviewer` | `Agent(subagent_type: "red-reviewer")` — model省略（親継承） | 攻撃側（広く速く懸念列挙） |
 | `blue-reviewer` | `Agent(subagent_type: "blue-reviewer")` — model省略（親継承） | 防御側（Red の反論検証） |
-| `auditor-reviewer` | `Agent(subagent_type: "auditor-reviewer", model: "opus")` | 審判（最終判定・Read で独立検証） |
+| `auditor-reviewer` | `Agent(subagent_type: "auditor-reviewer", model: "gpt-5.5")` | 審判（最終判定・Read で独立検証） |
 
-> model 指定は審判（Auditor）の `model: "opus"` のみ。Red/Blue は省略して親セッション継承。
+> model 指定は審判（Auditor）の `model: "gpt-5.5"` のみ。Red/Blue は省略して親セッション継承。
 
 ## アンチ多数決原則（CRITICAL）
 
@@ -118,7 +118,7 @@ ADOPT の全件修正後、再度 Adversarial Review を回す（最大 2 サイ
 
 - Red: `Agent(subagent_type: "red-reviewer")` — model省略（親継承）
 - Blue: `Agent(subagent_type: "blue-reviewer")` — model省略（親継承）
-- Auditor: `Agent(subagent_type: "auditor-reviewer", model: "opus")`
+- Auditor: `Agent(subagent_type: "auditor-reviewer", model: "gpt-5.5")`
 - **方針**: model 指定は Auditor のみ。Red/Blue は省略して親セッション継承
 
 ## 禁止事項

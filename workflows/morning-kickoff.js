@@ -124,7 +124,7 @@ focusには今日最も重要な1つのことを書いてください。
 `, {
   label: 'create-plan',
   phase: 'Plan',
-  model: 'opus',
+  model: "gpt-5.5", service_tier: "priority",
   agentType: 'daily-planner',
   schema: DAILY_PLAN_SCHEMA,
 })

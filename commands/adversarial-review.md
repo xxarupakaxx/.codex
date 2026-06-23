@@ -21,7 +21,7 @@ description: Red→Blue→Auditor の3エージェント敵対的レビューを
 
 ## コスト方針
 
-- Red/Blue は `Agent(subagent_type: "xxx")` で model 省略（親継承）、Auditor のみ `model: "opus"` 指定
+- Red/Blue は `Agent(subagent_type: "xxx")` で model 省略（親継承）、Auditor のみ `model: "gpt-5.5"` 指定
 - model 指定は審判（Auditor）のみ。Red/Blue は親セッションのモデルを継承
 
 詳細は `~/.claude/skills/adversarial-review/SKILL.md` 参照。

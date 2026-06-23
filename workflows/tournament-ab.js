@@ -183,15 +183,15 @@ ${focusDescription}
 const verdicts = await parallel([
   () => agent(
     judgePrompt('正確性', 'テスト通過率、エッジケース処理、仕様との整合性を重点的に評価'),
-    { label: 'judge-correctness', phase: 'Judge', model: 'opus', schema: VERDICT_SCHEMA }
+    { label: 'judge-correctness', phase: 'Judge', model: "gpt-5.5", service_tier: "priority", schema: VERDICT_SCHEMA }
   ),
   () => agent(
     judgePrompt('保守性', '可読性、拡張性、コード構造、命名品質を重点的に評価'),
-    { label: 'judge-maintainability', phase: 'Judge', model: 'opus', schema: VERDICT_SCHEMA }
+    { label: 'judge-maintainability', phase: 'Judge', model: "gpt-5.5", service_tier: "priority", schema: VERDICT_SCHEMA }
   ),
   () => agent(
     judgePrompt('パフォーマンス', '計算量、メモリ使用量、応答速度を重点的に評価'),
-    { label: 'judge-performance', phase: 'Judge', model: 'opus', schema: VERDICT_SCHEMA }
+    { label: 'judge-performance', phase: 'Judge', model: "gpt-5.5", service_tier: "priority", schema: VERDICT_SCHEMA }
   ),
 ])
 

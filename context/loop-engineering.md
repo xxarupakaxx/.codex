@@ -85,7 +85,7 @@ Layer 3: Project Override   (<repo>/.claude/ — PJごと)
 | **出力形式** | Orchestration Report（委任先・理由・結果のJSON構造） |
 | **ツール** | Agent, Workflow, Read, Grep, Glob, Bash, Write, Edit, TaskCreate, TaskUpdate |
 | **境界** | 直接コード編集しない。実装はimplementerに委任 |
-| **モデル** | opus |
+| **モデル** | gpt-5.5 |
 
 ### implementer
 | 項目 | 内容 |
@@ -94,7 +94,7 @@ Layer 3: Project Override   (<repo>/.claude/ — PJごと)
 | **出力形式** | 変更ファイル一覧 + テスト結果 + 差分サマリー |
 | **ツール** | Read, Edit, Write, Bash, Agent(codex/cursor) |
 | **境界** | 自分のworktree内のみ。他worktreeへの書き込み禁止 |
-| **モデル** | sonnet |
+| **モデル** | gpt-5.5 |
 
 ### cost-monitor
 | 項目 | 内容 |
@@ -103,7 +103,7 @@ Layer 3: Project Override   (<repo>/.claude/ — PJごと)
 | **出力形式** | CostReport JSON（date, total_cost_usd, breakdown, alert_level, recommendations） |
 | **ツール** | Read, Bash(ccusage), Grep |
 | **境界** | 読み取り専用。設定変更の提案のみ（実行しない） |
-| **モデル** | sonnet |
+| **モデル** | gpt-5.5 |
 
 ### minutes-classifier
 | 項目 | 内容 |
@@ -112,7 +112,7 @@ Layer 3: Project Override   (<repo>/.claude/ — PJごと)
 | **出力形式** | 分類結果JSON（items[].type: auto_execute/human_action/info_only） |
 | **ツール** | Read, Grep, Write, Bash |
 | **境界** | 曖昧なものはhuman_actionに分類（安全側）。金額・契約・人事は必ずhuman_action |
-| **モデル** | sonnet |
+| **モデル** | gpt-5.5 |
 
 ### jira-spec-writer
 | 項目 | 内容 |
@@ -121,7 +121,7 @@ Layer 3: Project Override   (<repo>/.claude/ — PJごと)
 | **出力形式** | Markdown仕様書（概要/要件/技術設計/テスト計画/リスク/サブタスク） |
 | **ツール** | Read, Grep, Glob, Write, Bash, WebSearch（Jira/Confluence MCPはToolSearch経由で利用可能） |
 | **境界** | ドラフトのみ生成（レビュー前マーク）。既存仕様書は上書きしない |
-| **モデル** | opus |
+| **モデル** | gpt-5.5 |
 
 ### ab-judge
 | 項目 | 内容 |
@@ -130,7 +130,7 @@ Layer 3: Project Override   (<repo>/.claude/ — PJごと)
 | **出力形式** | Verdict JSON（winner, confidence, scores, reasoning, notable_differences） |
 | **ツール** | Read, Grep, Bash(test/lint) |
 | **境界** | 評価のみ。コード修正しない。セキュリティスコア2以下は勝者にしない |
-| **モデル** | opus |
+| **モデル** | gpt-5.5 |
 
 ### harness-improver
 | 項目 | 内容 |
@@ -139,7 +139,7 @@ Layer 3: Project Override   (<repo>/.claude/ — PJごと)
 | **出力形式** | 改善提案（パターン/根拠/提案ルール/適用先） |
 | **ツール** | Read, Grep, Glob, Write |
 | **境界** | 提案のみ（自動適用しない）。1セッション最大3件。既存ルールとの矛盾チェック必須 |
-| **モデル** | opus |
+| **モデル** | gpt-5.5 |
 
 ### daily-planner
 | 項目 | 内容 |
@@ -148,7 +148,7 @@ Layer 3: Project Override   (<repo>/.claude/ — PJごと)
 | **出力形式** | DailyPlan JSON（focus, p0[], p1[], p2[], meetings[], carryover[], estimated_hours） |
 | **ツール** | Read, Grep, Bash, Write |
 | **境界** | 計画作成のみ。タスク実行しない。最大8時間分。P0が3件以上なら確認を要求 |
-| **モデル** | sonnet |
+| **モデル** | gpt-5.5 |
 
 ## ワークフロー実行フロー
 
@@ -160,7 +160,7 @@ Implement ──→ parallel([plan-a(worktree), plan-b(worktree)])
     │
 Test ──────→ parallel([test-a, test-b])
     │
-Judge ─────→ parallel([judge-correctness(opus), judge-maintainability(opus), judge-performance(opus)])
+Judge ─────→ parallel([judge-correctness(gpt-5.5), judge-maintainability(gpt-5.5), judge-performance(gpt-5.5)])
     │
 Decide ────→ 多数決 + 加重スコア平均 → winner(A/B/tie)
 ```
@@ -169,7 +169,7 @@ Decide ────→ 多数決 + 加重スコア平均 → winner(A/B/tie)
 ```
 Gather ──→ parallel([jira-tickets, calendar-events, carryover-tasks, pr-reviews])
     │
-Plan ────→ daily-planner(opus) → DailyPlan JSON
+Plan ────→ daily-planner(gpt-5.5) → DailyPlan JSON
     │
 Notify ──→ Slack投稿
 ```
@@ -180,7 +180,7 @@ args: {ticketKey, useTournament?}
 
 Analyze ──→ チケット分析 → complexity(simple/medium/complex)
     │
-Spec ─────→ jira-spec-writer(opus) → 仕様書ドラフト
+Spec ─────→ jira-spec-writer(gpt-5.5) → 仕様書ドラフト
     │
 Implement ─→ simple: 直接実装(worktree)
              medium: pipeline(subtasks, impl→test→review)
@@ -240,9 +240,9 @@ Summary ──→ Slack日次サマリー投稿
 
 | 用途 | 呼び出し方法 | モデル |
 |------|---------|--------|
-| コードベース探索 | `Agent(subagent_type: "Explore")` | sonnet |
-| 軽量ワーカー | `Agent(model: "sonnet")` | sonnet |
-| 判定・設計判断・レビュー | `Agent(model: "opus")` | opus |
+| コードベース探索 | `Agent(subagent_type: "Explore")` | gpt-5.5 |
+| 軽量ワーカー | `Agent(model: "gpt-5.5")` | gpt-5.5 |
+| 判定・設計判断・レビュー | `Agent(model: "gpt-5.5")` | gpt-5.5 |
 | 重い実装 | `Agent(subagent_type: "codex:codex-rescue")` | gpt-5.x（Codex側で管理） |
 | 専門レビュー | `Agent(subagent_type: "arch-reviewer")` 等 | 継承 |
 | 過去知見検索 | `Agent(subagent_type: "learnings-researcher")` | 継承 |
@@ -365,7 +365,7 @@ grep "stop-harness-improve" ~/.claude/settings.json
 | ok | $0-5 | 通常運用 |
 | info | $5-15 | 日報に記載 |
 | warning | $15-30 | モデルダウングレード検討 |
-| critical | $30+ | 即時対応、opus→sonnetへの切替 |
+| critical | $30+ | 即時対応、gpt-5.5→gpt-5.5への切替 |
 
 ### コスト追跡データ
 - 日次ログ: `~/.claude/.local/cost-track/YYYYMMDD.log`
