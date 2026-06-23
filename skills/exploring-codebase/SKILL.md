@@ -152,9 +152,9 @@ MEMORY_DIRはPJ CLAUDE.mdで定義（未定義なら .local/）。
 - 関心事を具体的に指定（例: 「認証フロー」「決済処理」）
 - 必要なエージェントのみ起動してもよい（例: データフローのみ）
 
-## Agent Teams連携
+## Codex multi-agent 連携
 
-`CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS=1` が有効な場合、`~/.claude/agents/` の定義をTeamメンバーとして直接使用可能。大規模コードベースではAgent Teamsでの並列探索がより効果的。
+大規模コードベースでは `multi_agent_v1.spawn_agent(agent_type: "explorer")`、`architecture-explorer`、`dependency-mapper` を目的別に並列起動する。複数ターンで状態共有が必要な場合だけ `/team-run` の Team Journal に探索結果を集約する。
 
 ## 既存設定への参照
 

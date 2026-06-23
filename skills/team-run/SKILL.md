@@ -7,7 +7,7 @@ description: "team-run を起動すると Codex の goal / Superpowers / multi_a
 
 **メインセッション（あなた）= team-lead。全 sub-agent はメインセッションが直接 spawn する。**
 
-Codex では Claude Code の Agent Teams API をそのまま前提にしない。`goal` で長い作業の目的を固定し、Superpowers で計画/検証/レビューのゲートを強化し、`multi_agent_v1.spawn_agent` で必要な専門 sub-agent を起動する。
+Codex では Claude Code の team coordination API をそのまま前提にしない。`goal` で長い作業の目的を固定し、Superpowers で計画/検証/レビューのゲートを強化し、`multi_agent_v1.spawn_agent` で必要な専門 sub-agent を起動する。
 
 ## 使う前に — 本当にチームが要るか
 
@@ -54,7 +54,7 @@ Codex 側ではスキル本文を読んでから、その指示を現在の tool
 
 ## Claude 用語との対応
 
-| 旧 Agent Teams 概念 | Codex で使うもの |
+| 旧 team coordination 概念 | Codex で使うもの |
 |---------------------|------------------|
 | team creation | 不要。`goal` + Team Journal + `spawn_agent` で管理 |
 | teammate spawn | `multi_agent_v1.spawn_agent` |
