@@ -1,0 +1,32 @@
+# Runtime state
+auth.json
+history.jsonl
+session_index.jsonl
+logs*.sqlite*
+state*.sqlite*
+goals*.sqlite*
+memories*.sqlite*
+sqlite/
+sessions/
+archived_sessions/
+shell_snapshots/
+worktrees/
+generated_images/
+attachments/
+tmp/
+.tmp/
+cache/
+vendor_imports/
+packages/
+process_manager/
+node_repl/
+automations/
+computer-use/
+plugins/cache/
+
+# Local secrets
+config.toml
+settings.json
+user.json
+*.backup-*
+.DS_Store

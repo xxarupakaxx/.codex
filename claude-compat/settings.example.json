@@ -1,0 +1,447 @@
+{
+  "cleanupPeriodDays": 99999,
+  "env": {
+    "CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS": "1",
+    "CLAUDE_CODE_ENABLE_TELEMETRY": "1",
+    "CLAUDE_CODE_NEW_INIT": "1",
+    "CLAUDE_AUTOCOMPACT_PCT_OVERRIDE": "65",
+    "BARK_DEVICE_KEY": "REDACTED",
+    "BARK_ENCRYPT_KEY": "REDACTED",
+    "BARK_ENCRYPT_IV": "REDACTED",
+    "CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC": "1"
+  },
+  "attribution": {
+    "commit": "",
+    "pr": ""
+  },
+  "model": "sonnet[1m]",
+  "skillOverrides": {
+    "analyse": "off",
+    "analyse-problem": "off",
+    "cause-and-effect": "off",
+    "why": "off",
+    "plan-do-check-act": "off"
+  },
+  "hooks": {
+    "PreToolUse": [
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/pre-dangerous-command-block.sh",
+            "timeout": 5,
+            "statusMessage": "Safety check..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/pre-dev-server-warn.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/pre-git-push-remind.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Edit|Write|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/pre-strategic-compact-suggest.sh",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "PreCompact": [
+      {
+        "matcher": "auto",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/pre-compact-handover.sh",
+            "timeout": 30,
+            "statusMessage": "Generating handover document..."
+          }
+        ]
+      }
+    ],
+    "SessionStart": [
+      {
+        "matcher": "compact",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/session-start-inject.sh"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/worktree-knowledge-link.sh",
+            "timeout": 5,
+            "statusMessage": "Checking worktree knowledge links..."
+          }
+        ]
+      },
+      {
+        "matcher": "startup",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --project ~/.claude/sui-memory python -m sui_memory.hook_session_start",
+            "timeout": 30,
+            "statusMessage": "Loading past memories..."
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/session-start-stocktake-reminder.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "UserPromptSubmit": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/pre-prompt-phase-gate.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ],
+    "PostToolUse": [
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "afplay /System/Library/Sounds/Pop.aiff 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/post-auto-format.sh",
+            "timeout": 15,
+            "statusMessage": "Auto-formatting..."
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/post-console-log-warn.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "matcher": "Write|Edit|MultiEdit",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/post-typescript-check.sh",
+            "timeout": 20,
+            "statusMessage": "TypeScript checking..."
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "afplay /System/Library/Sounds/Tink.aiff 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "matcher": "EnterWorktree",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/worktree-knowledge-link.sh",
+            "timeout": 5,
+            "statusMessage": "Linking worktree knowledge..."
+          }
+        ]
+      },
+      {
+        "matcher": "Skill",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/post-skill-usage-track.sh",
+            "timeout": 3
+          }
+        ]
+      },
+      {
+        "matcher": "Bash",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/post-failure-escalate.sh",
+            "timeout": 3
+          }
+        ]
+      },
+      {
+        "matcher": "Bash|Agent",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/post-cost-track.sh",
+            "timeout": 3
+          }
+        ]
+      }
+    ],
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "afplay /System/Library/Sounds/Purr.aiff 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/stop-workflow-check.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/stop-save-handover.sh",
+            "timeout": 15
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/stop-console-log-audit.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "uv run --project ~/.claude/sui-memory python -m sui_memory.hook_stop",
+            "timeout": 120,
+            "statusMessage": "Saving session memory..."
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/stop-harness-improve.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "SessionEnd": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/session-end-stats.sh",
+            "timeout": 10
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/knowledge-cleanup-check.sh",
+            "timeout": 10
+          }
+        ]
+      }
+    ],
+    "Notification": [
+      {
+        "matcher": "permission_prompt|idle_prompt|elicitation_dialog",
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/bark-notify.sh"
+          }
+        ]
+      }
+    ],
+    "SubagentStop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "afplay /System/Library/Sounds/Glass.aiff 2>/dev/null || true"
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/stop-subagent-compound.sh",
+            "timeout": 5
+          }
+        ]
+      },
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash ~/.claude/hooks/team-budget-guard.sh",
+            "timeout": 5
+          }
+        ]
+      }
+    ]
+  },
+  "statusLine": {
+    "type": "command",
+    "command": "bash ~/.claude/statusline-command.sh"
+  },
+  "enabledPlugins": {
+    "typescript-lsp@claude-plugins-official": true,
+    "session-report@claude-plugins-official": true,
+    "claude-md-management@claude-plugins-official": true,
+    "atlassian@claude-plugins-official": true,
+    "codex@openai-codex": true
+  },
+  "extraKnownMarketplaces": {
+    "claude-plugins-official": {
+      "source": {
+        "source": "github",
+        "repo": "anthropics/claude-plugins-official"
+      }
+    },
+    "openai-codex": {
+      "source": {
+        "source": "github",
+        "repo": "openai/codex-plugin-cc"
+      }
+    }
+  },
+  "language": "japanese Explanatory learning",
+  "plansDirectory": "./.local/plans",
+  "skipDangerousModePermissionPrompt": true,
+  "skipWorkflowUsageWarning": true,
+  "theme": "light",
+  "remoteControlAtStartup": true,
+  "skipAutoPermissionPrompt": true,
+  "voiceEnabled": false,
+  "mcpServers": {
+    "workflow-html-app": {
+      "command": "bash",
+      "args": [
+        "-c",
+        "exec node \"$HOME/.claude/mcp-servers/workflow-html-app/dist/main.js\""
+      ]
+    }
+  },
+  "allowedTools": [
+    "Bash(cd:*)",
+    "Bash(sqlite3:*)",
+    "Bash(grep:*)",
+    "Bash(awk:*)",
+    "Bash(sed:*)",
+    "Bash(find:*)",
+    "Bash(mkdir:*)",
+    "Bash(ls:*)",
+    "Bash(pwd:*)",
+    "Bash(which:*)",
+    "Bash(echo:*)",
+    "Bash(cat:*)",
+    "Bash(head:*)",
+    "Bash(tail:*)",
+    "Bash(wc:*)",
+    "Bash(date:*)",
+    "Bash(whoami:*)",
+    "Bash(uname:*)",
+    "Bash(env:*)",
+    "Bash(printenv:*)",
+    "Bash(basename:*)",
+    "Bash(dirname:*)",
+    "Bash(realpath:*)",
+    "Bash(file:*)",
+    "Bash(stat:*)",
+    "Bash(du:*)",
+    "Bash(df:*)",
+    "Bash(tree:*)",
+    "Bash(touch:*)",
+    "Bash(cp:*)",
+    "Bash(mv:*)",
+    "Bash(diff:*)",
+    "Bash(sort:*)",
+    "Bash(uniq:*)",
+    "Bash(tr:*)",
+    "Bash(cut:*)",
+    "Bash(xargs:*)",
+    "Bash(tee:*)",
+    "Bash(git status:*)",
+    "Bash(git log:*)",
+    "Bash(git diff:*)",
+    "Bash(git branch:*)",
+    "Bash(git show:*)",
+    "Bash(git rev-parse:*)",
+    "Bash(git remote:*)",
+    "Bash(git tag:*)",
+    "Bash(git stash list:*)",
+    "Bash(gh auth status:*)",
+    "Bash(gh pr view:*)",
+    "Bash(gh pr list:*)",
+    "Bash(gh issue list:*)",
+    "Bash(gh issue view:*)",
+    "Bash(node -e:*)",
+    "Bash(node --version:*)",
+    "Bash(npm list:*)",
+    "Bash(npm --version:*)",
+    "Bash(npx:*)",
+    "Bash(jq:*)",
+    "Bash(rg:*)",
+    "Bash(afplay:*)"
+  ]
+}
