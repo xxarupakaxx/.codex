@@ -1,0 +1,21 @@
+{
+  "user": {
+    "email": "your-email@example.com",
+    "github_username": "your-github-username"
+  },
+  "slack": {
+    "notification_channel": "C0XXXXXXX (Slack channel ID recommended)",
+    "dm_fallback": true
+  },
+  "jira": {
+    "assignee_jql": "assignee = currentUser()",
+    "default_project": ""
+  },
+  "github": {
+    "watch_repos": ["your-repo-name"]
+  },
+  "notes": {
+    "daily_dir": "~/.claude/.local/daily",
+    "daily_filename_format": "YYYY-MM-DD.md"
+  }
+}

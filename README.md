@@ -9,12 +9,20 @@ This repository intentionally stores only reproducible configuration:
 - `skills/`
 - `commands/`
 - `prompts/`
+- `config/user.example.json`
+- `context/`
+- `rules/`
+- `templates/`
+- `tools/`
+- `workflows/`
+- `scheduled-tasks/`
 - `hooks.json`
 - `claude-compat/`
 - `config.example.toml`
 
 It does not store runtime state, auth files, SQLite databases, histories,
 attachments, generated images, plugin caches, or local secret values.
+Claude-only runtime/configuration references are kept under `claude-compat/`.
 
 ## Apply locally
 
