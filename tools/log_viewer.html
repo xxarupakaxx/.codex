@@ -1,0 +1,1257 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Log Viewer</title>
+  <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
+  <style>
+    :root {
+      --bg-primary: #0d1117;
+      --bg-secondary: #161b22;
+      --bg-card: #21262d;
+      --text-primary: #e6edf3;
+      --text-secondary: #8b949e;
+      --accent: #58a6ff;
+      --accent-hover: #79b8ff;
+      --border: #30363d;
+      --success: #3fb950;
+      --warning: #d29922;
+      --danger: #f85149;
+      --phase-0: #8b5cf6;
+      --phase-1: #3b82f6;
+      --phase-2: #06b6d4;
+      --phase-3: #10b981;
+      --phase-4: #f59e0b;
+      --phase-5: #ef4444;
+      --timeline-line: #30363d;
+    }
+
+    [data-theme="light"] {
+      --bg-primary: #ffffff;
+      --bg-secondary: #f6f8fa;
+      --bg-card: #ffffff;
+      --text-primary: #1f2328;
+      --text-secondary: #656d76;
+      --accent: #0969da;
+      --accent-hover: #0550ae;
+      --border: #d0d7de;
+      --success: #1a7f37;
+      --warning: #9a6700;
+      --danger: #cf222e;
+      --timeline-line: #d0d7de;
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+    }
+
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Noto Sans', Helvetica, sans-serif;
+      background: var(--bg-primary);
+      color: var(--text-primary);
+      line-height: 1.6;
+      min-height: 100vh;
+      transition: background 0.3s, color 0.3s;
+    }
+
+    header {
+      background: var(--bg-secondary);
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+
+    .header-content {
+      max-width: 1200px;
+      margin: 0 auto;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    header h1 {
+      font-size: 1.25rem;
+      font-weight: 600;
+    }
+
+    .file-badge {
+      background: var(--bg-card);
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+      border: 1px solid var(--border);
+    }
+
+    .controls {
+      display: flex;
+      gap: 8px;
+      align-items: center;
+      flex-wrap: wrap;
+    }
+
+    button {
+      background: var(--accent);
+      color: white;
+      border: none;
+      padding: 6px 14px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+
+    button:hover {
+      background: var(--accent-hover);
+    }
+
+    button.secondary {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      color: var(--text-primary);
+    }
+
+    button.secondary:hover {
+      background: var(--border);
+    }
+
+    .theme-toggle {
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      width: 36px;
+      height: 36px;
+      border-radius: 50%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      font-size: 1.1rem;
+      padding: 0;
+    }
+
+    .container {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 24px;
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      gap: 24px;
+    }
+
+    @media (max-width: 900px) {
+      .container {
+        grid-template-columns: 1fr;
+      }
+      .sidebar {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 90;
+        height: auto;
+        max-height: 40vh;
+        border-radius: 16px 16px 0 0;
+        transform: translateY(calc(100% - 48px));
+        transition: transform 0.3s;
+      }
+      .sidebar.expanded {
+        transform: translateY(0);
+      }
+      .sidebar-toggle {
+        display: block;
+      }
+    }
+
+    /* Sidebar */
+    .sidebar {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      padding: 16px;
+      height: fit-content;
+      position: sticky;
+      top: 80px;
+    }
+
+    .sidebar-toggle {
+      display: none;
+      width: 100%;
+      text-align: center;
+      padding: 8px;
+      cursor: pointer;
+      color: var(--text-secondary);
+      font-size: 0.85rem;
+    }
+
+    .sidebar h2 {
+      font-size: 0.9rem;
+      color: var(--accent);
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .phase-nav {
+      list-style: none;
+    }
+
+    .phase-nav li {
+      margin-bottom: 8px;
+    }
+
+    .phase-nav a {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      padding: 10px 12px;
+      border-radius: 8px;
+      text-decoration: none;
+      color: var(--text-primary);
+      transition: all 0.2s;
+      font-size: 0.9rem;
+    }
+
+    .phase-nav a:hover {
+      background: var(--bg-card);
+    }
+
+    .phase-nav a.active {
+      background: var(--bg-card);
+      border-left: 3px solid var(--accent);
+    }
+
+    .phase-dot {
+      width: 12px;
+      height: 12px;
+      border-radius: 50%;
+      flex-shrink: 0;
+    }
+
+    .phase-dot.phase-0 { background: var(--phase-0); }
+    .phase-dot.phase-1 { background: var(--phase-1); }
+    .phase-dot.phase-2 { background: var(--phase-2); }
+    .phase-dot.phase-3 { background: var(--phase-3); }
+    .phase-dot.phase-4 { background: var(--phase-4); }
+    .phase-dot.phase-5 { background: var(--phase-5); }
+
+    .phase-status {
+      margin-left: auto;
+      font-size: 0.75rem;
+      padding: 2px 8px;
+      border-radius: 10px;
+      background: var(--bg-primary);
+    }
+
+    .phase-status.completed {
+      background: rgba(59, 251, 80, 0.15);
+      color: var(--success);
+    }
+
+    .phase-status.in-progress {
+      background: rgba(210, 153, 34, 0.15);
+      color: var(--warning);
+    }
+
+    /* Main Content */
+    .main-content {
+      min-height: 500px;
+    }
+
+    /* Drop Zone */
+    .drop-zone {
+      background: var(--bg-secondary);
+      border: 2px dashed var(--border);
+      border-radius: 12px;
+      padding: 80px 20px;
+      text-align: center;
+      transition: all 0.3s;
+    }
+
+    .drop-zone.dragover {
+      border-color: var(--accent);
+      background: rgba(88, 166, 255, 0.05);
+    }
+
+    .drop-zone-icon {
+      font-size: 4rem;
+      margin-bottom: 16px;
+    }
+
+    .drop-zone p {
+      color: var(--text-secondary);
+      margin-bottom: 16px;
+    }
+
+    input[type="file"] {
+      display: none;
+    }
+
+    /* Timeline */
+    .timeline {
+      position: relative;
+      padding-left: 32px;
+    }
+
+    .timeline::before {
+      content: '';
+      position: absolute;
+      left: 8px;
+      top: 0;
+      bottom: 0;
+      width: 2px;
+      background: var(--timeline-line);
+    }
+
+    .timeline-item {
+      position: relative;
+      margin-bottom: 24px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--border);
+    }
+
+    .timeline-item:last-child {
+      border-bottom: none;
+    }
+
+    .timeline-dot {
+      position: absolute;
+      left: -28px;
+      top: 4px;
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      border: 3px solid var(--bg-primary);
+    }
+
+    .timeline-item.phase-0 .timeline-dot { background: var(--phase-0); }
+    .timeline-item.phase-1 .timeline-dot { background: var(--phase-1); }
+    .timeline-item.phase-2 .timeline-dot { background: var(--phase-2); }
+    .timeline-item.phase-3 .timeline-dot { background: var(--phase-3); }
+    .timeline-item.phase-4 .timeline-dot { background: var(--phase-4); }
+    .timeline-item.phase-5 .timeline-dot { background: var(--phase-5); }
+
+    .timeline-header {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      margin-bottom: 12px;
+      flex-wrap: wrap;
+    }
+
+    .timeline-phase {
+      font-size: 0.75rem;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+    }
+
+    .phase-0 .timeline-phase { background: rgba(139, 92, 246, 0.2); color: var(--phase-0); }
+    .phase-1 .timeline-phase { background: rgba(59, 130, 246, 0.2); color: var(--phase-1); }
+    .phase-2 .timeline-phase { background: rgba(6, 182, 212, 0.2); color: var(--phase-2); }
+    .phase-3 .timeline-phase { background: rgba(16, 185, 129, 0.2); color: var(--phase-3); }
+    .phase-4 .timeline-phase { background: rgba(245, 158, 11, 0.2); color: var(--phase-4); }
+    .phase-5 .timeline-phase { background: rgba(239, 68, 68, 0.2); color: var(--phase-5); }
+
+    .timeline-title {
+      font-size: 1.1rem;
+      font-weight: 600;
+      flex: 1;
+    }
+
+    .timeline-date {
+      font-size: 0.8rem;
+      color: var(--text-secondary);
+    }
+
+    .timeline-content {
+      background: var(--bg-secondary);
+      border-radius: 8px;
+      padding: 16px;
+      border: 1px solid var(--border);
+    }
+
+    .timeline-content h3 {
+      font-size: 1rem;
+      margin-bottom: 8px;
+      color: var(--accent);
+    }
+
+    .timeline-content h4 {
+      font-size: 0.9rem;
+      margin-top: 16px;
+      margin-bottom: 8px;
+    }
+
+    .timeline-content p {
+      margin-bottom: 8px;
+      color: var(--text-secondary);
+    }
+
+    .timeline-content ul, .timeline-content ol {
+      margin-left: 20px;
+      margin-bottom: 12px;
+    }
+
+    .timeline-content li {
+      margin-bottom: 4px;
+    }
+
+    .timeline-content code {
+      background: var(--bg-card);
+      padding: 2px 6px;
+      border-radius: 4px;
+      font-family: 'SF Mono', Monaco, monospace;
+      font-size: 0.85em;
+    }
+
+    .timeline-content pre {
+      background: var(--bg-card);
+      padding: 12px;
+      border-radius: 6px;
+      overflow-x: auto;
+      margin-bottom: 12px;
+    }
+
+    .timeline-content pre code {
+      background: none;
+      padding: 0;
+    }
+
+    /* Task List */
+    .task-list {
+      list-style: none;
+      margin-left: 0;
+    }
+
+    .task-list li {
+      display: flex;
+      align-items: flex-start;
+      gap: 8px;
+      padding: 4px 0;
+    }
+
+    .task-checkbox {
+      width: 18px;
+      height: 18px;
+      border-radius: 4px;
+      border: 2px solid var(--border);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      flex-shrink: 0;
+      margin-top: 2px;
+    }
+
+    .task-checkbox.checked {
+      background: var(--success);
+      border-color: var(--success);
+      color: white;
+      font-size: 0.7rem;
+    }
+
+    /* Mermaid */
+    .mermaid-container {
+      background: var(--bg-card);
+      border-radius: 8px;
+      padding: 20px;
+      margin: 12px 0;
+      overflow-x: auto;
+    }
+
+    .mermaid {
+      display: flex;
+      justify-content: center;
+    }
+
+    /* Comments Panel */
+    .comment-panel {
+      margin-top: 12px;
+      padding-top: 12px;
+      border-top: 1px solid var(--border);
+    }
+
+    .comment-panel-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      cursor: pointer;
+      padding: 4px 0;
+    }
+
+    .comment-panel-header h4 {
+      font-size: 0.85rem;
+      color: var(--text-secondary);
+    }
+
+    .comment-count-badge {
+      background: var(--accent);
+      color: white;
+      padding: 2px 8px;
+      border-radius: 10px;
+      font-size: 0.7rem;
+    }
+
+    .comment-list {
+      margin-top: 8px;
+      display: none;
+    }
+
+    .comment-list.expanded {
+      display: block;
+    }
+
+    .comment-item {
+      background: var(--bg-card);
+      padding: 10px;
+      border-radius: 6px;
+      margin-bottom: 8px;
+      font-size: 0.85rem;
+    }
+
+    .comment-item .meta {
+      font-size: 0.7rem;
+      color: var(--text-secondary);
+      margin-top: 4px;
+      display: flex;
+      justify-content: space-between;
+    }
+
+    .comment-form {
+      margin-top: 8px;
+    }
+
+    .comment-form textarea {
+      width: 100%;
+      min-height: 60px;
+      background: var(--bg-card);
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      padding: 8px;
+      color: var(--text-primary);
+      font-family: inherit;
+      font-size: 0.85rem;
+      resize: vertical;
+      margin-bottom: 8px;
+    }
+
+    .comment-form textarea:focus {
+      outline: none;
+      border-color: var(--accent);
+    }
+
+    /* Summary Card */
+    .summary-card {
+      background: var(--bg-secondary);
+      border-radius: 12px;
+      padding: 20px;
+      margin-bottom: 24px;
+      border: 1px solid var(--border);
+    }
+
+    .summary-card h2 {
+      font-size: 1.1rem;
+      margin-bottom: 16px;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .summary-stats {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+      gap: 12px;
+    }
+
+    .stat-item {
+      background: var(--bg-card);
+      padding: 12px;
+      border-radius: 8px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 1.5rem;
+      font-weight: 700;
+      color: var(--accent);
+    }
+
+    .stat-label {
+      font-size: 0.75rem;
+      color: var(--text-secondary);
+      margin-top: 4px;
+    }
+
+    /* Toast */
+    .toast {
+      position: fixed;
+      bottom: 20px;
+      left: 50%;
+      transform: translateX(-50%) translateY(100px);
+      background: var(--bg-card);
+      border: 1px solid var(--accent);
+      padding: 10px 20px;
+      border-radius: 8px;
+      opacity: 0;
+      transition: all 0.3s;
+      z-index: 1000;
+    }
+
+    .toast.show {
+      transform: translateX(-50%) translateY(0);
+      opacity: 1;
+    }
+
+    /* Status Badge */
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 4px;
+      padding: 4px 10px;
+      border-radius: 20px;
+      font-size: 0.75rem;
+      font-weight: 500;
+    }
+
+    .status-badge.success {
+      background: rgba(63, 185, 80, 0.15);
+      color: var(--success);
+    }
+
+    .status-badge.warning {
+      background: rgba(210, 153, 34, 0.15);
+      color: var(--warning);
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <div class="header-content">
+      <div class="header-left">
+        <h1>Log Viewer</h1>
+        <span class="file-badge" id="file-badge">ファイル未選択</span>
+        <span class="status-badge success" id="db-status">DB: 接続中...</span>
+      </div>
+      <div class="controls">
+        <button onclick="document.getElementById('file-input').click()">ファイルを開く</button>
+        <button class="secondary" onclick="exportComments()">コメント出力</button>
+        <button class="theme-toggle" onclick="toggleTheme()" title="テーマ切替">&#x1F319;</button>
+        <input type="file" id="file-input" accept=".md,.markdown,.txt" onchange="handleFileSelect(event)">
+      </div>
+    </div>
+  </header>
+
+  <div class="container">
+    <div class="sidebar" id="sidebar">
+      <div class="sidebar-toggle" onclick="toggleSidebar()">
+        Phase 一覧 &#x25B2;
+      </div>
+      <h2>&#x1F4C5; Phase</h2>
+      <ul class="phase-nav" id="phase-nav">
+        <li><span style="color: var(--text-secondary); font-size: 0.85rem;">ファイルを読み込んでください</span></li>
+      </ul>
+    </div>
+
+    <div class="main-content" id="main-content">
+      <div class="drop-zone" id="drop-zone">
+        <div class="drop-zone-icon">&#x1F4CB;</div>
+        <p>05_log.md などのログファイルをドラッグ&ドロップ</p>
+        <p>タイムライン形式で表示します</p>
+        <button onclick="document.getElementById('file-input').click()">ファイルを選択</button>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast"></div>
+  <input type="file" id="import-input" accept=".json" style="display:none" onchange="handleImportComments(event)">
+
+  <script>
+    // ========== Configuration ==========
+    const DB_NAME = 'LogViewerDB';
+    const DB_VERSION = 1;
+    const STORE_NAME = 'comments';
+    let db = null;
+    let currentFileName = '';
+    let allComments = [];
+    let phases = [];
+
+    // ========== Theme ==========
+    function toggleTheme() {
+      const body = document.body;
+      const isDark = body.getAttribute('data-theme') !== 'light';
+      body.setAttribute('data-theme', isDark ? 'light' : 'dark');
+      document.querySelector('.theme-toggle').innerHTML = isDark ? '&#x2600;&#xFE0F;' : '&#x1F319;';
+      localStorage.setItem('logViewerTheme', isDark ? 'light' : 'dark');
+
+      if (document.querySelector('.mermaid svg')) {
+        reinitializeMermaid();
+      }
+    }
+
+    function loadTheme() {
+      const saved = localStorage.getItem('logViewerTheme');
+      if (saved === 'light') {
+        document.body.setAttribute('data-theme', 'light');
+        document.querySelector('.theme-toggle').innerHTML = '&#x2600;&#xFE0F;';
+      }
+    }
+
+    // ========== IndexedDB ==========
+    async function initDB() {
+      return new Promise((resolve, reject) => {
+        const request = indexedDB.open(DB_NAME, DB_VERSION);
+
+        request.onerror = () => {
+          updateDBStatus(false);
+          reject(request.error);
+        };
+
+        request.onsuccess = () => {
+          db = request.result;
+          updateDBStatus(true);
+          resolve(db);
+        };
+
+        request.onupgradeneeded = (event) => {
+          const database = event.target.result;
+          if (!database.objectStoreNames.contains(STORE_NAME)) {
+            const store = database.createObjectStore(STORE_NAME, { keyPath: 'id', autoIncrement: true });
+            store.createIndex('sectionId', 'sectionId', { unique: false });
+            store.createIndex('fileName', 'fileName', { unique: false });
+            store.createIndex('createdAt', 'createdAt', { unique: false });
+          }
+        };
+      });
+    }
+
+    function updateDBStatus(connected) {
+      const el = document.getElementById('db-status');
+      el.textContent = connected ? 'DB: OK' : 'DB: Error';
+      el.className = `status-badge ${connected ? 'success' : 'warning'}`;
+    }
+
+    async function saveComment(sectionId, sectionTitle, content) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction([STORE_NAME], 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const comment = {
+          sectionId,
+          sectionTitle,
+          content,
+          fileName: currentFileName,
+          createdAt: new Date().toISOString()
+        };
+        const req = store.add(comment);
+        req.onsuccess = () => resolve(req.result);
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function getComments() {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction([STORE_NAME], 'readonly');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.getAll();
+        req.onsuccess = () => {
+          let comments = req.result;
+          if (currentFileName) {
+            comments = comments.filter(c => c.fileName === currentFileName);
+          }
+          resolve(comments);
+        };
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    async function deleteComment(id) {
+      return new Promise((resolve, reject) => {
+        const tx = db.transaction([STORE_NAME], 'readwrite');
+        const store = tx.objectStore(STORE_NAME);
+        const req = store.delete(id);
+        req.onsuccess = () => resolve();
+        req.onerror = () => reject(req.error);
+      });
+    }
+
+    // ========== File Handling ==========
+    function setupDropZone() {
+      const dropZone = document.getElementById('drop-zone');
+      const mainContent = document.getElementById('main-content');
+
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(event => {
+        mainContent.addEventListener(event, preventDefaults, false);
+      });
+
+      function preventDefaults(e) {
+        e.preventDefault();
+        e.stopPropagation();
+      }
+
+      ['dragenter', 'dragover'].forEach(event => {
+        mainContent.addEventListener(event, () => {
+          if (dropZone) dropZone.classList.add('dragover');
+        });
+      });
+
+      ['dragleave', 'drop'].forEach(event => {
+        mainContent.addEventListener(event, () => {
+          if (dropZone) dropZone.classList.remove('dragover');
+        });
+      });
+
+      mainContent.addEventListener('drop', handleDrop);
+    }
+
+    function handleDrop(e) {
+      const files = e.dataTransfer.files;
+      if (files.length > 0) {
+        loadFile(files[0]);
+      }
+    }
+
+    function handleFileSelect(e) {
+      const files = e.target.files;
+      if (files.length > 0) {
+        loadFile(files[0]);
+      }
+    }
+
+    function loadFile(file) {
+      if (!file.name.match(/\.(md|markdown|txt)$/i)) {
+        showToast('Markdownファイル(.md)を選択してください');
+        return;
+      }
+
+      const reader = new FileReader();
+      reader.onload = async (e) => {
+        currentFileName = file.name;
+        document.getElementById('file-badge').textContent = file.name;
+        await processLogFile(e.target.result);
+        showToast(`${file.name} を読み込みました`);
+      };
+      reader.readAsText(file);
+    }
+
+    // ========== Log Processing ==========
+    async function processLogFile(markdown) {
+      phases = parsePhases(markdown);
+      allComments = await getComments();
+
+      renderPhaseNav();
+      renderTimeline();
+      renderSummary();
+    }
+
+    function parsePhases(markdown) {
+      const lines = markdown.split('\n');
+      const phases = [];
+      let currentPhase = null;
+      let currentSection = null;
+      let buffer = [];
+
+      for (let i = 0; i < lines.length; i++) {
+        const line = lines[i];
+
+        // Detect Phase headers (## Phase X: or ## Phase X.)
+        const phaseMatch = line.match(/^##\s+Phase\s+(\d+(?:\.\d+)?)[:\s.]+(.+)/i);
+        if (phaseMatch) {
+          if (currentPhase) {
+            if (currentSection) {
+              currentSection.content = buffer.join('\n');
+              currentPhase.sections.push(currentSection);
+            }
+            phases.push(currentPhase);
+          }
+
+          const phaseNum = phaseMatch[1];
+          const title = phaseMatch[2].trim();
+          const isCompleted = title.includes('✅') || title.toLowerCase().includes('completed');
+          const isInProgress = title.includes('🚧') || title.toLowerCase().includes('in progress');
+
+          currentPhase = {
+            number: phaseNum,
+            title: title.replace(/[✅🚧]/g, '').trim(),
+            status: isCompleted ? 'completed' : (isInProgress ? 'in-progress' : 'pending'),
+            date: extractDate(lines, i),
+            sections: []
+          };
+          currentSection = null;
+          buffer = [];
+          continue;
+        }
+
+        // Detect section headers (### )
+        if (line.startsWith('### ') && currentPhase) {
+          if (currentSection) {
+            currentSection.content = buffer.join('\n');
+            currentPhase.sections.push(currentSection);
+          }
+          currentSection = {
+            title: line.replace('### ', '').trim(),
+            content: ''
+          };
+          buffer = [];
+          continue;
+        }
+
+        // Collect content
+        if (currentPhase) {
+          buffer.push(line);
+        }
+      }
+
+      // Save last phase
+      if (currentPhase) {
+        if (currentSection) {
+          currentSection.content = buffer.join('\n');
+          currentPhase.sections.push(currentSection);
+        } else if (buffer.length > 0) {
+          currentPhase.sections.push({
+            title: 'Content',
+            content: buffer.join('\n')
+          });
+        }
+        phases.push(currentPhase);
+      }
+
+      return phases;
+    }
+
+    function extractDate(lines, startIndex) {
+      // Look for date pattern in nearby lines
+      for (let i = startIndex; i < Math.min(startIndex + 5, lines.length); i++) {
+        const dateMatch = lines[i].match(/\((\d{4}-\d{2}-\d{2})\)/);
+        if (dateMatch) return dateMatch[1];
+      }
+      return null;
+    }
+
+    // ========== Rendering ==========
+    function renderPhaseNav() {
+      const nav = document.getElementById('phase-nav');
+      if (phases.length === 0) {
+        nav.innerHTML = '<li><span style="color: var(--text-secondary); font-size: 0.85rem;">Phase が見つかりません</span></li>';
+        return;
+      }
+
+      nav.innerHTML = phases.map((phase, i) => {
+        const phaseClass = `phase-${Math.floor(parseFloat(phase.number))}`;
+        return `
+          <li>
+            <a href="#phase-${i}" onclick="scrollToPhase(${i}); return false;">
+              <span class="phase-dot ${phaseClass}"></span>
+              <span>Phase ${phase.number}</span>
+              ${phase.status !== 'pending' ? `<span class="phase-status ${phase.status}">${phase.status === 'completed' ? '完了' : '進行中'}</span>` : ''}
+            </a>
+          </li>
+        `;
+      }).join('');
+    }
+
+    function renderTimeline() {
+      const main = document.getElementById('main-content');
+
+      if (phases.length === 0) {
+        main.innerHTML = '<div class="drop-zone"><p>Phase が検出されませんでした。05_log.md 形式のファイルを使用してください。</p></div>';
+        return;
+      }
+
+      main.innerHTML = `
+        <div id="summary-container"></div>
+        <div class="timeline">
+          ${phases.map((phase, i) => renderPhaseItem(phase, i)).join('')}
+        </div>
+      `;
+
+      // Initialize Mermaid
+      reinitializeMermaid();
+
+      // Setup comment panels
+      setupCommentPanels();
+    }
+
+    function renderPhaseItem(phase, index) {
+      const phaseClass = `phase-${Math.floor(parseFloat(phase.number))}`;
+      const sectionId = `phase-${index}`;
+      const phaseComments = allComments.filter(c => c.sectionId === sectionId);
+
+      let contentHtml = '';
+      if (phase.sections.length > 0) {
+        contentHtml = phase.sections.map(section => {
+          let html = section.content;
+
+          // Process mermaid blocks
+          html = html.replace(
+            /```mermaid\n([\s\S]*?)```/g,
+            '<div class="mermaid-container"><div class="mermaid">$1</div></div>'
+          );
+
+          // Process task lists
+          html = html.replace(
+            /^- \[([ x])\] (.+)$/gm,
+            (_, checked, text) => {
+              const isChecked = checked === 'x';
+              return `<div class="task-item"><span class="task-checkbox ${isChecked ? 'checked' : ''}">${isChecked ? '✓' : ''}</span>${text}</div>`;
+            }
+          );
+
+          // Render markdown
+          marked.setOptions({ breaks: true, gfm: true });
+          return `
+            ${section.title !== 'Content' ? `<h4>${section.title}</h4>` : ''}
+            ${marked.parse(html)}
+          `;
+        }).join('');
+      }
+
+      return `
+        <div class="timeline-item ${phaseClass}" id="${sectionId}">
+          <div class="timeline-dot"></div>
+          <div class="timeline-header">
+            <span class="timeline-phase">Phase ${phase.number}</span>
+            <span class="timeline-title">${escapeHtml(phase.title)}</span>
+            ${phase.date ? `<span class="timeline-date">${phase.date}</span>` : ''}
+          </div>
+          <div class="timeline-content">
+            ${contentHtml}
+            <div class="comment-panel" data-section-id="${sectionId}" data-section-title="Phase ${phase.number}: ${phase.title}">
+              <div class="comment-panel-header" onclick="toggleCommentPanel(this)">
+                <h4>💬 コメント</h4>
+                <span class="comment-count-badge">${phaseComments.length}</span>
+              </div>
+              <div class="comment-list" id="comments-${sectionId}">
+                ${renderComments(phaseComments)}
+                <div class="comment-form">
+                  <textarea placeholder="このPhaseにコメント..." id="input-${sectionId}"></textarea>
+                  <button onclick="addComment('${sectionId}', 'Phase ${phase.number}: ${escapeHtml(phase.title)}')">追加</button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function renderComments(comments) {
+      if (comments.length === 0) return '';
+      return comments
+        .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt))
+        .map(c => `
+          <div class="comment-item">
+            <div>${escapeHtml(c.content)}</div>
+            <div class="meta">
+              <span>${formatDate(c.createdAt)}</span>
+              <button class="secondary" style="padding: 2px 8px; font-size: 0.7rem;" onclick="handleDeleteComment(${c.id}, '${c.sectionId}')">削除</button>
+            </div>
+          </div>
+        `).join('');
+    }
+
+    function renderSummary() {
+      const container = document.getElementById('summary-container');
+      if (!container) return;
+
+      const completed = phases.filter(p => p.status === 'completed').length;
+      const inProgress = phases.filter(p => p.status === 'in-progress').length;
+      const totalTasks = countTasks();
+
+      container.innerHTML = `
+        <div class="summary-card">
+          <h2>&#x1F4CA; サマリー</h2>
+          <div class="summary-stats">
+            <div class="stat-item">
+              <div class="stat-value">${phases.length}</div>
+              <div class="stat-label">Phase 数</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" style="color: var(--success);">${completed}</div>
+              <div class="stat-label">完了</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value" style="color: var(--warning);">${inProgress}</div>
+              <div class="stat-label">進行中</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">${allComments.length}</div>
+              <div class="stat-label">コメント</div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    function countTasks() {
+      let completed = 0;
+      let total = 0;
+      phases.forEach(phase => {
+        phase.sections.forEach(section => {
+          const matches = section.content.match(/- \[([ x])\]/g) || [];
+          total += matches.length;
+          completed += matches.filter(m => m.includes('x')).length;
+        });
+      });
+      return { completed, total };
+    }
+
+    // ========== Comments ==========
+    function setupCommentPanels() {
+      // All panels start collapsed
+    }
+
+    function toggleCommentPanel(header) {
+      const list = header.nextElementSibling;
+      list.classList.toggle('expanded');
+      header.querySelector('h4').textContent = list.classList.contains('expanded') ? '💬 コメント ▼' : '💬 コメント';
+    }
+
+    async function addComment(sectionId, sectionTitle) {
+      const input = document.getElementById(`input-${sectionId}`);
+      const content = input.value.trim();
+
+      if (!content) {
+        showToast('コメントを入力してください');
+        return;
+      }
+
+      await saveComment(sectionId, sectionTitle, content);
+      input.value = '';
+
+      // Refresh
+      allComments = await getComments();
+      const phaseComments = allComments.filter(c => c.sectionId === sectionId);
+      const listEl = document.getElementById(`comments-${sectionId}`);
+
+      // Update comment list (keeping form)
+      const form = listEl.querySelector('.comment-form');
+      listEl.innerHTML = renderComments(phaseComments);
+      listEl.appendChild(form);
+
+      // Update badge
+      const panel = listEl.closest('.comment-panel');
+      panel.querySelector('.comment-count-badge').textContent = phaseComments.length;
+
+      // Update summary
+      renderSummary();
+
+      showToast('コメントを追加しました');
+    }
+
+    async function handleDeleteComment(id, sectionId) {
+      await deleteComment(id);
+      allComments = await getComments();
+
+      const phaseComments = allComments.filter(c => c.sectionId === sectionId);
+      const listEl = document.getElementById(`comments-${sectionId}`);
+      const form = listEl.querySelector('.comment-form');
+      listEl.innerHTML = renderComments(phaseComments);
+      listEl.appendChild(form);
+
+      const panel = listEl.closest('.comment-panel');
+      panel.querySelector('.comment-count-badge').textContent = phaseComments.length;
+
+      renderSummary();
+      showToast('削除しました');
+    }
+
+    async function exportComments() {
+      const comments = await getComments();
+      if (comments.length === 0) {
+        showToast('エクスポートするコメントがありません');
+        return;
+      }
+      const data = JSON.stringify(comments, null, 2);
+      const blob = new Blob([data], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `log-comments-${currentFileName || 'log'}-${new Date().toISOString().split('T')[0]}.json`;
+      a.click();
+      URL.revokeObjectURL(url);
+      showToast('エクスポートしました');
+    }
+
+    // ========== Navigation ==========
+    function scrollToPhase(index) {
+      const el = document.getElementById(`phase-${index}`);
+      if (el) {
+        el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+      }
+    }
+
+    function toggleSidebar() {
+      document.getElementById('sidebar').classList.toggle('expanded');
+    }
+
+    // ========== Mermaid ==========
+    function reinitializeMermaid() {
+      const theme = document.body.getAttribute('data-theme') === 'light' ? 'default' : 'dark';
+      mermaid.initialize({
+        startOnLoad: false,
+        theme: theme,
+        securityLevel: 'loose'
+      });
+
+      document.querySelectorAll('.mermaid').forEach((el, i) => {
+        const code = el.textContent || el.getAttribute('data-code');
+        if (code && !el.querySelector('svg')) {
+          el.setAttribute('data-code', code);
+          mermaid.render(`mermaid-log-${i}-${Date.now()}`, code).then(result => {
+            el.innerHTML = result.svg;
+          }).catch(err => {
+            console.error('Mermaid error:', err);
+          });
+        }
+      });
+    }
+
+    // ========== Utilities ==========
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function formatDate(iso) {
+      return new Date(iso).toLocaleString('ja-JP', {
+        month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit'
+      });
+    }
+
+    function showToast(msg) {
+      const toast = document.getElementById('toast');
+      toast.textContent = msg;
+      toast.classList.add('show');
+      setTimeout(() => toast.classList.remove('show'), 2500);
+    }
+
+    // ========== Initialize ==========
+    document.addEventListener('DOMContentLoaded', async () => {
+      loadTheme();
+      setupDropZone();
+      try {
+        await initDB();
+      } catch (err) {
+        console.error('Init error:', err);
+        showToast('初期化エラー');
+      }
+    });
+  </script>
+</body>
+</html>
