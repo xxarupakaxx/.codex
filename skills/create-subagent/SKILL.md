@@ -1,12 +1,12 @@
 ---
 name: create-subagent
-description: 自然言語の要件から ~/.claude/agents/<name>.md 雛形を生成するメタスキル。Markdown + YAML frontmatter（name/description/tools/model）+ 起動条件 + 出力フォーマット + Tier 1/2/3レビュー姿勢 + スコアリングルーブリックを含むベストプラクティス準拠の雛形を作る。使用タイミング: (1) 新しいサブエージェントを追加したいとき、(2) /create-subagent <要件> 実行時、(3) 「サブエージェントを作って」「専門エージェントを追加」「reviewer を作って」等の依頼時。create-skill の派生としてエージェント定義に特化。
+description: 自然言語の要件から agents/<name>.toml 雛形を生成するメタスキル。TOML（name/description/model/service_tier/developer_instructions）+ 起動条件 + 出力フォーマット + Tier 1/2/3レビュー姿勢 + スコアリングルーブリックを含むベストプラクティス準拠の雛形を作る。使用タイミング: (1) 新しいサブエージェントを追加したいとき、(2) /create-subagent <要件> 実行時、(3) 「サブエージェントを作って」「専門エージェントを追加」「reviewer を作って」等の依頼時。create-skill の派生としてエージェント定義に特化。
 allowed-tools: Read, Write, Glob, Grep, AskUserQuestion
 ---
 
 # Create Subagent
 
-自然言語の要件から `~/.claude/agents/<name>.md` 雛形を生成するメタスキル。
+自然言語の要件から `agents/<name>.toml` 雛形を生成するメタスキル。
 
 ## 既存設定との関係
 
@@ -36,8 +36,8 @@ allowed-tools: Read, Write, Glob, Grep, AskUserQuestion
 |------|--------|-------|
 | Tier 1 | アーキ/性能レビュー（標準・常時呼ばれる） | 省略（親セッション継承） |
 | Tier 2 | 品質・テスト・観測性・a11y 等の追加レビュー | 省略（親セッション継承） |
-| Tier 3 | セキュリティ・PRDレビュー・複雑判断 | `model: "gpt-5.5"` を検討 |
-| Explorer | ファイル検索・パターンマッチ | `model: "gpt-5.5"` で軽量に |
+| Tier 3 | セキュリティ・PRDレビュー・複雑判断 | custom時のみ `model = "gpt-5.5"` + `service_tier = "priority"` を検討 |
+| Explorer | ファイル検索・パターンマッチ | 既存 `explorer` / `architecture-explorer` role を優先。custom時は `model = "gpt-5.4"` + `service_tier = "priority"` |
 
 判定指針: `~/.claude/rules/model-routing.md` を参照。
 
@@ -46,7 +46,7 @@ allowed-tools: Read, Write, Glob, Grep, AskUserQuestion
 **name 規約:**
 - 小文字・ハイフン・数字のみ（64文字以下）
 - 役割を即座に判別できる名前（例: `dependency-mapper`, `api-contract-reviewer`）
-- 既存 `~/.claude/agents/` と重複しないこと（Glob で確認）
+- 既存 `agents/` と重複しないこと（Glob で確認）
 
 **description 規約（CRITICAL）:**
 - 3人称・1024文字以内・XMLタグ不可
@@ -57,7 +57,7 @@ allowed-tools: Read, Write, Glob, Grep, AskUserQuestion
 
 `Read references/agent-template.md` を参照しテンプレートを取得し、以下を埋める:
 
-1. **YAML frontmatter**: name / description / tools / model（省略可）
+1. **TOML metadata**: name / description / model（省略可）/ service_tier（model明示時は必須）
 1. **developer_instructions**: 起動条件・入力・出力・評価姿勢を含む本文
 2. **Do Not Trust Preamble**: レビュー系エージェントには必ず挿入
 3. **評価姿勢セクション**: 懐疑姿勢・見逃しコスト・自作物への甘さ排除・証拠主義
@@ -68,7 +68,7 @@ allowed-tools: Read, Write, Glob, Grep, AskUserQuestion
 
 ### Step 5: 配置と確認
 
-- 配置先: `~/.claude/agents/<name>.md`
+- 配置先: `agents/<name>.toml`
 - 既存ファイル上書き時は AskUserQuestion で確認
 - 作成後、起動方法（`multi_agent_v1.spawn_agent(agent_type: "<name>")` 指定例）を報告
 

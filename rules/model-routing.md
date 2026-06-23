@@ -15,7 +15,7 @@ Codex で sub-agent を起動する際のモデル/role選択ルール。
 |------|-------|--------------|
 | Default / heavy judgment | `gpt-5.5` | `priority` |
 | Routine specialist agents | `gpt-5.4` | `priority` |
-| Cost-sensitive simple work | `gpt-5.4-mini` | omit unless supported/needed |
+| Cost-sensitive simple work | role既定または model 省略 | role既定または親セッション継承 |
 
 ## Dispatch Table
 
