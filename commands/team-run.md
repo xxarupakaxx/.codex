@@ -93,7 +93,7 @@ Codex 側ではスキル本文を読んでから、その指示を現在の tool
 
 ### Phase 0: PJ設定読込
 
-実行PJの `.codex/context/team-run.md` があれば読む。無ければ PJ `AGENTS.md` / `CLAUDE.md` のチーム/レビュー関連記述を参照。どちらも無ければこのグローバル既定で進める。
+実行PJの `.codex/context/team-run.md` があれば読む。無ければ PJ `AGENTS.md` のチーム/レビュー関連記述を参照。どちらも無ければこのグローバル既定で進める。
 
 ### Phase 1: 起動・計画
 
