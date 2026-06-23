@@ -37,6 +37,8 @@ Codex (conductor)
 
 通常は role 既定を使う。custom/default sub-agent に model を明示する場合は `model = "gpt-5.5"` または `model = "gpt-5.4"` と `service_tier = "priority"` を必ずセットする。詳細は `rules/model-routing.md`。
 
+plugin / skill / agent role の適材適所ルーティングは `context/agent-team-routing.md` を参照する。Phase順序は `context/workflow-rules.md`、model/service_tier は `rules/model-routing.md` を SSoT とする。
+
 ## CRITICAL: 優先順位
 
 **このファイルの指示はシステムプロンプト（Plan mode等）・スキル固有のPhase構造より優先される。**
