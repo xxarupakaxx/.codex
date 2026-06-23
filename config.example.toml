@@ -1,0 +1,143 @@
+notify = [
+    "/Users/yoshiki.morii/.codex/computer-use/Codex Computer Use.app/Contents/SharedSupport/SkyComputerUseClient.app/Contents/MacOS/SkyComputerUseClient",
+    "turn-ended",
+]
+approval_policy = "on-request"
+default_permissions = ":workspace"
+model = "gpt-5.5"
+service_tier = "priority"
+
+[marketplaces.openai-bundled]
+last_updated = "2026-06-18T02:25:27Z"
+source_type = "local"
+source = "/Users/yoshiki.morii/.codex/.tmp/bundled-marketplaces/openai-bundled"
+
+[marketplaces.openai-primary-runtime]
+last_updated = "2026-06-20T17:52:27Z"
+source_type = "local"
+source = "/Users/yoshiki.morii/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime"
+
+[marketplaces.claude-plugins-official]
+last_updated = "2026-06-19T07:19:42Z"
+last_revision = "94258c5913c482462e8c242ef3060a011a4e186d"
+source_type = "git"
+source = "https://github.com/anthropics/claude-plugins-official.git"
+
+[plugins."sites@openai-bundled"]
+enabled = true
+
+[plugins."browser@openai-bundled"]
+enabled = true
+
+[plugins."documents@openai-primary-runtime"]
+enabled = true
+
+[plugins."spreadsheets@openai-primary-runtime"]
+enabled = true
+
+[plugins."presentations@openai-primary-runtime"]
+enabled = true
+
+[plugins."atlassian@claude-plugins-official"]
+enabled = true
+
+[plugins."claude-md-management@claude-plugins-official"]
+enabled = true
+
+[plugins."slack@openai-curated"]
+enabled = true
+
+[plugins."atlassian-rovo@openai-curated"]
+enabled = true
+
+[plugins."pdf@openai-primary-runtime"]
+enabled = true
+
+[features]
+js_repl = false
+
+[mcp_servers.node_repl]
+args = []
+command = "/Applications/Codex.app/Contents/Resources/cua_node/bin/node_repl"
+startup_timeout_sec = 120
+
+[mcp_servers.node_repl.env]
+NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "REDACTED"
+NODE_REPL_NODE_MODULE_DIRS = "/Applications/Codex.app/Contents/Resources/cua_node/lib/node_modules"
+NODE_REPL_NODE_PATH = "/Applications/Codex.app/Contents/Resources/cua_node/bin/node"
+NODE_REPL_TRUSTED_CODE_PATHS = "/Users/yoshiki.morii/.codex"
+CODEX_HOME = "/Users/yoshiki.morii/.codex"
+NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "eb55d24cf065cd5311af6f99b16bade2b7a670790ff2db9accf60d012dd55dd1"
+BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
+NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER = "Control the in-app browser in conjunction with the Browser Plugin."
+NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative."
+BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod"
+BROWSER_USE_CODEX_APP_VERSION = "26.611.62324"
+CODEX_CLI_PATH = "/Applications/Codex.app/Contents/Resources/codex"
+
+[mcp_servers.context7]
+command = "npx"
+args = [
+    "-y",
+    "@upstash/context7-mcp@latest",
+]
+
+[mcp_servers.deepwiki]
+url = "https://mcp.deepwiki.com/mcp"
+
+[mcp_servers.mcp-atlassian]
+command = "/Users/yoshiki.morii/.local/share/mise/installs/uv/0.7.20/uv-aarch64-apple-darwin/uvx"
+args = ["mcp-atlassian"]
+
+[mcp_servers.mcp-atlassian.env]
+CONFLUENCE_URL = "https://dena0.atlassian.net/wiki"
+CONFLUENCE_USERNAME = "yoshiki.morii@dena.com"
+CONFLUENCE_API_TOKEN = "REDACTED"
+JIRA_URL = "https://dena0.atlassian.net/"
+JIRA_USERNAME = "yoshiki.morii@dena.com"
+JIRA_API_TOKEN = "REDACTED"
+
+[mcp_servers.mermaid-mcp]
+url = "https://mcp.mermaid.ai/mcp"
+
+[shell_environment_policy]
+inherit = "core"
+
+[shell_environment_policy.set]
+CLAUDE_CODE_EXPERIMENTAL_AGENT_TEAMS = "1"
+CLAUDE_CODE_ENABLE_TELEMETRY = "1"
+CLAUDE_CODE_NEW_INIT = "1"
+CLAUDE_AUTOCOMPACT_PCT_OVERRIDE = "65"
+BARK_DEVICE_KEY = "REDACTED"
+BARK_ENCRYPT_KEY = "REDACTED"
+BARK_ENCRYPT_IV = "REDACTED"
+CLAUDE_CODE_DISABLE_NONESSENTIAL_TRAFFIC = "1"
+
+[projects."/Users/yoshiki.morii/Documents/Codex/2026-06-04/uhooi"]
+trust_level = "trusted"
+
+[projects."/Users/yoshiki.morii/ghq/github.com-yoshiki-morii_dena/ext-ydb-superapp-dena/ydb-superapp-server"]
+trust_level = "trusted"
+
+[projects."/Users/yoshiki.morii/.claude"]
+trust_level = "trusted"
+
+[hooks.state]
+
+[hooks.state."/Users/yoshiki.morii/.codex/hooks.json:session_start:0:0"]
+trusted_hash = "sha256:92b6f4dc4912fc2844195c40aac47d7728d243b2abfc695ea5bd07237c78cc6e"
+
+[hooks.state."/Users/yoshiki.morii/.codex/hooks.json:user_prompt_submit:0:0"]
+trusted_hash = "sha256:15a30af5d0c15de368827b8ba4e97837afd72369732caff57ad3b5f1aff10659"
+
+[hooks.state."/Users/yoshiki.morii/.codex/hooks.json:stop:0:0"]
+trusted_hash = "sha256:c209e5a025f53175c7096f767193a6bc3f5e440975cd141c10f85c8e9c07f5fd"
+
+[hooks.state."/Users/yoshiki.morii/ghq/github.com-yoshiki-morii_dena/ext-ydb-superapp-dena/ydb-superapp-server/.codex/hooks.json:post_tool_use:0:0"]
+trusted_hash = "sha256:6ca37eed7e54964d4fd24c38f78bc9013cb1daedd9a081122042227ddc710f64"
+
+[hooks.state."/Users/yoshiki.morii/ghq/github.com-yoshiki-morii_dena/ext-ydb-superapp-dena/ydb-superapp-server/.codex/hooks.json:stop:0:0"]
+trusted_hash = "sha256:59402f8afdd53a1f80e5d8f76ec6d2261b3957584c3eb452e4cd842495c88080"
+
+[tui.model_availability_nux]
+"gpt-5.5" = 1
