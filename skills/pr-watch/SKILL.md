@@ -69,7 +69,7 @@ gh pr checks "$PR" --json name,state,bucket,link,workflow
 
 1. 失敗 check が**複数あれば全て**対象。各 `link`（`.../actions/runs/<run-id>/job/<job-id>`）から run-id / job-id を抽出
 2. 失敗ログを取得: `gh run view <run-id> --log-failed`（特定ジョブ: `gh run view --job <job-id> --log-failed`）
-3. ログから原因を特定して修正（test / lint / typecheck / build 等）。重い修正は `Agent(subagent_type: "codex:codex-rescue")`
+3. ログから原因を特定して修正（test / lint / typecheck / build 等）。重い修正は `multi_agent_v1.spawn_agent(agent_type: "implementer"|"worker")` に明確な write scope を渡して委任
 4. ローカルで test / lint / typecheck を実行し修正を確認
 5. **修正 diff が空、または直前サイクルと同一の修正なら push せず ESCALATE**（無駄な push と修正ループ防止）
 6. **write-ahead**: push の**直前**に state を再 Read し、`active_run_id` が自分の `run_id` と一致する場合だけ `ci_fix_attempts[<check名>]` を +1 して **state を Write**、その後 `git commit`（`fix:` 日本語）→ `git push`（force 系不使用）

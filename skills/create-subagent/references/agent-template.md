@@ -9,7 +9,7 @@
 name: <kebab-case-name>
 description: "<50-200字。何を検出/分析/生成するか。trigger語を3個以上含める>"
 tools: [Read, Grep, Glob, WebSearch, Write]
-# model: 省略推奨（親セッション継承）。判定・レビューなら "opus"、軽量なら "sonnet"
+# model: 省略推奨（親セッション継承）。判定・レビューなら "gpt-5.5"、軽量なら "gpt-5.5"
 ---
 
 # <Agent Display Name>
@@ -73,6 +73,6 @@ Total: <重み付き合計>/<max>
 
 ## model 選択
 
-Claude Code Agent Tool では通常 `model` を省略し、親セッションのモデルを継承させる。判定・レビューには `model: "opus"`、軽量タスクには `model: "sonnet"` を明示。
+Claude Code Agent Tool では通常 `model` を省略し、親セッションのモデルを継承させる。判定・レビューには `model: "gpt-5.5"`、軽量タスクには `model: "gpt-5.5"` を明示。
 
 詳細: `~/.claude/rules/model-routing.md`
