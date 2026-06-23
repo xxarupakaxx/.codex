@@ -21,6 +21,7 @@ archived_sessions/
 shell_snapshots/
 worktrees/
 generated_images/
+memories/
 attachments/
 tmp/
 .tmp/

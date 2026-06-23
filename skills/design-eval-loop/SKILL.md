@@ -144,13 +144,12 @@ playwright-cli goto http://localhost:3000
 
 #### Evaluatorサブエージェントの起動方法
 
-**Agentツール** で `ui-ux-reviewer` サブエージェントを起動する:
+Codex の multi-agent tool で `ui-ux-reviewer` サブエージェントを起動する:
 
 ```
-Agent(
-  subagent_type: "ui-ux-reviewer",
-  description: "Design evaluation iteration {N}",
-  prompt: <<以下のプロンプト>>
+multi_agent_v1.spawn_agent(
+  agent_type: "ui-ux-reviewer",
+  message: <<以下のプロンプト>>
 )
 ```
 
