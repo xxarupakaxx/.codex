@@ -8,6 +8,7 @@ This repository intentionally stores only reproducible configuration:
 - `agents/*.toml`
 - `skills/`
 - `commands/`
+- `prompts/`
 - `hooks.json`
 - `claude-compat/`
 - `config.example.toml`
@@ -23,3 +24,7 @@ secret values from a password manager or local environment.
 
 Codex model routing is pinned to `gpt-5.5` + `priority` by default. Custom
 agents should always declare both `model` and `service_tier`.
+
+Claude-style command markdown files are mirrored into `prompts/` for Codex
+custom prompts. Invoke them as `/prompts:<name>`, for example
+`/prompts:team-run`, after restarting Codex.
