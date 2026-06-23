@@ -43,6 +43,10 @@ Phase 0 ─→ Phase 1 ─→ Phase 2 ─→ Phase 3 ─→ Phase 4 ─→ Phase
 - 深掘り (重要判断): `adversarial-review` で Red(攻撃) → Blue(防御) → Auditor(審判)
   - **adversarial 出力は `adv/*.jsonl` に格納**。issues/ には書き込まない。auto に戻す場合は ADOPT/UPGRADE の指摘を手動で issues/ に転記する必要がある
 
+### Plugin / Skill / Agent Routing
+
+Phase の順序はこのファイルを SSoT とする。一方、各Phaseで **どの plugin / skill / agent role を選ぶか** は `context/agent-team-routing.md` を参照する。agent role と model/service_tier の詳細は `rules/model-routing.md` を参照する。
+
 ### スキル・コマンドの役割
 
 | コンポーネント | 種別 | 役割 | 接続先Phase |
