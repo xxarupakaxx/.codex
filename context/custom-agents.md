@@ -54,10 +54,10 @@ color: purple             # 任意: 表示色
 
 ## 呼び出し方法
 
-Claude Code の Agent Tool で `subagent_type` に指定:
+Codex の multi-agent tool で `agent_type` に指定:
 
 ```
-Agent(subagent_type: "arch-reviewer", prompt: "...")
+multi_agent_v1.spawn_agent(agent_type: "arch-reviewer", message: "...")
 ```
 
 ## 例: レビュワーエージェント

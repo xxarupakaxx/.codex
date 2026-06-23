@@ -2,7 +2,6 @@
 name: domain-reviewer
 description: PJ固有のドメイン知識に基づくコードレビュー。ビジネスロジックの整合性、命名規約、ドメインモデルの正確性を検証。
 tools: Read, Grep, Glob, Write
-model: "gpt-5.5"
 color: green
 ---
 

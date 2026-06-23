@@ -70,7 +70,7 @@ allowed-tools: Read, Write, Glob, Grep, AskUserQuestion
 
 - 配置先: `~/.claude/agents/<name>.md`
 - 既存ファイル上書き時は AskUserQuestion で確認
-- 作成後、起動方法（`Agent(subagent_type: "<name>")` 指定例）を報告
+- 作成後、起動方法（`multi_agent_v1.spawn_agent(agent_type: "<name>")` 指定例）を報告
 
 ## 設計原則
 

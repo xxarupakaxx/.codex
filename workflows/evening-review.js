@@ -95,7 +95,7 @@ const costReport = await agent(`
 - critical: $30+
 
 ## モデル別推奨
-- critical時: gpt-5.5 → gpt-5.5 へのダウングレードを提案
+- critical時: gpt-5.5 → gpt-5.4 role へのダウングレードを提案
 - warning時: 並列agent数の削減を提案
 - info以下: 現状維持
 
@@ -152,7 +152,7 @@ ${JSON.stringify(costReport)}
 - トレードオフ（品質への影響）
 
 最大2件の提案に絞ってください。
-`, { label: 'cost-improvement', phase: 'Improve', model: "gpt-5.5" })
+`, { label: 'cost-improvement', phase: 'Improve', model: "gpt-5.5", service_tier: "priority" })
   if (costImprovement) improvements.push({ type: 'cost', content: costImprovement })
 }
 

@@ -215,7 +215,7 @@ Brutally Minimal / Maximalist Chaos / Retro-Futuristic / Organic-Natural / Luxur
 
 **生成と評価を分離し、独立した評価者による外部フィードバックで品質を担保する。**
 
-記事 "Harness Design for Long-Running Apps" の知見: gpt-5.5 4.6の能力向上により、スプリント単位の反復評価は不要に。**デフォルトは単一パス評価**。モデルの能力境界付近のタスクのみ、評価が実質的な価値を持つ。
+記事 "Harness Design for Long-Running Apps" の知見: 近年の frontier model の能力向上により、スプリント単位の反復評価は不要に。**デフォルトは単一パス評価**。モデルの能力境界付近のタスクのみ、評価が実質的な価値を持つ。
 
 ### 評価構造
 
