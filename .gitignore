@@ -34,6 +34,9 @@ computer-use/
 plugins/
 plugins/cache/
 pets/
+skills/.system/
+claude-compat/config/
+claude-compat/hooks.claude-settings.json
 
 # Local secrets
 config.toml
