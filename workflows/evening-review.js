@@ -95,7 +95,7 @@ const costReport = await agent(`
 - critical: $30+
 
 ## モデル別推奨
-- critical時: opus → sonnet へのダウングレードを提案
+- critical時: gpt-5.5 → gpt-5.5 へのダウングレードを提案
 - warning時: 並列agent数の削減を提案
 - info以下: 現状維持
 
@@ -152,7 +152,7 @@ ${JSON.stringify(costReport)}
 - トレードオフ（品質への影響）
 
 最大2件の提案に絞ってください。
-`, { label: 'cost-improvement', phase: 'Improve', model: 'opus' })
+`, { label: 'cost-improvement', phase: 'Improve', model: "gpt-5.5" })
   if (costImprovement) improvements.push({ type: 'cost', content: costImprovement })
 }
 
@@ -175,7 +175,7 @@ ${JSON.stringify(significantFailures)}
 - 提案ルール: [追加すべきルール文]
 - 適用先: [ファイルパス]
 - 根拠: [発生回数、影響]
-`, { label: 'failure-improvement', phase: 'Improve', model: 'opus', agentType: 'harness-improver' })
+`, { label: 'failure-improvement', phase: 'Improve', model: "gpt-5.5", service_tier: "priority", agentType: 'harness-improver' })
   if (failureImprovement) improvements.push({ type: 'failure', content: failureImprovement })
 }
 
