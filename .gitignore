@@ -2,6 +2,15 @@
 auth.json
 history.jsonl
 session_index.jsonl
+installation_id
+external_agent_session_imports.json
+chrome-native-hosts-v2.json
+.app-server-state*
+.personality_migration
+.codex-global-state*
+..codex-global-state*
+cloud-*-cache.json
+models_cache.json
 logs*.sqlite*
 state*.sqlite*
 goals*.sqlite*
@@ -22,7 +31,9 @@ process_manager/
 node_repl/
 automations/
 computer-use/
+plugins/
 plugins/cache/
+pets/
 
 # Local secrets
 config.toml
