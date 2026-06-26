@@ -116,6 +116,14 @@ JIRA_API_TOKEN = "REDACTED"
 [mcp_servers.mermaid-mcp]
 url = "https://mcp.mermaid.ai/mcp"
 
+[mcp_servers.workflow-html-app]
+command = "bash"
+args = [
+    "-lc",
+    "exec node \"$HOME/.codex/mcp-servers/workflow-html-app/dist/main.js\"",
+]
+startup_timeout_sec = 30
+
 [shell_environment_policy]
 inherit = "core"
 
