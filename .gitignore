@@ -40,6 +40,8 @@ claude-compat/config/
 claude-compat/hooks.claude-settings.json
 claude-compat/mcp-servers/**/node_modules/
 claude-compat/mcp-servers/**/dist/
+mcp-servers/**/node_modules/
+mcp-servers/**/dist/
 claude-compat/plugins/cache/
 claude-compat/plugins/data/
 claude-compat/plugins/marketplaces/
