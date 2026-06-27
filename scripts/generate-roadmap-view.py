@@ -2,8 +2,14 @@
 from __future__ import annotations
 
 import argparse
+import functools
+import http.server
 import json
+import os
 import sys
+import threading
+import time
+import webbrowser
 from datetime import datetime, timezone
 from pathlib import Path
 
@@ -22,6 +28,22 @@ DEFAULT_FILES = [
     "99_history.md",
     "checkpoint.md",
 ]
+
+
+class RoadmapHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
+    def end_headers(self) -> None:
+        self.send_header("Cache-Control", "no-store")
+        super().end_headers()
+
+    def log_message(self, format: str, *args: object) -> None:
+        return
+
+
+def atomic_write_text(path: Path, text: str) -> None:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    tmp.write_text(text)
+    tmp.replace(path)
 
 
 def read_files(task_dir: Path) -> tuple[dict[str, str], list[dict[str, object]]]:
@@ -78,6 +100,44 @@ def render_html(snapshot: dict[str, object]) -> str:
     return template.replace(PLACEHOLDER, payload, 1)
 
 
+def write_outputs(task_dir: Path, output: Path, write_json: bool) -> dict[str, object]:
+    snapshot = build_snapshot(task_dir)
+    atomic_write_text(output, render_html(snapshot))
+
+    if write_json:
+        json_path = output.with_name("roadmap-snapshot.json")
+        atomic_write_text(json_path, json.dumps(snapshot, ensure_ascii=False, indent=2))
+
+    return snapshot
+
+
+def watch_outputs(task_dir: Path, output: Path, interval: float, stop: threading.Event) -> None:
+    while not stop.is_set():
+        try:
+            write_outputs(task_dir, output, write_json=True)
+        except Exception as exc:  # pragma: no cover - visible operator feedback
+            print(f"watch update failed: {exc}", file=sys.stderr, flush=True)
+        stop.wait(interval)
+
+
+def serve_output(output: Path, host: str, port: int, open_browser: bool) -> int:
+    directory = output.parent
+    handler = functools.partial(RoadmapHTTPRequestHandler, directory=str(directory))
+    server = http.server.ThreadingHTTPServer((host, port), handler)
+    actual_host, actual_port = server.server_address[:2]
+    url = f"http://{actual_host}:{actual_port}/{output.name}"
+    print(url, flush=True)
+    if open_browser:
+        webbrowser.open(url)
+    try:
+        server.serve_forever()
+    except KeyboardInterrupt:
+        print("\nstopping roadmap server", file=sys.stderr)
+    finally:
+        server.server_close()
+    return 0
+
+
 def parse_args(argv: list[str]) -> argparse.Namespace:
     parser = argparse.ArgumentParser(
         description="Generate a browser-readable roadmap.html from a Codex task memory directory."
@@ -93,6 +153,38 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         action="store_true",
         help="Write roadmap-snapshot.json next to the HTML as well.",
     )
+    parser.add_argument(
+        "--serve",
+        action="store_true",
+        help="Serve the generated HTML over local HTTP. Defaults to an OS-assigned free port.",
+    )
+    parser.add_argument(
+        "--watch",
+        action="store_true",
+        help="Keep regenerating roadmap.html and roadmap-snapshot.json until interrupted.",
+    )
+    parser.add_argument(
+        "--host",
+        default="127.0.0.1",
+        help="Host for --serve. Defaults to 127.0.0.1.",
+    )
+    parser.add_argument(
+        "--port",
+        type=int,
+        default=0,
+        help="Port for --serve. Defaults to 0, letting the OS choose a free port.",
+    )
+    parser.add_argument(
+        "--interval",
+        type=float,
+        default=2.0,
+        help="Seconds between --watch refreshes. Defaults to 2.0.",
+    )
+    parser.add_argument(
+        "--open",
+        action="store_true",
+        help="Open the generated file or local server URL in the default browser.",
+    )
     return parser.parse_args(argv)
 
 
@@ -104,15 +196,38 @@ def main(argv: list[str]) -> int:
         return 2
 
     output = Path(args.output).expanduser().resolve() if args.output else task_dir / "roadmap.html"
-    snapshot = build_snapshot(task_dir)
-    html = render_html(snapshot)
-    output.write_text(html)
-
-    if args.json:
-        json_path = output.with_name("roadmap-snapshot.json")
-        json_path.write_text(json.dumps(snapshot, ensure_ascii=False, indent=2))
+    write_json = args.json or args.serve or args.watch
+    write_outputs(task_dir, output, write_json=write_json)
 
     print(output)
+    if args.serve:
+        stop = threading.Event()
+        thread = None
+        if args.watch:
+            thread = threading.Thread(
+                target=watch_outputs,
+                args=(task_dir, output, args.interval, stop),
+                daemon=True,
+            )
+            thread.start()
+        try:
+            return serve_output(output, args.host, args.port, args.open)
+        finally:
+            stop.set()
+            if thread:
+                thread.join(timeout=1)
+
+    if args.watch:
+        stop = threading.Event()
+        try:
+            watch_outputs(task_dir, output, args.interval, stop)
+        except KeyboardInterrupt:
+            print("\nstopping roadmap watch", file=sys.stderr)
+        return 0
+
+    if args.open:
+        webbrowser.open(output.as_uri())
+
     return 0
 
 

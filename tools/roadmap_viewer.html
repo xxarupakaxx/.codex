@@ -136,6 +136,38 @@
       flex-wrap: wrap;
     }
 
+    .live-badge {
+      min-height: 32px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      white-space: nowrap;
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--planned);
+    }
+
+    .live-badge.live .live-dot {
+      background: var(--good);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 16%, transparent);
+    }
+
+    .live-badge.error .live-dot {
+      background: var(--danger);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 14%, transparent);
+    }
+
     .btn {
       min-height: 40px;
       border: 1px solid var(--line-strong);
@@ -750,6 +782,7 @@
         </div>
       </div>
       <div class="toolbar">
+        <span class="live-badge" id="live-status"><span class="live-dot" aria-hidden="true"></span><span id="live-status-text">Static</span></span>
         <button class="btn primary" type="button" id="open-files">Open files</button>
         <button class="btn" type="button" id="export-json">Export JSON</button>
         <button class="btn" type="button" id="theme-toggle">Theme</button>
@@ -892,6 +925,8 @@
     ];
 
     let currentSnapshot = { title: 'Roadmap', taskDir: '', generatedAt: '', files: {}, sources: [] };
+    let lastSnapshotSignature = '';
+    let liveTimer = null;
 
     function byId(id) {
       return document.getElementById(id);
@@ -937,6 +972,16 @@
         files,
         sources: snapshot.sources || Object.keys(files).map(name => ({ name, size: files[name].length }))
       };
+    }
+
+    function snapshotSignature(snapshot) {
+      const files = Object.entries(snapshot.files || {})
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([name, text]) => [name, String(text)]);
+      return JSON.stringify({
+        taskDir: snapshot.taskDir || snapshot.task_dir || '',
+        files
+      });
     }
 
     function inferTitle(files) {
@@ -1133,6 +1178,7 @@
 
     function render(snapshotInput) {
       currentSnapshot = normalizeSnapshot(snapshotInput);
+      lastSnapshotSignature = snapshotSignature(currentSnapshot);
       const model = buildModel(currentSnapshot);
       renderHero(model);
       renderMindset(model);
@@ -1142,6 +1188,19 @@
       renderRisks(model);
       renderEvidence(model);
       renderSources(model);
+    }
+
+    function setLiveStatus(kind, text) {
+      const badge = byId('live-status');
+      const label = byId('live-status-text');
+      badge.className = `live-badge ${kind || ''}`.trim();
+      label.textContent = text;
+    }
+
+    function stopLivePolling() {
+      if (!liveTimer) return;
+      window.clearInterval(liveTimer);
+      liveTimer = null;
     }
 
     function renderHero(model) {
@@ -1292,11 +1351,13 @@
 
     async function loadFiles(fileList) {
       const files = {};
+      stopLivePolling();
       for (const file of Array.from(fileList)) {
         const text = await file.text();
         if (file.name.toLowerCase().endsWith('.json')) {
           const snapshot = JSON.parse(text);
           render(snapshot);
+          setLiveStatus('', 'Manual');
           showToast(`Loaded ${file.name}`);
           return;
         }
@@ -1308,6 +1369,7 @@
         generatedAt: new Date().toISOString(),
         files
       });
+      setLiveStatus('', 'Manual');
       showToast(`Loaded ${Object.keys(files).length} files`);
     }
 
@@ -1329,6 +1391,38 @@
       toast.classList.add('show');
       window.clearTimeout(showToast.timer);
       showToast.timer = window.setTimeout(() => toast.classList.remove('show'), 2200);
+    }
+
+    async function pollSnapshot() {
+      try {
+        const response = await fetch(`roadmap-snapshot.json?ts=${Date.now()}`, {
+          cache: 'no-store'
+        });
+        if (!response.ok) {
+          setLiveStatus('error', `Live ${response.status}`);
+          return;
+        }
+        const snapshot = await response.json();
+        const signature = snapshotSignature(snapshot);
+        if (signature !== lastSnapshotSignature) {
+          render(snapshot);
+          showToast('Roadmap updated');
+        }
+        setLiveStatus('live', 'Live');
+      } catch {
+        setLiveStatus('error', 'Live lost');
+      }
+    }
+
+    function startLivePolling() {
+      const isHttp = location.protocol === 'http:' || location.protocol === 'https:';
+      if (!isHttp) {
+        setLiveStatus('', 'Static');
+        return;
+      }
+      setLiveStatus('live', 'Live');
+      pollSnapshot();
+      liveTimer = window.setInterval(pollSnapshot, 2000);
     }
 
     function setupInteractions() {
@@ -1370,6 +1464,7 @@
       } else {
         render({ title: 'Roadmap Viewer', files: {} });
       }
+      startLivePolling();
     });
   </script>
 </body>

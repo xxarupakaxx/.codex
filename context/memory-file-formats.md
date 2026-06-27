@@ -57,6 +57,21 @@
 | 80_review.md | レビュー結果 | レビュー実施後 |
 | 90_pr.md | PR内容 | PR作成時 |
 | 99_history.md | 意思決定ログ | 随時 |
+| roadmap.html | ブラウザ用ロードマップビュー | Phase 2完了後・実装中に再生成 |
+| roadmap-snapshot.json | live更新用snapshot | `--serve --watch` 利用時に自動更新 |
+
+### Live Roadmap Viewer
+
+`roadmap.html` は `scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task>` で生成する。Codex app の横で開きっぱなしにして進捗を見たい場合は次を使う:
+
+```bash
+python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --watch
+```
+
+- 既定では `127.0.0.1` にbindし、port `0` で空きポートを自動割当する。
+- ブラウザはHTTP経由で `roadmap-snapshot.json` をpollingし、ログ・進捗・レビューが更新されると再描画する。
+- 複数セッションで同時に使う場合は、セッションごとに `${MEMORY_DIR}/memory/YYMMDD_<task_name>/` を分ける。必要なら `--port <port>` で明示的に分ける。
+- live表示は補助ビューであり、05_log.md / 40_progress.md / 80_review.md が正本。
 
 ## 05_log.md（重要）
 
