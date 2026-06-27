@@ -40,7 +40,7 @@ description: "エージェントチェーンを順次実行するオーケスト
 各エージェントに対して:
 
 1. **コンテキスト注入**: タスク説明 + 前のエージェントのハンドオフドキュメント
-2. **エージェント実行**: Agent Tool（subagent_type指定）で実行
+2. **エージェント実行**: `multi_agent_v1.spawn_agent(agent_type: "...")` で実行
 3. **ハンドオフ生成**: 結果を構造化ドキュメントとして整理
 4. **次のエージェントへ引き継ぎ**
 
@@ -103,8 +103,8 @@ description: "エージェントチェーンを順次実行するオーケスト
 
 | 機構 | 性質 | 使う場面 |
 |------|------|---------|
-| **Workflow tool** | 親が一括投入する並列fan-out（独立・短命ワーカー） | レビュー/調査/A-B/パイプライン。**大半はこれ（既定）** |
-| **`/team-run`** | Goal + Team Journal + `spawn_agent` で状態共有しながら自律協調 | 複数ターンに渡る協働、FE/BE並行 |
+| **`multi_tool_use.parallel` / `multi_agent_v1.spawn_agent`** | 親が一括投入するfan-out（独立・短命ワーカー） | レビュー/調査/A-B/パイプライン。**大半はこれ（既定）** |
+| **team-run skill** (`/team-run` shim) | Goal + Team Journal + Review Heat + `spawn_agent` で状態共有しながら自律協調 | 複数ターンに渡る協働、FE/BE並行 |
 | **`/orchestrate`** (本コマンド) | Codexランタイムでの逐次エージェントチェーン（ハンドオフ文書） | Codex主体で順序が重要なチェーン |
 | **`/lfg`** | Phase 0-5.5 の全フェーズを自律チェーン実行 | 1タスクを最初から最後まで通す（包括的） |
 | **`blueprint`** | 多セッション・多PRの設計図生成 | 大規模・長期タスクの分解 |
@@ -121,4 +121,4 @@ description: "エージェントチェーンを順次実行するオーケスト
 
 - 各エージェントのハンドオフは05_log.mdにも記録する
 - チェーン中にブロッカーが出たら中断してユーザーに報告
-- エージェント名は `~/.claude/agents/` 配下の定義に準拠
+- agent_type と model/service_tier は `context/agent-team-routing.md` と `rules/model-routing.md` に準拠
