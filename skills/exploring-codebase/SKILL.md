@@ -9,8 +9,8 @@ description: コードベースの構造・パターン・依存関係を3つの
 
 ## 既存設定との関係
 
-- **Phase 0-5（@context/workflow-rules.md）**: Phase 1（調査）の補完。通常の `explorer` 探索より深い多角的調査が必要な場合に使用
-- **メモリディレクトリ（@context/memory-file-formats.md）**: 結果を05_log.mdに記録
+- **Phase 0-5（`context/workflow-rules.md`）**: Phase 1（調査）の補完。通常の `explorer` 探索より深い多角的調査が必要な場合に使用
+- **メモリディレクトリ（`context/memory-file-formats.md`）**: 結果を05_log.mdに記録
 - **codebase-review**: レビュー（品質問題の検出）ではなく、理解（構造の把握）が目的
 
 ## 使用場面
@@ -31,7 +31,7 @@ description: コードベースの構造・パターン・依存関係を3つの
 
 ### Step 2: 3つの探索サブエージェント + 過去知見検索を並列起動
 
-**CRITICAL**: Agent Tool で以下4つを**同時に**起動する。
+**CRITICAL**: `multi_agent_v1.spawn_agent(agent_type: "...")` で以下4つを**同時に**起動する。
 
 各エージェントには以下の情報を渡す:
 - 探索対象ディレクトリのフルパス
@@ -41,7 +41,7 @@ description: コードベースの構造・パターン・依存関係を3つの
 
 #### Agent 1: Architecture Explorer
 
-**subagent_type**: `architecture-explorer`（未ロード時は `explorer`）
+**agent_type**: `architecture-explorer`（未ロード時は `explorer`）
 
 **プロンプトテンプレート**:
 ```
@@ -56,7 +56,7 @@ description: コードベースの構造・パターン・依存関係を3つの
 
 #### Agent 2: Data Flow Tracer
 
-**subagent_type**: `data-flow-tracer`（未ロード時は `explorer`）
+**agent_type**: `data-flow-tracer`（未ロード時は `explorer`）
 
 **プロンプトテンプレート**:
 ```
@@ -71,7 +71,7 @@ description: コードベースの構造・パターン・依存関係を3つの
 
 #### Agent 3: Dependency Mapper
 
-**subagent_type**: `dependency-mapper`（未ロード時は `explorer`）
+**agent_type**: `dependency-mapper`（未ロード時は `explorer`）
 
 **プロンプトテンプレート**:
 ```
@@ -86,7 +86,7 @@ description: コードベースの構造・パターン・依存関係を3つの
 
 #### Agent 4: Learnings Researcher（過去知見検索）
 
-**subagent_type**: `learnings-researcher`（未ロード時は `explorer` またはローカル `rg`/SQLite検索で代替）
+**agent_type**: `learnings-researcher`（未ロード時は `explorer` またはローカル `rg`/SQLite検索で代替）
 
 **プロンプトテンプレート**:
 ```
@@ -97,7 +97,7 @@ description: コードベースの構造・パターン・依存関係を3つの
 
 `learnings-researcher` の検索戦略に従って、
 memories/、solutions/、issues/ を横断検索してください。
-MEMORY_DIRはPJ CLAUDE.mdで定義（未定義なら .local/）。
+MEMORY_DIRはPJ AGENTS.md（互換 CLAUDE.md がある場合はその import 内容も含む）で定義（未定義なら .local/）。
 ```
 
 **スキップ条件**: MEMORY_DIRにmemories/やsolutions/が存在しない場合（新規PJ等）
@@ -154,9 +154,9 @@ MEMORY_DIRはPJ CLAUDE.mdで定義（未定義なら .local/）。
 
 ## Codex multi-agent 連携
 
-大規模コードベースでは `multi_agent_v1.spawn_agent(agent_type: "explorer")`、`architecture-explorer`、`dependency-mapper` を目的別に並列起動する。複数ターンで状態共有が必要な場合だけ `/team-run` の Team Journal に探索結果を集約する。
+大規模コードベースでは `multi_agent_v1.spawn_agent(agent_type: "explorer")`、`architecture-explorer`、`dependency-mapper` を目的別に並列起動する。複数ターンで状態共有が必要な場合だけ `team-run` skill の Team Journal に探索結果を集約する。
 
 ## 既存設定への参照
 
-- @context/workflow-rules.md（Phase 1との連携）
-- @context/memory-file-formats.md（05_log.mdへの記録）
+- `context/workflow-rules.md`（Phase 1との連携）
+- `context/memory-file-formats.md`（05_log.mdへの記録）
