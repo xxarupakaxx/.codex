@@ -14,8 +14,9 @@
 | Sprint Contract | 機械判定できる合格基準を定義する | `checkpoint.md` |
 | Team Journal | 周回をまたぐ状態、決定、失敗原因を共有する | `${MEMORY_DIR}/memory/YYMMDD_<task_name>/team-journal.md` |
 | Review Heat | 変更のリスクに応じて checker / judge を選ぶ | このファイル + `workflow-rules.md` |
+| Live Roadmap | 現在地を横で見るための補助ビュー | `${MEMORY_DIR}/memory/YYMMDD_<task_name>/roadmap.html` |
 
-Goal は「完了の定義」であり、レビュー体制ではない。Team Journal は「現在地」であり、合格証明ではない。Review Heat は「疑い方」であり、実装計画ではない。この分離を崩さない。
+Goal は「完了の定義」であり、レビュー体制ではない。Team Journal は「現在地」であり、合格証明ではない。Review Heat は「疑い方」であり、実装計画ではない。Live Roadmap は見える化であり、正本ログではない。この分離を崩さない。
 
 ## Team Roles
 
@@ -77,4 +78,5 @@ team-run を完了扱いにするには、少なくとも次を満たす。
 - CRITICAL が0件。
 - IMPORTANT は修正済み、または残す理由とリスクを Team Journal に記録済み。
 - Team Journal に最終状態、検証、レビュー結果、残存リスクが記録されている。
+- Live Roadmap を使っていた場合、最終 `roadmap.html` / `roadmap-snapshot.json` が同じメモリディレクトリ内に残っている。
 - 完了済み sub-agent を `multi_agent_v1.close_agent` している。

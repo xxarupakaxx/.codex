@@ -8,15 +8,16 @@ allowed-tools: Read, mcp__workflow-html-app__view-plan
 
 計画ファイル・ログ・レビュー結果をHTMLビューアに自動表示する。
 
-Roadmap Viewer は「Plan時点では粗い全体像、実装が進むほどクリアになる」俯瞰ビューを担当する。Plan Viewer / Log Viewer は詳細確認用として使う。
+Roadmap Viewer は「Plan時点では粗い全体像、実装が進むほどクリアになる」俯瞰ビューを担当する。`--serve --watch` で起動すると、Codex app の横に置いたブラウザが自動更新される。Plan Viewer / Log Viewer は詳細確認用として使う。
 
 ## 自動発動条件
 
 以下のタイミングで**自動的に**発動（ユーザー確認不要）：
 
 1. **Phase 2完了時**: `${MEMORY_DIR}/memory/<task>/roadmap.html` を生成し、Roadmap Viewerで表示
-2. **Phase 3/4の節目**: `40_progress.md` / `80_review.md` / `05_log.md` 更新後に `roadmap.html` を再生成
-3. **Phase 5完了時**: Roadmap Viewerで最終状態を表示し、必要に応じて05_log.mdをlog_viewerで表示
+2. **横で見たい場合**: `scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --watch` を起動し、表示URLを案内
+3. **Phase 3/4の節目**: `40_progress.md` / `80_review.md` / `05_log.md` 更新後、watch中ならブラウザが自動更新
+4. **Phase 5完了時**: Roadmap Viewerで最終状態を表示し、必要に応じて05_log.mdをlog_viewerで表示
 
 ## 手動トリガー
 
@@ -56,6 +57,14 @@ ${MEMORY_DIR}/memory/<task>/roadmap.html
 
 ユーザーには生成されたHTMLパスを案内する。ブラウザで開けば、タスク全体の現在地、解像度、フェーズ、レビュー、リスク、証跡が一画面で見える。
 
+ライブ更新:
+
+```bash
+python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --watch
+```
+
+`--serve` は既定で `127.0.0.1` にbindし、port `0` で空きポートを自動割当する。複数セッションで同時に使う場合は、各セッションの `${MEMORY_DIR}/memory/<task>` を分ける。固定portが必要な時だけ `--port <port>` を指定する。
+
 ### 3. MCP Apps view-plan 呼び出し（詳細確認用）
 
 `mcp__workflow-html-app__view-plan` ツールを呼び出し:
@@ -80,6 +89,7 @@ ${MEMORY_DIR}/memory/<task>/roadmap.html
 - `00_spec.md` / `30_plan.md` / `40_progress.md` / `80_review.md` / `05_log.md` を統合
 - Clarityメーター、Phaseレール、Task進捗、Review Heat、Risks、Evidence Streamを表示
 - 生成済みHTMLにsnapshotを埋め込むため、追加サーバーなしで `file://` 表示できる
+- `--serve --watch` では `roadmap-snapshot.json` をpollingし、開きっぱなしのブラウザを自動更新する
 - 手動で複数Markdown/JSONをドラッグ&ドロップして確認可能
 
 ### Plan Viewer（計画ビューア）

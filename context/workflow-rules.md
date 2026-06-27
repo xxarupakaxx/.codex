@@ -549,13 +549,13 @@ Phase直結でないユーティリティスキル。**状況が発生したら*
 ## HTML Viewer Tools
 
 計画ファイル・ログ・レビュー結果をブラウザでインタラクティブに閲覧するためのHTMLビューア。
-Roadmap Viewer は `roadmap.html` を生成し、Plan時点の粗い全体像から実装・レビューが進むにつれてクリアになる進捗ビューを提供する。Plan Viewer / Log Viewer は個別ファイルの詳細確認に使う。
+Roadmap Viewer は `roadmap.html` を生成し、Plan時点の粗い全体像から実装・レビューが進むにつれてクリアになる進捗ビューを提供する。`--serve --watch` で起動すると、Codex app の横で開いたブラウザが `roadmap-snapshot.json` をpollingして自動更新される。Plan Viewer / Log Viewer は個別ファイルの詳細確認に使う。
 
 ### MCP Apps ツール
 
 | ツール名 | MCPツール | 対象ファイル | 主な機能 |
 |---------|----------|------------|---------|
-| Roadmap Viewer | ローカルHTML (`tools/roadmap_viewer.html`) + `scripts/generate-roadmap-view.py` | 00_spec.md / 30_plan.md / 40_progress.md / 80_review.md / 05_log.md | Clarityメーター、Phaseレール、Task進捗、Review Heat、Risks、Evidence Stream |
+| Roadmap Viewer | ローカルHTML (`tools/roadmap_viewer.html`) + `scripts/generate-roadmap-view.py` | 00_spec.md / 30_plan.md / 40_progress.md / 80_review.md / 05_log.md | Clarityメーター、Phaseレール、Task進捗、Review Heat、Risks、Evidence Stream、live polling |
 | Plan Viewer | `mcp__workflow-html-app__view-plan` | 30_plan.md | Markdownレンダリング、コメント機能、Codexへのフィードバック送信 |
 | Log Viewer | `mcp__workflow-html-app__view-plan` | 05_log.md | Phase検出、タイムライン可視化（予定） |
 
@@ -564,8 +564,9 @@ Roadmap Viewer は `roadmap.html` を生成し、Plan時点の粗い全体像か
 以下のタイミングで`viewing-plans`スキルが**自動的に**発動：
 
 1. **Phase 2完了時**: 30_plan.md作成後、`scripts/generate-roadmap-view.py <memory_dir>` で `roadmap.html` を生成
-2. **Phase 3/4更新時**: `40_progress.md` / `80_review.md` / `05_log.md` 更新後、`roadmap.html` を再生成
-3. **Phase 5完了時**: 最終 `roadmap.html` を生成し、必要に応じて個別Plan/Log Viewerも表示
+2. **横で見たい場合**: `scripts/generate-roadmap-view.py <memory_dir> --serve --watch` を起動し、表示URLを案内
+3. **Phase 3/4更新時**: `40_progress.md` / `80_review.md` / `05_log.md` 更新後、watch中なら `roadmap-snapshot.json` が更新され、ブラウザが自動再描画
+4. **Phase 5完了時**: 最終 `roadmap.html` を生成し、必要に応じて個別Plan/Log Viewerも表示
 
 ### 使用方法（自動）
 
@@ -575,6 +576,14 @@ Roadmap Viewer は `roadmap.html` を生成し、Plan時点の粗い全体像か
 3. 生成された <memory_dir>/roadmap.html をユーザーに提示
 4. 詳細確認が必要なら Read で30_plan.md / 05_log.mdを読み込み、MCP Apps viewerへ渡す
 ```
+
+ライブ表示:
+
+```bash
+python3 scripts/generate-roadmap-view.py <memory_dir> --serve --watch
+```
+
+`--serve` は既定で `127.0.0.1` + port `0`（空きポート自動割当）を使う。複数セッションで同時起動する場合はメモリディレクトリを分け、必要時のみ `--port <port>` を指定する。
 
 ### 手動トリガー
 
