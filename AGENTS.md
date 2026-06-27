@@ -126,6 +126,13 @@ B. **Blueprint（大規模タスクのみ）**: 多セッション・多PRの設
   - SessionStartHookで過去メモリをFTS5検索→コンテキスト自動注入
   - memories/solutions/のMarkdownは自動的にSQLiteにインデックス同期
 
+## ライブロードマップ表示
+
+- Phase 2完了後、必要に応じて `scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --watch` を起動し、Codex appの横で `roadmap.html` を開きながら進捗を確認できるようにする。
+- live表示は `${MEMORY_DIR}/memory/<task>/roadmap.html` と `roadmap-snapshot.json` を使う。各セッションで `<task>` が異なればファイル衝突しない。
+- `--serve` の既定は `127.0.0.1` + port `0`（OSの空きポート自動割当）。複数セッションで同時起動しても固定port衝突を避ける。固定したい場合だけ `--port <port>` を指定する。
+- live表示は進捗確認の補助であり、Goal、Sprint Contract、Team Journal、05_log.md、レビュー結果の代替ではない。
+
 ## ユーザーへの質問
 
 **IMPORTANT**: 曖昧な点があればエスパーせず必ずAskUserQuestionで質問する
