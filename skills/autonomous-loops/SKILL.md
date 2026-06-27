@@ -11,9 +11,9 @@ description: "自律ループパターン集。シーケンシャルパイプラ
 
 | パターン | 実装機構 |
 |---------|---------|
-| 1. シーケンシャルパイプライン | `Workflow` tool の `pipeline()` |
+| 1. シーケンシャルパイプライン | メインセッションの逐次実行 + `update_plan` |
 | 2. PRループ（レビュー→修正→再レビュー） | `workflows/pr-review-loop.js`（または `auto-reviewing-pre-pr` を手動ループ） |
-| 3. DAGオーケストレーション | `Workflow` tool の `parallel()`/`pipeline()`（依存順に段組み）、エージェント間協調が要るなら Codex `/team-run` |
+| 3. DAGオーケストレーション | `multi_tool_use.parallel` と `multi_agent_v1.spawn_agent` を依存順に段組み、エージェント間協調が要るなら Codex `team-run` skill |
 
 ## パターン1: シーケンシャルパイプライン
 
@@ -23,7 +23,7 @@ description: "自律ループパターン集。シーケンシャルパイプラ
 [Step 1] → output1 → [Step 2] → output2 → [Step 3] → 最終結果
 ```
 
-**使用場面**: `Workflow` tool の `pipeline()`（各item をステージ列に流す）
+**使用場面**: メインセッションで各 item をステージ列に流し、進捗は `update_plan` で管理する
 **ゲート条件**: 各ステップ完了後に品質チェック
 
 ```markdown
@@ -74,7 +74,7 @@ PR-Loop:
                                    [E: Tests]
 ```
 
-**使用場面**: `Workflow` tool で依存順に `parallel()` を段組みする（`blueprint`の依存グラフ実行）。エージェント間の往復協調が要る場合は Codex `/team-run`
+**使用場面**: `multi_tool_use.parallel` と `multi_agent_v1.spawn_agent` を依存順に段組みする（`blueprint`の依存グラフ実行）。エージェント間の往復協調が要る場合は Codex `team-run` skill
 
 ```markdown
 DAG:
@@ -95,7 +95,7 @@ Execution:
 
 - **最大ループ回数**: デフォルト 5（pr-review-loop は 3）。Workflowスクリプト内の `maxRounds` 引数、または `checkpoint.md` の合格基準で制御する
 - **タイムアウト**: 各ステップ デフォルト 30 分。orchestrate 設定で上書き可
-- **失敗エスカレーション**: 連続 2 回失敗 → AskUserQuestion で人間判断を求める
-- **最大ループ超過時**: ESCALATE として残存タスクと進捗を AskUserQuestion でユーザーに報告
+- **失敗エスカレーション**: 連続 2 回失敗 → ユーザーに確認して人間判断を求める
+- **最大ループ超過時**: ESCALATE として残存タスクと進捗をユーザーに報告し、続行判断を確認する
 - **LLM連続修正上限**: 3 回（workflow-rules.md / auto-reviewing-pre-pr SKILL.md 準拠）
 - **checkpoint保存**: 各ラウンド終了時に `checkpoint.md` へ状態保存（再開可能性を担保）
