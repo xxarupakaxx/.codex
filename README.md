@@ -53,3 +53,14 @@ duplicating workflow text in those shims.
 
 Claude-style command markdown files are mirrored into `prompts/` for Codex
 custom prompts. Invoke them as `/prompts:<name>` after restarting Codex.
+
+## Skill Routing
+
+`skills/ask-skill-router/SKILL.md` is the lightweight router for choosing a
+workflow before reaching for a heavy process gate. It keeps the distinction
+between user-invoked flows, such as `team-run`, `orchestrate`, `grill-me`,
+PRD writing, and issue splitting, and model-invoked disciplines, such as
+`research`, `tdd`, `diagnosing-bugs`, `ubiquitous-language`, and verification.
+
+Superpowers remains available as a strong option, but it is no longer treated
+as the default route for every non-trivial task.
