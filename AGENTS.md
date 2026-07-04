@@ -22,7 +22,7 @@ Codex (conductor)
   ├── multi_tool_use.parallel → 独立したローカル調査の並列実行
   ├── multi_agent_v1.spawn_agent(role) → 専門 sub-agent
   ├── Goal tools → 長い作業の目的・完了状態管理
-  ├── Superpowers skills → 計画・TDD・検証・レビューのプロセス補強
+  ├── ask-skill-router / skills → 小さな規律の選択とプロセス補強
   └── 専門agents → arch/security/perf-reviewer 等
 ```
 
@@ -38,6 +38,20 @@ Codex (conductor)
 通常は role 既定を使う。custom/default sub-agent に model を明示する場合は `model = "gpt-5.5"` または `model = "gpt-5.4"` と `service_tier = "priority"` を必ずセットする。詳細は `rules/model-routing.md`。
 
 plugin / skill / agent role の適材適所ルーティングは `context/agent-team-routing.md` を参照する。Phase順序は `context/workflow-rules.md`、model/service_tier は `rules/model-routing.md` を SSoT とする。
+
+## Skill Invocation Policy
+
+Skill は「常時強制する工程」ではなく、「必要なときに呼び出す小さな規律」として扱う。
+重い harness / Superpowers 風の flow は、ユーザーが明示したとき、または高価値で複数ターンの実装に必要なときだけ使う。
+
+起動権は次の2層に分ける。
+
+- **User-invoked**: `team-run`、`orchestrate`、`grill-me`、`blueprint`、PRD化、issue分解、外部投稿やPR作成など、作業の進路や外部状態を大きく変えるもの。ユーザーの明示、または短い確認を挟んで使う。
+- **Model-invoked**: `research`、`tdd`、`diagnosing-bugs`、`code-review`、`ubiquitous-language`、`verification-loop` など、現在の作業を小さく安全に進める規律。タスクに合う場合だけ使い、結果を短く報告する。
+
+ルーティングに迷うときは `ask-skill-router` を読む。
+原則は、巨大な自動flowに載せる前に、要求の不一致、共有語彙、TDD/feedback loop、設計の泥団子化のどれが実際のボトルネックかを切り分けること。
+Superpowers は強い道具だが既定の process gate ではない。
 
 ## CRITICAL: 優先順位
 
