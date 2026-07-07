@@ -2,7 +2,6 @@
 name: pr-review
 description: PRレビュー。PR番号・ブランチ名指定時またはレビュー依頼時に使用。サブエージェント並列レビュー＋重要度別Roundで対話的にユーザーと確認。
 context: fork
-allowed-tools: Bash(gh:*), Read, Grep, Glob
 ---
 
 # PRレビュー
