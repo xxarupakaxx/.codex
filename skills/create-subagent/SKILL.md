@@ -128,4 +128,4 @@ allowed-tools: Read, Write, Glob, Grep, AskUserQuestion
 - `create-mcp-server` — MCPサーバ雛形生成
 - `~/.claude/rules/model-routing.md` — model override 判断基準
 - `~/.claude/rules/architecture-language.md` — 共通語彙
-- 既存例: `~/.claude/agents/security-reviewer.md`, `~/.claude/agents/arch-reviewer.md`
+- 既存例: `~/.codex/agents/security-reviewer.toml`, `~/.codex/agents/arch-reviewer.toml`
