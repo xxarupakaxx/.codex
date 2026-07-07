@@ -38,6 +38,9 @@ computer-use/
 /plugins/cache/
 pets/
 skills/.system/
+# Business-specific automation, excluded from version control
+/scheduled-tasks/
+claude-compat/scheduled-tasks/
 claude-compat/config/
 claude-compat/hooks.claude-settings.json
 claude-compat/mcp-servers/**/node_modules/
