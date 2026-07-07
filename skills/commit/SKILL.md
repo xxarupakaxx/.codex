@@ -62,3 +62,9 @@ git push
 
 - コミットハッシュ
 - pushした場合はその旨
+
+## 実績由来の知見
+
+- `git push` が `Repository not found` を返したら、repo URLを疑う前に `gh auth status` でactive accountとremote ownerの一致を確認する（仕事repoと個人repoでアカウントを使い分けている環境では、切替忘れによる失敗が繰り返し発生している）。認証transportの片方が死んでいる場合はもう片方へ切替える（SSH疎通は `git ls-remote git@github.com:<owner>/<repo>.git` で確認、HTTPSへ戻すなら `gh auth setup-git`）（出典: memories/rollout_summaries/2026-06-23T06-22-45-7rsk-plugin_routing_sot_team_run_push.md「Task 2 Failures」、memories/rollout_summaries/2026-06-23T01-00-42-uYoW-claude_to_codex_config_sync_and_dotfiles_push.md「Task 2 Failures」、memories/rollout_summaries/2026-06-26T09-36-25-4B26-release_db_migration_sync_develop_before_pr3049.md「Task 1 Preference signals」）
+- sandbox内で `git commit` / `git worktree add` / rebase が `.git/index.lock` 等のpermissionエラーで失敗したら、コミット内容を変えずescalated permissionsで再実行する（複数rolloutで再発した既知事象）（出典: memories/rollout_summaries/2026-06-23T06-22-45-7rsk-plugin_routing_sot_team_run_push.md「Task 2 Failures」）
+- ユーザーがpushを指示している作業（設定・docs含む）はremoteへのpush完了までがdone。進捗報告より先にpushを完了させる（出典: memories/rollout_summaries/2026-06-23T01-00-42-uYoW-claude_to_codex_config_sync_and_dotfiles_push.md「Task 1/2 Preference signals」）
