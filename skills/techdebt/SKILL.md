@@ -181,3 +181,4 @@ export const validateEmail = (email: string): boolean => {
 
 - **deprecated依存の棚卸しフロー**: (1) lockfileの `deprecated:` メタデータ走査 → (2) `pnpm view <pkg>@<ver> deprecated` でレジストリ現況確認 → (3) `pnpm list -r --depth 0` で直接依存か判定 → (4) `pnpm why` で由来分類 → (5) 無関係分のみ更新PR化（起因分はメジャー移行作業として別扱い）（出典: memories/rollout_summaries/2026-06-26T04-39-22-XJvd-ydb_superapp_server_deprecated_deps_payload_v2_dependabot.md「Task 1/2 Key steps」）
 - **注記**: dependabot等の `semver-major` ignore 設定がメジャー更新の自動表面化を隠すことがある。可視化するには対象ディレクトリを列挙しグローバルの `semver-major` ignore を外す（出典: 同上「Task 2 Reusable knowledge」）
+- **依存削減候補スキャンの対象範囲**: 依存削減候補のスキャンはテスト・非本番パスを含めない。本番build入力（`tsconfig.server.json`等）に整合させるとfalse candidateが激減する（出典: memories/rollout_summaries/2026-06-26T05-59-04-KP5a-production_docker_image_prune_and_ci_fix.md「Task 1 Failures」）
