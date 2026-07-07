@@ -104,3 +104,7 @@ solutions/とmemories/から類似の過去解決策を検索:
 - 不確実な情報は「要確認」として明示する
 - 計画のdeepen後にサブエージェントレビューが控えているため、
   リサーチに集中し、レビュー的な指摘はしない
+
+## 実績由来の知見
+
+- Context7等のdocs取得がquota超過等で失敗したら、調査を止めず即座に公式ドキュメント直参照へ切り替える（出典: memories/rollout_summaries/2026-06-26T05-59-50-ZLd9-cache_paginated_bricks_consistency_investigation.md「Task 1 Failures / References」）
