@@ -3,14 +3,14 @@
   "version": "0.1.0",
   "type": "module",
   "description": "MCP Apps server for interactive HTML workflow viewers",
-  "main": "dist/server.js",
+  "main": "dist/main.js",
   "scripts": {
     "build": "npm run build:server && npm run build:ui",
     "build:server": "tsc -p tsconfig.server.json",
     "build:ui": "vite build && node scripts/copy-static-ui.mjs",
     "dev": "tsx watch main.ts",
     "test": "node --test test/*.test.js",
-    "start": "node dist/server.js"
+    "start": "node dist/main.js"
   },
   "dependencies": {
     "@anthropic-ai/sdk": "^0.39.0",
