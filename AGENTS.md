@@ -22,7 +22,7 @@ Codex (conductor)
   ├── multi_tool_use.parallel → 独立したローカル調査の並列実行
   ├── multi_agent_v1.spawn_agent(role) → 専門 sub-agent
   ├── Goal tools → 長い作業の目的・完了状態管理
-  ├── Superpowers skills → 計画・TDD・検証・レビューのプロセス補強
+  ├── ask-skill-router / skills → 小さな規律の選択とプロセス補強
   └── 専門agents → arch/security/perf-reviewer 等
 ```
 
@@ -38,6 +38,20 @@ Codex (conductor)
 通常は role 既定を使う。custom/default sub-agent に model を明示する場合は `model = "gpt-5.5"` または `model = "gpt-5.4"` と `service_tier = "priority"` を必ずセットする。詳細は `rules/model-routing.md`。
 
 plugin / skill / agent role の適材適所ルーティングは `context/agent-team-routing.md` を参照する。Phase順序は `context/workflow-rules.md`、model/service_tier は `rules/model-routing.md` を SSoT とする。
+
+## Skill Invocation Policy
+
+Skill は「常時強制する工程」ではなく、「必要なときに呼び出す小さな規律」として扱う。
+重い harness / Superpowers 風の flow は、ユーザーが明示したとき、または高価値で複数ターンの実装に必要なときだけ使う。
+
+起動権は次の2層に分ける。
+
+- **User-invoked**: `team-run`、`orchestrate`、`grill-me`、`blueprint`、PRD化、issue分解、外部投稿やPR作成など、作業の進路や外部状態を大きく変えるもの。ユーザーの明示、または短い確認を挟んで使う。
+- **Model-invoked**: `research`、`tdd`、`diagnosing-bugs`、`code-review`、`ubiquitous-language`、`verification-loop` など、現在の作業を小さく安全に進める規律。タスクに合う場合だけ使い、結果を短く報告する。
+
+ルーティングに迷うときは `ask-skill-router` を読む。
+原則は、巨大な自動flowに載せる前に、要求の不一致、共有語彙、TDD/feedback loop、設計の泥団子化のどれが実際のボトルネックかを切り分けること。
+Superpowers は強い道具だが既定の process gate ではない。
 
 ## CRITICAL: 優先順位
 
@@ -125,6 +139,13 @@ B. **Blueprint（大規模タスクのみ）**: 多セッション・多PRの設
   - StopHookでセッションのQ&Aチャンクを自動保存+ベクトル化
   - SessionStartHookで過去メモリをFTS5検索→コンテキスト自動注入
   - memories/solutions/のMarkdownは自動的にSQLiteにインデックス同期
+
+## ライブロードマップ表示
+
+- Phase 2完了後、必要に応じて `scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --watch` を起動し、Codex appの横で `roadmap.html` を開きながら進捗を確認できるようにする。
+- live表示は `${MEMORY_DIR}/memory/<task>/roadmap.html` と `roadmap-snapshot.json` を使う。各セッションで `<task>` が異なればファイル衝突しない。
+- `--serve` の既定は `127.0.0.1` + port `0`（OSの空きポート自動割当）。複数セッションで同時起動しても固定port衝突を避ける。固定したい場合だけ `--port <port>` を指定する。
+- live表示は進捗確認の補助であり、Goal、Sprint Contract、Team Journal、05_log.md、レビュー結果の代替ではない。
 
 ## ユーザーへの質問
 
