@@ -77,6 +77,8 @@ allowed-tools: Read, Grep, Glob, Bash, Edit, Write, Task, WebFetch, WebSearch
 
 **状態遷移バグの場合**: 状態を「あり/なし」のような二値に単純化せず、遷移元を全列挙してから判定する。ある遷移が別の目的（補償・期限切れ処理等）のために存在し、権利剥奪のような本来の判定は別経路が担っているケースがある（出典: memories/rollout_summaries/2026-06-16T03-11-09-8ZCf-iap_iab_failed_state_behavior_check.md「Failures and how to do differently, Reusable knowledge」）。
 
+**一覧・集約系バグの場合**: 個別サービスの検証だけで終わらせず、統合入口（複数ソースをまとめるresolver等）まで検証対象に含める。個別サービスのソートは正しくても統合後のソートが崩れているケースがある（出典: memories/rollout_summaries/2026-06-23T01-15-45-dbXj-devin_qa_playbook_release_branch_test_first.md「Task 1 Reusable knowledge / Task 2 Key steps」）。
+
 ### 3.2 トレース注入
 
 絞り込み中に追加観測が必要なら:
