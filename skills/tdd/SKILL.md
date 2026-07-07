@@ -103,6 +103,7 @@ ToDoから次の項目を選び、Phase 2へ戻る。
 - **Mock しすぎ**: 内部詳細をモックして実装変更で全テスト破綻（`references/mocking.md`）
 - **System Boundary を Mock し忘れ**: DB/API/時刻/乱数を直叩き→フレーキー
 - **テスト命名が手抜き**: `it("test1")` のような無意味な名前
+- **既存テストの存在だけで期待値担保と判断**: テスト名でなく、そのテストが本当に期待値の業務フィールドを比較しているかを確認する（テスト名と実際の比較対象フィールドがズレていた実例）。似た名前のフィールドはfixtureを分離し「間違ったキーなら落ちる」形にする（出典: memories/rollout_summaries/2026-06-23T01-15-45-dbXj-devin_qa_playbook_release_branch_test_first.md「Task 1 Failures / Reusable knowledge」）
 
 ## 関連スキル
 
