@@ -104,6 +104,10 @@ description: I can review PRs.
 - `--user`: `~/.claude/skills/<skill-name>/`
 - `--project`: `./.claude/skills/<skill-name>/`
 
+**Codex環境向けの場合**: `~/.codex/skills/<skill-name>/` 配下に自己完結で作成する。実行時に `~/.claude/` 側の定義を呼び出す設計にはしない（ユーザー明示の好み。出典: memories/23_evidence_summary.md「S-003」）。
+
+
+
 **構造（Progressive Disclosure）:**
 ```
 <skill-name>/
