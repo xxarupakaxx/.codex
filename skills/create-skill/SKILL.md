@@ -150,6 +150,10 @@ description: <何をするか>。<いつ使うか>。使用タイミング: (1) 
 - @context/memory-file-formats.md
 ```
 
+## 実績由来の知見
+
+- 出力契約が実質的に異なる機能を既存スキルに混ぜない。別スキルのエントリポイントに分離するのが既定（2.5D対応を既存の状態図生成スキルへ混入させた案がユーザーに却下され、`generate-state-diagram-3d` という別スキルとして切り出された実例）（出典: memories/rollout_summaries/2026-06-23T06-38-16-2lBv-codex_native_3d_state_diagram_and_workflow_html_app.md「Task 1 Failures / Preference signals」）
+
 ## 禁止事項
 
 - 既存設定との整合性確認なしでスキル作成
