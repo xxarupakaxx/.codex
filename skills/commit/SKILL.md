@@ -39,6 +39,8 @@ git add <files>
 
 NOTE: CLAUDE.mdがglobal gitignoreされている場合は `git add -f` で追加
 
+NOTE: rebase中にコンフリクトを検出した場合は `git status` で `UU` ファイルを特定し、base/ours/theirsを比較して両ブランチの意図を統合してから `git add` → `git rebase --continue` で完了する（出典: memories/rollout_summaries/2026-06-18T04-14-24-sLqw-git_pull_conflict_resolved_and_merged_to_main.md「Task 1」）。
+
 ### 4. コミット
 
 ```bash
