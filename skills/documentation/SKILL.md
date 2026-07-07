@@ -72,3 +72,5 @@ npm run new-command  # 新しいコマンド
 - canonical な記録先が外部（Confluence等）だとユーザーが明示した場合、リポジトリ側ドキュメントは長文複製ではなく参照リンクへ縮小する（出典: memories/rollout_summaries/2026-06-16T07-44-40-S8ow-jira_ai_workflow_shared_dev_state_confluence_integration.md「Task 2, Failures and how to do differently」）
 - リポジトリ内ドキュメントは明示指定がなくても日本語プローズを既定とし、固有名詞は原語のまま保持する（出典: memories/rollout_summaries/2026-06-16T07-44-40-S8ow-jira_ai_workflow_shared_dev_state_confluence_integration.md「Task 1, Preference signals」）
 - 用語・導線の置換を伴うドキュメント更新は、主要ファイルの修正だけで完了と判断しない。置換対象語彙で `rg` 横断検索を行い、ヒットゼロになったことを完了条件とする（部分置換で旧記述が残存しレビュー指摘を受けた実失敗より。出典: memories/23_evidence_summary.md「S-004, S-009」）
+- 図・表に実スキーマ未確認の項目を書かない。schema定義と突合してから記載する（ER図に実在しないカラムを書き、reviewer指摘で削除した実例。出典: memories/rollout_summaries/2026-06-26T02-46-53-Dw5K-check_in_lottery_wiki_migration_and_review_fix.md「Task 2 Key steps / Reusable knowledge」）
+- 内部仕様と設計docが矛盾したら現実装をsource of truthにする。既存docs/wikiの命名規約（flattened `features-{name}-interface.md` 等）を先に確認してから書く（出典: memories/rollout_summaries/2026-06-26T02-46-53-Dw5K-check_in_lottery_wiki_migration_and_review_fix.md「Task 1 Preference signals / Key steps」）
