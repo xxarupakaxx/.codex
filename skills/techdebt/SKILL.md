@@ -41,7 +41,7 @@ git diff --name-only <base-branch>...HEAD
 ```bash
 # 関数・メソッドの重複検出
 # TypeScript/JavaScript
-rg -l "function\s+\w+|const\s+\w+\s*=" --type ts --type tsx --type js
+rg -l "function\s+\w+|const\s+\w+\s*=" --type ts --type js
 
 # 類似パターンの検出
 rg "<pattern>" --type ts -C 5
@@ -176,3 +176,8 @@ export const validateEmail = (email: string): boolean => {
 - 意図的な重複（パフォーマンス最適化等）は除外判断が必要
 - リファクタリングは必ずテストで動作確認
 - 大規模リファクタリングは別タスクとして計画
+
+## 実績由来の知見
+
+- **deprecated依存の棚卸しフロー**: (1) lockfileの `deprecated:` メタデータ走査 → (2) `pnpm view <pkg>@<ver> deprecated` でレジストリ現況確認 → (3) `pnpm list -r --depth 0` で直接依存か判定 → (4) `pnpm why` で由来分類 → (5) 無関係分のみ更新PR化（起因分はメジャー移行作業として別扱い）（出典: memories/rollout_summaries/2026-06-26T04-39-22-XJvd-ydb_superapp_server_deprecated_deps_payload_v2_dependabot.md「Task 1/2 Key steps」）
+- **注記**: dependabot等の `semver-major` ignore 設定がメジャー更新の自動表面化を隠すことがある。可視化するには対象ディレクトリを列挙しグローバルの `semver-major` ignore を外す（出典: 同上「Task 2 Reusable knowledge」）
