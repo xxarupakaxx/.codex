@@ -120,8 +120,9 @@ Codex 側ではスキル本文を読んでから、その指示を現在の tool
 5. **global Phase 2 計画**: `context/workflow-rules.md` に従い、30_plan.md を作成し、3ファイル以上の変更なら `deepening-plan` を実行してからサブエージェント計画検証へ進む。
 6. **合格基準定義**: 機械判定を背骨にする。test / typecheck / lint / build / 実行確認で嘘をつけない形にする。
 7. **Team Journal 初期化**: `${MEMORY_DIR}/memory/YYMMDD_<task_name>/team-journal.md` に合格基準 / Budget / leader 状態 / plugin route を書く。
-8. **Review Heat 仮決定**: `context/team-run.md` の Heat ladder で checker / judge の初期セットを決め、Team Journal に記録する。
-9. **planner 起動**:
+8. **Live Roadmap 起動（任意だが推奨）**: Codex app の横で進捗を見たい場合、`scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/YYMMDD_<task_name> --serve --watch` を起動し、URLをTeam Journalへ記録する。既定port `0` を使い、複数セッションはメモリディレクトリを分けて衝突を避ける。
+9. **Review Heat 仮決定**: `context/team-run.md` の Heat ladder で checker / judge の初期セットを決め、Team Journal に記録する。
+10. **planner 起動**:
 
 ```text
 multi_agent_v1.spawn_agent(
@@ -130,7 +131,7 @@ multi_agent_v1.spawn_agent(
 )
 ```
 
-10. **plan-reviewer 起動**:
+11. **plan-reviewer 起動**:
 
 ```text
 multi_agent_v1.spawn_agent(
@@ -139,7 +140,7 @@ multi_agent_v1.spawn_agent(
 )
 ```
 
-11. **人間ゲート**: 仕様変更・外部副作用・破壊的操作・広範囲変更はユーザー承認を取る。既にユーザーが実行を明示し、変更がローカル設定/ドキュメントに閉じる場合は、計画をログに残して進めてよい。
+12. **人間ゲート**: 仕様変更・外部副作用・破壊的操作・広範囲変更はユーザー承認を取る。既にユーザーが実行を明示し、変更がローカル設定/ドキュメントに閉じる場合は、計画をログに残して進めてよい。
 
 ### Overlay C: global Phase 3 内 — 実装ループ
 
@@ -191,6 +192,7 @@ multi_agent_v1.spawn_agent(agent_type: "code-quality-reviewer", message: "変更
 - Verification: [...]
 - Review Findings: [...]
 - Blockers: [...]
+- Live Roadmap: URL or path
 ```
 
 4. 価値ある知見・失敗パターンは `compounding-knowledge` で保存する。
