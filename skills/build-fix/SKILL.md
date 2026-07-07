@@ -71,3 +71,10 @@ npm test
 2. インポート・依存関係の修正
 3. 個別の型エラー修正
 4. 残りの軽微なエラー
+
+## 実績由来の知見
+
+- **失敗の切り分け**: lint/format/terraformチェック等が失敗したら、自分のパッチ起因か環境・既存warning起因かを先に判定する。`terraform fmt -check -diff`は通ったが`check:tf`は失敗した例は、ローカルGCP認証切れという環境要因だった。サンドボックス制約（localhost DB接続不可、GCS impersonationの`invalid_rapt`等）による検証失敗も同様にコード上の問題と混同せず、targeted checkで実際のパッチを確認してから報告する（出典: memories/rollout_summaries/2026-06-16T03-53-25-JmlJ-pr_2954_billing_review_fix_push.md「Task 2/3」, memories/rollout_summaries/2026-06-16T04-32-09-W9wb-pr_2921_booking_event_reminder_review.md「Failures and how to do differently」）。
+- **pnpm系の落とし穴**: `pnpm install --frozen-lockfile --ignore-scripts`だけではnative addon（例: sharp）が未ビルドのまま残り、後続で明示的な再ビルドが必要になる。また既存`node_modules`があるワークスペースで`pnpm fetch`のような新鮮ストア検証を行うと`ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY`が発生するため、専用の一時ワークスペースまたはCIモードを使う（出典: memories/rollout_summaries/2026-06-17T03-24-31-n5ze-pr_2957_release_merge_ci_monitoring.md, memories/rollout_summaries/2026-06-22T05-52-03-qgnt-dependency_tarball_ci_pr_and_review.md「Task 1/2 Failures and how to do differently」）。
+- **依存パッケージ消失の疑い**: CI失敗の原因が依存パッケージのレジストリからの削除にあると疑ったら`npm view <pkg>@<version>`の404で確認する。失敗が親ブランチ由来と分かった場合は、子PRの差分を汚さず親ブランチ側に修正をpushしてから子PRをrebaseする（出典: memories/rollout_summaries/2026-06-17T03-25-19-yrPB-team_run_billing_p5_pr_monitoring_and_merge.md「Task 3」）。
+- **lint境界違反の解消**: import制限ルール等の境界違反は、ルール緩和ではなく境界層（predicate関数等）を追加して解消する。テストは境界層をmockして具象依存を排除する（出典: memories/rollout_summaries/2026-06-26T05-59-04-KP5a-production_docker_image_prune_and_ci_fix.md「Task 2」）。
