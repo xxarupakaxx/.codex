@@ -23,12 +23,13 @@ description: |
 ```bash
 MEMORY_DIR="${TOPLEVEL}/.local"
 INDEX_FILE="$MEMORY_DIR/index.json"
+THRESHOLD_DATE=$(date -v-30d +%Y-%m-%d)
 
 # index.jsonの内容を確認
 cat "$INDEX_FILE" | jq '.files | to_entries | sort_by(.value.ref_count) | reverse'
 
 # 30日未参照のファイルを特定
-jq -r '.files | to_entries[] | select(.value.last_accessed < "THRESHOLD_DATE") | .key' "$INDEX_FILE"
+jq -r --arg threshold "$THRESHOLD_DATE" '.files | to_entries[] | select(.value.last_accessed < $threshold) | .key' "$INDEX_FILE"
 ```
 
 ### Step 2: アーカイブ候補の確認
@@ -83,7 +84,7 @@ jq 'del(.files["archived/path"])' "$INDEX_FILE" > "$INDEX_FILE.tmp"
 mv "$INDEX_FILE.tmp" "$INDEX_FILE"
 
 # 新規統合ファイルをindex.jsonに追加
-jq --arg path "new/path.md" '.files[$path] = {"ref_count": 0, "created": "TODAY"}' "$INDEX_FILE" > "$INDEX_FILE.tmp"
+jq --arg path "new/path.md" --arg today "$(date +%Y-%m-%d)" '.files[$path] = {"ref_count": 0, "created": $today}' "$INDEX_FILE" > "$INDEX_FILE.tmp"
 mv "$INDEX_FILE.tmp" "$INDEX_FILE"
 ```
 
