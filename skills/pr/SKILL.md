@@ -8,6 +8,8 @@ description: Draft PRを作成
 
 Draft PRを作成します。
 
+引数（base-branch）が省略された場合、`$ARGUMENTS` は PJ 設定（AGENTS.md / CLAUDE.md）の `BASE_BRANCH` に従い、未定義時は develop → main → master の順で存在するブランチを使う。
+
 ## 実行手順
 
 ### 1. 現在の状態確認
