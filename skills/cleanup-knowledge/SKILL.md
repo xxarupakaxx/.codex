@@ -21,6 +21,7 @@ description: |
 ### Step 1: 現状分析
 
 ```bash
+TOPLEVEL=$(git rev-parse --show-toplevel)
 MEMORY_DIR="${TOPLEVEL}/.local"
 INDEX_FILE="$MEMORY_DIR/index.json"
 THRESHOLD_DATE=$(date -v-30d +%Y-%m-%d)
