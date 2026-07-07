@@ -67,12 +67,12 @@ find . -type f \( -name "*.ts" -o -name "*.tsx" -o -name "*.py" -o -name "*.md" 
 
 ### Phase 1: 並列サブエージェント実行
 
-**CRITICAL**: 6つのサブエージェントを**同時に**起動する。Agent Tool を1つのメッセージで6回呼び出す。
-Agent CLI を使った別モデル検証は廃止。Agent Tool の専門サブエージェント並列起動のみで実施する。
+**CRITICAL**: 6つのサブエージェントを**同時に**起動する。`multi_tool_use.parallel` で6つの `spawn_agent` を並列実行する。
+Agent CLI を使った別モデル検証は廃止。専門サブエージェント並列起動のみで実施する。
 
-**CRITICAL**: issueファイル作成を伴うため、汎用実行枠は `subagent_type="general-purpose"` を使用すること。
+**CRITICAL**: issueファイル作成を伴うため、汎用実行枠は `multi_agent_v1.spawn_agent(agent_type: "implementer")` を使用すること。
 - `explorer` は読み取り調査向きで、issueファイル作成が必要な作業には使わない
-- `general-purpose` は Claude Code の汎用 Agent であり、専門 subagent_type ではない
+- `implementer` はファイル書込みを伴う汎用実装ワーカーであり、issueファイル作成のような書込みタスクに適する
 
 各サブエージェントには以下の情報を渡す:
 - メモリディレクトリのフルパス
