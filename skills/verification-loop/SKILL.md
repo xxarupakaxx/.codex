@@ -106,6 +106,11 @@ criteria:
     pass: "size < 5M"
 ```
 
+### 移行・整合系タスクの合格基準（専用verifierスクリプト）
+
+設定移行・用語統一・禁止パターン除去など機械的に判定できるタスクでは、専用verifierスクリプト（禁止パターン検出等）を用意し、その決定的な出力文字列（例: `check passed`）自体を合格基準にする。ステージ済み変更だけを対象にした確認は `git grep --cached` + 禁止パターンのregexで足りる。
+（出典: memories/rollout_summaries/2026-06-23T01-00-42-uYoW-claude_to_codex_config_sync_and_dotfiles_push.md「Task 1/3 Key steps / Reusable knowledge」）
+
 ## 安全ガード
 
 - **最大ループ回数**: 5回（無限ループ防止）
