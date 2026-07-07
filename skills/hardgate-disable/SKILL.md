@@ -32,7 +32,7 @@ argument-hint: <理由> [--ttl=1h|30m|10m]
    ```
 2. TTL 経過後、`pre-dangerous-command-block.sh` が次の起動時に自動削除
 3. バイパス有効期間中、危険コマンドはブロックされず **ただし blocked.jsonl に bypass_used:true で記録**
-4. 早期解除: `/hardgate-enable` (もしくは `rm ~/.claude/.local/hooks/state/hardgate_bypass.json`)
+4. 早期解除: `rm ~/.claude/.local/hooks/state/hardgate_bypass.json`
 
 ## CRITICAL
 
