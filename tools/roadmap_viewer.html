@@ -1,0 +1,1471 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Roadmap Viewer</title>
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'%3E%3Crect width='16' height='16' fill='%232f6f5e'/%3E%3Cpath d='M3 11h10M3 8h7M3 5h4' stroke='%23f7f7f4' stroke-width='1.5'/%3E%3C/svg%3E">
+  <style>
+    :root {
+      --bg: #f7f7f4;
+      --surface: #ffffff;
+      --surface-2: #eeeeea;
+      --ink: #171917;
+      --muted: #676c63;
+      --faint: #8b9188;
+      --line: #d9dbd3;
+      --line-strong: #b9bdae;
+      --accent: #2f6f5e;
+      --accent-2: #8a5a1f;
+      --danger: #a33a2c;
+      --warn: #b78117;
+      --good: #2f7a4f;
+      --planned: #747b70;
+      --shadow: 0 14px 40px rgba(31, 35, 30, 0.08);
+      --radius: 8px;
+      color-scheme: light;
+    }
+
+    [data-theme="dark"] {
+      --bg: #151713;
+      --surface: #1d211c;
+      --surface-2: #262b24;
+      --ink: #f0f1ec;
+      --muted: #b3b8ad;
+      --faint: #858c80;
+      --line: #363d33;
+      --line-strong: #4a5545;
+      --accent: #76b7a3;
+      --accent-2: #d4a35f;
+      --danger: #d77468;
+      --warn: #e0b456;
+      --good: #7dca97;
+      --planned: #9ca59a;
+      --shadow: 0 18px 48px rgba(0, 0, 0, 0.22);
+      color-scheme: dark;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--ink);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP", sans-serif;
+      line-height: 1.5;
+    }
+
+    button,
+    input,
+    select {
+      font: inherit;
+    }
+
+    button:focus-visible,
+    input:focus-visible,
+    select:focus-visible,
+    [tabindex]:focus-visible {
+      outline: 2px solid var(--accent);
+      outline-offset: 2px;
+    }
+
+    .app-header {
+      position: sticky;
+      top: 0;
+      z-index: 20;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg) 92%, transparent);
+      backdrop-filter: blur(16px);
+    }
+
+    .header-inner {
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 14px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+    }
+
+    .brand {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      min-width: 0;
+    }
+
+    .brand-mark {
+      width: 34px;
+      height: 34px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius);
+      display: grid;
+      place-items: center;
+      background:
+        linear-gradient(135deg, transparent 0 42%, var(--accent) 42% 50%, transparent 50%),
+        var(--surface);
+    }
+
+    .brand h1 {
+      margin: 0;
+      font-size: 17px;
+      font-weight: 700;
+      letter-spacing: 0;
+      line-height: 1.2;
+    }
+
+    .brand p {
+      margin: 2px 0 0;
+      color: var(--muted);
+      font-size: 12px;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: min(62vw, 760px);
+    }
+
+    .toolbar {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 8px;
+      flex-wrap: wrap;
+    }
+
+    .live-badge {
+      min-height: 32px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      background: var(--surface);
+      color: var(--muted);
+      padding: 5px 10px;
+      font-size: 12px;
+      font-weight: 800;
+      display: inline-flex;
+      align-items: center;
+      gap: 7px;
+      white-space: nowrap;
+    }
+
+    .live-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 999px;
+      background: var(--planned);
+    }
+
+    .live-badge.live .live-dot {
+      background: var(--good);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--good) 16%, transparent);
+    }
+
+    .live-badge.error .live-dot {
+      background: var(--danger);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 14%, transparent);
+    }
+
+    .btn {
+      min-height: 40px;
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius);
+      background: var(--surface);
+      color: var(--ink);
+      padding: 8px 12px;
+      cursor: pointer;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 8px;
+      transition: border-color 0.16s, background 0.16s, transform 0.16s;
+    }
+
+    .btn:hover {
+      border-color: var(--accent);
+      transform: translateY(-1px);
+    }
+
+    .btn.primary {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: var(--bg);
+      font-weight: 700;
+    }
+
+    .file-input {
+      display: none;
+    }
+
+    .shell {
+      max-width: 1500px;
+      margin: 0 auto;
+      padding: 20px;
+    }
+
+    .hero {
+      display: grid;
+      grid-template-columns: minmax(0, 1.2fr) minmax(300px, 0.8fr);
+      gap: 16px;
+      align-items: stretch;
+      margin-bottom: 16px;
+    }
+
+    .panel {
+      background: var(--surface);
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      box-shadow: var(--shadow);
+    }
+
+    .hero-main {
+      padding: 22px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 260px;
+      gap: 20px;
+      min-height: 246px;
+    }
+
+    .kicker {
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 800;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+      margin-bottom: 10px;
+    }
+
+    .title {
+      margin: 0;
+      font-size: 34px;
+      line-height: 1.08;
+      letter-spacing: 0;
+      max-width: 900px;
+    }
+
+    .subtitle {
+      margin: 14px 0 0;
+      color: var(--muted);
+      max-width: 760px;
+      font-size: 15px;
+      overflow-wrap: anywhere;
+    }
+
+    .clarity-box {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-2);
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+    }
+
+    .clarity-number {
+      font-size: 48px;
+      line-height: 1;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .meter {
+      height: 10px;
+      border-radius: 999px;
+      background: var(--line);
+      overflow: hidden;
+      margin: 14px 0 8px;
+    }
+
+    .meter-fill {
+      height: 100%;
+      width: 0;
+      background: linear-gradient(90deg, var(--warn), var(--accent), var(--good));
+      transition: width 0.28s ease;
+    }
+
+    .microcopy {
+      margin: 0;
+      color: var(--muted);
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+      margin-top: 18px;
+    }
+
+    .stat {
+      border-top: 1px solid var(--line);
+      padding-top: 10px;
+      min-width: 0;
+    }
+
+    .stat strong {
+      display: block;
+      font-size: 22px;
+      line-height: 1.1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .stat span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .drop-panel {
+      padding: 18px;
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      gap: 14px;
+    }
+
+    .drop-zone {
+      min-height: 140px;
+      border: 1px dashed var(--line-strong);
+      border-radius: var(--radius);
+      background:
+        linear-gradient(90deg, color-mix(in srgb, var(--accent) 8%, transparent), transparent),
+        var(--surface-2);
+      display: grid;
+      place-items: center;
+      text-align: center;
+      padding: 20px;
+      color: var(--muted);
+    }
+
+    .drop-zone.dragover {
+      border-color: var(--accent);
+      color: var(--ink);
+    }
+
+    .drop-zone strong {
+      color: var(--ink);
+      display: block;
+      margin-bottom: 4px;
+    }
+
+    .drop-zone span {
+      overflow-wrap: anywhere;
+    }
+
+    .grid {
+      display: grid;
+      grid-template-columns: 280px minmax(0, 1fr) 340px;
+      gap: 16px;
+      align-items: start;
+    }
+
+    .section-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 14px 16px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .section-header h2 {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.2;
+    }
+
+    .section-header span {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .mindmap {
+      padding: 16px;
+    }
+
+    .mind-root {
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius);
+      padding: 14px;
+      background: var(--surface-2);
+      margin-bottom: 14px;
+    }
+
+    .mind-root strong {
+      display: block;
+      font-size: 15px;
+    }
+
+    .mind-root span {
+      display: block;
+      margin-top: 4px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .branch-list {
+      display: grid;
+      gap: 10px;
+    }
+
+    .branch {
+      border-left: 3px solid var(--line-strong);
+      padding: 8px 10px;
+      background: color-mix(in srgb, var(--surface-2) 68%, transparent);
+      border-radius: 0 var(--radius) var(--radius) 0;
+    }
+
+    .branch.complete {
+      border-left-color: var(--good);
+    }
+
+    .branch.in-progress {
+      border-left-color: var(--accent-2);
+    }
+
+    .branch.planned {
+      border-left-color: var(--planned);
+      opacity: 0.78;
+    }
+
+    .branch strong {
+      display: block;
+      font-size: 13px;
+    }
+
+    .branch span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .phase-list {
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .phase {
+      display: grid;
+      grid-template-columns: 38px minmax(0, 1fr);
+      gap: 10px;
+      align-items: start;
+      padding: 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+
+    .phase-marker {
+      width: 30px;
+      height: 30px;
+      border-radius: 999px;
+      display: grid;
+      place-items: center;
+      font-size: 12px;
+      font-weight: 800;
+      font-variant-numeric: tabular-nums;
+      border: 1px solid var(--line-strong);
+      color: var(--muted);
+      background: var(--surface-2);
+    }
+
+    .phase.complete .phase-marker {
+      background: color-mix(in srgb, var(--good) 14%, var(--surface));
+      color: var(--good);
+      border-color: color-mix(in srgb, var(--good) 46%, var(--line));
+    }
+
+    .phase.in-progress .phase-marker {
+      background: color-mix(in srgb, var(--accent-2) 16%, var(--surface));
+      color: var(--accent-2);
+      border-color: color-mix(in srgb, var(--accent-2) 52%, var(--line));
+    }
+
+    .phase-title {
+      margin: 0;
+      font-size: 13px;
+      font-weight: 800;
+    }
+
+    .phase-meta {
+      margin-top: 2px;
+      color: var(--muted);
+      font-size: 12px;
+      overflow-wrap: anywhere;
+    }
+
+    .task-list {
+      padding: 12px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .task {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 12px;
+      background: var(--surface);
+    }
+
+    .task-top {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 12px;
+    }
+
+    .task h3 {
+      margin: 0;
+      font-size: 14px;
+      line-height: 1.3;
+    }
+
+    .task small {
+      color: var(--muted);
+      display: block;
+      margin-top: 4px;
+      word-break: break-word;
+    }
+
+    .pill {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 24px;
+      border-radius: 999px;
+      padding: 3px 8px;
+      border: 1px solid var(--line);
+      color: var(--muted);
+      background: var(--surface-2);
+      font-size: 11px;
+      font-weight: 800;
+      white-space: nowrap;
+    }
+
+    .pill.complete {
+      color: var(--good);
+      border-color: color-mix(in srgb, var(--good) 40%, var(--line));
+      background: color-mix(in srgb, var(--good) 10%, var(--surface));
+    }
+
+    .pill.in-progress {
+      color: var(--accent-2);
+      border-color: color-mix(in srgb, var(--accent-2) 42%, var(--line));
+      background: color-mix(in srgb, var(--accent-2) 11%, var(--surface));
+    }
+
+    .task-progress {
+      margin-top: 10px;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .bar {
+      height: 7px;
+      border-radius: 999px;
+      background: var(--line);
+      overflow: hidden;
+    }
+
+    .bar-fill {
+      height: 100%;
+      width: 0;
+      background: var(--accent);
+    }
+
+    .task-progress span {
+      color: var(--muted);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .side-stack {
+      display: grid;
+      gap: 16px;
+    }
+
+    .review-grid {
+      padding: 12px;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 8px;
+    }
+
+    .review-count {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px;
+      background: var(--surface);
+    }
+
+    .review-count strong {
+      display: block;
+      font-size: 22px;
+      line-height: 1.1;
+      font-variant-numeric: tabular-nums;
+    }
+
+    .review-count span {
+      display: block;
+      margin-top: 3px;
+      color: var(--muted);
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+
+    .critical strong {
+      color: var(--danger);
+    }
+
+    .important strong {
+      color: var(--warn);
+    }
+
+    .minor strong {
+      color: var(--muted);
+    }
+
+    .risk-list,
+    .evidence-list,
+    .source-list {
+      padding: 12px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .risk,
+    .evidence,
+    .source {
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      padding: 10px;
+      background: var(--surface);
+    }
+
+    .risk strong,
+    .evidence strong,
+    .source strong {
+      display: block;
+      font-size: 13px;
+      line-height: 1.35;
+    }
+
+    .risk span,
+    .evidence span,
+    .source span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-top: 4px;
+      overflow-wrap: anywhere;
+    }
+
+    .source button {
+      width: 100%;
+      text-align: left;
+      border: 0;
+      background: transparent;
+      color: inherit;
+      padding: 0;
+      cursor: pointer;
+    }
+
+    .source-preview {
+      padding: 0 12px 12px;
+    }
+
+    pre {
+      margin: 0;
+      padding: 12px;
+      overflow: auto;
+      max-height: 340px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-2);
+      color: var(--ink);
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+      font-size: 12px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+
+    .empty {
+      color: var(--muted);
+      font-size: 13px;
+      padding: 12px;
+    }
+
+    .toast {
+      position: fixed;
+      left: 50%;
+      bottom: 20px;
+      transform: translateX(-50%) translateY(80px);
+      padding: 10px 14px;
+      border-radius: var(--radius);
+      background: var(--ink);
+      color: var(--bg);
+      opacity: 0;
+      transition: opacity 0.2s, transform 0.2s;
+      z-index: 40;
+      box-shadow: var(--shadow);
+    }
+
+    .toast.show {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    @media (max-width: 1180px) {
+      .hero,
+      .hero-main,
+      .grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .header-inner {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .toolbar {
+        justify-content: flex-start;
+        width: 100%;
+      }
+
+      .btn {
+        min-height: 44px;
+      }
+
+      .title {
+        font-size: 26px;
+      }
+
+      .stats {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .review-grid {
+        grid-template-columns: 1fr;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      *,
+      *::before,
+      *::after {
+        scroll-behavior: auto !important;
+        transition: none !important;
+      }
+    }
+  </style>
+</head>
+<body>
+  <header class="app-header">
+    <div class="header-inner">
+      <div class="brand">
+        <div class="brand-mark" aria-hidden="true"></div>
+        <div>
+          <h1>Roadmap Viewer</h1>
+          <p id="source-line">Plan, progress, review, and log in one browser view.</p>
+        </div>
+      </div>
+      <div class="toolbar">
+        <span class="live-badge" id="live-status"><span class="live-dot" aria-hidden="true"></span><span id="live-status-text">Static</span></span>
+        <button class="btn primary" type="button" id="open-files">Open files</button>
+        <button class="btn" type="button" id="export-json">Export JSON</button>
+        <button class="btn" type="button" id="theme-toggle">Theme</button>
+        <input class="file-input" id="file-input" type="file" multiple accept=".md,.markdown,.txt,.json">
+      </div>
+    </div>
+  </header>
+
+  <main class="shell">
+    <section class="hero">
+      <div class="panel hero-main">
+        <div>
+          <div class="kicker" id="kicker">Task Roadmap</div>
+          <h2 class="title" id="title">Drop a task memory folder snapshot to begin</h2>
+          <p class="subtitle" id="subtitle">
+            Plan time starts broad and a little foggy. As progress, review, and evidence files appear, this view sharpens into a working map of what is done and what still needs attention.
+          </p>
+          <div class="stats" aria-label="Roadmap summary">
+            <div class="stat"><strong id="stat-tasks">0</strong><span>tasks</span></div>
+            <div class="stat"><strong id="stat-done">0%</strong><span>task progress</span></div>
+            <div class="stat"><strong id="stat-phase">-</strong><span>active phase</span></div>
+            <div class="stat"><strong id="stat-evidence">0</strong><span>evidence items</span></div>
+          </div>
+        </div>
+        <div class="clarity-box">
+          <div>
+            <div class="kicker">Clarity</div>
+            <div class="clarity-number"><span id="clarity-number">0</span><small>%</small></div>
+            <div class="meter" aria-hidden="true"><div class="meter-fill" id="clarity-fill"></div></div>
+          </div>
+          <p class="microcopy" id="clarity-copy">Load plan files to create the first outline.</p>
+        </div>
+      </div>
+
+      <div class="panel drop-panel">
+        <div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="Load roadmap files">
+          <div>
+            <strong>Load task memory files</strong>
+            <span>Drop `30_plan.md`, `40_progress.md`, `80_review.md`, `05_log.md`, or a generated roadmap JSON.</span>
+          </div>
+        </div>
+        <p class="microcopy">Generated HTML embeds the snapshot automatically. Manual loading is here for quick inspection.</p>
+      </div>
+    </section>
+
+    <section class="grid">
+      <aside class="panel">
+        <div class="section-header">
+          <h2>Mindset Map</h2>
+          <span id="mindset-state">initial</span>
+        </div>
+        <div class="mindmap">
+          <div class="mind-root">
+            <strong id="mind-root-title">Goal</strong>
+            <span id="mind-root-meta">The task shape will appear here.</span>
+          </div>
+          <div class="branch-list" id="branch-list"></div>
+        </div>
+      </aside>
+
+      <section class="panel">
+        <div class="section-header">
+          <h2>Execution Roadmap</h2>
+          <span id="roadmap-meta">0 phases detected</span>
+        </div>
+        <div class="phase-list" id="phase-list"></div>
+        <div class="section-header">
+          <h2>Tasks</h2>
+          <span id="task-meta">0 tasks</span>
+        </div>
+        <div class="task-list" id="task-list"></div>
+      </section>
+
+      <aside class="side-stack">
+        <section class="panel">
+          <div class="section-header">
+            <h2>Review Heat</h2>
+            <span id="review-meta">latest counts</span>
+          </div>
+          <div class="review-grid">
+            <div class="review-count critical"><strong id="critical-count">0</strong><span>Critical</span></div>
+            <div class="review-count important"><strong id="important-count">0</strong><span>Important</span></div>
+            <div class="review-count minor"><strong id="minor-count">0</strong><span>Minor</span></div>
+          </div>
+        </section>
+
+        <section class="panel">
+          <div class="section-header">
+            <h2>Risks / Unknowns</h2>
+            <span id="risk-meta">open items</span>
+          </div>
+          <div class="risk-list" id="risk-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-header">
+            <h2>Evidence Stream</h2>
+            <span id="evidence-meta">from 05_log</span>
+          </div>
+          <div class="evidence-list" id="evidence-list"></div>
+        </section>
+
+        <section class="panel">
+          <div class="section-header">
+            <h2>Sources</h2>
+            <span id="source-meta">loaded files</span>
+          </div>
+          <div class="source-list" id="source-list"></div>
+          <div class="source-preview"><pre id="source-preview">No source selected.</pre></div>
+        </section>
+      </aside>
+    </section>
+  </main>
+
+  <div class="toast" id="toast" role="status" aria-live="polite"></div>
+
+  <script id="embedded-snapshot" type="application/json">{"__ROADMAP_SNAPSHOT_JSON__": true}</script>
+  <script>
+    const PHASES = [
+      { number: '0', label: 'Preparation', aliases: ['準備', 'preparation'] },
+      { number: '1', label: 'Investigation', aliases: ['調査', 'investigation'] },
+      { number: '2', label: 'Planning', aliases: ['計画', 'planning'] },
+      { number: '2.5', label: 'Acceptance', aliases: ['acceptance', 'checkpoint'] },
+      { number: '3', label: 'Implementation', aliases: ['実装', 'implementation'] },
+      { number: '4', label: 'Quality', aliases: ['品質', 'review', '検証'] },
+      { number: '5', label: 'Report', aliases: ['完了', '報告'] },
+      { number: '5.5', label: 'Compound', aliases: ['compound', '知見'] }
+    ];
+
+    const KNOWN_FILES = [
+      '00_spec.md',
+      '10_task.md',
+      '20_survey.md',
+      '30_plan.md',
+      '40_progress.md',
+      '80_review.md',
+      '05_log.md',
+      '99_history.md',
+      'checkpoint.md'
+    ];
+
+    let currentSnapshot = { title: 'Roadmap', taskDir: '', generatedAt: '', files: {}, sources: [] };
+    let lastSnapshotSignature = '';
+    let liveTimer = null;
+
+    function byId(id) {
+      return document.getElementById(id);
+    }
+
+    function escapeHtml(value) {
+      return String(value ?? '')
+        .replaceAll('&', '&amp;')
+        .replaceAll('<', '&lt;')
+        .replaceAll('>', '&gt;')
+        .replaceAll('"', '&quot;')
+        .replaceAll("'", '&#039;');
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function statusLabel(status) {
+      if (status === 'complete') return 'complete';
+      if (status === 'in-progress') return 'active';
+      return 'planned';
+    }
+
+    function parseEmbeddedSnapshot() {
+      const el = byId('embedded-snapshot');
+      if (!el) return null;
+      try {
+        const data = JSON.parse(el.textContent || 'null');
+        if (!data || data.__ROADMAP_SNAPSHOT_JSON__) return null;
+        return data;
+      } catch {
+        return null;
+      }
+    }
+
+    function normalizeSnapshot(snapshot) {
+      const files = snapshot.files || {};
+      return {
+        title: snapshot.title || inferTitle(files) || 'Task Roadmap',
+        taskDir: snapshot.taskDir || snapshot.task_dir || '',
+        generatedAt: snapshot.generatedAt || snapshot.generated_at || '',
+        files,
+        sources: snapshot.sources || Object.keys(files).map(name => ({ name, size: files[name].length }))
+      };
+    }
+
+    function snapshotSignature(snapshot) {
+      const files = Object.entries(snapshot.files || {})
+        .sort(([left], [right]) => left.localeCompare(right))
+        .map(([name, text]) => [name, String(text)]);
+      return JSON.stringify({
+        taskDir: snapshot.taskDir || snapshot.task_dir || '',
+        files
+      });
+    }
+
+    function inferTitle(files) {
+      const plan = files['30_plan.md'] || '';
+      const spec = files['00_spec.md'] || '';
+      const h1 = (plan + '\n' + spec).match(/^#\s+(.+)$/m);
+      if (h1) return h1[1].trim();
+      const task = Object.keys(files).find(Boolean);
+      return task ? 'Roadmap Snapshot' : '';
+    }
+
+    function checkboxStats(text) {
+      const matches = Array.from(String(text || '').matchAll(/-\s+\[([ xX])\]/g));
+      const total = matches.length;
+      const done = matches.filter(match => match[1].toLowerCase() === 'x').length;
+      return { done, total, ratio: total ? done / total : 0 };
+    }
+
+    function extractTasks(files) {
+      const plan = files['30_plan.md'] || files['10_task.md'] || '';
+      const progress = files['40_progress.md'] || '';
+      const matches = Array.from(plan.matchAll(/^###\s+Task\s+(\d+):\s*(.+)$/gmi));
+      if (!matches.length) return fallbackTasks(plan);
+
+      return matches.map((match, index) => {
+        const start = match.index || 0;
+        const end = matches[index + 1]?.index ?? plan.length;
+        const body = plan.slice(start, end);
+        const target = body.match(/\*\*変更対象:\*\*\s*(.+)/)?.[1]?.trim() || '';
+        const stats = checkboxStats(body);
+        const progressDone = new RegExp(`-\\s+\\[x\\]\\s+Task\\s+${match[1]}\\b`, 'i').test(progress);
+        const status = progressDone
+          ? 'complete'
+          : stats.total === 0
+            ? 'planned'
+            : stats.ratio >= 0.95
+              ? 'complete'
+              : stats.ratio > 0
+                ? 'in-progress'
+                : 'planned';
+        const total = progressDone && stats.total === 0 ? 1 : stats.total;
+        const done = progressDone ? Math.max(stats.done, total) : stats.done;
+        return {
+          id: `task-${match[1]}`,
+          number: match[1],
+          title: match[2].trim(),
+          target,
+          body,
+          status,
+          done,
+          total,
+          ratio: progressDone ? 1 : stats.ratio
+        };
+      });
+    }
+
+    function fallbackTasks(markdown) {
+      const headings = Array.from(String(markdown || '').matchAll(/^##+\s+(.+)$/gm))
+        .map((match, index) => ({
+          id: `section-${index + 1}`,
+          number: String(index + 1),
+          title: match[1].trim(),
+          target: '',
+          body: '',
+          status: 'planned',
+          done: 0,
+          total: 0,
+          ratio: 0
+        }));
+      return headings.slice(0, 8);
+    }
+
+    function extractLogEntries(files) {
+      const log = files['05_log.md'] || '';
+      const matches = Array.from(log.matchAll(/^##\s+(.+)$/gm));
+      return matches.map((match, index) => {
+        const start = match.index || 0;
+        const end = matches[index + 1]?.index ?? log.length;
+        const body = log.slice(start + match[0].length, end).trim();
+        return {
+          title: match[1].trim(),
+          body,
+          phase: match[1].match(/Phase\s+(\d+(?:\.\d+)?)/i)?.[1] || '',
+          summary: summarize(body)
+        };
+      }).slice(-8).reverse();
+    }
+
+    function summarize(text) {
+      const clean = String(text || '')
+        .split('\n')
+        .map(line => line.replace(/^[-*]\s+/, '').trim())
+        .filter(line => line && !line.startsWith('**') && !line.startsWith('>'))
+        .join(' ');
+      return clean.length > 180 ? `${clean.slice(0, 177)}...` : clean;
+    }
+
+    function extractReviewCounts(files) {
+      const text = `${files['80_review.md'] || ''}\n${files['05_log.md'] || ''}`;
+      const counts = { critical: 0, important: 0, minor: 0, hasReview: false };
+      const regex = /(CRITICAL|IMPORTANT|MINOR)\s*[:：]\s*(\d+)/gi;
+      let match;
+      while ((match = regex.exec(text))) {
+        counts[match[1].toLowerCase()] = Number(match[2]);
+        counts.hasReview = true;
+      }
+      return counts;
+    }
+
+    function extractRisks(files) {
+      const plan = files['30_plan.md'] || '';
+      const rows = [];
+      const tableLines = plan.split('\n').filter(line => /^\|.+\|$/.test(line));
+      for (const line of tableLines) {
+        if (/^\|\s*-+/.test(line) || /リスク|影響度|対策/.test(line)) continue;
+        const cells = line.split('|').slice(1, -1).map(cell => cell.trim());
+        if (cells.length >= 3 && cells[0]) {
+          rows.push({ title: cells[0], meta: `Impact: ${cells[1]} / ${cells[2]}` });
+        }
+      }
+
+      const unknownLines = plan.split('\n')
+        .filter(line => /未確定|要確認|懸念|リスク/.test(line))
+        .filter(line => !line.includes('|'))
+        .map(line => line.replace(/^[-*#\s]+/, '').trim())
+        .filter(Boolean)
+        .slice(0, 6);
+
+      for (const line of unknownLines) rows.push({ title: line, meta: 'from plan notes' });
+      return rows.slice(0, 8);
+    }
+
+    function extractPhaseSignals(files, entries) {
+      const text = [
+        files['30_plan.md'] || '',
+        files['40_progress.md'] ? 'Phase 3' : '',
+        files['80_review.md'] ? 'Phase 4' : '',
+        files['05_log.md'] || ''
+      ].join('\n');
+      const found = new Map();
+
+      for (const phase of PHASES) {
+        const numberRe = new RegExp(`Phase\\s+${phase.number.replace('.', '\\.')}`, 'i');
+        if (numberRe.test(text)) {
+          found.set(phase.number, 'in-progress');
+        }
+      }
+
+      if ((files['30_plan.md'] || '').includes('Phase 2: 計画完了')) {
+        found.set('0', 'complete');
+        found.set('1', 'complete');
+        found.set('2', 'complete');
+      }
+
+      for (const entry of entries) {
+        if (!entry.phase) continue;
+        found.set(entry.phase, /完了|completed|最終/i.test(entry.title) ? 'complete' : 'in-progress');
+      }
+
+      const highestIndex = PHASES.reduce((max, phase, index) => found.has(phase.number) ? index : max, -1);
+      return PHASES.map((phase, index) => {
+        let status = found.get(phase.number) || 'planned';
+        if (highestIndex >= 0 && index < highestIndex) status = 'complete';
+        if (highestIndex >= 0 && index === highestIndex && status !== 'complete') status = 'in-progress';
+        const related = entries.find(entry => entry.phase === phase.number);
+        return { ...phase, status, note: related?.summary || '' };
+      });
+    }
+
+    function calculateClarity(tasks, phases, entries, reviews, risks) {
+      const taskDefinition = tasks.length ? 22 : 0;
+      const taskRatio = tasks.length ? tasks.reduce((sum, task) => sum + task.ratio, 0) / tasks.length : 0;
+      const phaseScore = phases.filter(phase => phase.status !== 'planned').length / phases.length * 18;
+      const executionScore = taskRatio * 28;
+      const evidenceScore = clamp(entries.length, 0, 6) / 6 * 14;
+      const reviewScore = reviews.hasReview ? 12 : 0;
+      const riskPenalty = Math.min(risks.length * 1.5, 8);
+      return Math.round(clamp(taskDefinition + phaseScore + executionScore + evidenceScore + reviewScore - riskPenalty, 0, 100));
+    }
+
+    function buildModel(snapshot) {
+      const tasks = extractTasks(snapshot.files);
+      const entries = extractLogEntries(snapshot.files);
+      const reviews = extractReviewCounts(snapshot.files);
+      const risks = extractRisks(snapshot.files);
+      const phases = extractPhaseSignals(snapshot.files, entries);
+      const clarity = calculateClarity(tasks, phases, entries, reviews, risks);
+      const totalChecks = tasks.reduce((sum, task) => sum + task.total, 0);
+      const doneChecks = tasks.reduce((sum, task) => sum + task.done, 0);
+      const progress = totalChecks ? Math.round(doneChecks / totalChecks * 100) : tasks.filter(task => task.status === 'complete').length / Math.max(tasks.length, 1) * 100;
+      const activePhase = [...phases].reverse().find(phase => phase.status !== 'planned') || phases[0];
+      return { snapshot, tasks, entries, reviews, risks, phases, clarity, progress: Math.round(progress), activePhase };
+    }
+
+    function render(snapshotInput) {
+      currentSnapshot = normalizeSnapshot(snapshotInput);
+      lastSnapshotSignature = snapshotSignature(currentSnapshot);
+      const model = buildModel(currentSnapshot);
+      renderHero(model);
+      renderMindset(model);
+      renderPhases(model);
+      renderTasks(model);
+      renderReviews(model);
+      renderRisks(model);
+      renderEvidence(model);
+      renderSources(model);
+    }
+
+    function setLiveStatus(kind, text) {
+      const badge = byId('live-status');
+      const label = byId('live-status-text');
+      badge.className = `live-badge ${kind || ''}`.trim();
+      label.textContent = text;
+    }
+
+    function stopLivePolling() {
+      if (!liveTimer) return;
+      window.clearInterval(liveTimer);
+      liveTimer = null;
+    }
+
+    function renderHero(model) {
+      const { snapshot, tasks, entries, clarity, progress, activePhase } = model;
+      byId('title').textContent = snapshot.title;
+      byId('kicker').textContent = snapshot.taskDir ? 'Task Memory Roadmap' : 'Roadmap Snapshot';
+      byId('subtitle').textContent = snapshot.taskDir
+        ? `${snapshot.taskDir} / generated ${snapshot.generatedAt || 'from local files'}`
+        : 'A local browser view that gets clearer as plan, progress, review, and evidence files accumulate.';
+      byId('source-line').textContent = snapshot.taskDir || `${Object.keys(snapshot.files).length} source files loaded`;
+      byId('stat-tasks').textContent = String(tasks.length);
+      byId('stat-done').textContent = `${progress}%`;
+      byId('stat-phase').textContent = activePhase?.number || '-';
+      byId('stat-evidence').textContent = String(entries.length);
+      byId('clarity-number').textContent = String(clarity);
+      byId('clarity-fill').style.width = `${clarity}%`;
+      byId('clarity-copy').textContent = clarity < 35
+        ? 'Mostly intent and outline. Useful for alignment, still light on evidence.'
+        : clarity < 70
+          ? 'The plan has shape. Implementation and review evidence are starting to anchor it.'
+          : 'The map is evidence-backed. Remaining work should be visible and narrow.';
+    }
+
+    function renderMindset(model) {
+      const complete = model.tasks.filter(task => task.status === 'complete').length;
+      const active = model.tasks.filter(task => task.status === 'in-progress').length;
+      byId('mindset-state').textContent = model.clarity < 35 ? 'foggy' : model.clarity < 70 ? 'forming' : 'clear';
+      byId('mind-root-title').textContent = model.snapshot.title;
+      byId('mind-root-meta').textContent = `${model.tasks.length} tasks / ${complete} complete / ${model.risks.length} risk signals`;
+
+      const branches = [
+        { title: 'Intent', meta: model.snapshot.files['00_spec.md'] ? 'spec captured' : 'implicit from plan', status: model.snapshot.files['00_spec.md'] ? 'complete' : 'planned' },
+        { title: 'Plan', meta: model.tasks.length ? `${model.tasks.length} task branches` : 'waiting for task breakdown', status: model.tasks.length ? 'complete' : 'planned' },
+        { title: 'Build', meta: active ? `${active} task active` : `${complete} task complete`, status: active ? 'in-progress' : complete ? 'complete' : 'planned' },
+        { title: 'Review', meta: model.reviews.hasReview ? 'review counts detected' : 'not reviewed yet', status: model.reviews.hasReview ? 'complete' : 'planned' },
+        { title: 'Unknowns', meta: model.risks.length ? `${model.risks.length} open signals` : 'no risk table detected', status: model.risks.length ? 'in-progress' : 'complete' }
+      ];
+
+      byId('branch-list').innerHTML = branches.map(branch => `
+        <div class="branch ${branch.status}">
+          <strong>${escapeHtml(branch.title)}</strong>
+          <span>${escapeHtml(branch.meta)}</span>
+        </div>
+      `).join('');
+    }
+
+    function renderPhases(model) {
+      byId('roadmap-meta').textContent = `${model.phases.filter(phase => phase.status !== 'planned').length} phases active`;
+      byId('phase-list').innerHTML = model.phases.map(phase => `
+        <article class="phase ${phase.status}">
+          <div class="phase-marker">${escapeHtml(phase.number)}</div>
+          <div>
+            <p class="phase-title">${escapeHtml(phase.label)}</p>
+            <div class="phase-meta">${statusLabel(phase.status)}${phase.note ? ` / ${escapeHtml(phase.note)}` : ''}</div>
+          </div>
+        </article>
+      `).join('');
+    }
+
+    function renderTasks(model) {
+      byId('task-meta').textContent = `${model.tasks.length} tasks`;
+      if (!model.tasks.length) {
+        byId('task-list').innerHTML = '<p class="empty">No tasks found. Add `### Task 1: ...` sections to 30_plan.md.</p>';
+        return;
+      }
+      byId('task-list').innerHTML = model.tasks.map(task => `
+        <article class="task">
+          <div class="task-top">
+            <div>
+              <h3>${escapeHtml(task.number)}. ${escapeHtml(task.title)}</h3>
+              ${task.target ? `<small>${escapeHtml(task.target)}</small>` : ''}
+            </div>
+            <span class="pill ${task.status}">${statusLabel(task.status)}</span>
+          </div>
+          <div class="task-progress">
+            <div class="bar" aria-hidden="true"><div class="bar-fill" style="width: ${Math.round(task.ratio * 100)}%"></div></div>
+            <span>${task.total ? `${task.done}/${task.total}` : 'no checks'}</span>
+          </div>
+        </article>
+      `).join('');
+    }
+
+    function renderReviews(model) {
+      byId('critical-count').textContent = String(model.reviews.critical);
+      byId('important-count').textContent = String(model.reviews.important);
+      byId('minor-count').textContent = String(model.reviews.minor);
+      byId('review-meta').textContent = model.reviews.hasReview ? 'detected' : 'not detected';
+    }
+
+    function renderRisks(model) {
+      byId('risk-meta').textContent = `${model.risks.length} signals`;
+      if (!model.risks.length) {
+        byId('risk-list').innerHTML = '<p class="empty">No risks detected from plan tables or notes.</p>';
+        return;
+      }
+      byId('risk-list').innerHTML = model.risks.map(risk => `
+        <article class="risk">
+          <strong>${escapeHtml(risk.title)}</strong>
+          <span>${escapeHtml(risk.meta)}</span>
+        </article>
+      `).join('');
+    }
+
+    function renderEvidence(model) {
+      byId('evidence-meta').textContent = `${model.entries.length} recent entries`;
+      if (!model.entries.length) {
+        byId('evidence-list').innerHTML = '<p class="empty">No 05_log.md entries loaded yet.</p>';
+        return;
+      }
+      byId('evidence-list').innerHTML = model.entries.map(entry => `
+        <article class="evidence">
+          <strong>${escapeHtml(entry.title)}</strong>
+          <span>${escapeHtml(entry.summary || 'No summary text.')}</span>
+        </article>
+      `).join('');
+    }
+
+    function renderSources(model) {
+      const names = Object.keys(model.snapshot.files).sort((a, b) => {
+        const ai = KNOWN_FILES.indexOf(a);
+        const bi = KNOWN_FILES.indexOf(b);
+        return (ai === -1 ? 99 : ai) - (bi === -1 ? 99 : bi) || a.localeCompare(b);
+      });
+      byId('source-meta').textContent = `${names.length} files`;
+      if (!names.length) {
+        byId('source-list').innerHTML = '<p class="empty">No source files loaded.</p>';
+        byId('source-preview').textContent = 'No source selected.';
+        return;
+      }
+
+      byId('source-list').innerHTML = names.map(name => `
+        <article class="source">
+          <button type="button" data-source="${escapeHtml(name)}">
+            <strong>${escapeHtml(name)}</strong>
+            <span>${model.snapshot.files[name].length.toLocaleString()} chars</span>
+          </button>
+        </article>
+      `).join('');
+
+      byId('source-list').querySelectorAll('button[data-source]').forEach(button => {
+        button.addEventListener('click', () => {
+          const name = button.dataset.source;
+          byId('source-preview').textContent = model.snapshot.files[name] || '';
+        });
+      });
+      byId('source-preview').textContent = model.snapshot.files[names[0]] || '';
+    }
+
+    async function loadFiles(fileList) {
+      const files = {};
+      stopLivePolling();
+      for (const file of Array.from(fileList)) {
+        const text = await file.text();
+        if (file.name.toLowerCase().endsWith('.json')) {
+          const snapshot = JSON.parse(text);
+          render(snapshot);
+          setLiveStatus('', 'Manual');
+          showToast(`Loaded ${file.name}`);
+          return;
+        }
+        files[file.name] = text;
+      }
+      render({
+        title: inferTitle(files) || 'Manual Roadmap Snapshot',
+        taskDir: 'manual load',
+        generatedAt: new Date().toISOString(),
+        files
+      });
+      setLiveStatus('', 'Manual');
+      showToast(`Loaded ${Object.keys(files).length} files`);
+    }
+
+    function exportJson() {
+      const blob = new Blob([JSON.stringify(currentSnapshot, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const link = document.createElement('a');
+      link.href = url;
+      link.download = 'roadmap-snapshot.json';
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      URL.revokeObjectURL(url);
+    }
+
+    function showToast(message) {
+      const toast = byId('toast');
+      toast.textContent = message;
+      toast.classList.add('show');
+      window.clearTimeout(showToast.timer);
+      showToast.timer = window.setTimeout(() => toast.classList.remove('show'), 2200);
+    }
+
+    async function pollSnapshot() {
+      try {
+        const response = await fetch(`roadmap-snapshot.json?ts=${Date.now()}`, {
+          cache: 'no-store'
+        });
+        if (!response.ok) {
+          setLiveStatus('error', `Live ${response.status}`);
+          return;
+        }
+        const snapshot = await response.json();
+        const signature = snapshotSignature(snapshot);
+        if (signature !== lastSnapshotSignature) {
+          render(snapshot);
+          showToast('Roadmap updated');
+        }
+        setLiveStatus('live', 'Live');
+      } catch {
+        setLiveStatus('error', 'Live lost');
+      }
+    }
+
+    function startLivePolling() {
+      const isHttp = location.protocol === 'http:' || location.protocol === 'https:';
+      if (!isHttp) {
+        setLiveStatus('', 'Static');
+        return;
+      }
+      setLiveStatus('live', 'Live');
+      pollSnapshot();
+      liveTimer = window.setInterval(pollSnapshot, 2000);
+    }
+
+    function setupInteractions() {
+      const fileInput = byId('file-input');
+      byId('open-files').addEventListener('click', () => fileInput.click());
+      fileInput.addEventListener('change', event => {
+        if (event.target.files.length) loadFiles(event.target.files).catch(error => showToast(error.message));
+      });
+      byId('export-json').addEventListener('click', exportJson);
+      byId('theme-toggle').addEventListener('click', () => {
+        const next = document.body.dataset.theme === 'dark' ? '' : 'dark';
+        document.body.dataset.theme = next;
+        localStorage.setItem('roadmapViewerTheme', next);
+      });
+
+      const dropZone = byId('drop-zone');
+      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(name => {
+        dropZone.addEventListener(name, event => {
+          event.preventDefault();
+          event.stopPropagation();
+        });
+      });
+      ['dragenter', 'dragover'].forEach(name => dropZone.addEventListener(name, () => dropZone.classList.add('dragover')));
+      ['dragleave', 'drop'].forEach(name => dropZone.addEventListener(name, () => dropZone.classList.remove('dragover')));
+      dropZone.addEventListener('drop', event => {
+        if (event.dataTransfer.files.length) loadFiles(event.dataTransfer.files).catch(error => showToast(error.message));
+      });
+      dropZone.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') fileInput.click();
+      });
+    }
+
+    document.addEventListener('DOMContentLoaded', () => {
+      document.body.dataset.theme = localStorage.getItem('roadmapViewerTheme') || '';
+      setupInteractions();
+      const embedded = parseEmbeddedSnapshot();
+      if (embedded) {
+        render(embedded);
+      } else {
+        render({ title: 'Roadmap Viewer', files: {} });
+      }
+      startLivePolling();
+    });
+  </script>
+</body>
+</html>
