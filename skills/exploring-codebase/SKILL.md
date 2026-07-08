@@ -20,6 +20,12 @@ description: コードベースの構造・パターン・依存関係を3つの
 - 既存アーキテクチャの理解
 - リファクタリング対象の全体像把握
 
+## 実績由来の知見
+
+- 設定・自動化の配線を探すときは `settings` 系ファイルだけでなく正典ドキュメント（`commands/`・`context/` 等）を先に当たる。常時稼働/初動起動/必要時起動の3分類で全体を切ると把握が速い
+- 一般論をそのまま当てはめず、schema/resolver/設定の実体を先に読んで実リスクを再定義する。ページング等の「一般的に起こりがちな問題」を疑う前に、対象コードが実際にどう実装されているか（固定レンジか可変オフセットか等）を確認してから論点を立て直す
+（出典: memories/rollout_summaries/2026-06-17T03-21-39-wAW0-claude_settings_agent_teams_orchestrator_evaluation.md「Preference signals, Failures and how to do differently」, memories/rollout_summaries/2026-06-26T05-59-50-ZLd9-cache_paginated_bricks_consistency_investigation.md「Task 1 Key steps / Reusable knowledge / References」）
+
 ## ワークフロー
 
 ### Step 1: 探索対象の特定

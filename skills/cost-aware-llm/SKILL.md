@@ -40,6 +40,14 @@ Codex の `multi_agent_v1.spawn_agent` は、まず `agent_type` の role 既定
 | 通常タスクは親モデル継承に任せる | ~60% |
 | 複雑判断のみ必要に応じて `model = "gpt-5.5"` + `service_tier = "priority"` に昇格 | ~70% |
 
+## NG例: 一律格上げ
+
+軽量/routineタスクまで一律で上位モデル（`gpt-5.5`等）に格上げすると、role default のルーティングポリシーと不整合を起こす。明示モデル指定は判定・レビュー等の重い用途に限定し、軽量/routineタスクは既定モデル（role default）に委ねる（出典: memories/23_evidence_summary.md「S-008」）。
+
+## model明示時の互換性検証
+
+`model` を明示する設定変更を行った場合は `~/.codex/scripts/verify-codex-model-compat.py` でリグレッションガードする。明示 `model = ...` の近傍に `service_tier = "priority"` があるかを検査するスクリプトで、対象パスを指定して実行する（出典: memories/23_evidence_summary.md「S-005」）。
+
 ## 関連
 
 - `rules/model-routing.md` — 詳細な選択基準とサブエージェント別の割り当て

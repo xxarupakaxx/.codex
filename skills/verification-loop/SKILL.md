@@ -106,6 +106,14 @@ criteria:
     pass: "size < 5M"
 ```
 
+### 移行・整合系タスクの合格基準（専用verifierスクリプト）
+
+設定移行・用語統一・禁止パターン除去など機械的に判定できるタスクでは、専用verifierスクリプト（禁止パターン検出等）を用意し、その決定的な出力文字列（例: `check passed`）自体を合格基準にする。ステージ済み変更だけを対象にした確認は `git grep --cached` + 禁止パターンのregexで足りる。
+（出典: memories/rollout_summaries/2026-06-23T01-00-42-uYoW-claude_to_codex_config_sync_and_dotfiles_push.md「Task 1/3 Key steps / Reusable knowledge」）
+
+verifierの検査対象は1種類のファイルに限定しない。`.toml`のみを検査対象にしてMarkdown/JS中の同種違反を見逃した実例があるため、対象パターンを含みうるテキストファイル全般をスキャン範囲にする。また、repoに存在しないcheckコマンドを合格基準に数えない。検証コマンドはpackage.json等の実定義を確認してから構成する。
+（出典: memories/rollout_summaries/2026-06-23T05-49-22-Anzx-codex_team_run_compatibility_superpowers_goal.md「Task 1 Failures」、memories/rollout_summaries/2026-06-23T08-02-54-uEIX-pr_3012_review_push_billing_refund_slack_fix.md「Task 1 Failures」）
+
 ## 安全ガード
 
 - **最大ループ回数**: 5回（無限ループ防止）

@@ -2,7 +2,6 @@
 name: pr-review
 description: PRレビュー。PR番号・ブランチ名指定時またはレビュー依頼時に使用。サブエージェント並列レビュー＋重要度別Roundで対話的にユーザーと確認。
 context: fork
-allowed-tools: Bash(gh:*), Read, Grep, Glob, Task
 ---
 
 # PRレビュー
@@ -33,9 +32,9 @@ CLAUDE.mdを読み、以下を把握:
 
 ### 3. サブエージェント並列レビュー
 
-**CRITICAL: `claude -p` CLIは使わない。Taskツールの専門サブエージェントを並列起動すること。**
+**CRITICAL: `claude -p` CLIは使わない。`multi_agent_v1.spawn_agent` で専門サブエージェントを並列起動すること。**
 
-変更ファイル一覧を取得後、コアレビューアー + 変更内容に応じた追加レビューアーを**Taskツールで並列起動**。
+変更ファイル一覧を取得後、コアレビューアー + 変更内容に応じた追加レビューアーを **`multi_agent_v1.spawn_agent` で並列起動**。
 
 #### コアレビューアー（常時起動）
 
@@ -204,3 +203,11 @@ MINOR指摘が0件の場合はRound 3をスキップ。
 | IMPORTANT | アーキテクチャ違反、テスト不足、一貫性違反 | 強く推奨 |
 | MINOR | 命名、コメント、軽微な改善 | 改善推奨 |
 | Good | 良い実装 | 賞賛（Roundには含めない） |
+
+## 実績由来の知見
+
+- **gh認証フォールバック**: `gh auth status` が失敗する場合は `git fetch origin pull/<id>/head:refs/remotes/origin/pr/<id>` で直接取得し、`origin/<base>...origin/pr/<id>` で差分比較する。private repoではまず `gh auth switch` でアカウント切替を試す。6件のPRレビューで実証済みの手順（出典: memories/rollout_summaries/2026-06-15T02-19-06-lD3O-pr_review_booking_event_redeem_cancel_2945.md「Key steps」、memories/rollout_summaries/2026-06-23T08-02-54-uEIX-pr_3012_review_push_billing_refund_slack_fix.md「Key steps」、MEMORY.md:365,268）
+- **環境ノイズとコード指摘の分離**: サンドボックス起因の検証失敗（DB接続不可、認証エラー等）をコードの問題として報告しない（出典: memories/rollout_summaries/2026-06-16T04-32-09-W9wb-pr_2921_booking_event_reminder_review.md「Failures and how to do differently」）
+- **サブエージェント起動不可時の代替**: sub-agent起動がスレッド/ポリシー制約で使えない場合、並列レビューを断念せず優先度の高い観点（security, concurrency, API contract, test）から手動レビューで代替する（出典: memories/rollout_summaries/2026-06-15T03-24-07-Cneo-pr_review_2940_booking_event_validation.md「Failures and how to do differently」、memories/rollout_summaries/2026-06-22T05-52-03-qgnt-dependency_tarball_ci_pr_and_review.md「Failures and how to do differently」）
+- **短い依頼の解釈**: 「pr-reviewして」だけの依頼はスコープ確認なしで全ワークフローを開始する。「修正してプッシュして」が付けば実装修正とpushまで含む（出典: memories/rollout_summaries/2026-06-15T02-19-06-lD3O-pr_review_booking_event_redeem_cancel_2945.md「Preference signals」、memories/rollout_summaries/2026-06-16T03-53-25-JmlJ-pr_2954_billing_review_fix_push.md「Preference signals」）
+- **レビューコメント返信の404フォールバック**: REST経由の直接返信が404の場合、GraphQLでレビュースレッドIDを取得し `addPullRequestReviewThreadReply` を使う（出典: memories/memory_summary.md:27,67、memories/raw_memories.md:2338-2339,2347）
