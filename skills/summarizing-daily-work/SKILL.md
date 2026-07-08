@@ -55,7 +55,7 @@ ${MEMORY_DIR}/memory/YYMMDD_*/
 
 ### Step 4: サブエージェントで要約生成
 
-Agent Tool（model 省略 — 親セッション継承）で以下を生成:
+`multi_agent_v1.spawn_agent`（role既定のmodel/service_tierを使用）で以下を生成:
 
 - 各タスクの要約（何をしたか、結果）
 - 未完了タスクの抽出

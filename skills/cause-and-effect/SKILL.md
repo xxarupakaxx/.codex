@@ -1,4 +1,5 @@
 ---
+name: cause-and-effect
 description: Systematic Fishbone analysis exploring problem causes across six categories
 argument-hint: 分析する問題の説明（オプション）
 ---

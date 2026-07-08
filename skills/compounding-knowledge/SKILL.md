@@ -46,7 +46,7 @@ description: |
 
 ### Step 2: 並列サブエージェント起動
 
-以下の4つのサブエージェント（Agent Tool）を**並列**で起動。
+以下の4つを `multi_tool_use.parallel` で `multi_agent_v1.spawn_agent` により**並列**起動。
 原則 `model` を省略し、親セッションのモデルを継承させる。明示指定が必要な場合のみ `~/.claude/rules/model-routing.md` に従う。
 
 #### 2-1: Solution Extractor

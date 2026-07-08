@@ -7,13 +7,23 @@
   <title>Diagram Viewer - MCP App</title>
   <style>
     :root {
-      --bg: #1a1a2e;
-      --surface: #16213e;
-      --text: #eee;
-      --text-muted: #888;
-      --accent: #0f4c75;
-      --accent-hover: #3282b8;
-      --border: #333;
+      --bg: #101418;
+      --surface: #171d23;
+      --surface-2: #202832;
+      --text: #eef2f6;
+      --text-muted: #9aa8b5;
+      --accent: #4f7cff;
+      --accent-hover: #6f95ff;
+      --border: #33404d;
+      --success: #40c980;
+      --danger: #ff6b6b;
+      --warning: #f2b84b;
+      --node-ui: #5aa9ff;
+      --node-api: #7ccf90;
+      --node-domain: #f2b84b;
+      --node-db: #d28cff;
+      --node-external: #ff8a7a;
+      --node-unknown: #98a2ad;
     }
 
     * {
@@ -23,76 +33,131 @@
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
       background: var(--bg);
       color: var(--text);
-      line-height: 1.6;
-      padding: 20px;
       height: 100vh;
       overflow: hidden;
     }
 
+    button {
+      font: inherit;
+    }
+
     .container {
-      max-width: 1200px;
-      margin: 0 auto;
       height: 100%;
       display: flex;
       flex-direction: column;
+      padding: 16px;
+      gap: 12px;
     }
 
     header {
       display: flex;
       justify-content: space-between;
       align-items: center;
-      margin-bottom: 15px;
-      padding-bottom: 10px;
+      gap: 16px;
+      min-height: 44px;
       border-bottom: 1px solid var(--border);
+      padding-bottom: 12px;
       flex-shrink: 0;
     }
 
     h1 {
-      font-size: 1.5rem;
+      font-size: 1.1rem;
+      font-weight: 650;
+      line-height: 1.2;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
     }
 
     .header-controls {
       display: flex;
-      gap: 10px;
       align-items: center;
+      gap: 10px;
+      flex-wrap: wrap;
+      justify-content: flex-end;
     }
 
     .status {
-      font-size: 0.8rem;
+      font-size: 0.78rem;
       color: var(--text-muted);
+      white-space: nowrap;
     }
 
     .status.connected {
-      color: #4caf50;
+      color: var(--success);
     }
 
-    .controls {
+    .controls,
+    .view-switch {
       display: flex;
-      gap: 8px;
+      align-items: center;
+      gap: 6px;
     }
 
-    .controls button {
-      padding: 6px 12px;
-      background: var(--accent);
-      color: white;
-      border: none;
-      border-radius: 4px;
+    .controls button,
+    .view-switch button {
+      min-height: 30px;
+      padding: 5px 10px;
+      border: 1px solid var(--border);
+      border-radius: 6px;
+      background: var(--surface-2);
+      color: var(--text);
       cursor: pointer;
-      font-size: 0.85rem;
-      transition: background 0.2s;
     }
 
-    .controls button:hover {
-      background: var(--accent-hover);
+    .controls button:hover,
+    .view-switch button:hover {
+      border-color: var(--accent);
+    }
+
+    .view-switch button.active {
+      background: var(--accent);
+      border-color: var(--accent);
+      color: white;
+    }
+
+    .view-switch[hidden],
+    .graph-only[hidden],
+    #graph-sidebar[hidden],
+    #node-details[hidden] {
+      display: none;
+    }
+
+    .zoom-info {
+      min-width: 48px;
+      padding: 4px 8px;
+      border-radius: 4px;
+      background: var(--surface);
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      text-align: center;
+    }
+
+    .workspace {
+      flex: 1;
+      min-height: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 12px;
+    }
+
+    .workspace.graph-mode {
+      grid-template-columns: 220px minmax(0, 1fr) 280px;
+    }
+
+    #diagram-container,
+    #graph-sidebar,
+    #node-details {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      min-height: 0;
     }
 
     #diagram-container {
-      background: var(--surface);
-      border-radius: 8px;
-      flex: 1;
       overflow: hidden;
       position: relative;
     }
@@ -117,61 +182,304 @@
       height: auto !important;
     }
 
-    .loading {
+    #graph-view {
+      position: absolute;
+      inset: 0;
+      display: flex;
+      align-items: stretch;
+      justify-content: stretch;
+      background:
+        linear-gradient(90deg, rgba(255,255,255,0.04) 1px, transparent 1px),
+        linear-gradient(0deg, rgba(255,255,255,0.04) 1px, transparent 1px),
+        var(--surface);
+      background-size: 40px 40px;
+      overflow: hidden;
+    }
+
+    #graph-view.hidden,
+    #diagram-wrapper.hidden {
+      display: none;
+    }
+
+    #graph-stage {
+      position: relative;
+      width: 100%;
+      height: 100%;
+      perspective: 1400px;
+      overflow: hidden;
+      cursor: grab;
+    }
+
+    #graph-stage.dragging {
+      cursor: grabbing;
+    }
+
+    #graph-space {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 1200px;
+      height: 760px;
+      transform-style: preserve-3d;
+      transform-origin: 0 0;
+      transition: transform 0.08s linear;
+    }
+
+    .layer-plane {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: var(--layer-width);
+      height: var(--layer-height);
+      border: 1px solid rgba(255,255,255,0.16);
+      border-radius: 8px;
+      background: rgba(255,255,255,0.045);
+      transform: translate3d(calc(var(--layer-width) / -2), calc(var(--layer-height) / -2), var(--z));
+      transform-style: preserve-3d;
+      pointer-events: none;
+    }
+
+    .layer-plane span {
+      position: absolute;
+      left: 12px;
+      top: 10px;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      letter-spacing: 0;
+      text-transform: uppercase;
+    }
+
+    .graph-node {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      width: 156px;
+      min-height: 62px;
+      padding: 9px 10px;
+      border: 1px solid rgba(255,255,255,0.24);
+      border-left: 4px solid var(--node-unknown);
+      border-radius: 8px;
+      background: rgba(16,20,24,0.94);
+      color: var(--text);
+      text-align: left;
+      cursor: pointer;
+      transform: translate3d(var(--x), var(--y), var(--z));
+      transform-style: preserve-3d;
+      box-shadow: 0 10px 24px rgba(0,0,0,0.26);
+      transition: opacity 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
+    }
+
+    .graph-node:hover,
+    .graph-node.selected {
+      border-color: var(--accent);
+      box-shadow: 0 0 0 2px rgba(79,124,255,0.28), 0 12px 28px rgba(0,0,0,0.34);
+    }
+
+    .graph-node.hidden-by-layer,
+    .edge-line.hidden-by-layer,
+    .edge-label.hidden-by-layer,
+    .layer-plane.hidden-by-layer {
+      opacity: 0.08;
+      pointer-events: none;
+    }
+
+    .graph-node .node-title {
+      display: block;
+      font-size: 0.8rem;
+      font-weight: 650;
+      line-height: 1.25;
+    }
+
+    .graph-node .node-meta {
+      display: block;
+      margin-top: 5px;
+      color: var(--text-muted);
+      font-size: 0.68rem;
+      line-height: 1.25;
+    }
+
+    .graph-node.layer-ui { border-left-color: var(--node-ui); }
+    .graph-node.layer-api { border-left-color: var(--node-api); }
+    .graph-node.layer-domain { border-left-color: var(--node-domain); }
+    .graph-node.layer-db { border-left-color: var(--node-db); }
+    .graph-node.layer-external { border-left-color: var(--node-external); }
+
+    .edge-line {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      height: 2px;
+      background: linear-gradient(90deg, rgba(238,242,246,0.22), rgba(238,242,246,0.74));
+      transform-origin: 0 50%;
+      pointer-events: none;
+    }
+
+    .edge-line::after {
+      content: "";
+      position: absolute;
+      right: -1px;
+      top: -4px;
+      width: 0;
+      height: 0;
+      border-top: 5px solid transparent;
+      border-bottom: 5px solid transparent;
+      border-left: 8px solid rgba(238,242,246,0.74);
+    }
+
+    .edge-line.edge-async {
+      background-image: repeating-linear-gradient(90deg, rgba(238,242,246,0.72) 0 8px, transparent 8px 14px);
+    }
+
+    .edge-line.edge-error {
+      background: var(--danger);
+    }
+
+    .edge-label {
+      position: absolute;
+      left: 50%;
+      top: 50%;
+      max-width: 140px;
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: rgba(16,20,24,0.9);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      font-size: 0.66rem;
+      line-height: 1.2;
+      transform: translate3d(var(--x), var(--y), var(--z));
+      pointer-events: none;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
+    #graph-sidebar,
+    #node-details {
+      padding: 14px;
+      overflow: auto;
+    }
+
+    #graph-sidebar h2,
+    #node-details h2 {
+      font-size: 0.86rem;
+      margin-bottom: 10px;
+    }
+
+    .layer-filter {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      padding: 7px 0;
+      border-bottom: 1px solid rgba(255,255,255,0.06);
+      color: var(--text);
+      font-size: 0.8rem;
+    }
+
+    .layer-filter input {
+      accent-color: var(--accent);
+    }
+
+    .help-text {
+      margin-top: 12px;
+      color: var(--text-muted);
+      font-size: 0.75rem;
+      line-height: 1.45;
+    }
+
+    #node-details .empty {
+      color: var(--text-muted);
+      font-size: 0.82rem;
+      line-height: 1.45;
+    }
+
+    .detail-section {
+      margin-top: 14px;
+    }
+
+    .detail-section h3 {
+      font-size: 0.74rem;
+      color: var(--text-muted);
+      margin-bottom: 5px;
+      text-transform: uppercase;
+      letter-spacing: 0;
+    }
+
+    .detail-section p,
+    .detail-section li {
+      font-size: 0.82rem;
+      line-height: 1.45;
+      color: var(--text);
+    }
+
+    .detail-section ul {
+      list-style: none;
+      display: grid;
+      gap: 4px;
+    }
+
+    .loading,
+    .error {
       text-align: center;
       padding: 40px;
       color: var(--text-muted);
     }
 
     .error {
-      text-align: center;
-      padding: 40px;
-      color: #f44336;
+      color: var(--danger);
     }
 
     #code-panel {
-      margin-top: 15px;
       flex-shrink: 0;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      background: var(--surface);
+      overflow: hidden;
     }
 
     #code-panel.collapsed {
       display: none;
     }
 
-    #code-toggle {
-      background: transparent;
-      border: 1px solid var(--border);
-      color: var(--text-muted);
-      padding: 4px 10px;
-      border-radius: 4px;
-      cursor: pointer;
-      font-size: 0.8rem;
-    }
-
-    #code-toggle:hover {
-      border-color: var(--accent);
-      color: var(--text);
-    }
-
     #mermaid-code {
-      background: #0d1117;
-      padding: 15px;
-      border-radius: 6px;
-      font-family: 'SF Mono', Monaco, monospace;
-      font-size: 0.85rem;
+      max-height: 210px;
+      overflow: auto;
+      padding: 14px;
+      background: #0b0f14;
+      color: #d8e2ec;
+      font-family: "SF Mono", Monaco, Consolas, monospace;
+      font-size: 0.78rem;
+      line-height: 1.45;
       white-space: pre-wrap;
-      word-break: break-all;
-      max-height: 200px;
-      overflow-y: auto;
-      color: #c9d1d9;
+      word-break: break-word;
     }
 
-    .zoom-info {
-      font-size: 0.75rem;
-      color: var(--text-muted);
-      padding: 4px 8px;
-      background: var(--bg);
-      border-radius: 4px;
+    @media (max-width: 980px) {
+      body {
+        overflow: auto;
+      }
+
+      .container {
+        min-height: 100vh;
+      }
+
+      .workspace.graph-mode {
+        grid-template-columns: 1fr;
+      }
+
+      #graph-sidebar,
+      #node-details {
+        max-height: 180px;
+      }
+
+      header {
+        align-items: flex-start;
+        flex-direction: column;
+      }
+
+      .header-controls {
+        justify-content: flex-start;
+      }
     }
   </style>
 </head>
@@ -181,22 +489,45 @@
       <h1 id="title">Diagram Viewer</h1>
       <div class="header-controls">
         <span id="status" class="status">Waiting for diagram...</span>
+        <div class="view-switch" id="view-switch" hidden>
+          <button id="view-mermaid" type="button" class="active">Mermaid</button>
+          <button id="view-graph" type="button">2.5D</button>
+        </div>
         <div class="controls">
-          <button id="zoom-in">+</button>
+          <button id="zoom-in" type="button">+</button>
           <span class="zoom-info" id="zoom-level">100%</span>
-          <button id="zoom-out">-</button>
-          <button id="zoom-reset">Reset</button>
-          <button id="code-toggle">Code</button>
+          <button id="zoom-out" type="button">-</button>
+          <button id="zoom-reset" type="button">Reset</button>
+          <button id="code-toggle" type="button">Code</button>
+          <button id="copy-code" type="button">Copy</button>
         </div>
       </div>
     </header>
 
-    <div id="diagram-container">
-      <div id="diagram-wrapper">
-        <div id="diagram">
-          <div class="loading">Mermaid diagram will appear here</div>
+    <div class="workspace" id="workspace">
+      <aside id="graph-sidebar" hidden>
+        <h2>Layers</h2>
+        <div id="layer-filters"></div>
+        <p class="help-text">Drag the 2.5D view to rotate it. X shows process order, Z shows the technical layer.</p>
+      </aside>
+
+      <div id="diagram-container">
+        <div id="diagram-wrapper">
+          <div id="diagram">
+            <div class="loading">Mermaid diagram will appear here</div>
+          </div>
+        </div>
+        <div id="graph-view" class="hidden">
+          <div id="graph-stage" aria-label="2.5D graph view">
+            <div id="graph-space"></div>
+          </div>
         </div>
       </div>
+
+      <aside id="node-details" hidden>
+        <h2>Node Details</h2>
+        <p class="empty">Select a node to inspect why it exists, which files it touches, and how it connects to the flow.</p>
+      </aside>
     </div>
 
     <div id="code-panel" class="collapsed">
@@ -207,7 +538,6 @@
   <script type="module">
     import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
 
-    // Initialize mermaid
     mermaid.initialize({
       startOnLoad: false,
       theme: 'dark',
@@ -224,7 +554,6 @@
       },
     });
 
-    // Trusted origins whitelist
     const TRUSTED_ORIGINS = [
       'https://claude.ai',
       'https://www.claude.ai',
@@ -242,7 +571,6 @@
       });
     }
 
-    // MCP App client
     class MCPAppClient {
       constructor() {
         this.connected = false;
@@ -251,7 +579,7 @@
         this.parentOrigin = null;
 
         window.addEventListener('message', (event) => this.handleMessage(event));
-        this.sendToParent({ type: 'app-ready', name: 'Diagram Viewer', version: '1.0.0' });
+        this.sendToParent({ type: 'app-ready', name: 'Diagram Viewer', version: '1.1.0' });
       }
 
       handleMessage(event) {
@@ -293,68 +621,221 @@
         }
       }
 
-      updateStatus(connected) {
+      updateStatus(connected, message) {
         const statusEl = document.getElementById('status');
-        if (connected) {
-          statusEl.textContent = 'Connected';
-          statusEl.classList.add('connected');
-        } else {
-          statusEl.textContent = 'Disconnected';
-          statusEl.classList.remove('connected');
-        }
+        statusEl.textContent = message || (connected ? 'Connected' : 'Disconnected');
+        statusEl.classList.toggle('connected', connected);
       }
     }
 
-    // Initialize
     const app = new MCPAppClient();
+    const workspaceEl = document.getElementById('workspace');
+    const diagramWrapperEl = document.getElementById('diagram-wrapper');
     const diagramEl = document.getElementById('diagram');
+    const graphViewEl = document.getElementById('graph-view');
+    const graphStageEl = document.getElementById('graph-stage');
+    const graphSpaceEl = document.getElementById('graph-space');
     const titleEl = document.getElementById('title');
     const codePanel = document.getElementById('code-panel');
     const mermaidCodeEl = document.getElementById('mermaid-code');
     const zoomLevelEl = document.getElementById('zoom-level');
+    const viewSwitchEl = document.getElementById('view-switch');
+    const viewMermaidEl = document.getElementById('view-mermaid');
+    const viewGraphEl = document.getElementById('view-graph');
+    const layerFiltersEl = document.getElementById('layer-filters');
+    const graphSidebarEl = document.getElementById('graph-sidebar');
+    const nodeDetailsEl = document.getElementById('node-details');
+
+    const LAYER_ORDER = ['UI', 'API', 'Domain', 'DB', 'External', 'Queue', 'Ops', 'Test', 'Unknown'];
+    const LAYER_CLASS = {
+      UI: 'layer-ui',
+      API: 'layer-api',
+      Domain: 'layer-domain',
+      DB: 'layer-db',
+      External: 'layer-external',
+    };
 
     let currentZoom = 1;
+    let currentView = 'mermaid';
     let currentMermaidCode = '';
+    let currentGraphJson = '';
+    let currentGraph = null;
+    let hiddenLayers = new Set();
+    let selectedNodeId = null;
+    let camera = { rotateX: 58, rotateZ: -28 };
+    let dragState = null;
 
-    // Zoom controls
+    function setText(el, text) {
+      el.textContent = text == null || text === '' ? '-' : String(text);
+    }
+
+    function escapeHtml(text) {
+      const div = document.createElement('div');
+      div.textContent = text;
+      return div.innerHTML;
+    }
+
+    function clamp(value, min, max) {
+      return Math.max(min, Math.min(max, value));
+    }
+
+    function normalizeLayer(layer) {
+      const text = String(layer || 'Unknown');
+      return LAYER_ORDER.includes(text) ? text : 'Unknown';
+    }
+
+    function normalizeGraph(rawGraph) {
+      const graph = typeof rawGraph === 'string' ? JSON.parse(rawGraph) : rawGraph;
+      if (!graph || !Array.isArray(graph.nodes)) {
+        throw new Error('graphJson must include a nodes array');
+      }
+      const nodes = graph.nodes.map((node, index) => {
+        if (!node || !node.id) {
+          throw new Error(`graphJson node at index ${index} is missing id`);
+        }
+        return {
+          id: String(node.id),
+          label: String(node.label || node.id),
+          layer: normalizeLayer(node.layer),
+          kind: String(node.kind || 'step'),
+          why: String(node.why || ''),
+          files: Array.isArray(node.files) ? node.files.map(String) : [],
+          order: Number.isFinite(Number(node.order)) ? Number(node.order) : null,
+        };
+      });
+      const nodeIds = new Set(nodes.map(node => node.id));
+      const edges = Array.isArray(graph.edges) ? graph.edges
+        .filter(edge => edge && nodeIds.has(String(edge.from)) && nodeIds.has(String(edge.to)))
+        .map(edge => ({
+          from: String(edge.from),
+          to: String(edge.to),
+          label: String(edge.label || ''),
+          type: String(edge.type || 'sync'),
+        })) : [];
+      return { nodes, edges };
+    }
+
+    function computeNodeDepths(nodes, edges) {
+      const incoming = new Map(nodes.map(node => [node.id, 0]));
+      const outgoing = new Map(nodes.map(node => [node.id, []]));
+      edges.forEach(edge => {
+        incoming.set(edge.to, (incoming.get(edge.to) || 0) + 1);
+        outgoing.get(edge.from)?.push(edge.to);
+      });
+      const queue = nodes.filter(node => incoming.get(node.id) === 0).map(node => node.id);
+      const depth = new Map(nodes.map((node, index) => [node.id, node.order ?? index]));
+      while (queue.length > 0) {
+        const id = queue.shift();
+        const baseDepth = depth.get(id) || 0;
+        outgoing.get(id)?.forEach(nextId => {
+          depth.set(nextId, Math.max(depth.get(nextId) || 0, baseDepth + 1));
+          incoming.set(nextId, (incoming.get(nextId) || 0) - 1);
+          if (incoming.get(nextId) === 0) queue.push(nextId);
+        });
+      }
+      return depth;
+    }
+
+    function computeLayout(graph) {
+      const depths = computeNodeDepths(graph.nodes, graph.edges);
+      const layers = [...new Set(graph.nodes.map(node => node.layer))]
+        .sort((a, b) => LAYER_ORDER.indexOf(a) - LAYER_ORDER.indexOf(b));
+      const layerCenter = (layers.length - 1) / 2;
+      const grouped = new Map();
+      graph.nodes.forEach(node => {
+        const key = `${node.layer}:${depths.get(node.id) || 0}`;
+        const group = grouped.get(key) || [];
+        group.push(node.id);
+        grouped.set(key, group);
+      });
+      const maxDepth = Math.max(1, ...Array.from(depths.values()));
+      const positions = new Map();
+      graph.nodes.forEach((node, index) => {
+        const depth = depths.get(node.id) || index;
+        const sameSlot = grouped.get(`${node.layer}:${depth}`) || [];
+        const slotIndex = sameSlot.indexOf(node.id);
+        const layerIndex = layers.indexOf(node.layer);
+        positions.set(node.id, {
+          x: (depth - maxDepth / 2) * 210,
+          y: (slotIndex - (sameSlot.length - 1) / 2) * 120,
+          z: (layerIndex - layerCenter) * 170,
+        });
+      });
+      return { positions, layers };
+    }
+
     function updateZoom() {
-      diagramEl.style.transform = `scale(${currentZoom})`;
       zoomLevelEl.textContent = `${Math.round(currentZoom * 100)}%`;
+      if (currentView === 'graph') {
+        updateGraphTransform();
+      } else {
+        diagramEl.style.transform = `scale(${currentZoom})`;
+      }
+    }
+
+    function updateGraphTransform() {
+      graphSpaceEl.style.transform = [
+        'translate3d(-50%, -50%, 0)',
+        `scale(${currentZoom})`,
+        `rotateX(${camera.rotateX}deg)`,
+        `rotateZ(${camera.rotateZ}deg)`
+      ].join(' ');
+    }
+
+    function showView(view) {
+      currentView = view === 'graph' && currentGraph ? 'graph' : 'mermaid';
+      const isGraph = currentView === 'graph';
+      viewMermaidEl.classList.toggle('active', !isGraph);
+      viewGraphEl.classList.toggle('active', isGraph);
+      workspaceEl.classList.toggle('graph-mode', isGraph);
+      diagramWrapperEl.classList.toggle('hidden', isGraph);
+      graphViewEl.classList.toggle('hidden', !isGraph);
+      graphSidebarEl.hidden = !isGraph;
+      nodeDetailsEl.hidden = !isGraph;
+      mermaidCodeEl.textContent = isGraph ? currentGraphJson : currentMermaidCode;
+      updateZoom();
     }
 
     document.getElementById('zoom-in').addEventListener('click', () => {
-      currentZoom = Math.min(currentZoom + 0.25, 3);
+      currentZoom = Math.min(currentZoom + 0.2, 3);
       updateZoom();
     });
 
     document.getElementById('zoom-out').addEventListener('click', () => {
-      currentZoom = Math.max(currentZoom - 0.25, 0.25);
+      currentZoom = Math.max(currentZoom - 0.2, 0.3);
       updateZoom();
     });
 
     document.getElementById('zoom-reset').addEventListener('click', () => {
       currentZoom = 1;
+      camera = { rotateX: 58, rotateZ: -28 };
       updateZoom();
     });
 
-    // Code toggle
     document.getElementById('code-toggle').addEventListener('click', () => {
       codePanel.classList.toggle('collapsed');
     });
 
-    // Render mermaid diagram
+    document.getElementById('copy-code').addEventListener('click', () => {
+      if (currentView === 'graph') {
+        copyGraphJson();
+      } else {
+        copyText(currentMermaidCode);
+      }
+    });
+
+    viewMermaidEl.addEventListener('click', () => showView('mermaid'));
+    viewGraphEl.addEventListener('click', () => showView('graph'));
+
     async function renderDiagram(mermaidCode) {
       try {
         currentMermaidCode = mermaidCode;
-        mermaidCodeEl.textContent = mermaidCode;
-
-        // Generate unique ID for this render
+        if (currentView === 'mermaid') {
+          mermaidCodeEl.textContent = mermaidCode;
+        }
         const id = `mermaid-${Date.now()}`;
-
-        // Render the diagram
         const { svg } = await mermaid.render(id, mermaidCode);
         diagramEl.innerHTML = svg;
-
         app.updateStatus(true);
       } catch (error) {
         diagramEl.innerHTML = `<div class="error">
@@ -365,46 +846,326 @@
       }
     }
 
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
+    function renderLayerFilters(layers) {
+      layerFiltersEl.innerHTML = '';
+      layers.forEach(layer => {
+        const id = `layer-${layer.toLowerCase()}`;
+        const label = document.createElement('label');
+        label.className = 'layer-filter';
+
+        const span = document.createElement('span');
+        setText(span, layer);
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.id = id;
+        checkbox.checked = !hiddenLayers.has(layer);
+        checkbox.addEventListener('change', () => {
+          if (checkbox.checked) {
+            hiddenLayers.delete(layer);
+          } else {
+            hiddenLayers.add(layer);
+          }
+          applyLayerVisibility();
+        });
+
+        label.append(span, checkbox);
+        layerFiltersEl.append(label);
+      });
     }
 
-    // Handle content from MCP server
+    function renderGraph3d(graph) {
+      currentGraph = graph;
+      hiddenLayers = new Set();
+      selectedNodeId = null;
+      graphSpaceEl.innerHTML = '';
+      const { positions, layers } = computeLayout(graph);
+      const layerWidth = 1040;
+      const layerHeight = Math.max(460, graph.nodes.length * 52);
+
+      layers.forEach(layer => {
+        const layerIndex = layers.indexOf(layer);
+        const layerCenter = (layers.length - 1) / 2;
+        const plane = document.createElement('div');
+        plane.className = 'layer-plane';
+        plane.dataset.layer = layer;
+        plane.style.setProperty('--layer-width', `${layerWidth}px`);
+        plane.style.setProperty('--layer-height', `${layerHeight}px`);
+        plane.style.setProperty('--z', `${(layerIndex - layerCenter) * 170}px`);
+        const text = document.createElement('span');
+        setText(text, layer);
+        plane.append(text);
+        graphSpaceEl.append(plane);
+      });
+
+      graph.edges.forEach(edge => {
+        const from = positions.get(edge.from);
+        const to = positions.get(edge.to);
+        if (!from || !to) return;
+        const dx = to.x - from.x;
+        const dy = to.y - from.y;
+        const distance = Math.max(24, Math.hypot(dx, dy));
+        const angle = Math.atan2(dy, dx);
+        const edgeLine = document.createElement('div');
+        edgeLine.className = `edge-line edge-${edge.type}`;
+        edgeLine.dataset.from = edge.from;
+        edgeLine.dataset.to = edge.to;
+        edgeLine.style.width = `${distance}px`;
+        edgeLine.style.transform = `translate3d(${from.x}px, ${from.y}px, ${(from.z + to.z) / 2}px) rotateZ(${angle}rad)`;
+        graphSpaceEl.append(edgeLine);
+
+        if (edge.label) {
+          const edgeLabel = document.createElement('div');
+          edgeLabel.className = 'edge-label';
+          edgeLabel.dataset.from = edge.from;
+          edgeLabel.dataset.to = edge.to;
+          edgeLabel.style.setProperty('--x', `${from.x + dx / 2}px`);
+          edgeLabel.style.setProperty('--y', `${from.y + dy / 2 - 18}px`);
+          edgeLabel.style.setProperty('--z', `${(from.z + to.z) / 2}px`);
+          setText(edgeLabel, edge.label);
+          graphSpaceEl.append(edgeLabel);
+        }
+      });
+
+      graph.nodes.forEach(node => {
+        const position = positions.get(node.id);
+        const nodeEl = document.createElement('button');
+        nodeEl.type = 'button';
+        nodeEl.className = `graph-node ${LAYER_CLASS[node.layer] || ''}`;
+        nodeEl.dataset.id = node.id;
+        nodeEl.dataset.layer = node.layer;
+        nodeEl.style.setProperty('--x', `${position.x}px`);
+        nodeEl.style.setProperty('--y', `${position.y}px`);
+        nodeEl.style.setProperty('--z', `${position.z}px`);
+
+        const title = document.createElement('span');
+        title.className = 'node-title';
+        setText(title, node.label);
+
+        const meta = document.createElement('span');
+        meta.className = 'node-meta';
+        setText(meta, `${node.layer} / ${node.kind}`);
+
+        nodeEl.append(title, meta);
+        nodeEl.addEventListener('click', () => selectNode(node.id));
+        graphSpaceEl.append(nodeEl);
+      });
+
+      renderLayerFilters(layers);
+      renderNodeDetails(null);
+      updateGraphTransform();
+      applyLayerVisibility();
+      viewSwitchEl.hidden = false;
+    }
+
+    function applyLayerVisibility() {
+      const nodeLayer = new Map((currentGraph?.nodes || []).map(node => [node.id, node.layer]));
+      graphSpaceEl.querySelectorAll('[data-layer]').forEach(el => {
+        el.classList.toggle('hidden-by-layer', hiddenLayers.has(el.dataset.layer));
+      });
+      graphSpaceEl.querySelectorAll('[data-from][data-to]').forEach(el => {
+        const fromLayer = nodeLayer.get(el.dataset.from);
+        const toLayer = nodeLayer.get(el.dataset.to);
+        el.classList.toggle('hidden-by-layer', hiddenLayers.has(fromLayer) || hiddenLayers.has(toLayer));
+      });
+    }
+
+    function selectNode(nodeId) {
+      selectedNodeId = nodeId;
+      graphSpaceEl.querySelectorAll('.graph-node').forEach(nodeEl => {
+        nodeEl.classList.toggle('selected', nodeEl.dataset.id === nodeId);
+      });
+      const node = currentGraph.nodes.find(item => item.id === nodeId);
+      renderNodeDetails(node);
+    }
+
+    function renderNodeDetails(node) {
+      nodeDetailsEl.innerHTML = '';
+      const title = document.createElement('h2');
+      setText(title, node ? node.label : 'Node Details');
+      nodeDetailsEl.append(title);
+
+      if (!node) {
+        const empty = document.createElement('p');
+        empty.className = 'empty';
+        setText(empty, 'Select a node to inspect why it exists, which files it touches, and how it connects to the flow.');
+        nodeDetailsEl.append(empty);
+        return;
+      }
+
+      addDetailSection('Layer', `${node.layer} / ${node.kind}`);
+      addDetailSection('Why', node.why || 'No rationale provided.');
+
+      const relatedEdges = currentGraph.edges.filter(edge => edge.from === node.id || edge.to === node.id);
+      addListSection('Connections', relatedEdges.map(edge => {
+        const direction = edge.from === node.id ? 'to' : 'from';
+        const otherId = edge.from === node.id ? edge.to : edge.from;
+        const other = currentGraph.nodes.find(item => item.id === otherId);
+        return `${direction} ${other?.label || otherId}${edge.label ? `: ${edge.label}` : ''}`;
+      }));
+
+      addListSection('Files', node.files.length > 0 ? node.files : ['No files provided.']);
+    }
+
+    function addDetailSection(label, value) {
+      const section = document.createElement('section');
+      section.className = 'detail-section';
+      const heading = document.createElement('h3');
+      setText(heading, label);
+      const body = document.createElement('p');
+      setText(body, value);
+      section.append(heading, body);
+      nodeDetailsEl.append(section);
+    }
+
+    function addListSection(label, items) {
+      const section = document.createElement('section');
+      section.className = 'detail-section';
+      const heading = document.createElement('h3');
+      setText(heading, label);
+      const list = document.createElement('ul');
+      items.forEach(item => {
+        const li = document.createElement('li');
+        setText(li, item);
+        list.append(li);
+      });
+      section.append(heading, list);
+      nodeDetailsEl.append(section);
+    }
+
+    async function copyText(text) {
+      try {
+        await navigator.clipboard.writeText(text);
+        app.updateStatus(true, 'Copied');
+      } catch {
+        const textarea = document.createElement('textarea');
+        textarea.value = text;
+        textarea.style.position = 'fixed';
+        textarea.style.left = '-9999px';
+        document.body.append(textarea);
+        textarea.select();
+        document.execCommand('copy');
+        textarea.remove();
+        app.updateStatus(true, 'Copied');
+      }
+    }
+
+    function copyGraphJson() {
+      return copyText(currentGraphJson);
+    }
+
+    graphStageEl.addEventListener('pointerdown', (event) => {
+      if (event.target.closest('.graph-node')) return;
+      dragState = {
+        pointerId: event.pointerId,
+        x: event.clientX,
+        y: event.clientY,
+        rotateX: camera.rotateX,
+        rotateZ: camera.rotateZ,
+      };
+      graphStageEl.classList.add('dragging');
+      graphStageEl.setPointerCapture(event.pointerId);
+    });
+
+    graphStageEl.addEventListener('pointermove', (event) => {
+      if (!dragState || dragState.pointerId !== event.pointerId) return;
+      const dx = event.clientX - dragState.x;
+      const dy = event.clientY - dragState.y;
+      camera.rotateZ = dragState.rotateZ + dx * 0.18;
+      camera.rotateX = clamp(dragState.rotateX - dy * 0.14, 18, 78);
+      updateGraphTransform();
+    });
+
+    function endGraphDrag(event) {
+      if (!dragState || dragState.pointerId !== event.pointerId) return;
+      dragState = null;
+      graphStageEl.classList.remove('dragging');
+      if (graphStageEl.hasPointerCapture(event.pointerId)) {
+        graphStageEl.releasePointerCapture(event.pointerId);
+      }
+    }
+
+    graphStageEl.addEventListener('pointerup', endGraphDrag);
+    graphStageEl.addEventListener('pointercancel', endGraphDrag);
+
+    graphStageEl.addEventListener('wheel', (event) => {
+      if (currentView !== 'graph') return;
+      event.preventDefault();
+      currentZoom = clamp(currentZoom - event.deltaY * 0.001, 0.3, 3);
+      updateZoom();
+    }, { passive: false });
+
     app.onContentReceived = (jsonText) => {
       try {
         const data = JSON.parse(jsonText);
         if (data.title) {
           titleEl.textContent = data.title;
         }
+
+        currentGraphJson = '';
+        currentGraph = null;
+        viewSwitchEl.hidden = true;
+
         if (data.mermaidCode) {
           renderDiagram(data.mermaidCode);
         }
+
+        if (data.graphJson) {
+          try {
+            currentGraphJson = data.graphJson;
+            currentGraph = normalizeGraph(data.graphJson);
+            renderGraph3d(currentGraph);
+          } catch (graphError) {
+            console.error('Graph JSON parse error:', graphError);
+            app.updateStatus(true, 'Graph JSON invalid; Mermaid shown');
+          }
+        }
+
+        showView(currentGraph ? 'graph' : 'mermaid');
       } catch (error) {
         console.error('Failed to parse content:', error);
         diagramEl.innerHTML = `<div class="error">
           <h3>Parse Error</h3>
-          <p>Failed to parse diagram data</p>
+          <p>${escapeHtml(error.message || 'Failed to parse diagram data')}</p>
         </div>`;
+        showView('mermaid');
       }
     };
 
-    // Demo mode for standalone testing
     if (window.parent === window) {
       document.getElementById('status').textContent = 'Standalone Mode';
 
       const demoMermaid = `stateDiagram-v2
-    [*] --> Idle
-    Idle --> Processing : Start
-    Processing --> Success : Complete
-    Processing --> Error : Fail
-    Success --> [*]
-    Error --> Idle : Retry`;
+    [*] --> Request
+    Request --> API : Submit
+    API --> Domain : Validate
+    Domain --> DB : Save
+    Domain --> External : Notify
+    DB --> [*] : Persisted`;
+
+      const demoGraph = {
+        nodes: [
+          { id: 'ui', label: 'Submit form', layer: 'UI', kind: 'trigger', why: 'User intent starts the workflow.', files: ['app/page.tsx'], order: 0 },
+          { id: 'api', label: 'Server action', layer: 'API', kind: 'command', why: 'The boundary validates input before domain logic.', files: ['app/actions.ts'], order: 1 },
+          { id: 'domain', label: 'Apply business rule', layer: 'Domain', kind: 'decision', why: 'Business invariants stay outside the UI.', files: ['domain/rules.ts'], order: 2 },
+          { id: 'db', label: 'Persist result', layer: 'DB', kind: 'write', why: 'The final state must be queryable later.', files: ['db/schema.ts'], order: 3 },
+          { id: 'external', label: 'Send notification', layer: 'External', kind: 'integration', why: 'Downstream systems need the event.', files: ['lib/notify.ts'], order: 3 }
+        ],
+        edges: [
+          { from: 'ui', to: 'api', label: 'submit', type: 'sync' },
+          { from: 'api', to: 'domain', label: 'validated input', type: 'sync' },
+          { from: 'domain', to: 'db', label: 'state change', type: 'sync' },
+          { from: 'domain', to: 'external', label: 'event', type: 'async' }
+        ]
+      };
 
       setTimeout(() => {
-        titleEl.textContent = 'Demo State Diagram';
-        renderDiagram(demoMermaid);
+        titleEl.textContent = 'Demo 2.5D State Diagram';
+        app.onContentReceived(JSON.stringify({
+          mermaidCode: demoMermaid,
+          title: 'Demo 2.5D State Diagram',
+          graphJson: JSON.stringify(demoGraph, null, 2)
+        }));
       }, 500);
     }
   </script>

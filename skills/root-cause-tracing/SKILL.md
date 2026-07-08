@@ -176,3 +176,7 @@ digraph principle {
 - ソースで修正（getterバリデーション）
 - 4層の防御を追加
 - 1847テストがパス、汚染ゼロ
+
+## 実績由来の知見
+
+- ユーザーが最初に指したファイルを前提に調査を続けない。実行入口（エントリースクリプト等）のimport chainから実経路を確定する（疑われたファイルが実は無関係な別クライアントで、実経路は別モジュールだった実例）。コード側が正しいと確認できたら、残る原因を外部（権限伝播・環境不一致等）に絞る。ユーザーがファイルを指し直したら即座にそちらへ切り替え、無関係モジュールの解説を続けない（出典: memories/rollout_summaries/2026-06-25T04-53-10-pwxM-bspf_403_baystars_account_api_client_diagnosis.md「Task 1 Failures / Key steps / Preference signals」）

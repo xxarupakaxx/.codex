@@ -209,6 +209,19 @@ Python の場合:
 **プロジェクト共有設定 — `.mcp.json`（PJ ルート）:**
 リポジトリにコミットしてチーム共有可能。同じ schema を使う。
 
+**Codex環境向けの場合**: `~/.claude/settings.json` ではなくCodex側設定（`~/.codex/config.toml`）で自己完結させる。`[mcp_servers.<name>]` に `command` / `args` / `startup_timeout_sec` を書く。
+
+```toml
+[mcp_servers.<name>]
+command = "bash"
+args = ["-lc", "exec node \"$HOME/.codex/mcp-servers/<name>/dist/main.js\""]
+startup_timeout_sec = 30
+```
+
+登録後は `npm test` + `npm run build` で `dist/` 生成を確認する。build出力（`dist/`・`node_modules/`）は `.gitignore` に含める（出典: memories/rollout_summaries/2026-06-23T06-38-16-2lBv-codex_native_3d_state_diagram_and_workflow_html_app.md「Task 2 Key steps / Reusable knowledge / References」）。
+
+MCPツールはセッション開始時にロードされるため、config更新後は再起動または新セッションが必要（同一セッション内では新ツールは見えない）。また `package.json` の `main`/`start` が実runtime entrypointとズレたままpushしない（例: `dist/server.js` を指していたが実際のstdio entrypointは `dist/main.js` だった場合は先に修正する）。`~/.codex/config.toml` はsecretを含む前提で扱い、内容をそのまま表示・転記しない（誤って表示した場合はローテーションする）（出典: memories/rollout_summaries/2026-06-23T06-38-16-2lBv-codex_native_3d_state_diagram_and_workflow_html_app.md「Task 2 Failures」、memories/rollout_summaries/2026-06-26T08-04-03-PnpU-codex_goal_setter_install_and_push_via_ssh.md「Task 2 Key steps / Failures」）。
+
 ### Step 6: 動作確認手順を提示
 
 ```bash

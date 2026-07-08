@@ -8,6 +8,8 @@ description: Draft PRを作成
 
 Draft PRを作成します。
 
+引数（base-branch）が省略された場合、`$ARGUMENTS` は PJ 設定（AGENTS.md / CLAUDE.md）の `BASE_BRANCH` に従い、未定義時は develop → main → master の順で存在するブランチを使う。
+
 ## 実行手順
 
 ### 1. 現在の状態確認
@@ -97,6 +99,9 @@ find "${MEMORY_DIR:-.local}/memory" -maxdepth 3 -name "91_state_diagram.md" 2>/d
 - PRテンプレート（`.github/PULL_REQUEST_TEMPLATE.md`）が存在する場合、テンプレートの項目を勝手に削除してはならない（CLAUDE.md 禁止事項）。状態図セクションはテンプレート末尾（チェックリスト前など適切な位置）に追記する形で挿入
 - GitHubはPR本文のMermaidをネイティブレンダリングするため、画像化や外部リンクは不要
 - Validator警告コメント（`<!-- ⚠️ Mermaid Validator FAILED ... -->`）が `91_state_diagram.md` に残っている場合、当該ブロックは貼らずに「※構文エラーのため省略」とだけ記載し、ユーザーに通知
+- PR本文更新は平文改行のファイルに書き出して `gh pr edit --body-file` で渡す（シェルクォート経由だとリテラル `\n` が本文に残ることがある）。テンプレ再構成時は技術的内容を保持し形式のみ変更する。DB schema/GraphQL変更を含むPRはMermaidフロー図をbodyに含める（出典: memories/rollout_summaries/2026-06-22T05-52-03-qgnt-dependency_tarball_ci_pr_and_review.md「Failures and how to do differently」、memories/rollout_summaries/2026-06-19T02-01-11-sh6E-pr_2956_description_update_cloudsql_role.md「Reusable knowledge」、memories/rollout_summaries/2026-06-26T08-53-53-tABQ-pr3049_template_pr_description_update_and_billing_cancel_not.md「Key steps / References」）
+- PR本文の再整形・更新時は、既に解消済みの古い注意書き（stale caveat）を現状と照合して削除する（旧schema制限に関する記述が解消後も残存していた実例。出典: memories/rollout_summaries/2026-06-26T08-53-53-tABQ-pr3049_template_pr_description_update_and_billing_cancel_not.md「Task 2 Failures」）
+- PR本文の事実一覧（影響範囲表等）は外部由来情報の転記でなく、リポジトリ内の実データ（例: `terraform/env/*/main.tf` の `gcp_project_id`）で裏取りして記載する（出典: memories/rollout_summaries/2026-06-19T02-01-11-sh6E-pr_2956_description_update_cloudsql_role.md「Reusable knowledge」）
 
 ### 5. Draft PR作成
 
