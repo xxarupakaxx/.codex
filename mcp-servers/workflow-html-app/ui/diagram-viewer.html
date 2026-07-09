@@ -1671,6 +1671,21 @@
       updateZoom();
     }, { passive: false });
 
+    graphStageEl.addEventListener('keydown', (event) => {
+      if (currentView !== 'graph' && currentView !== 'timeline') return;
+      const keyActions = {
+        ArrowLeft: () => { camera.rotateZ -= 8; },
+        ArrowRight: () => { camera.rotateZ += 8; },
+        ArrowUp: () => { camera.rotateX = clamp(camera.rotateX + 6, 18, 78); },
+        ArrowDown: () => { camera.rotateX = clamp(camera.rotateX - 6, 18, 78); },
+      };
+      const action = keyActions[event.key];
+      if (!action) return;
+      event.preventDefault();
+      action();
+      updateGraphTransform();
+    });
+
     app.onContentReceived = (jsonText) => {
       try {
         const data = JSON.parse(jsonText);
@@ -1726,11 +1741,11 @@
 
       const demoGraph = {
         nodes: [
-          { id: 'ui', label: 'Submit form', layer: 'UI', kind: 'trigger', why: 'User intent starts the workflow.', files: ['app/page.tsx'], order: 0, startStep: 0, focusStep: 0, endStep: 4 },
-          { id: 'api', label: 'Server action', layer: 'API', kind: 'command', why: 'The boundary validates input before domain logic.', files: ['app/actions.ts'], order: 1, startStep: 1, focusStep: 1, endStep: 4 },
-          { id: 'domain', label: 'Apply business rule', layer: 'Domain', kind: 'decision', why: 'Business invariants stay outside the UI.', files: ['domain/rules.ts'], order: 2, startStep: 2, focusStep: 2, endStep: 4 },
-          { id: 'db', label: 'Persist result', layer: 'DB', kind: 'write', why: 'The final state must be queryable later.', files: ['db/schema.ts'], order: 3, startStep: 3, focusStep: 3, endStep: 4 },
-          { id: 'external', label: 'Send notification', layer: 'External', kind: 'integration', why: 'Downstream systems need the event.', files: ['lib/notify.ts'], order: 3, startStep: 4, focusStep: 4, endStep: 4 }
+          { id: 'ui', label: 'Submit form', layer: 'UI', kind: 'trigger', why: 'User intent starts the workflow.', files: ['app/page.tsx'], order: 0 },
+          { id: 'api', label: 'Server action', layer: 'API', kind: 'command', why: 'The boundary validates input before domain logic.', files: ['app/actions.ts'], order: 1 },
+          { id: 'domain', label: 'Apply business rule', layer: 'Domain', kind: 'decision', why: 'Business invariants stay outside the UI.', files: ['domain/rules.ts'], order: 2 },
+          { id: 'db', label: 'Persist result', layer: 'DB', kind: 'write', why: 'The final state must be queryable later.', files: ['db/schema.ts'], order: 3 },
+          { id: 'external', label: 'Send notification', layer: 'External', kind: 'integration', why: 'Downstream systems need the event.', files: ['lib/notify.ts'], order: 3 }
         ],
         edges: [
           { id: 'ui_api', from: 'ui', to: 'api', label: 'submit', type: 'sync' },
@@ -1740,7 +1755,6 @@
         ],
         timeline: {
           unit: 'phase',
-          duration: 4,
           steps: [
             { id: 'step_0', at: 0, label: 'User submits', timestamp: 'phase 1', summary: 'The UI captures user intent and starts the workflow.', eventType: 'trigger', activeNodes: ['ui'], changedNodes: ['ui'], counters: { commits: 1, errors: 0 }, annotations: ['Nothing has crossed the API boundary yet.'] },
             { id: 'step_1', at: 1, label: 'Input crosses boundary', timestamp: 'phase 2', summary: 'The server action validates the request before domain logic runs.', eventType: 'review', activeNodes: ['api'], activeEdges: ['ui_api'], changedNodes: ['api'], changedEdges: ['ui_api'], counters: { commits: 2, errors: 0 } },
