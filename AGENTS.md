@@ -7,6 +7,7 @@ Use these Codex model/service_tier pairs instead:
 
 - Default / heavy judgment: `model = "gpt-5.5"`, `service_tier = "priority"`
 - Routine specialist agents already configured as `gpt-5.4` may keep `service_tier = "priority"`
+- Simple custom/default helper work under the current priority-tier policy: `model = "gpt-5.4-mini"`, `service_tier = "priority"` when current Codex tooling supports it
 - Do not omit `service_tier` for custom subagents.
 
 ---
@@ -30,12 +31,13 @@ Codex (conductor)
 |------|---------|--------------------------|
 | 探索・監視（explore/pr-watch等） | `multi_agent_v1.spawn_agent(agent_type: "explorer")` またはローカル `rg` | role既定（通常 `gpt-5.4` / `priority`） |
 | 軽量ワーカー・通常実装 | `multi_agent_v1.spawn_agent(agent_type: "worker"|"implementer")` | role既定（通常 `gpt-5.5` / `priority`） |
+| commit文案・短い要約・定型整形 | `default` / custom sub-agent（委任が有益で、metadata対応時のみ） | `gpt-5.4-mini` / `priority` |
 | 判定・設計判断・計画 | `implementation-planner` / `technical-evaluator` / `go-nogo-advisor` | role既定（`gpt-5.4` または `gpt-5.5` / `priority`） |
 | 専門レビュー | `arch-reviewer` / `security-reviewer` / `code-quality-reviewer` 等 | role既定（必ず `priority`） |
 | 過去知見検索 | `learnings-researcher` | role既定（`gpt-5.4` / `priority`） |
 | パイプライン制御 | `multi_tool_use.parallel` + `multi_agent_v1.wait_agent` | — |
 
-通常は role 既定を使う。custom/default sub-agent に model を明示する場合は `model = "gpt-5.5"` または `model = "gpt-5.4"` と `service_tier = "priority"` を必ずセットする。詳細は `rules/model-routing.md`。
+通常は role 既定を使う。custom/default sub-agent に model を明示する場合は、許可モデル集合と用途を `rules/model-routing.md` に従わせ、`service_tier = "priority"` を必ずセットする。これはこの Vault の互換性方針であり、API一般の最安構成を意味しない。`gpt-5.4-mini` は metadata 対応時の commit文案・短い要約・定型整形など、低リスクで lead が即検査できる作業に限る。
 
 plugin / skill / agent role の適材適所ルーティングは `context/agent-team-routing.md` を参照する。Phase順序は `context/workflow-rules.md`、model/service_tier は `rules/model-routing.md` を SSoT とする。
 
