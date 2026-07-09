@@ -18,7 +18,7 @@ developer_instructions = """
 
 ## 起動条件
 
-- 自動: <CLAUDE.md ワークフローのどの Phase/状況で起動するか>
+- 自動: <AGENTS.md / workflow-rules.md のどの Phase/状況で起動するか>
 - 手動: <ユーザーが明示的に呼ぶケース>
 
 ## 入力
@@ -74,6 +74,6 @@ Total: <重み付き合計>/<max>
 
 ## model 選択
 
-Codex の `multi_agent_v1.spawn_agent` では通常 `agent_type` の role 既定を使う。custom/default sub-agent で判定・レビュー向けに明示する場合は `model = "gpt-5.5"` と `service_tier = "priority"` を併記する。軽量タスクは既存 role または model 省略を優先する。
+Codex の `multi_agent_v1.spawn_agent` では通常 `agent_type` の role 既定を使う。custom/default sub-agent で判定・レビュー向けに明示する場合は `model = "gpt-5.5"` と `service_tier = "priority"` を併記する。commit文案・短い要約・定型整形などの低リスク補助だけは、現セッションの metadata で利用可能な場合に `model = "gpt-5.4-mini"`、`service_tier = "priority"`、`reasoning_effort = "low"` を検討できる。利用できない環境では既存 role または model 省略を優先する。
 
 詳細: `rules/model-routing.md`

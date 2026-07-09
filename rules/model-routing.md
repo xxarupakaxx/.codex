@@ -16,7 +16,17 @@ Codex で sub-agent を起動する際のモデル/role選択ルール。
 |------|-------|--------------|
 | Default / heavy judgment | `gpt-5.5` | `priority` |
 | Routine specialist agents | `gpt-5.4` | `priority` |
-| Cost-sensitive simple work | role既定または model 省略 | role既定または親セッション継承 |
+| Simple custom/default helper work | `gpt-5.4-mini` | `priority` |
+| Role-backed work | role既定または model 省略 | role既定または親セッション継承 |
+
+`gpt-5.4-mini` は、現セッションの `multi_agent_v1.spawn_agent` metadata で利用可能な場合だけ使う。既存 role があるなら model override ではなく role 既定を優先する。custom/default sub-agent で model を明示する場合は、mini でも `service_tier = "priority"` を併記する。
+
+## Service Tier Policy
+
+この Vault の Codex 互換ルールでは、custom/default sub-agent で model を明示する場合に `service_tier = "priority"` を併記する。
+これは互換性とレイテンシのためのローカル方針であり、OpenAI API 一般の最安構成を意味しない。
+コスト最適化は service tier を下げることではなく、L0 local、文脈削減、Heat ladder、mini の限定投入で行う。
+API レスポンスなどで実際に適用された service tier が取得できる場合は、requested tier ではなく actual tier をログや評価の根拠にする。
 
 ## Dispatch Table
 
@@ -25,6 +35,7 @@ Codex で sub-agent を起動する際のモデル/role選択ルール。
 | 探索・監視（explore/pr-watch等） | `spawn_agent(agent_type: "explorer")` / local `rg` | role既定 |
 | アーキテクチャ探索 | `architecture-explorer` / `dependency-mapper` / `data-flow-tracer` | role既定 (`gpt-5.4`, `priority`) |
 | 軽量ワーカー・通常実装 | `worker` / `implementer` | role既定 |
+| commit文案・短い要約・定型整形 | `default` with explicit model when delegation is useful | `gpt-5.4-mini`, `service_tier="priority"`, `reasoning_effort="low"` |
 | 判定・設計判断・計画 | `implementation-planner` / `technical-evaluator` / `go-nogo-advisor` | role既定 |
 | 重い実装（3+ファイル） | `implementer` または `worker` に disjoint write scope を明示 | role既定 (`gpt-5.5`, `priority`) |
 | 専門レビュー | `arch-reviewer` / `security-reviewer` / `code-quality-reviewer` / `test-reviewer` 等 | role既定 |
@@ -37,11 +48,36 @@ Codex で sub-agent を起動する際のモデル/role選択ルール。
 ```text
 Sub-agent 起動時:
   既存 role で表現できる？ → agent_type を指定して role 既定を使う
+  default/custom で、短い定型作業かつ失敗してもleadが即検査できる？ → gpt-5.4-mini + service_tier priority + low effort
   3+ファイルまたは複雑実装？ → implementer/worker に明確な write scope を渡す
   計画・判定・高品質レビュー？ → planner/evaluator/reviewer role を使う
   探索・監視・軽量調査？ → explorer 系 role または local rg
   それ以外 → default/custom。model を明示するなら service_tier も明示
 ```
+
+## Cost Ladder
+
+| Level | 使う場面 | 例 | 昇格条件 |
+|-------|----------|----|----------|
+| L0 local | shell/rg/diff で十分 | ファイル列挙、差分確認、format check | 判断・要約が必要 |
+| L1 mini | default/custom の単純作業 | commit文案、短いlog要約、既知形式への整形、重複チェック | 不確実性、矛盾、複数ファイル判断、ユーザー影響 |
+| L2 routine role | 専門 role がある通常作業 | explorer、docs-reviewer、arch-reviewer | CRITICAL/IMPORTANT、広い設計判断 |
+| L3 heavy role | 失敗コストが高い判断 | technical-evaluator、security-reviewer、go-nogo-advisor、implementer | さらに独立審判が必要 |
+
+### `gpt-5.4-mini` を使ってよい条件
+
+- 入力が短く、成果物を lead がすぐ検査できる。
+- 変更を書かない、または書く場合でも単一の低リスク text artifact に閉じる。
+- 失敗時のコストが低く、再実行や lead 修正が容易。
+- `service_tier = "priority"` と `reasoning_effort = "low"` を明示できる。
+- 例: git-cz 日本語 commit message 候補、短い調査ログ要約、明確なテンプレートへの整形、重複 URL/見出しの検出。
+
+### `gpt-5.4-mini` を使わない条件
+
+- セキュリティ、認証、課金、データ削除、外部書き込み、GO/NO-GO 判定。
+- 3ファイル以上の実装、未知コードの設計判断、レビューの最終判定。
+- ユーザー要件が曖昧、ソース間に矛盾がある、引用や法務・医療・金融など高リスク根拠が必要。
+- role 定義済み agent で表現できる作業。role 既定を override しない。
 
 ## team-run の割り当て
 
