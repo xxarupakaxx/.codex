@@ -917,6 +917,7 @@
     let timelineLastTick = 0;
     let playbackSpeed = 1;
     let currentTimelineRanges = { nodeRanges: new Map(), edgeRanges: new Map() };
+    let hasReceivedExternalContent = false;
     const prefersReducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
 
     function setText(el, text) {
@@ -1686,8 +1687,9 @@
       updateGraphTransform();
     });
 
-    app.onContentReceived = (jsonText) => {
+    app.onContentReceived = async (jsonText) => {
       try {
+        hasReceivedExternalContent = true;
         const data = JSON.parse(jsonText);
         if (data.title) {
           titleEl.textContent = data.title;
@@ -1703,7 +1705,7 @@
         clearTimelineClasses();
 
         if (data.mermaidCode) {
-          renderDiagram(data.mermaidCode);
+          await renderDiagram(data.mermaidCode);
         }
 
         if (data.graphJson) {
@@ -1766,6 +1768,8 @@
       };
 
       setTimeout(() => {
+        if (hasReceivedExternalContent) return;
+        hasReceivedExternalContent = true;
         titleEl.textContent = 'Demo 2.5D State Diagram';
         app.onContentReceived(JSON.stringify({
           mermaidCode: demoMermaid,
