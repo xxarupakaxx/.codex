@@ -142,10 +142,14 @@ B. **Blueprint（大規模タスクのみ）**: 多セッション・多PRの設
 
 ## ライブロードマップ表示
 
-- Phase 2完了後、必要に応じて `scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --watch` を起動し、Codex appの横で `roadmap.html` を開きながら進捗を確認できるようにする。
+- 複数Phaseのworkflowを実行する場合は、`viewing-plans` スキルを併走させる。
+- Phase 2完了後、`scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task>` で `roadmap.html` を生成する。長い実装、team-run、レビューを含む作業では、可能なら `--serve --watch` を起動し、Codex appの横で `roadmap.html` を開きながら進捗を確認できるようにする。
+- Phase 3/4では `40_progress.md`、`80_review.md`、`05_log.md` の更新が Roadmap Viewer に反映されるようにする。
+- Phase 5では最終 `roadmap.html` を再生成し、必要に応じて `workflow-html-app` の Plan Viewer、Log Viewer、Verification Viewer、Diagram Viewerで成果物を確認する。
 - live表示は `${MEMORY_DIR}/memory/<task>/roadmap.html` と `roadmap-snapshot.json` を使う。各セッションで `<task>` が異なればファイル衝突しない。
 - `--serve` の既定は `127.0.0.1` + port `0`（OSの空きポート自動割当）。複数セッションで同時起動しても固定port衝突を避ける。固定したい場合だけ `--port <port>` を指定する。
 - live表示は進捗確認の補助であり、Goal、Sprint Contract、Team Journal、05_log.md、レビュー結果の代替ではない。
+- 表示ツールやスクリプトが使えない場合は、失敗を隠さず 05_log.md と完了報告に残す。
 
 ## ユーザーへの質問
 
