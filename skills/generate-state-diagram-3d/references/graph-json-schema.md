@@ -58,9 +58,6 @@ Use this schema for `91_state_diagram_graph.json`.
 | `why` | yes | Why the step exists. Avoid only restating the label. |
 | `files` | no | Repository-relative file paths. |
 | `order` | no | Numeric process order on the X axis. |
-| `startStep` | no | First timeline `at` value where the node should appear active or available. |
-| `focusStep` | no | Timeline `at` value where the node is the primary focus. |
-| `endStep` | no | Last timeline `at` value where the node remains relevant before fading to past state. |
 
 ## Edge Fields
 
@@ -107,7 +104,7 @@ Timeline design rules:
 - Do not turn every commit or log line into a step unless each one changes the reader's understanding.
 - Make `summary` useful when read alone; it is the fallback when animation is disabled.
 - Use `eventType` and labels together. Do not rely on color alone.
-- The viewer infers step-specific emphasis from `activeNodes`, `changedNodes`, `activeEdges`, and `changedEdges`; use `startStep`, `focusStep`, and `endStep` only for coarse node lifecycle hints.
+- The viewer infers step-specific emphasis from `activeNodes`, `changedNodes`, `activeEdges`, and `changedEdges`.
 
 ## Validation Checklist
 

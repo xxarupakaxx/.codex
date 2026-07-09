@@ -119,9 +119,10 @@ test("graph JSON schema documents additive timeline replay fields", () => {
   assert.match(schema, /Timeline Fields/);
   assert.match(schema, /Timeline Step Fields/);
   assert.match(schema, /edges\[\]\.id/);
-  assert.match(schema, /startStep/);
-  assert.match(schema, /focusStep/);
-  assert.match(schema, /endStep/);
+  assert.match(schema, /step-based/);
   assert.match(schema, /activeNodes/);
   assert.match(schema, /changedEdges/);
+  assert.doesNotMatch(schema, /startStep/);
+  assert.doesNotMatch(schema, /focusStep/);
+  assert.doesNotMatch(schema, /endStep/);
 });
