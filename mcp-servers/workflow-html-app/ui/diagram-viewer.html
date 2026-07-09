@@ -1116,6 +1116,9 @@
       viewMermaidEl.classList.toggle('active', currentView === 'mermaid');
       viewGraphEl.classList.toggle('active', currentView === 'graph');
       viewTimelineEl.classList.toggle('active', isTimeline);
+      viewMermaidEl.setAttribute('aria-pressed', String(currentView === 'mermaid'));
+      viewGraphEl.setAttribute('aria-pressed', String(currentView === 'graph'));
+      viewTimelineEl.setAttribute('aria-pressed', String(isTimeline));
       workspaceEl.classList.toggle('graph-mode', isGraphLike);
       workspaceEl.classList.toggle('timeline-mode', isTimeline);
       diagramWrapperEl.classList.toggle('hidden', isGraphLike);
@@ -1342,9 +1345,10 @@
 
     function clearTimelineReadout() {
       timelineCaptionEl.textContent = 'No timeline step';
-      timelineSummaryEl.innerHTML = '<strong>Summary</strong>: -';
-      timelineDiffEl.innerHTML = '<strong>Delta</strong>: -';
+      timelineSummaryEl.textContent = 'Summary: -';
+      timelineDiffEl.textContent = 'Delta: -';
       timelineCountersEl.innerHTML = '';
+      timelineLiveEl.textContent = '';
     }
 
     function clearTimelineClasses() {
@@ -1408,8 +1412,10 @@
       timelineSliderEl.value = String(currentStepIndex);
       const timestamp = step.timestamp ? `${step.timestamp} · ` : '';
       timelineCaptionEl.textContent = `${currentStepIndex + 1}/${timeline.steps.length} · ${timestamp}${step.label}`;
-      timelineSummaryEl.innerHTML = `<strong>Summary</strong>: ${escapeHtml(step.summary || 'No summary provided.')}`;
-      timelineDiffEl.innerHTML = `<strong>Delta</strong>: ${escapeHtml(buildTimelineDelta(step))}`;
+      timelineSummaryEl.textContent = `Summary: ${step.summary || 'No summary provided.'}`;
+      timelineDiffEl.textContent = `Delta: ${buildTimelineDelta(step)}`;
+      timelineSliderEl.setAttribute('aria-valuetext', `${timestamp}${step.label}`);
+      timelineLiveEl.textContent = `${timestamp}${step.label}. ${step.summary || ''}`;
       renderTimelineCounters(step.counters);
       applyTimelineClasses(step);
       renderNodeDetails(selectedNodeId ? currentGraph.nodes.find(item => item.id === selectedNodeId) : null);
@@ -1479,6 +1485,7 @@
     function setTimelinePlaying(playing) {
       timelinePlaying = Boolean(playing && currentGraph?.timeline && !prefersReducedMotion);
       timelinePlayEl.textContent = timelinePlaying ? 'Pause' : 'Play';
+      timelinePlayEl.setAttribute('aria-pressed', String(timelinePlaying));
       if (timelineFrame) {
         cancelAnimationFrame(timelineFrame);
         timelineFrame = null;
@@ -1658,7 +1665,7 @@
     graphStageEl.addEventListener('pointercancel', endGraphDrag);
 
     graphStageEl.addEventListener('wheel', (event) => {
-      if (currentView !== 'graph') return;
+      if (currentView !== 'graph' && currentView !== 'timeline') return;
       event.preventDefault();
       currentZoom = clamp(currentZoom - event.deltaY * 0.001, 0.3, 3);
       updateZoom();
