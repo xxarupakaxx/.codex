@@ -6,6 +6,8 @@ description: Create a single hand-drawn, black-and-white concept sketch that mak
 # One Page Concept Sketch
 
 Turn an idea into one readable image that explains the concept, not a decorative poster.
+Do not reduce a long source into a few vague labels.
+For source-based automation notes, the artifact must let a reader reconstruct what was read, what changed, what matters, and what decision remains without opening the source note.
 
 Optimize for three outcomes:
 
@@ -58,16 +60,38 @@ If a source cannot fit into one readable image, keep the image focused and provi
 - why it was left out,
 - where the omitted detail belongs if the user wants a fuller artifact.
 
+## Information Completeness Guardrail
+
+Rework the artifact if any of these are true:
+
+- The visual alone does not reveal the source's subject, target, and conclusion.
+- Bullets are only keywords, source titles, or labels without why they matter.
+- The input, interpretation, and decision areas do not contain concrete source material.
+- Major sections in the source note have no matching slot in the visual or companion note.
+- The reader must open the source note to understand the meaning, not merely to inspect details.
+
+For automation notes, the one-page artifact must include:
+
+- **Claim**: the day's conclusion in one sentence.
+- **Inputs**: specific sources, scan ranges, or materials used.
+- **Findings**: three to six concrete findings, each with enough context to stand alone.
+- **Mechanism**: two to four steps explaining why the claim follows or how information flows.
+- **Decision / Action**: what the human should decide, inspect, or do next.
+- **Limits**: inaccessible sources, unverified details, and intentionally omitted material.
+
+For dense daily notes, prefer an HTML/CSS one-page board or a larger SVG over tiny text labels.
+Completeness and reconstructability are more important than looking minimal.
+
 ## Structure
 
 Use this layout grammar by default:
 
 1. Title at top center.
 2. One-line subtitle that states the claim.
-3. Two or three numbered sections separated by thin horizontal rules.
-4. Each section contains a left-to-right causal flow, comparison, or timeline.
-5. Put one boxed "Point" note on the right side of each main section.
-6. End with a bottom summary band that names the takeaway and action.
+3. Three to five information sections separated by thin rules.
+4. Each section contains concrete source material, not only category names.
+5. Put one boxed "Decision" or "Point" note on the right side.
+6. End with a bottom summary band that names the takeaway, action, and limit.
 
 Prefer a single argument over a catalog.
 If the source has many ideas, select the one tension that explains the rest.
@@ -96,6 +120,7 @@ Before drawing, reduce the idea to:
 Delete only supporting details that do not change the source's core claims, mechanism, caveats, or decision implications.
 If a sentence cannot fit in a small label, turn it into a shorter noun phrase or move it to a point box.
 If a detail is important but too dense for the image, preserve it in the companion note rather than pretending it does not matter.
+Keep proper nouns, task names, article names, hypotheses, and verification ideas when they identify the source's substance.
 
 ## Text Rules
 
@@ -149,3 +174,4 @@ Pass the artifact only if all checks are true:
 - The bottom summary band contains the practical takeaway.
 - No section has more than one main message.
 - The visual style is hand-drawn and monochrome, not a slide deck or marketing hero.
+- The visual is not a low-information word cloud. It should be possible to evaluate the source note's overall content from the artifact itself.
