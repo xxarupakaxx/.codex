@@ -34,9 +34,17 @@ test("diagram viewer exposes the 2.5D graph UI contract", () => {
 
   assert.match(html, /id="view-mermaid"/);
   assert.match(html, /id="view-graph"/);
+  assert.match(html, /id="view-timeline"/);
   assert.match(html, /id="layer-filters"/);
   assert.match(html, /id="node-details"/);
+  assert.match(html, /id="timeline-panel"/);
+  assert.match(html, /id="timeline-slider"/);
+  assert.match(html, /id="timeline-play"/);
+  assert.match(html, /id="timeline-prev-event"/);
+  assert.match(html, /id="timeline-next-event"/);
   assert.match(html, /function renderGraph3d/);
+  assert.match(html, /function normalizeTimeline/);
+  assert.match(html, /function applyTimelineStep/);
   assert.match(html, /function copyGraphJson/);
   assert.match(html, /setPointerCapture/);
 });
@@ -50,6 +58,19 @@ test("diagram viewer keeps Mermaid rendering independent from optional graph par
   assert.notEqual(graphIndex, -1);
   assert.ok(mermaidIndex < graphIndex, "Mermaid must render before optional graph parsing");
   assert.match(html, /currentGraph\s*=\s*null/);
+});
+
+test("diagram viewer keeps timeline replay optional and step based", () => {
+  const html = read("ui/diagram-viewer.html");
+
+  assert.match(html, /viewTimelineEl\.hidden\s*=\s*!graph\.timeline/);
+  assert.match(html, /timelinePanelEl\.hidden\s*=\s*!isTimeline/);
+  assert.match(html, /requestAnimationFrame\(tickTimeline\)/);
+  assert.match(html, /prefers-reduced-motion: reduce/);
+  assert.match(html, /changedNodes/);
+  assert.match(html, /changedEdges/);
+  assert.match(html, /activeNodes/);
+  assert.match(html, /activeEdges/);
 });
 
 test("build step emits the static diagram viewer used by the dist server", () => {
@@ -74,6 +95,8 @@ test("generate-state-diagram-3d documents graph JSON and requires workflow-html-
   assert.match(skill, /UI \/ API \/ Domain \/ DB \/ External/);
   assert.match(skill, /workflow-html-app MCP/);
   assert.match(skill, /mcp__workflow-html-app__view-diagram/);
+  assert.match(skill, /timeline/);
+  assert.match(skill, /replay/);
 });
 
 test("base generate-state-diagram stays Mermaid-focused and does not own graphJson output", () => {
@@ -84,5 +107,21 @@ test("base generate-state-diagram stays Mermaid-focused and does not own graphJs
 
   assert.doesNotMatch(skill, /91_state_diagram_graph\.json/);
   assert.doesNotMatch(skill, /graphJson/);
-  assert.doesNotMatch(skill, /2\.5D/);
+  assert.match(skill, /generate-state-diagram-3d/);
+});
+
+test("graph JSON schema documents additive timeline replay fields", () => {
+  const schema = readFirst([
+    "../../../skills/generate-state-diagram-3d/references/graph-json-schema.md",
+    "../../skills/generate-state-diagram-3d/references/graph-json-schema.md",
+  ]);
+
+  assert.match(schema, /Timeline Fields/);
+  assert.match(schema, /Timeline Step Fields/);
+  assert.match(schema, /edges\[\]\.id/);
+  assert.match(schema, /startStep/);
+  assert.match(schema, /focusStep/);
+  assert.match(schema, /endStep/);
+  assert.match(schema, /activeNodes/);
+  assert.match(schema, /changedEdges/);
 });
