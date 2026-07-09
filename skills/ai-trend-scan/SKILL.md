@@ -5,7 +5,7 @@ description: AI企業の公式記事と技術コミュニティ(HN/arXiv/GitHub 
 
 # /ai-trend-scan — 毎朝のAIトレンド収集
 
-AI企業の公式記事と技術コミュニティを横断し、**あなたの関心プロファイルで採点した「今日のTop」をURL全件フェッチ＆要約して一つのノートに収録**するキュレーター。「見よう見ようと思って忘れる」を、毎朝オフラインで読める完結ノートとして Vault に自動生成する形で解決する。**まず `CLAUDE.md` を読み、絶対ルール（リネーム禁止・削除禁止・既存は追記のみ・新規はInbox配下・wikilinkはファイル名ベース）を厳守すること。** 詳細手順は [[08_trend-scan]]（[[AI-Bullpen-Vault]]）。
+AI企業の公式記事と技術コミュニティを横断し、**あなたの関心プロファイルで採点した「今日のTop」をURL全件フェッチ＆要約して一つのノートに収録**するキュレーター。「見よう見ようと思って忘れる」を、毎朝オフラインで読める完結ノートとして Vault に自動生成する形で解決する。**まず `AGENTS.md` を読み、絶対ルール（リネーム禁止・削除禁止・既存は追記のみ・新規はInbox配下・wikilinkはファイル名ベース）を厳守すること。** 詳細手順は [[08_trend-scan]]（[[AI-Bullpen-Vault]]）。
 
 ## 0. 準備
 - 今日の日付（JST, Asia/Tokyo）を確定。
@@ -108,15 +108,18 @@ related: ["[[AI-Agent-MOC]]"]
 ```
 
 - 今日の `Daily/YYYY-MM-DD.md` の `## 💭 メモ` から trend ノートへリンクを**追記**（当日Dailyが無ければ作成）。
-- frontmatterの `summary` / `depth` / `as_of` / `related` は CLAUDE.md「セカンドブレイン拡張フィールド」の定義に従う。深掘りに発展した話題は [[AI-Agent-MOC]] の該当クラスタへ接続する。
+- frontmatterの `summary` / `depth` / `as_of` / `related` は `AGENTS.md` と互換 `CLAUDE.md` の「セカンドブレイン拡張フィールド」の定義に従う。深掘りに発展した話題は [[AI-Agent-MOC]] の該当クラスタへ接続する。
+- その後、`$one-page-concept-sketch` を実行し、今日のAIトレンドの構造、主要な流れ、実務上の判断点を一枚に圧縮する。
+- 成果物は `Inbox/automation/concept-sketches/concept-sketch-YYYY-MM-DD-ai-trend-scan.md` に保存する。形式と品質条件は [[11_one-page-concept-sketch]] に従う。
+- trend ノートと `Daily/YYYY-MM-DD.md` の `## 💭 メモ` から `[[concept-sketch-YYYY-MM-DD-ai-trend-scan]]` へリンクを追記する。既に同じリンクがあれば重複させない。
 
 ## 5. ゲート & コミット
-- 🛡 **副作用の限定**: 書き込みは Vault内（`Inbox/automation/trends/trend-*.md` と当日Daily）のみ。Vault外アクション（メール/Slack/カレンダー）は行わず、収集物を外部に送出しない。
-- [[03_guardian]]（`git status --porcelain` 監査: リネーム/削除/Inbox外新規/CLAUDE.md変更があれば中止）→ [[04_verifier]]（YAML/frontmatter/wikilink検証）。
+- 🛡 **副作用の限定**: 書き込みは Vault内（`Inbox/automation/trends/trend-*.md`、`Inbox/automation/concept-sketches/concept-sketch-*.md`、当日Daily）のみ。Vault外アクション（メール/Slack/カレンダー）は行わず、収集物を外部に送出しない。
+- [[03_guardian]]（`git status --porcelain` 監査: リネーム/削除/Inbox外新規/AGENTS.md変更があれば中止）→ [[04_verifier]]（YAML/frontmatter/wikilink検証）。
 - `main` にコミットし、`origin/main` へpushする。
 
 ## 6. 報告
-- 一覧化した件数 / Top3のタイトル / フェッチ成功N件・失敗N件 / trendノートリンク。
+- 一覧化した件数 / Top3のタイトル / フェッチ成功N件・失敗N件 / trendノートリンク / concept sketchリンク。
 
 ## ⏰ スケジュール設定
 - **モード: scheduled（無人）**。毎朝、daily-curator と被らない時刻に。
