@@ -11,6 +11,10 @@ description: LayerX入社準備として、Payment、B2B決済、法人カード
 
 出力先は `Inbox/automation/payment-trends/payment-trend-YYYY-MM-DD.md`。
 `evidence_urls` には、根拠に使った重要URLだけを入れる。
-frontmatterには `summary` / `depth: flash` / `related` も設定し、本文には「基礎ノートへの接続」節を含める（テンプレートは [[10_payment-domain-scan]]、定義は CLAUDE.md「セカンドブレイン拡張フィールド」）。
+frontmatterには `summary` / `depth: flash` / `related` も設定し、本文には「基礎ノートへの接続」節を含める（テンプレートは [[10_payment-domain-scan]]、定義は `AGENTS.md` と互換 `CLAUDE.md` の「セカンドブレイン拡張フィールド」）。
 外部調査は `research` スキルのルールで行い、一次情報、公式情報、規制当局、業界団体、企業公式発表を優先する。
 最低1つは「顧客仮説」または「検証案」まで落とす。
+
+本体ノート生成後に `$one-page-concept-sketch` を実行する。
+成果物は `Inbox/automation/concept-sketches/concept-sketch-YYYY-MM-DD-payment-domain-scan.md` に保存し、payment trend ノートと `Daily/YYYY-MM-DD.md` からリンクする。
+形式と品質条件は [[11_one-page-concept-sketch]] に従う。
