@@ -4,6 +4,7 @@ history.jsonl
 session_index.jsonl
 installation_id
 external_agent_session_imports.json
+claude-cowork-import-history.json
 chrome-native-hosts-v2.json
 .app-server-state*
 .personality_migration
@@ -24,9 +25,12 @@ worktrees/
 generated_images/
 memories/
 attachments/
+ambient-suggestions/
+backups/
 tmp/
 .tmp/
 cache/
+log/
 vendor_imports/
 packages/
 process_manager/
@@ -62,4 +66,5 @@ user.json
 config/user.json
 config/*.local.json
 *.backup-*
+*.bak-*
 .DS_Store
