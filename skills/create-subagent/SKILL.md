@@ -38,8 +38,9 @@ allowed-tools: Read, Write, Glob, Grep, AskUserQuestion
 | Tier 2 | 品質・テスト・観測性・a11y 等の追加レビュー | 省略（親セッション継承） |
 | Tier 3 | セキュリティ・PRDレビュー・複雑判断 | custom時のみ `model = "gpt-5.5"` + `service_tier = "priority"` を検討 |
 | Explorer | ファイル検索・パターンマッチ | 既存 `explorer` / `architecture-explorer` role を優先。custom時は `model = "gpt-5.4"` + `service_tier = "priority"` |
+| Mini helper | commit文案・短い要約・定型整形 | metadataで利用可能な場合のみ、default/customで `model = "gpt-5.4-mini"` + `service_tier = "priority"` + `reasoning_effort = "low"` を検討 |
 
-判定指針: `~/.claude/rules/model-routing.md` を参照。
+判定指針: `rules/model-routing.md` を参照。
 
 ### Step 3: name / description 設計
 
@@ -126,6 +127,6 @@ allowed-tools: Read, Write, Glob, Grep, AskUserQuestion
 - `create-skill` — スキル生成の姉妹（本スキルはエージェント生成版）
 - `create-hook` — Hook 雛形生成
 - `create-mcp-server` — MCPサーバ雛形生成
-- `~/.claude/rules/model-routing.md` — model override 判断基準
-- `~/.claude/rules/architecture-language.md` — 共通語彙
+- `rules/model-routing.md` — model override 判断基準
+- `context/agent-team-routing.md` — role / skill routing の共通語彙
 - 既存例: `~/.codex/agents/security-reviewer.toml`, `~/.codex/agents/arch-reviewer.toml`
