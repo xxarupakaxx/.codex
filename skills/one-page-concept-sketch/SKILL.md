@@ -1,11 +1,12 @@
 ---
 name: one-page-concept-sketch
-description: Create a single hand-drawn, black-and-white concept sketch that makes an idea understandable at a glance without omitting central information. Use when the user asks for an image, diagram, infographic, explainer sheet, one-page summary, whiteboard-style visual, handwritten Japanese style, sketchnote, or one image that shows what this is about. For automation notes in this Vault, save the result under Inbox/automation/concept-sketches/ and follow [[11_one-page-concept-sketch]].
+description: Create a hand-drawn, black-and-white concept sketch that makes an idea understandable at a glance without omitting central information. Use when the user asks for an image, diagram, infographic, explainer sheet, one-page summary, whiteboard-style visual, handwritten Japanese style, sketchnote, or one image that shows what this is about. Invoke $imagegen for generated raster visuals, and preserve an exact SVG/HTML-derived PNG when Japanese text or layout must remain accurate. For automation notes in this Vault, save the result under Inbox/automation/concept-sketches/ and follow [[11_one-page-concept-sketch]].
 ---
 
 # One Page Concept Sketch
 
-Turn an idea into one readable image that explains the concept, not a decorative poster.
+Turn an idea into one readable knowledge image that explains the concept, not a decorative poster.
+Dual mode may add a separately named imagegen companion, but the exact board remains the authoritative knowledge artifact.
 Do not reduce a long source into a few vague labels.
 For source-based automation notes, the artifact must let a reader reconstruct what was read, what changed, what matters, and what decision remains without opening the source note.
 
@@ -19,22 +20,88 @@ Optimize for three outcomes:
 
 For Vault automations, follow [[11_one-page-concept-sketch]].
 
-- Save the artifact as `Inbox/automation/concept-sketches/concept-sketch-YYYY-MM-DD-<lane>.md`.
+- Save the artifact as `Inbox/automation/concept-sketches/concept-sketch-YYYY-MM-DD-<lane>.md`. If that note already exists, create `-v2.md` or the next free version and link the actual saved note; do not overwrite or rename the earlier note.
 - Create `Inbox/automation/concept-sketches/` before saving if it is missing.
 - Link it from the source note and from `Daily/YYYY-MM-DD.md`.
 - Keep the source coverage map in the saved note.
+- Save the Exact Board as `attachments/<lane>-concept-YYYY-MM-DD.png`. If it already exists and replacement was not explicitly requested, use `-v2.png` or the next free version.
+- Save an imagegen output as `attachments/<lane>-concept-YYYY-MM-DD-imagegen.png`. If that name already exists and replacement was not explicitly requested, use `-imagegen-v2.png` or the next free version.
+- In Dual mode, embed the Exact Board first and the imagegen companion in a separate `Imagegen Companion` section. In Imagegen mode, embed only the `-imagegen.png` file under `Sketch`.
 - Do not rename or delete existing notes.
-- Do not write outside `Inbox/automation/concept-sketches/` unless the caller explicitly asks for another target.
+- Put final Markdown artifacts under `Inbox/automation/concept-sketches/` and final image artifacts under `attachments/`. Do not write final artifacts elsewhere unless the caller explicitly asks for another target. Temporary files outside the Vault are allowed only for an explicitly approved CLI fallback.
 
 ## Output Mode
 
-Choose the production mode before drafting.
+Choose the production mode before drafting. Do not stop at SVG/HTML or a prompt when the user asked for an actual image.
 
-- Use SVG or HTML/CSS when exact Japanese text, labels, or long explanations must be readable.
-- Use image generation when the user mainly wants a bitmap illustration, mood, or rough visual direction.
-- Use a prompt plus layout spec when the user asks for guidance rather than an actual file.
+- **Exact Board mode**: Use SVG or HTML/CSS when exact Japanese text, labels, citations, numbers, or long explanations must be readable. Rasterize the completed board deterministically and save the resulting PNG.
+- **Imagegen mode**: Invoke `$imagegen` and the built-in `image_gen` tool when the user mainly wants a bitmap illustration, mood, metaphor, or rough visual direction. Save the generated bitmap with the `-imagegen.png` suffix and embed it as the only image under `Sketch`.
+- **Dual mode**: Keep the exact board PNG as the main knowledge artifact and also invoke `$imagegen` to create a separate illustrative companion. Share the core claim and semantic structure, not the Exact Board's dense layout or long text.
+- **Prompt-only mode**: Use a prompt plus layout spec only when the user explicitly asks for guidance instead of an actual file.
 
-If using an image generation tool, keep text short and expect to manually revise or rebuild text-heavy areas as SVG/HTML if legibility fails.
+For Vault automations, use Dual mode by default because this Vault's output contract requests an imagegen companion. The caller may explicitly request `exact-board-only` to skip image generation. Outside that Vault default, use Exact Board unless an Imagegen trigger applies.
+
+Do not pass a completed SVG or HTML board to imagegen as an edit target. Rasterization is the exact conversion path. For the imagegen companion, translate the coverage map, visual hierarchy, metaphor, and style into a fresh generation prompt.
+
+If using imagegen, omit text by default. Put exact Japanese wording in the Exact Board. If the generated image's meaning is wrong, revise once with a concrete prompt; if it still fails, keep the Exact Board as primary and record the imagegen limitation rather than presenting the companion as authoritative.
+
+### Imagegen triggers
+
+Treat these as explicit Imagegen requests:
+
+- `$imagegen`
+- `imagegen`
+- a request that explicitly asks for AI-generated imagery, a generated illustration, or a generated bitmap
+- `imagen` when the surrounding context clearly uses it to mean image generation
+
+Do not treat `PNG conversion`, `make this viewable as an image`, `make this readable in Obsidian`, or `convert the SVG to an image` alone as an Imagegen trigger. Those phrases request deterministic Exact Board rasterization unless the Vault Dual-mode default or another explicit trigger also applies.
+
+Mode priority:
+
+1. Explicit prompt or layout guidance only: Prompt-only mode.
+2. Explicit Imagegen trigger plus exact Japanese, citations, or numbers: Dual mode.
+3. Explicit Imagegen trigger plus illustration, mood, or metaphor as the main goal: Imagegen mode.
+4. Vault automation without `exact-board-only`: Dual mode.
+5. Otherwise: Exact Board mode.
+
+## Imagegen Invocation Contract
+
+When Imagegen or Dual mode applies:
+
+1. Complete the Source Coverage Contract and text layout spec first.
+2. Invoke `$imagegen` and use the built-in `image_gen` tool. Do not merely return a prompt or say that an image could be generated.
+3. Generate a new bitmap from the concept's meaning. Do not use the SVG/HTML file as an image-edit target, and do not copy the dense Exact Board layout into the generation prompt.
+4. Include the use case, composition, monochrome hand-drawn style, text policy, required concepts, and forbidden decorative elements in the prompt.
+5. Inspect the generated result visually. Check topic fidelity, missing core claims, accidental text, malformed Japanese, cropping, and phone-width readability.
+6. Persist the selected output under `attachments/` with the `-imagegen.png` suffix. Never overwrite an existing image unless the user explicitly requested replacement.
+7. Embed the saved file in the concept-sketch note with an Obsidian image wikilink.
+8. If the tool is unavailable, blocked, or does not return a persistable artifact, do not silently skip it. In Dual mode, preserve the Exact Board but mark Dual mode and the imagegen companion incomplete. In Imagegen mode, no final image exists, so mark the entire task incomplete. Never claim a saved image or add a broken wikilink.
+
+Use this prompt skeleton:
+
+```text
+Use case: one-page concept illustration
+Source claim: <one sentence>
+Required concepts: <three to six concrete ideas>
+Mechanism or contrast: <causal flow, branch, before/after, or trade-off>
+Composition: <simplified visual hierarchy created for the imagegen companion>
+Style: monochrome hand-drawn sketchnote, warm-white paper, thin imperfect black ink
+Text: no text
+Avoid: letters, Japanese pseudo-text, logos, watermark, decorative filler, stock-poster style, glossy effects, color gradients, invented facts
+```
+
+### Imagegen persistence gate
+
+- Do not assume that built-in `image_gen` accepts a Vault destination argument.
+- Before generation, record the known candidate files under `$CODEX_HOME/generated_images/` when the runtime exposes that directory.
+- After generation, select only the concrete file returned by the tool or a newly created output that can be tied unambiguously to that call. Do not guess from modification time alone and do not select a file that existed before the call.
+- Inspect the source image's real format with `file` or image metadata. Copy it directly only when it is actually PNG. If it is WebP, JPEG, or another bitmap format, convert the image data to PNG before using a `.png` filename; never change only the extension.
+- Save the selected PNG under `attachments/` before adding its wikilink. Use `-imagegen-v2.png` or the next free version if the intended name already exists and replacement was not requested.
+- Verify that the saved file exists, its real format is PNG, it opens successfully, and it matches the intended output. Add the Obsidian wikilink only after this check passes.
+- Some runtimes do not permit local post-processing after a built-in image generation call. If the output path cannot be obtained uniquely, or the runtime cannot perform the copy, do not claim that the image was saved and do not create a broken wikilink.
+- In Dual mode, a blocked persistence gate leaves only the Exact Board complete; mark Dual mode and the Imagegen Companion incomplete.
+- In Imagegen mode, a blocked persistence gate means the task has no completed image. Mark the task incomplete, do not claim Vault persistence, and do not create a wikilink.
+- If the user explicitly approves the system imagegen CLI fallback, keep CLI intermediates and raw outputs outside the Vault, such as under `/private/tmp/imagegen/<task>/`. Copy only the final verified image into `attachments/`. Never create and then delete CLI temporary files inside this Vault.
 
 ## Source Coverage Contract
 
@@ -69,6 +136,8 @@ Rework the artifact if any of these are true:
 - The input, interpretation, and decision areas do not contain concrete source material.
 - Major sections in the source note have no matching slot in the visual or companion note.
 - The reader must open the source note to understand the meaning, not merely to inspect details.
+
+In Dual mode, evaluate Source Coverage and reconstructability primarily against the Exact Board. The imagegen companion passes when it reinforces the core claim, does not contradict the Exact Board, and contains no meaningless pseudo-text; it does not need to reproduce the note's exact wording.
 
 For automation notes, the one-page artifact must include:
 
@@ -156,13 +225,15 @@ Do not mix more than two patterns in one image.
 4. Choose one common pattern.
 5. Draft the layout as text first: title, subtitle, sections, point boxes, summary band.
 6. Map every core claim to a visible slot or the companion note.
-7. Produce the artifact in the chosen output mode.
-8. Check legibility at small size.
-9. Remove any decorative element that does not explain the idea.
+7. Produce the artifact in Exact Board, Imagegen, or Dual mode. For Vault automations, default to Dual mode.
+8. When Imagegen or Dual mode applies, invoke `$imagegen` and the built-in `image_gen` tool. A prompt or layout spec alone is incomplete.
+9. Apply the Imagegen persistence gate. Embed an imagegen wikilink only after the selected output has been copied into `attachments/` and verified.
+10. Check both artifacts at phone width. The exact board must preserve text; the imagegen companion must preserve meaning.
+11. Remove any decorative element that does not explain the idea.
 
 ## Quality Check
 
-Pass the artifact only if all checks are true:
+Except in Prompt-only mode, pass the artifact only if all checks are true:
 
 - For source-based requests, every core claim is covered in the image or named in the companion note.
 - The image reflects the source's caveats and scope limits when they affect the takeaway.
@@ -175,3 +246,13 @@ Pass the artifact only if all checks are true:
 - No section has more than one main message.
 - The visual style is hand-drawn and monochrome, not a slide deck or marketing hero.
 - The visual is not a low-information word cloud. It should be possible to evaluate the source note's overall content from the artifact itself.
+- An actual PNG exists in `attachments/` and is embedded with an Obsidian image wikilink.
+- When Imagegen or Dual mode applies, the available `imagegen` skill was read and a built-in `image_gen` call was made. A prompt or layout spec alone is a failure.
+- Imagegen is saved only when the selected built-in output was copied from a concrete tool-returned path or an unambiguous new `$CODEX_HOME/generated_images/` output, and the copied bitmap was verified before linking.
+- In Dual mode, the exact board and imagegen companion use different filenames, and the generated file does not overwrite the exact board.
+- Generated visuals do not become the authoritative source for exact Japanese text, citations, or numbers.
+- Every image wikilink resolves to a readable file under `attachments/`: one link in Exact Board or Imagegen mode, and two links in completed Dual mode.
+- Completed Imagegen mode requires one verified generated PNG under `attachments/`.
+- Completed Dual mode requires both a verified Exact Board PNG and a verified generated PNG under `attachments/`.
+- If Dual persistence is blocked, the Exact Board artifact may be complete, but Dual mode does not pass this Quality Check.
+- A built-in `image_gen` call without a persistable, verified generated PNG is not a completed Imagegen or Dual result.
