@@ -75,7 +75,7 @@ export function createServer(): McpServer {
   // Register view-diagram tool
   server.tool(
     "view-diagram",
-    "Mermaid図と任意のGraph JSONをインタラクティブHTMLで表示。Mermaidのズーム・パンと2.5Dレイヤービューに対応",
+    "Mermaid図と任意のGraph JSONをインタラクティブHTMLで表示。Mermaidのズーム・パン、2.5Dレイヤービュー、Graph JSON timeline再生に対応",
     {
       mermaidCode: z.string().describe("Mermaidダイアグラムコード"),
       title: z.string().optional().describe("図のタイトル（オプション）"),

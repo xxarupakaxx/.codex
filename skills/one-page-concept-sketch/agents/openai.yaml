@@ -1,0 +1,4 @@
+interface:
+  display_name: "One Page Concept Sketch"
+  short_description: "調査済み内容を過不足なく一枚の手書き風図解に圧縮する"
+  default_prompt: "Use $one-page-concept-sketch to research this source and turn it into a single hand-drawn concept sketch."
