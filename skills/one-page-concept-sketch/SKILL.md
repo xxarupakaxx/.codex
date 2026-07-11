@@ -16,7 +16,7 @@ Optimize for three outcomes:
 
 - A reader can say what the topic is within 3 seconds.
 - A reader can explain the core mechanism within 30 seconds.
-- The visual still works when viewed as a screenshot on a phone.
+- The visual works as an A4 landscape board: wide enough to compare sections side by side, but still readable when zoomed or previewed on a phone.
 
 ## Vault Output Contract
 
@@ -31,6 +31,8 @@ For Vault automations, follow [[11_one-page-concept-sketch]].
 - Save the Exact Board as `attachments/<lane>-concept-YYYY-MM-DD.png`. If it already exists and replacement was not explicitly requested, use `-v2.png` or the next free version.
 - Save an imagegen output as `attachments/<lane>-concept-YYYY-MM-DD-imagegen.png`. If that name already exists and replacement was not explicitly requested, use `-imagegen-v2.png` or the next free version.
 - In Dual mode, embed the Exact Board first and the imagegen companion in a separate `Imagegen Companion` section. In Imagegen mode, embed only the `-imagegen.png` file under `Sketch`.
+- Use A4 landscape orientation for both Exact Board and imagegen companion by default.
+  The target aspect ratio is about 1.414:1, such as 1400 x 990 CSS px rendered at 2x, unless the user explicitly asks for portrait or square.
 - Do not rename or delete existing notes.
 - Put final Markdown artifacts under `Inbox/automation/concept-sketches/` and final image artifacts under `attachments/`. Do not write final artifacts elsewhere unless the caller explicitly asks for another target. Temporary files outside the Vault are allowed only for an explicitly approved CLI fallback.
 
@@ -77,8 +79,8 @@ When Imagegen or Dual mode applies:
 1. Complete the Source Coverage Contract and text layout spec first.
 2. Invoke `$imagegen` and use the built-in `image_gen` tool. Do not merely return a prompt or say that an image could be generated.
 3. Generate a new bitmap from the concept's meaning. Do not use the SVG/HTML file as an image-edit target, and do not copy the dense Exact Board layout into the generation prompt.
-4. Include the use case, composition, monochrome hand-drawn style, text policy, required concepts, and forbidden decorative elements in the prompt.
-5. Inspect the generated result visually. Check topic fidelity, missing core claims, accidental text, malformed Japanese, cropping, and phone-width readability.
+4. Include the use case, A4 landscape composition, monochrome hand-drawn style, text policy, required concepts, and forbidden decorative elements in the prompt.
+5. Inspect the generated result visually. Check topic fidelity, missing core claims, accidental text, malformed Japanese, cropping, A4 landscape shape, and readability.
 6. Persist the selected output under `attachments/` with the `-imagegen.png` suffix. Never overwrite an existing image unless the user explicitly requested replacement.
 7. Embed the saved file in the concept-sketch note with an Obsidian image wikilink.
 8. If the tool is unavailable, blocked, or does not return a persistable artifact, do not silently skip it. In Dual mode, preserve the Exact Board but mark Dual mode and the imagegen companion incomplete. In Imagegen mode, no final image exists, so mark the entire task incomplete. Never claim a saved image or add a broken wikilink.
@@ -90,7 +92,7 @@ Use case: one-page concept illustration
 Source claim: <one sentence>
 Required concepts: <three to six concrete ideas>
 Mechanism or contrast: <causal flow, branch, before/after, or trade-off>
-Composition: <simplified visual hierarchy created for the imagegen companion>
+Composition: <simplified visual hierarchy created for the imagegen companion; A4 landscape by default>
 Style: monochrome hand-drawn sketchnote, warm-white paper, thin imperfect black ink
 Text: no text
 Avoid: letters, Japanese pseudo-text, logos, watermark, decorative filler, stock-poster style, glossy effects, color gradients, invented facts
@@ -154,7 +156,7 @@ For automation notes, the one-page artifact must include:
 - **Decision / Action**: what the human should decide, inspect, or do next.
 - **Limits**: inaccessible sources, unverified details, and intentionally omitted material.
 
-For dense daily notes, prefer an HTML/CSS one-page board or a larger SVG over tiny text labels.
+For dense daily notes, prefer an A4 landscape HTML/CSS one-page board or a larger landscape SVG over tiny text labels.
 Completeness and reconstructability are more important than looking minimal.
 
 ## Structure
@@ -163,9 +165,9 @@ Use this layout grammar by default:
 
 1. Title at top center.
 2. One-line subtitle that states the claim.
-3. Three to five information sections separated by thin rules.
+3. A4 landscape canvas with three to five information sections arranged side by side where useful.
 4. Each section contains concrete source material, not only category names.
-5. Put one boxed "Decision" or "Point" note on the right side.
+5. Put one boxed "Decision" or "Point" note in the middle or right side.
 6. End with a bottom summary band that names the takeaway, action, and limit.
 
 Prefer a single argument over a catalog.
@@ -234,7 +236,7 @@ Do not mix more than two patterns in one image.
 7. Produce the artifact in Exact Board, Imagegen, or Dual mode. For Vault automations, default to Dual mode.
 8. When Imagegen or Dual mode applies, invoke `$imagegen` and the built-in `image_gen` tool. A prompt or layout spec alone is incomplete.
 9. Apply the Imagegen persistence gate. Embed an imagegen wikilink only after the selected output has been copied into `attachments/` and verified.
-10. Check both artifacts at phone width. The exact board must preserve text; the imagegen companion must preserve meaning.
+10. Check both artifacts as A4 landscape boards. The exact board must preserve text; the imagegen companion must preserve meaning and must not drift into a vertical poster.
 11. Remove any decorative element that does not explain the idea.
 
 ## Quality Check
@@ -244,7 +246,8 @@ Except in Prompt-only mode, pass the artifact only if all checks are true:
 - For source-based requests, every core claim is covered in the image or named in the companion note.
 - The image reflects the source's caveats and scope limits when they affect the takeaway.
 - The artifact avoids both missing central information and dumping raw detail into tiny unreadable text.
-- The title and subtitle are readable at phone width.
+- The title and subtitle are readable in the A4 landscape PNG and remain legible when previewed smaller.
+- The main PNG is landscape, preferably near A4 landscape ratio, unless the caller explicitly requested another shape.
 - The main claim is visible without reading every caption.
 - Arrows show cause, time, or choice clearly.
 - Right-side point boxes add judgment, not repetition.
