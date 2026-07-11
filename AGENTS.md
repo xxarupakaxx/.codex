@@ -7,6 +7,7 @@ Use these Codex model/service_tier pairs instead:
 
 - Default / heavy judgment: `model = "gpt-5.5"`, `service_tier = "priority"`
 - Routine specialist agents already configured as `gpt-5.4` may keep `service_tier = "priority"`
+- Simple custom/default helper work under the current priority-tier policy: `model = "gpt-5.4-mini"`, `service_tier = "priority"` when current Codex tooling supports it
 - Do not omit `service_tier` for custom subagents.
 
 ---
@@ -30,12 +31,13 @@ Codex (conductor)
 |------|---------|--------------------------|
 | 探索・監視（explore/pr-watch等） | `multi_agent_v1.spawn_agent(agent_type: "explorer")` またはローカル `rg` | role既定（通常 `gpt-5.4` / `priority`） |
 | 軽量ワーカー・通常実装 | `multi_agent_v1.spawn_agent(agent_type: "worker"|"implementer")` | role既定（通常 `gpt-5.5` / `priority`） |
+| commit文案・短い要約・定型整形 | `default` / custom sub-agent（委任が有益で、metadata対応時のみ） | `gpt-5.4-mini` / `priority` |
 | 判定・設計判断・計画 | `implementation-planner` / `technical-evaluator` / `go-nogo-advisor` | role既定（`gpt-5.4` または `gpt-5.5` / `priority`） |
 | 専門レビュー | `arch-reviewer` / `security-reviewer` / `code-quality-reviewer` 等 | role既定（必ず `priority`） |
 | 過去知見検索 | `learnings-researcher` | role既定（`gpt-5.4` / `priority`） |
 | パイプライン制御 | `multi_tool_use.parallel` + `multi_agent_v1.wait_agent` | — |
 
-通常は role 既定を使う。custom/default sub-agent に model を明示する場合は `model = "gpt-5.5"` または `model = "gpt-5.4"` と `service_tier = "priority"` を必ずセットする。詳細は `rules/model-routing.md`。
+通常は role 既定を使う。custom/default sub-agent に model を明示する場合は、許可モデル集合と用途を `rules/model-routing.md` に従わせ、`service_tier = "priority"` を必ずセットする。これはこの Vault の互換性方針であり、API一般の最安構成を意味しない。`gpt-5.4-mini` は metadata 対応時の commit文案・短い要約・定型整形など、低リスクで lead が即検査できる作業に限る。
 
 plugin / skill / agent role の適材適所ルーティングは `context/agent-team-routing.md` を参照する。Phase順序は `context/workflow-rules.md`、model/service_tier は `rules/model-routing.md` を SSoT とする。
 
@@ -142,10 +144,14 @@ B. **Blueprint（大規模タスクのみ）**: 多セッション・多PRの設
 
 ## ライブロードマップ表示
 
-- Phase 2完了後、必要に応じて `scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --watch` を起動し、Codex appの横で `roadmap.html` を開きながら進捗を確認できるようにする。
+- 複数Phaseのworkflowを実行する場合は、`viewing-plans` スキルを併走させる。
+- Phase 2完了後、`scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task>` で `roadmap.html` を生成する。長い実装、team-run、レビューを含む作業では、可能なら `--serve --watch` を起動し、Codex appの横で `roadmap.html` を開きながら進捗を確認できるようにする。
+- Phase 3/4では `40_progress.md`、`80_review.md`、`05_log.md` の更新が Roadmap Viewer に反映されるようにする。
+- Phase 5では最終 `roadmap.html` を再生成し、必要に応じて `workflow-html-app` の Plan Viewer、Log Viewer、Verification Viewer、Diagram Viewerで成果物を確認する。
 - live表示は `${MEMORY_DIR}/memory/<task>/roadmap.html` と `roadmap-snapshot.json` を使う。各セッションで `<task>` が異なればファイル衝突しない。
 - `--serve` の既定は `127.0.0.1` + port `0`（OSの空きポート自動割当）。複数セッションで同時起動しても固定port衝突を避ける。固定したい場合だけ `--port <port>` を指定する。
 - live表示は進捗確認の補助であり、Goal、Sprint Contract、Team Journal、05_log.md、レビュー結果の代替ではない。
+- 表示ツールやスクリプトが使えない場合は、失敗を隠さず 05_log.md と完了報告に残す。
 
 ## ユーザーへの質問
 

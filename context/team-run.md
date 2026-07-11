@@ -51,13 +51,15 @@ Heat は変更規模だけでなくリスクで上げる。設定ファイルの
 | 変更領域 | 最初に選ぶ reviewer |
 |----------|---------------------|
 | AGENTS.md / context / skills / commands | `rule-validator`, `docs-reviewer`, `arch-reviewer` |
-| model / service_tier / agent routing | `technical-evaluator`, `rule-validator`, `cost-monitor` |
+| model / service_tier / agent routing | `cost-aware-llm` で方針確認後、`technical-evaluator`, `rule-validator`, `cost-monitor` |
 | security / auth / data access | `security-reviewer`, `api-contract-reviewer`, `data-flow-tracer` |
 | tests / validation harness | `test-reviewer`, `code-quality-reviewer` |
 | UI / browser behavior | `ui-ux-reviewer`, `a11y-reviewer`, Playwright smoke |
 | CI / deploy / env vars | `devops-reviewer`, `security-reviewer` |
 
 PRD や受入条件がある場合は `prd-reviewer` を足す。性能が主目的または性能劣化リスクがある場合は `perf-reviewer` を足す。
+
+`gpt-5.4-mini` は reviewer の代替ではなく、commit文案、短い要約、定型整形、重複検出などの前段補助に限る。Review Heat を下げる理由として mini を使わない。
 
 ## Stop And Escalate
 

@@ -8,7 +8,7 @@ allowed-tools: Read, Bash, Glob, Grep, Write, mcp__workflow-html-app__view-diagr
 
 ## Overview
 
-Create a 2.5D layered state diagram for branch changes. This skill is separate from `generate-state-diagram`: the base skill owns Mermaid/Markdown diagrams, while this skill owns Graph JSON and the workflow-html-app 2.5D viewer path.
+Create a 2.5D layered state diagram for branch changes. This skill is separate from `generate-state-diagram`: the base skill owns Mermaid/Markdown diagrams, while this skill owns Graph JSON, optional timeline replay data, and the workflow-html-app 2.5D/timeline viewer path.
 
 ## Hard Requirement
 
@@ -29,7 +29,7 @@ Do not treat hand-written static 3D HTML as the normal path. If `mcp__workflow-h
 Save these files in the task memory directory:
 
 - `91_state_diagram_3d.md`: explanation, main Mermaid diagram, usage notes, glossary, and file map
-- `91_state_diagram_graph.json`: Graph JSON consumed by workflow-html-app
+- `91_state_diagram_graph.json`: Graph JSON consumed by workflow-html-app. Include optional `timeline` data when time progression is essential to understanding.
 - `91_state_diagram_3d.html`: optional fallback only when MCP display is unavailable or user asks for a standalone file
 
 Do not overwrite `91_state_diagram.md` unless the user explicitly asks to replace the base Mermaid diagram output.
@@ -69,6 +69,35 @@ Map the axes as:
 | Y | parallel branches or same-step alternatives |
 | Z | technical layer boundary |
 
+### Step 2.5: Decide Whether Timeline Replay Is Needed
+
+Add `timeline` to Graph JSON when the reader must understand temporal progression, not only static topology.
+
+Use timeline replay for:
+
+- multi-commit or multi-phase migrations
+- retries, queues, async work, background jobs, or staged failure recovery
+- agent/team workflows where work moves between roles
+- UI flows where the user sees different states over time
+- incident, debugging, or performance narratives where the sequence explains causality
+- diagrams where the user asked for replay, scrubber, timeline, animation, or time-based progression
+
+Do not add timeline replay for:
+
+- static entity relationships
+- simple one-pass request/response flows
+- small changes where Mermaid already explains the flow
+- decorative animation that does not clarify a state change
+
+Timeline quality rules:
+
+- Keep the static Mermaid diagram as the overview. Timeline replay augments it; it does not replace it.
+- Prefer 5-20 meaningful steps. Do not dump every commit or log line into `timeline.steps`.
+- Each step must explain what changed and why it matters in `summary`.
+- Use `eventType` plus visible labels. Do not make color the only carrier of meaning.
+- If animation is disabled, the step summaries and details pane must still explain the sequence.
+- Avoid moving the camera and changing node state at the same time; highlight state changes instead.
+
 ### Step 3: Create Mermaid Context
 
 Create a compact main Mermaid diagram to act as the 2D reference in the viewer. Use `stateDiagram-v2` for lifecycle/state-heavy flows and `flowchart LR` for data-heavy flows.
@@ -88,7 +117,15 @@ Graph JSON rules:
 - `files` should use repository-relative paths.
 - `order` should be stable and roughly monotonic along the main path.
 - Every edge must reference existing node IDs.
+- Add stable `id` to edges when a timeline needs to refer to them.
 - Use `type: "async"` for queue/event/background work and `type: "error"` for failure paths.
+- When timeline replay is needed, add a compact `timeline` object:
+  - `timeline.steps[].at` is the numeric ordering and display position, not a promise of real-time playback duration.
+  - `timeline.steps[].activeNodes` and `activeEdges` reference existing graph IDs.
+  - `timeline.steps[].changedNodes` and `changedEdges` identify the local delta from the previous step.
+  - `timeline.steps[].summary` explains why this frame matters.
+  - `timeline.steps[].eventType` stays within `normal`, `trigger`, `decision`, `error`, `fix`, `review`, and `apply` where possible.
+  - Do not add node-level timeline fields in v1. The viewer infers past/future state from timeline step references.
 
 ### Step 5: Save Files
 
@@ -96,7 +133,7 @@ Save `91_state_diagram_3d.md` with:
 
 - purpose and branch
 - main Mermaid diagram
-- short explanation of how to read the 2.5D view
+- short explanation of how to read the 2.5D view and the timeline replay if present
 - glossary
 - file map
 - Graph JSON file path
@@ -124,5 +161,7 @@ This call is required for normal completion. The final report must say whether t
 - Graph JSON opens in workflow-html-app without breaking Mermaid display.
 - Layer placement helps comprehension; do not create arbitrary decorative 3D.
 - The reader can click a node and understand why it exists, what files implement it, and what it connects to.
+- If timeline replay is present, the reader can scrub to a step and understand what changed since the previous step.
 - Failure and retry paths are represented when they affect state or user-visible behavior.
 - If Graph JSON is invalid or the MCP is unavailable, do not claim the 2.5D view was delivered.
+- If timeline parsing fails but Mermaid renders, report the timeline failure separately and keep the static diagram available.
