@@ -15,6 +15,7 @@ description: 直近1週間のDaily・digest・trend・payment-trend・新規know
 - 本文は「今週の学び」「LayerX入社準備の進捗」「今週の数字」「メタデータ監査」「MOCへの接続」「来週のフォーカス」で構成する。
 - メタデータ監査では、当週の新規ノートの `summary` / `related` / `depth` 欠落と、全期間の孤立ノート（リンク0）を数える。
 - `automation_read: false` または `source_system: claude-note` のノートは列挙、本文読取、リンク追跡、要約の対象外にする。
+- 最初のpath列挙より前に `_shared-ai/scripts/list-vault-automation-inputs.rb` をローカル実行し、そのstdoutに出た許可済みpathだけを後続の `rg` へ渡す。未filterの `Daily/` や `Inbox/` へ直接 `rg -l` しない。
 - MOCへの接続は、無人実行なら提案に留め、対話中なら承認のうえ該当ノート末尾へ追記する。
 - 保存前に YAML・`[[wikilink]]` の実在・Templater記法の残りを自己検証する（[[04_verifier]] の観点）。
 
