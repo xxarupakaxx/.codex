@@ -6,6 +6,8 @@ description: Create a hand-drawn, black-and-white concept sketch that makes an i
 # One Page Concept Sketch
 
 Turn an idea into one readable knowledge image that explains the concept, not a decorative poster.
+For a note, article, paper, transcript, meeting record, or research summary, the primary artifact is a text-bearing Exact Board PNG.
+The image itself must explain what the source is about, what it says, why the conclusion follows, what the reader should decide or do, and what the desired end state is.
 Dual mode may add a separately named imagegen companion, but the exact board remains the authoritative knowledge artifact.
 Do not reduce a long source into a few vague labels.
 For source-based automation notes, the artifact must let a reader reconstruct what was read, what changed, what matters, and what decision remains without opening the source note.
@@ -16,6 +18,7 @@ Optimize for three outcomes:
 
 - A reader can say what the topic is within 3 seconds.
 - A reader can explain the core mechanism within 30 seconds.
+- A reader can identify the desired end state and the next decision or action without opening the source note.
 - The visual works as an A4 landscape board: wide enough to compare sections side by side, but still readable when zoomed or previewed on a phone.
 
 ## Vault Output Contract
@@ -45,11 +48,13 @@ Choose the production mode before drafting. Do not stop at SVG/HTML or a prompt 
 - **Dual mode**: Keep the exact board PNG as the main knowledge artifact and also invoke `$imagegen` to create a separate illustrative companion. Share the core claim and semantic structure, not the Exact Board's dense layout or long text.
 - **Prompt-only mode**: Use a prompt plus layout spec only when the user explicitly asks for guidance instead of an actual file.
 
-For Vault automations, use Dual mode by default because this Vault's output contract requests an imagegen companion. The caller may explicitly request `exact-board-only` to skip image generation. Outside that Vault default, use Exact Board unless an Imagegen trigger applies.
+For source-based summaries, including Vault automations, use Exact Board mode by default.
+Use Imagegen or Dual mode only when the caller explicitly asks for generated illustration, metaphor, mood, or an imagegen companion.
+An imagegen companion is optional supporting material and never counts as the summary image or primary artifact.
 
 Do not pass a completed SVG or HTML board to imagegen as an edit target. Rasterization is the exact conversion path. For the imagegen companion, translate the coverage map, visual hierarchy, metaphor, and style into a fresh generation prompt.
 
-If using imagegen, omit text by default. Put exact Japanese wording in the Exact Board. If the generated image's meaning is wrong, revise once with a concrete prompt; if it still fails, keep the Exact Board as primary and record the imagegen limitation rather than presenting the companion as authoritative.
+If using imagegen, omit text by default. Put exact Japanese wording in the Exact Board. This text-free policy applies only to the optional imagegen companion, never to the primary Exact Board summary. If the generated image's meaning is wrong, revise once with a concrete prompt; if it still fails, keep the Exact Board as primary and record the imagegen limitation rather than presenting the companion as authoritative.
 Do not make the imagegen companion the only visible explanation.
 If the companion is mostly icons, metaphors, or a flow drawing, the Markdown `Text Board` must explicitly say what the drawing represents and why it matters.
 
@@ -62,14 +67,14 @@ Treat these as explicit Imagegen requests:
 - a request that explicitly asks for AI-generated imagery, a generated illustration, or a generated bitmap
 - `imagen` when the surrounding context clearly uses it to mean image generation
 
-Do not treat `PNG conversion`, `make this viewable as an image`, `make this readable in Obsidian`, or `convert the SVG to an image` alone as an Imagegen trigger. Those phrases request deterministic Exact Board rasterization unless the Vault Dual-mode default or another explicit trigger also applies.
+Do not treat `PNG conversion`, `make this viewable as an image`, `make this readable in Obsidian`, or `convert the SVG to an image` alone as an Imagegen trigger. Those phrases request deterministic Exact Board rasterization unless another explicit Imagegen trigger also applies.
 
 Mode priority:
 
 1. Explicit prompt or layout guidance only: Prompt-only mode.
 2. Explicit Imagegen trigger plus exact Japanese, citations, or numbers: Dual mode.
 3. Explicit Imagegen trigger plus illustration, mood, or metaphor as the main goal: Imagegen mode.
-4. Vault automation without `exact-board-only`: Dual mode.
+4. Source-based summary or Vault automation without an explicit Imagegen trigger: Exact Board mode.
 5. Otherwise: Exact Board mode.
 
 ## Imagegen Invocation Contract
@@ -140,6 +145,8 @@ If a source cannot fit into one readable image, keep the image focused and provi
 Rework the artifact if any of these are true:
 
 - The visual alone does not reveal the source's subject, target, and conclusion.
+- The visual does not state the desired end state or show how it differs from the current state.
+- The visual contains no meaningful explanatory text beyond a title or isolated keywords.
 - Bullets are only keywords, source titles, or labels without why they matter.
 - The input, interpretation, and decision areas do not contain concrete source material.
 - Major sections in the source note have no matching slot in the visual or companion note.
@@ -154,6 +161,7 @@ For automation notes, the one-page artifact must include:
 - **Findings**: three to six concrete findings, each with enough context to stand alone.
 - **Mechanism**: two to four steps explaining why the claim follows or how information flows.
 - **Decision / Action**: what the human should decide, inspect, or do next.
+- **Desired end state**: what should be true when the idea, recommendation, or process has been carried through successfully.
 - **Limits**: inaccessible sources, unverified details, and intentionally omitted material.
 
 For dense daily notes, prefer an A4 landscape HTML/CSS one-page board or a larger landscape SVG over tiny text labels.
@@ -168,7 +176,8 @@ Use this layout grammar by default:
 3. A4 landscape canvas with three to five information sections arranged side by side where useful.
 4. Each section contains concrete source material, not only category names.
 5. Put one boxed "Decision" or "Point" note in the middle or right side.
-6. End with a bottom summary band that names the takeaway, action, and limit.
+6. Show the desired end state explicitly, using a labeled box, endpoint, before/after destination, or acceptance condition.
+7. End with a bottom summary band that names the takeaway, action, desired end state, and limit.
 
 Prefer a single argument over a catalog.
 If the source has many ideas, select the one tension that explains the rest.
@@ -193,6 +202,7 @@ Before drawing, reduce the idea to:
 - **Mechanism**: two or three steps that explain why the claim is true.
 - **Contrast**: wrong intuition versus better framing.
 - **Takeaway**: what to preserve, avoid, decide, or do next.
+- **Desired end state**: the observable condition that should exist after the recommendation or process succeeds.
 
 Delete only supporting details that do not change the source's core claims, mechanism, caveats, or decision implications.
 If a sentence cannot fit in a small label, turn it into a shorter noun phrase or move it to a point box.
@@ -201,7 +211,7 @@ Keep proper nouns, task names, article names, hypotheses, and verification ideas
 
 ## Text Rules
 
-Keep labels short.
+Keep labels concise but meaningful. A source-based Exact Board must contain enough readable text to stand alone; do not optimize for short labels at the cost of comprehension.
 
 - Title: 6 to 14 Japanese characters, or 2 to 5 English words.
 - Subtitle: one line.
@@ -231,9 +241,9 @@ Do not mix more than two patterns in one image.
 2. For source-based requests, run the Source Coverage Contract before visual drafting.
 3. Extract the concept and write the compression bullets.
 4. Choose one common pattern.
-5. Draft the layout and the Markdown Text Board as text first: title, subtitle, sections, point boxes, summary band, claim, inputs, findings, mechanism, decision/action, and limits.
+5. Draft the layout and the Markdown Text Board as text first: title, subtitle, sections, point boxes, summary band, claim, inputs, findings, mechanism, decision/action, desired end state, and limits.
 6. Map every core claim to a visible slot or the companion note.
-7. Produce the artifact in Exact Board, Imagegen, or Dual mode. For Vault automations, default to Dual mode.
+7. Produce the artifact in Exact Board, Imagegen, or Dual mode. For source-based summaries and Vault automations, default to Exact Board mode unless Imagegen was explicitly requested.
 8. When Imagegen or Dual mode applies, invoke `$imagegen` and the built-in `image_gen` tool. A prompt or layout spec alone is incomplete.
 9. Apply the Imagegen persistence gate. Embed an imagegen wikilink only after the selected output has been copied into `attachments/` and verified.
 10. Check both artifacts as A4 landscape boards. The exact board must preserve text; the imagegen companion must preserve meaning and must not drift into a vertical poster.
@@ -249,12 +259,15 @@ Except in Prompt-only mode, pass the artifact only if all checks are true:
 - The title and subtitle are readable in the A4 landscape PNG and remain legible when previewed smaller.
 - The main PNG is landscape, preferably near A4 landscape ratio, unless the caller explicitly requested another shape.
 - The main claim is visible without reading every caption.
+- The image alone states the topic, central claim, mechanism, desired end state, next decision or action, and material limits.
+- The image contains meaningful explanatory sentences or short clauses, not only concepts, icons, arrows, and isolated labels.
 - Arrows show cause, time, or choice clearly.
 - Right-side point boxes add judgment, not repetition.
 - The bottom summary band contains the practical takeaway.
 - No section has more than one main message.
 - The visual style is hand-drawn and monochrome, not a slide deck or marketing hero.
 - The visual is not a low-information word cloud. It should be possible to evaluate the source note's overall content from the artifact itself.
+- A source-based artifact fails if the reader must use the Markdown Text Board or reopen the source to discover the conclusion, mechanism, desired end state, or next action. The Markdown note is a fallback and evidence surface, not a substitute for an incomplete image.
 - The saved Markdown note is not image-only.
   Even if every image is hidden, broken, or visually ambiguous, `Source Coverage`, `Text Board`, and `Companion Note` must let the reader understand the topic, claim, mechanism, decision, and limits.
 - Imagegen-only and Dual outputs must not present a wordless generated drawing as the whole artifact.
