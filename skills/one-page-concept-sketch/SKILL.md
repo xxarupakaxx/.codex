@@ -9,6 +9,8 @@ Turn an idea into one readable knowledge image that explains the concept, not a 
 Dual mode may add a separately named imagegen companion, but the exact board remains the authoritative knowledge artifact.
 Do not reduce a long source into a few vague labels.
 For source-based automation notes, the artifact must let a reader reconstruct what was read, what changed, what matters, and what decision remains without opening the source note.
+The saved Markdown note must also work as a one-page text note.
+Images are embedded evidence and memory hooks, not a replacement for the note's own readable explanation.
 
 Optimize for three outcomes:
 
@@ -24,6 +26,8 @@ For Vault automations, follow [[11_one-page-concept-sketch]].
 - Create `Inbox/automation/concept-sketches/` before saving if it is missing.
 - Link it from the source note and from `Daily/YYYY-MM-DD.md`.
 - Keep the source coverage map in the saved note.
+- Keep a `## Text Board` section in the saved note.
+  This section must restate the claim, inputs, findings, mechanism, decision/action, and limits in Markdown text so the note remains understandable when images are not opened.
 - Save the Exact Board as `attachments/<lane>-concept-YYYY-MM-DD.png`. If it already exists and replacement was not explicitly requested, use `-v2.png` or the next free version.
 - Save an imagegen output as `attachments/<lane>-concept-YYYY-MM-DD-imagegen.png`. If that name already exists and replacement was not explicitly requested, use `-imagegen-v2.png` or the next free version.
 - In Dual mode, embed the Exact Board first and the imagegen companion in a separate `Imagegen Companion` section. In Imagegen mode, embed only the `-imagegen.png` file under `Sketch`.
@@ -44,6 +48,8 @@ For Vault automations, use Dual mode by default because this Vault's output cont
 Do not pass a completed SVG or HTML board to imagegen as an edit target. Rasterization is the exact conversion path. For the imagegen companion, translate the coverage map, visual hierarchy, metaphor, and style into a fresh generation prompt.
 
 If using imagegen, omit text by default. Put exact Japanese wording in the Exact Board. If the generated image's meaning is wrong, revise once with a concrete prompt; if it still fails, keep the Exact Board as primary and record the imagegen limitation rather than presenting the companion as authoritative.
+Do not make the imagegen companion the only visible explanation.
+If the companion is mostly icons, metaphors, or a flow drawing, the Markdown `Text Board` must explicitly say what the drawing represents and why it matters.
 
 ### Imagegen triggers
 
@@ -223,7 +229,7 @@ Do not mix more than two patterns in one image.
 2. For source-based requests, run the Source Coverage Contract before visual drafting.
 3. Extract the concept and write the compression bullets.
 4. Choose one common pattern.
-5. Draft the layout as text first: title, subtitle, sections, point boxes, summary band.
+5. Draft the layout and the Markdown Text Board as text first: title, subtitle, sections, point boxes, summary band, claim, inputs, findings, mechanism, decision/action, and limits.
 6. Map every core claim to a visible slot or the companion note.
 7. Produce the artifact in Exact Board, Imagegen, or Dual mode. For Vault automations, default to Dual mode.
 8. When Imagegen or Dual mode applies, invoke `$imagegen` and the built-in `image_gen` tool. A prompt or layout spec alone is incomplete.
@@ -246,6 +252,10 @@ Except in Prompt-only mode, pass the artifact only if all checks are true:
 - No section has more than one main message.
 - The visual style is hand-drawn and monochrome, not a slide deck or marketing hero.
 - The visual is not a low-information word cloud. It should be possible to evaluate the source note's overall content from the artifact itself.
+- The saved Markdown note is not image-only.
+  Even if every image is hidden, broken, or visually ambiguous, `Source Coverage`, `Text Board`, and `Companion Note` must let the reader understand the topic, claim, mechanism, decision, and limits.
+- Imagegen-only and Dual outputs must not present a wordless generated drawing as the whole artifact.
+  The generated image may be a metaphor, but the Markdown note must carry the precise textual explanation.
 - An actual PNG exists in `attachments/` and is embedded with an Obsidian image wikilink.
 - When Imagegen or Dual mode applies, the available `imagegen` skill was read and a built-in `image_gen` call was made. A prompt or layout spec alone is a failure.
 - Imagegen is saved only when the selected built-in output was copied from a concrete tool-returned path or an unambiguous new `$CODEX_HOME/generated_images/` output, and the copied bitmap was verified before linking.
