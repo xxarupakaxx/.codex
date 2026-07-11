@@ -146,6 +146,8 @@ B. **Blueprint（大規模タスクのみ）**: 多セッション・多PRの設
 
 - 複数Phaseのworkflowを実行する場合は、`viewing-plans` スキルを併走させる。
 - Phase 2完了後、`scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task>` で `roadmap.html` を生成する。長い実装、team-run、レビューを含む作業では、可能なら `--serve --watch` を起動し、Codex appの横で `roadmap.html` を開きながら進捗を確認できるようにする。
+- **IMPORTANT**: `viewing-plans` の成果物としてローカルHTMLまたは表示URLを生成した場合は、ユーザーへの案内前に `open "<absolute-path-or-URL>"` で実際に開き、MCP Apps がUIを直接開く場合を除いてパスやURLだけを提示して完了しない。
+  `open` に失敗した場合は、失敗内容と対象パスまたはURLを報告する。
 - Phase 3/4では `40_progress.md`、`80_review.md`、`05_log.md` の更新が Roadmap Viewer に反映されるようにする。
 - Phase 5では最終 `roadmap.html` を再生成し、必要に応じて `workflow-html-app` の Plan Viewer、Log Viewer、Verification Viewer、Diagram Viewerで成果物を確認する。
 - live表示は `${MEMORY_DIR}/memory/<task>/roadmap.html` と `roadmap-snapshot.json` を使う。各セッションで `<task>` が異なればファイル衝突しない。
