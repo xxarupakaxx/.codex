@@ -69,4 +69,4 @@ frontmatterは拡張スキーマを使う（`type: note`、`tags: [automation, w
 ## ⏰ スケジュール設定
 
 - **主モードは on-demand**（対話で呼ぶ）。定期実行では金曜09:15の `/loop-engineering` の後、金曜18:00に週1回実行する。
-- Codex automation id: `weekly-learning-review`。cadence例は `0 18 * * 5`。
+- Codex automationの現行IDとcadenceは `Inbox/automation/SCHEDULES.md` の `/weekly-learning-review` 節を正本とする。
