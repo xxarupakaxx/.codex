@@ -19,15 +19,16 @@ description: 直近1週間のDaily、digest、trend、payment-trend、新規know
 
 ## 2. 収集（検索ファースト。全文読みは絞った対象のみ）
 
-1. 当週作成ノートの列挙: `rg -l "^date_created: <当週の各日付>"` を `Daily/` と `Inbox/`（`Claude-note/` は対象外）に対して実行。frontmatterの `summary` / `related` / `depth` / `tags` も `rg` で回収する。
-2. 系統別に要点を拾う:
+1. path列挙や `rg` より前に、`ruby _shared-ai/scripts/list-vault-automation-inputs.rb . Daily Inbox/automation/digest Inbox/automation/trends Inbox/automation/payment-trends Inbox/knowledge` をローカル実行する。stdoutに出た許可済みpathだけを後続処理へ渡し、未filterのディレクトリを列挙しない。
+2. 当週作成ノートの列挙: 許可済みpathだけを対象に `date_created` を確認し、frontmatterの `summary` / `related` / `depth` / `tags` を回収する。filterがexit 1なら停止する。
+3. 系統別に要点を拾う:
    - `Daily/`: 「🔁 ふりかえり」「💭 メモ」節
    - `Inbox/automation/digest/`: 「概要」節
    - `Inbox/automation/trends/`: 当週ノートのTop見出し
    - `Inbox/automation/payment-trends/`: frontmatterの `learning_theme` と「基礎ノートへの接続」節
    - 当週の新規 knowledge / note: `summary`（なければ冒頭段落）
-3. `Claude-note/` はVault側とiCloud側の正本が未確定のため、読み取りも書き込みも行わず、NextActionsの状況へ言及しない。呼出しpromptに「読み取りのみ」と残っていても、この停止境界を優先する。
-4. `automation_read: false` または `source_system: claude-note` のノートは、列挙、本文読取、リンク追跡、要約の対象外にする。
+4. `Claude-note/` はVault側とiCloud側の正本が未確定のため、読み取りも書き込みも行わず、NextActionsの状況へ言及しない。呼出しpromptに「読み取りのみ」と残っていても、この停止境界を優先する。
+5. `automation_read: false` または `source_system: claude-note` のノートは、列挙、本文読取、リンク追跡、要約の対象外にする。
 
 ## 3. 週次レビューノートの生成
 
