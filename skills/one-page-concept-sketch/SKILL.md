@@ -140,6 +140,27 @@ If a source cannot fit into one readable image, keep the image focused and provi
 - why it was left out,
 - where the omitted detail belongs if the user wants a fuller artifact.
 
+## Copy-to-Learn Contract
+
+For a source-based summary, organize the Exact Board so that copying it by hand in the indicated order reconstructs the source's reasoning.
+The board is not a collection of independent cards.
+It is a guided learning path whose sequence makes each statement prepare the reader for the next one.
+
+Use this learning sequence unless the source itself requires another order:
+
+1. **Question**: what problem or question the source addresses.
+2. **Premise**: the background, definitions, or current condition needed to follow the argument.
+3. **Reasoning**: the causal chain, comparison, process, or decision rule that connects the premise to the conclusion.
+4. **Concrete example**: one example that makes the abstract mechanism easier to understand.
+5. **Contrast or change**: the wrong and better framing, or the current and desired states.
+6. **Conclusion**: what the reader should understand, decide, or do.
+7. **Desired end state**: what should be observably true when the conclusion has been applied successfully.
+
+Show the reading and copying order with spatial flow, numbering, or meaningful arrows.
+Each step must use a short sentence or clause that makes sense when copied into a notebook.
+Do not rely on isolated nouns, category labels, icons, or unlabeled arrows to carry the reasoning.
+Do not add a separate reproduction exercise, worksheet, or "try it yourself" area unless the caller explicitly requests one.
+
 ## Information Completeness Guardrail
 
 Rework the artifact if any of these are true:
@@ -174,7 +195,7 @@ Use this layout grammar by default:
 1. Title at top center.
 2. One-line subtitle that states the claim.
 3. A4 landscape canvas with three to five information sections arranged side by side where useful.
-4. Each section contains concrete source material, not only category names.
+4. Each section contains concrete source material, not only category names, and its place in the reading order is visible.
 5. Put one boxed "Decision" or "Point" note in the middle or right side.
 6. Show the desired end state explicitly, using a labeled box, endpoint, before/after destination, or acceptance condition.
 7. End with a bottom summary band that names the takeaway, action, desired end state, and limit.
@@ -241,7 +262,7 @@ Do not mix more than two patterns in one image.
 2. For source-based requests, run the Source Coverage Contract before visual drafting.
 3. Extract the concept and write the compression bullets.
 4. Choose one common pattern.
-5. Draft the layout and the Markdown Text Board as text first: title, subtitle, sections, point boxes, summary band, claim, inputs, findings, mechanism, decision/action, desired end state, and limits.
+5. Draft the Copy-to-Learn sequence and the Markdown Text Board as text first: question, premise, reasoning, concrete example, contrast or change, conclusion, desired end state, and limits.
 6. Map every core claim to a visible slot or the companion note.
 7. Produce the artifact in Exact Board, Imagegen, or Dual mode. For source-based summaries and Vault automations, default to Exact Board mode unless Imagegen was explicitly requested.
 8. When Imagegen or Dual mode applies, invoke `$imagegen` and the built-in `image_gen` tool. A prompt or layout spec alone is incomplete.
@@ -261,6 +282,9 @@ Except in Prompt-only mode, pass the artifact only if all checks are true:
 - The main claim is visible without reading every caption.
 - The image alone states the topic, central claim, mechanism, desired end state, next decision or action, and material limits.
 - The image contains meaningful explanatory sentences or short clauses, not only concepts, icons, arrows, and isolated labels.
+- The reading and copying order is unambiguous from the layout, numbering, or meaningful arrows.
+- Copying the board in that order would preserve the source's question, premises, reasoning, example, conclusion, and desired end state.
+- No separate reproduction exercise or worksheet has been added unless the caller requested one.
 - Arrows show cause, time, or choice clearly.
 - Right-side point boxes add judgment, not repetition.
 - The bottom summary band contains the practical takeaway.
