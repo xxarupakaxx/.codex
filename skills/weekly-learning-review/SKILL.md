@@ -26,7 +26,7 @@ description: 直近1週間のDaily、digest、trend、payment-trend、新規know
    - `Inbox/automation/trends/`: 当週ノートのTop見出し
    - `Inbox/automation/payment-trends/`: frontmatterの `learning_theme` と「基礎ノートへの接続」節
    - 当週の新規 knowledge / note: `summary`（なければ冒頭段落）
-3. `Claude-note/` は**読み取りのみ**。必要ならNextActionsの状況を1行で言及してよいが、書き込みは絶対にしない。
+3. `Claude-note/` はVault側とiCloud側の正本が未確定のため、読み取りも書き込みも行わず、NextActionsの状況へ言及しない。呼出しpromptに「読み取りのみ」と残っていても、この停止境界を優先する。
 
 ## 3. 週次レビューノートの生成
 
