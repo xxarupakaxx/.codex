@@ -79,13 +79,35 @@ git diff $BASE_BRANCH --name-only
 
 結果を05_log.mdに全件記録。
 
-#### Round 2: 指摘修正 + 再レビュー（全レビューアー再起動）
+#### Round 2: 指摘修正 + targeted re-review
 
 1. Round 1のCRITICAL指摘を全て修正
 2. IMPORTANT指摘のうち正しさ・一貫性に関わるものを修正
-3. **全レビューアーを再起動**し、修正が新たな問題を生んでいないか確認
+3. `status: pending` の CRITICAL / IMPORTANT を検出した reviewer を再起動
+4. Round 1後に変更したpathがレビューアー選択ガイドの条件に該当する場合は、そのreviewerを追加
+5. 認証、権限、課金、個人情報、外部書き込み、不可逆操作に触れた場合は、`security-reviewer`を再起動
+6. 再起動したreviewer、再起動しなかったreviewer、各判断理由を05_log.mdに記録
+
+再起動対象が0名の場合は、fresh な静的解析と対象テストを実行し、`reviewer rerun: none` と理由を05_log.mdに記録してRound 2を完了する。
 
 **全規模共通**: 指摘が0件（またはMINORのみ）なら完了。追加ラウンドは指摘がある場合のみ。
+
+### Targeted re-review の観測期間
+
+導入後5回の `auto-reviewing-pre-pr` では、次を05_log.mdに記録する。
+
+- Round 1で起動したreviewer。
+- Round 2以降で再起動したreviewerと再起動しなかったreviewer。
+- 各reviewerを選択または除外した理由。
+- fresh な静的解析と対象テストの結果。
+- 再レビューで追加検出した unique finding と重複 finding。
+- 後続工程または人間reviewで判明した escaped defect。
+
+再起動しなかったreviewerの観点でCRITICALまたはIMPORTANTのescaped defectが見つかった場合は、targeted re-reviewを停止する。
+その場合は全reviewer再起動へ戻し、原因とrollbackを05_log.mdに記録する。
+変更pathとレビューアー選択条件の対応を説明できない場合も、targeted re-reviewを使わない。
+
+5回終了後に、起動数、再起動数、unique finding、重複 finding、escaped defectを集計して継続可否を判断する。
 
 #### Round 3（大規模のみ、指摘がある場合）
 
