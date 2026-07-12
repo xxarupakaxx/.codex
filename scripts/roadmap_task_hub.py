@@ -11,10 +11,12 @@ import json
 from pathlib import Path
 import secrets
 import subprocess
+import sys
 import threading
 import time
 from typing import Callable, Literal, TextIO
 from urllib.parse import quote, unquote, urlsplit
+import webbrowser
 
 
 @dataclass(frozen=True)
@@ -713,6 +715,34 @@ def build_task_index(
         )
     )
     return {"tasks": tuple(unified), "archivedCount": archived_count}
+
+
+def run_task_hub(
+    memory_roots: list[Path],
+    *,
+    host: str = "127.0.0.1",
+    port: int = 0,
+    open_browser: bool = False,
+) -> int:
+    provider = CodexAppServerProvider()
+    session = TaskHubSession(
+        index_builder=make_task_index_builder(provider, memory_roots)
+    )
+    server = create_task_hub_server((host, port), session)
+    server.timeout = 2.0
+    url = session.start_url(server.server_address[1])
+    print(url, flush=True)
+    if open_browser:
+        webbrowser.open(url)
+    try:
+        while not session.should_stop():
+            session.refresh()
+            server.handle_request()
+    except KeyboardInterrupt:
+        print("\nstopping roadmap task hub", file=sys.stderr)
+    finally:
+        server.server_close()
+    return 0
 
 
 def main() -> int:
