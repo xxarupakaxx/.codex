@@ -8,6 +8,7 @@ import sys
 import tempfile
 import threading
 import unittest
+from unittest import mock
 
 
 SCRIPT = Path(__file__).parents[1] / "scripts" / "roadmap_task_hub.py"
@@ -412,6 +413,28 @@ class TaskHubSessionTest(unittest.TestCase):
 
         self.assertTrue(result["provider"].connected)
         self.assertEqual(result["index"]["tasks"], ())
+
+    def test_run_task_hub_builds_loopback_server_for_memory_roots(self):
+        memory_roots = [Path("/tmp/memory")]
+        session = mock.Mock()
+        session.should_stop.return_value = True
+        session.start_url.return_value = "http://127.0.0.1:4321/#session=key"
+        server = mock.Mock()
+        server.server_address = ("127.0.0.1", 4321)
+
+        with (
+            mock.patch.object(hub, "CodexAppServerProvider") as provider_type,
+            mock.patch.object(hub, "make_task_index_builder", return_value="builder") as make_builder,
+            mock.patch.object(hub, "TaskHubSession", return_value=session) as session_type,
+            mock.patch.object(hub, "create_task_hub_server", return_value=server) as create_server,
+        ):
+            result = hub.run_task_hub(memory_roots, host="localhost", port=0)
+
+        self.assertEqual(result, 0)
+        make_builder.assert_called_once_with(provider_type.return_value, memory_roots)
+        session_type.assert_called_once_with(index_builder="builder")
+        create_server.assert_called_once_with(("localhost", 0), session)
+        server.server_close.assert_called_once_with()
 
 
 if __name__ == "__main__":
