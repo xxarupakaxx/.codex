@@ -47,6 +47,26 @@ Phase 0 ─→ Phase 1 ─→ Phase 2 ─→ Phase 3 ─→ Phase 4 ─→ Phase
 
 Phase の順序はこのファイルを SSoT とする。一方、各Phaseで **どの plugin / skill / agent role を選ぶか** は `context/agent-team-routing.md` を参照する。agent role と model/service_tier の詳細は `rules/model-routing.md` を参照する。
 
+### Engineering skill Phase adapter
+
+次の skill は global Phase を置き換える flow ではなく、各 Phase 内の discipline または artifact adapter として使う。個別 skill に独自の順序があっても、Phase 0-5.5、User Validation Gate、Sprint Contract、mandatory review、project の commit / push policyを優先する。具体 route、起動権、Delegation Gate、外部書き込み gate は `context/agent-team-routing.md` を参照する。
+
+| Skill / lane | Global Phase | Discipline / artifact | Boundary |
+|---|---|---|---|
+| `setting-up-engineering-skills` | Phase 0 | tracker、triage label、domain doc layout の precondition | hard dependency が欠ける tracker route でのみ user-invoked として提案する |
+| `mapping-large-projects` | Phase 1-2 | route 未知の effort を decision map にする | route 既知の WU 設計や実装を置き換えない |
+| `blueprint` | Phase 0 の前 | route 既知の大規模作業を WU と依存へ分ける | fog-of-war の探索には使わず、各 WU の Phase 0-5.5 は省略しない |
+| `grilling-with-docs` | Phase 1-2 | codebase と docs に alignment を蓄積する | alignment、spec、ticket 化までは同じ文脈を保ち、個別 ticket 実装は durable artifact から fresh に始める |
+| `prototyping-solutions` | Phase 1-2 | 一つの design question に対する decision evidence | production 実装ではない。branch、issue、commit は project policy と承認に従う |
+| `modeling-domains` / `designing-codebases` | Phase 1-2 | domain vocabulary / deep-module vocabulary | global process、ADR gate、実装許可を所有しない |
+| `writing-specifications` | Phase 2 | 合意済み会話を test seam を含む spec にする | 再インタビューや無承認の tracker 公開を行わない |
+| `creating-tracer-tickets` | Phase 2-2.5 | 承認済み spec を垂直 slice と blocking edge にする | `deepening-plan`、Blueprint WU、Sprint Contract を置き換えない |
+| `triaging-issues` | Phase 1-2 | raw incoming issue / PR を agent-ready にする | 生成済み tracer ticket を再 triage せず、外部更新は承認を分ける |
+| `implementing-work` | Phase 3 | spec / ticket から実装対象を取得する adapter | global の調査、TDD、品質確認、review、commit / push policyを上書きしない |
+| `reviewing-code` | Phase 4 または read-only review | fixed point から Standards / Spec の二軸を独立確認する | Phase 4 の severity、修正 gate、mandatory review、最終出荷判定を置き換えない |
+| `improving-codebase-architecture` | Phase 1-2 | architecture survey と候補選択 | broad refactor の実装許可ではない |
+| `handing-off-context` | Phase 間 / 次 session の Phase 0 | durable handoff artifact | active Phase の gate を飛ばさず、別 session や外部投稿を自動実行しない |
+
 ### スキル・コマンドの役割
 
 | コンポーネント | 種別 | 役割 | 接続先Phase |
@@ -63,8 +83,8 @@ Phase の順序はこのファイルを SSoT とする。一方、各Phaseで **
 | `brainstorming` | スキル | 過去知見を含むアイデア探索 | 計画前 |
 | `/blueprint` | スキル | 多セッション・多PRの設計図（WU分割 + Cold-Start Brief + 依存DAG） | Phase 0の前（大規模時） |
 | `autonomous-loops` | スキル | 実行パターン集（Sequential / PR Loop / DAG） | 3（実行戦略） |
-| `subagent-driven-development` | スキル | タスクごとにサブエージェント + レビュー | 3（3+独立タスク時） |
-| `team-run` | スキル（`/team-run` shim から起動可） | Goal + Team Journal + Review Heat + `spawn_agent` で複数 role を協調実行 | 3（10+ファイル時） |
+| `subagent-driven-development` | スキル | 並列利益が統合コストを上回る独立タスクを委任 | 3（Delegation Gate 通過時） |
+| `team-run` | スキル（`/team-run` shim から起動可） | Goal + Team Journal + Review Heat を維持し、必要時だけ role を追加 | 3（高価値・複数ターン時） |
 | `iterative-retrieval` | スキル | 検索結果が不十分な時の段階的リファインメント | 全Phase（状況発生時） |
 | `search-first` | スキル | 実装前の既存ツール検索（車輪の再発明防止） | 1, 2（新機能実装時） |
 | `/checkpoint` + `/verify` | スキル | 合格基準定義→自動検証ループ | 4（品質確認自動化） |
