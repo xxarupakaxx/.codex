@@ -3,9 +3,12 @@ from __future__ import annotations
 
 import argparse
 import functools
+import hashlib
 import http.server
 import json
 import os
+import re
+import stat
 import sys
 import threading
 import time
@@ -27,7 +30,15 @@ DEFAULT_FILES = [
     "05_log.md",
     "99_history.md",
     "checkpoint.md",
+    "team-journal.md",
+    "90_verification.md",
 ]
+
+OUTPUT_NAMES = {"roadmap.html", "roadmap-snapshot.json"}
+EMBEDDED_SNAPSHOT_RE = re.compile(
+    r'<script\b(?=[^>]*\bid=["\']embedded-snapshot["\'])[^>]*>(.*?)</script\s*>',
+    re.IGNORECASE | re.DOTALL,
+)
 
 
 class RoadmapHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -46,25 +57,104 @@ def atomic_write_text(path: Path, text: str) -> None:
     tmp.replace(path)
 
 
+def write_text_if_changed(path: Path, text: str) -> bool:
+    try:
+        if path.is_file() and path.read_text() == text:
+            return False
+    except OSError:
+        pass
+    atomic_write_text(path, text)
+    return True
+
+
 def read_files(task_dir: Path) -> tuple[dict[str, str], list[dict[str, object]]]:
     files: dict[str, str] = {}
     sources: list[dict[str, object]] = []
     for name in DEFAULT_FILES:
         path = task_dir / name
-        if not path.is_file():
+        if path.is_symlink():
+            continue
+        try:
+            source_stat = path.stat(follow_symlinks=False)
+        except OSError:
+            continue
+        if not stat.S_ISREG(source_stat.st_mode):
             continue
         text = path.read_text()
         files[name] = text
-        stat = path.stat()
         sources.append(
             {
                 "name": name,
                 "path": str(path),
-                "size": stat.st_size,
-                "modifiedAt": datetime.fromtimestamp(stat.st_mtime, timezone.utc).isoformat(),
+                "size": source_stat.st_size,
+                "modifiedAt": datetime.fromtimestamp(source_stat.st_mtime, timezone.utc).isoformat(),
             }
         )
     return files, sources
+
+
+def artifact_type(path: Path) -> str:
+    suffix = path.suffix.lower().lstrip(".")
+    return suffix or "file"
+
+
+def is_temporary_file(path: Path) -> bool:
+    return path.name.endswith(".tmp")
+
+
+def collect_artifacts(task_dir: Path, output: Path | None = None) -> list[dict[str, object]]:
+    artifacts: list[dict[str, object]] = []
+    excluded_paths: set[Path] = set()
+    if output is not None:
+        excluded_paths.add(output.resolve(strict=False))
+        excluded_paths.add(output.with_name("roadmap-snapshot.json").resolve(strict=False))
+
+    for current, directory_names, file_names in os.walk(task_dir, followlinks=False):
+        current_dir = Path(current)
+        directory_names[:] = sorted(
+            name for name in directory_names if not (current_dir / name).is_symlink()
+        )
+        for name in sorted(file_names):
+            path = current_dir / name
+            if path.is_symlink() or name in OUTPUT_NAMES or is_temporary_file(path):
+                continue
+            if path.resolve(strict=False) in excluded_paths:
+                continue
+            try:
+                file_stat = path.stat(follow_symlinks=False)
+            except OSError:
+                continue
+            if not stat.S_ISREG(file_stat.st_mode):
+                continue
+            relative_path = path.relative_to(task_dir).as_posix()
+            artifacts.append(
+                {
+                    "name": path.name,
+                    "path": relative_path,
+                    "type": artifact_type(path),
+                    "size": file_stat.st_size,
+                    "modifiedAt": datetime.fromtimestamp(
+                        file_stat.st_mtime, timezone.utc
+                    ).isoformat(),
+                }
+            )
+
+    artifacts.sort(key=lambda item: str(item["path"]))
+    return artifacts
+
+
+def build_fingerprint(files: dict[str, str], artifacts: list[dict[str, object]]) -> str:
+    payload = {
+        "files": files,
+        "artifacts": artifacts,
+    }
+    canonical = json.dumps(
+        payload,
+        ensure_ascii=False,
+        sort_keys=True,
+        separators=(",", ":"),
+    )
+    return hashlib.sha256(canonical.encode()).hexdigest()
 
 
 def infer_title(files: dict[str, str], task_dir: Path) -> str:
@@ -78,17 +168,20 @@ def infer_title(files: dict[str, str], task_dir: Path) -> str:
     return task_dir.name.replace("_", " ")
 
 
-def build_snapshot(task_dir: Path) -> dict[str, object]:
+def build_snapshot(task_dir: Path, output: Path | None = None) -> dict[str, object]:
     files, sources = read_files(task_dir)
     if not files:
         raise ValueError(f"no roadmap source files found in {task_dir}")
+    artifacts = collect_artifacts(task_dir, output)
     return {
         "version": 1,
         "title": infer_title(files, task_dir),
         "taskDir": str(task_dir),
         "generatedAt": datetime.now(timezone.utc).isoformat(),
+        "fingerprint": build_fingerprint(files, artifacts),
         "files": files,
         "sources": sources,
+        "artifacts": artifacts,
     }
 
 
@@ -100,13 +193,61 @@ def render_html(snapshot: dict[str, object]) -> str:
     return template.replace(PLACEHOLDER, payload, 1)
 
 
+def read_json_snapshot(path: Path) -> dict[str, object] | None:
+    try:
+        value = json.loads(path.read_text())
+    except (OSError, json.JSONDecodeError):
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def read_html_snapshot(path: Path) -> dict[str, object] | None:
+    try:
+        html = path.read_text()
+    except OSError:
+        return None
+    match = EMBEDDED_SNAPSHOT_RE.search(html)
+    if not match:
+        return None
+    try:
+        value = json.loads(match.group(1))
+    except json.JSONDecodeError:
+        return None
+    return value if isinstance(value, dict) else None
+
+
+def previous_generated_at(
+    fingerprint: str, candidates: list[dict[str, object] | None]
+) -> str | None:
+    for candidate in candidates:
+        if not candidate or candidate.get("fingerprint") != fingerprint:
+            continue
+        generated_at = candidate.get("generatedAt")
+        if isinstance(generated_at, str) and generated_at:
+            return generated_at
+    return None
+
+
 def write_outputs(task_dir: Path, output: Path, write_json: bool) -> dict[str, object]:
-    snapshot = build_snapshot(task_dir)
-    atomic_write_text(output, render_html(snapshot))
+    json_path = output.with_name("roadmap-snapshot.json")
+    snapshot = build_snapshot(task_dir, output=output)
+    previous_timestamp = previous_generated_at(
+        str(snapshot["fingerprint"]),
+        [
+            read_html_snapshot(output),
+            read_json_snapshot(json_path) if write_json else None,
+        ],
+    )
+    if previous_timestamp:
+        snapshot["generatedAt"] = previous_timestamp
+
+    write_text_if_changed(output, render_html(snapshot))
 
     if write_json:
-        json_path = output.with_name("roadmap-snapshot.json")
-        atomic_write_text(json_path, json.dumps(snapshot, ensure_ascii=False, indent=2))
+        write_text_if_changed(
+            json_path,
+            json.dumps(snapshot, ensure_ascii=False, indent=2),
+        )
 
     return snapshot
 

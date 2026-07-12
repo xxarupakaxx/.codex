@@ -549,13 +549,13 @@ Phase直結でないユーティリティスキル。**状況が発生したら*
 ## HTML Viewer Tools
 
 計画ファイル・ログ・レビュー結果をブラウザでインタラクティブに閲覧するためのHTMLビューア。
-Roadmap Viewer は `roadmap.html` を生成し、Plan時点の粗い全体像から実装・レビューが進むにつれてクリアになる進捗ビューを提供する。`--serve --watch` で起動すると、Codex app の横で開いたブラウザが `roadmap-snapshot.json` をpollingして自動更新される。Plan Viewer / Log Viewer は個別ファイルの詳細確認に使う。
+Roadmap Viewer は `roadmap.html` を生成し、「現在地」「稼働中の作業」「成果物」「計画」「更新鮮度」を同じ画面で確認できるようにする。`--serve --watch` で起動すると、Codex app の横で開いたブラウザが `roadmap-snapshot.json` をpollingし、source内容または表示対象artifact metadataが変化したときだけ自動更新される。Plan Viewer / Log Viewer は個別ファイルの詳細確認に使う。
 
 ### MCP Apps ツール
 
 | ツール名 | MCPツール | 対象ファイル | 主な機能 |
 |---------|----------|------------|---------|
-| Roadmap Viewer | ローカルHTML (`tools/roadmap_viewer.html`) + `scripts/generate-roadmap-view.py` | 00_spec.md / 30_plan.md / 40_progress.md / 80_review.md / 05_log.md | Clarityメーター、Phaseレール、Task進捗、Review Heat、Risks、Evidence Stream、live polling |
+| Roadmap Viewer | ローカルHTML (`tools/roadmap_viewer.html`) + `scripts/generate-roadmap-view.py` | 00_spec.md / 30_plan.md / 40_progress.md / 80_review.md / 05_log.md、任意の team-journal.md / 90_verification.md | 「いま」、計画キャンバス、実行パルス、成果物シェルフ、更新鮮度、live polling |
 | Plan Viewer | `mcp__workflow-html-app__view-plan` | 30_plan.md | Markdownレンダリング、コメント機能、Codexへのフィードバック送信 |
 | Log Viewer | `mcp__workflow-html-app__view-plan` | 05_log.md | Phase検出、タイムライン可視化（予定） |
 
@@ -565,7 +565,7 @@ Roadmap Viewer は `roadmap.html` を生成し、Plan時点の粗い全体像か
 
 1. **Phase 2完了時**: 30_plan.md作成後、`scripts/generate-roadmap-view.py <memory_dir>` で `roadmap.html` を生成
 2. **横で見たい場合**: `scripts/generate-roadmap-view.py <memory_dir> --serve --watch` を起動し、表示URLを案内
-3. **Phase 3/4更新時**: `40_progress.md` / `80_review.md` / `05_log.md` 更新後、watch中なら `roadmap-snapshot.json` が更新され、ブラウザが自動再描画
+3. **Phase 3/4更新時**: `40_progress.md` / `80_review.md` / `05_log.md` / `team-journal.md` / `90_verification.md` または成果物metadataの変更後、watch中なら `roadmap-snapshot.json` が更新され、ブラウザが自動再描画
 4. **Phase 5完了時**: 最終 `roadmap.html` を生成し、必要に応じて個別Plan/Log Viewerも表示
 
 ### 使用方法（自動）
@@ -584,6 +584,8 @@ python3 scripts/generate-roadmap-view.py <memory_dir> --serve --watch
 ```
 
 `--serve` は既定で `127.0.0.1` + port `0`（空きポート自動割当）を使う。複数セッションで同時起動する場合はメモリディレクトリを分け、必要時のみ `--port <port>` を指定する。
+
+generatorはtask directory配下の通常ファイルを成果物metadataとして再帰収集する。symlinkは追跡せず、`roadmap.html`、`roadmap-snapshot.json`、一時ファイルは対象外とする。入力fingerprintが不変なwatch cycleでは、HTMLとsnapshotのmtimeを変更しない。
 
 ### 手動トリガー
 
