@@ -77,7 +77,15 @@ Roadmap Task Hub と Codex task を確実に対応付ける場合は、タスク
 - `approval_state`: 承認待ちなど、明示的に `waiting` と扱う状態。
 - `updated_at`: timezone を含む ISO 8601 の更新日時。
 
-`thread_id` がない場合、path・title・更新時刻による一致は候補表示にだけ使い、自動確定しない。JSON が壊れている場合もタスク自体は一覧から消さず、詳細の `metadataError` に読み取りエラーを表示する。
+current thread ID を取得できた場合は、その ID を `task-meta.json` の `thread_id` に保存する。`thread_id` の完全一致だけを確定済み対応として扱う。`thread_id` がない場合、path・title・更新時刻による一致は候補表示にだけ使い、自動確定しない。候補を採用するかどうかの承認は Codex 会話を正本とし、承認後に `thread_id` を保存する。JSON が壊れている場合もタスク自体は一覧から消さず、詳細の `metadataError` に読み取りエラーを表示する。
+
+複数 task を一覧する Roadmap Task Hub は次で起動する:
+
+```bash
+python3 scripts/generate-roadmap-view.py --hub --memory-root "$MEMORY_DIR/memory" --open
+```
+
+`--memory-root` は複数回指定できる。Hub は loopback 上の OS 割当 port で起動し、Codex app-server の thread と memory task を定期再取得する。起動 URL の fragment にある session key でローカル API を保護し、ブラウザの heartbeat が途絶えると終了する。provider の一時障害時は直近の成功結果を保持して degraded 状態を表示する。
 
 ### Live Roadmap Viewer
 

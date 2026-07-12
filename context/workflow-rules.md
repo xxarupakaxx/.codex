@@ -537,6 +537,14 @@ Phase直結でないユーティリティスキル。**状況が発生したら*
 計画ファイル・ログ・レビュー結果をブラウザでインタラクティブに閲覧するためのHTMLビューア。
 Roadmap Viewer は `roadmap.html` を生成し、「現在地」「稼働中の作業」「成果物」「計画」「更新鮮度」を同じ画面で確認できるようにする。`--serve --watch` で起動すると、Codex app の横で開いたブラウザが `roadmap-snapshot.json` をpollingし、source内容または表示対象artifact metadataが変化したときだけ自動更新される。Plan Viewer / Log Viewer は個別ファイルの詳細確認に使う。
 
+複数 task を横断して確認する場合は Roadmap Task Hub を起動する:
+
+```bash
+python3 scripts/generate-roadmap-view.py --hub --memory-root "$MEMORY_DIR/memory" --open
+```
+
+`--memory-root` は複数回指定できる。current thread ID を取得できた場合は task directory の `task-meta.json` に保存し、完全一致だけを確定済み対応として扱う。path・title・更新時刻による一致は候補表示に留めて自動確定せず、承認は Codex 会話を正本とする。Hub は loopback 限定の session key 付き API を使い、provider を定期再取得し、ブラウザ heartbeat が途絶えると終了する。provider の一時障害中は直近の成功結果を保持して degraded 状態を表示する。
+
 ### MCP Apps ツール
 
 | ツール名 | MCPツール | 対象ファイル | 主な機能 |
