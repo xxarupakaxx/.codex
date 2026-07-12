@@ -10,12 +10,12 @@
 | 用途 | 機構 |
 |------|------|
 | ローカル並列実行・独立コマンド | `multi_tool_use.parallel` |
-| 専門レビュー・調査・軽量ワーカー | `multi_agent_v1.spawn_agent(agent_type: "...")` |
-| 複数ターンの協調 | `team-run` skill（`/team-run` shim）+ Goal + Team Journal + Review Heat + `spawn_agent` |
-| 重い実装の委任 | `implementer` / `worker` role に write scope を明示して `spawn_agent` |
+| 専門レビュー・調査・軽量ワーカー | Delegation Gate 通過後に `multi_agent_v1.spawn_agent(agent_type: "...")` |
+| 複数ターンの協調 | `team-run` skill（`/team-run` shim）+ Goal + Team Journal + Review Heat。必要時だけ `spawn_agent` |
+| 重い実装の委任 | 並列利益があり、write scope を分離できる場合だけ `implementer` / `worker` を起動 |
 | プラグイン由来の運用規律 | Superpowers skills（計画・レビュー・完了前検証など） |
 
-> **parallel と team-run の使い分け**: 独立した読み取り・検証は `multi_tool_use.parallel` で足りる。複数ロールが状態を共有しながら継続判断する場合だけ `team-run` skill を使い、Goal、Team Journal、Review Heat で目的・担当・未解決事項・疑い方を同期する。
+> **parallel と team-run の使い分け**: 独立した読み取り・検証は `multi_tool_use.parallel` で足りる。複数ターンで状態を保つ場合は `team-run` skill を使い、Goal、Team Journal、Review Heat を同期する。sub-agent は `agent-team-routing.md` の Delegation Gate を満たす場合だけ追加する。
 
 ## 現状ステータス（2026-06-17 時点）
 

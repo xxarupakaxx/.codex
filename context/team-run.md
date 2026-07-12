@@ -30,19 +30,20 @@ Goal は「完了の定義」であり、レビュー体制ではない。Team J
 | judge | `go-nogo-advisor` / `auditor-reviewer` | GO/NO-GO、残存リスク、出荷判定 |
 | recorder | lead | Team Journal、05_log.md、issues/ への記録 |
 
-maker と checker を同一 agent にしない。maker の自己申告は完了条件ではなく、checker が成果物と検証結果を見て通す。
+role は必要になったときだけ割り当てる。`team-run` の開始は、planner、maker、checker の全起動を意味しない。
+maker と checker の両方を使う場合は同一 agent にしない。maker の自己申告だけを完了条件にせず、fresh な検証結果または独立 checker で確認する。
 
 ## Review Heat Ladder
 
 | Heat | 使う場面 | 必須 checker | 追加条件 |
 |------|----------|--------------|----------|
 | 0 Self | typo、単一ドキュメント、外部影響なし | lead self-check | fresh な validation だけで足りる場合 |
-| 1 Focused | 1-3ファイル、設定/ドキュメント中心、低リスク | `docs-reviewer` または `rule-validator` の該当1名 + 関連1名 | `CRITICAL=0`、IMPORTANT は理由付き処理。AGENTS/context/skills/commands 変更は下の Reviewer Pack を優先 |
-| 2 Standard | 4-9ファイル、複数責務、通常の実装 | `arch-reviewer`, `security-reviewer`, `code-quality-reviewer`, 関連 reviewer | `workflow-rules.md` の規模別ラウンドを適用 |
-| 3 Hot | 10+ファイル、認証/課金/DB/外部API/データ損失リスク | Heat 2 + `test-reviewer` + `go-nogo-advisor` | unresolved IMPORTANT があれば出荷不可または明示承認 |
+| 1 Focused | 設定、ドキュメント、policy の自己改変 | 最も関連する checker 1名 | `CRITICAL=0`、IMPORTANT は理由付き処理 |
+| 2 Standard | 複数責務、通常の実装、機械検証が不完全 | 失敗リスクに対応する checker 1名以上 | 観点が独立する場合だけ追加する |
+| 3 Hot | 認証、課金、DB、外部API、データ損失リスク | security / test / go-no-go から必要な checker | unresolved IMPORTANT があれば出荷不可または明示承認 |
 | 4 Adversarial | 重要判断、セキュリティ、契約変更、ESCALATE | `adversarial-review` 経由の `red-reviewer` / `blue-reviewer` / `auditor-reviewer` | Auditor 判定を最終判断に使う |
 
-Heat は変更規模だけでなくリスクで上げる。設定ファイルのみでも、model routing、権限、外部書き込み、レビューゲートを変える場合は Heat 1 以上にする。
+Heat はファイル数ではなく、observability、reversibility、blast radius、権限、外部副作用で上げる。設定ファイルのみでも、model routing、権限、外部書き込み、レビューゲートを変える場合は Heat 1 以上にする。
 
 ## Reviewer Pack Selection
 
