@@ -62,6 +62,23 @@
 | roadmap.html | ブラウザ用ロードマップビュー | Phase 2完了後・実装中に再生成 |
 | roadmap-snapshot.json | live更新用snapshot | `--serve --watch` 利用時に自動更新 |
 
+### task-meta.json（任意）
+
+Roadmap Task Hub と Codex task を確実に対応付ける場合は、タスクディレクトリ直下に `task-meta.json` を置く。
+
+```json
+{"thread_id":"019f...","project_path":"/absolute/path","task_title":"Roadmap Viewer UX","task_state":"running","approval_state":"waiting","updated_at":"2026-07-12T12:00:00+09:00"}
+```
+
+- `thread_id`: Codex app-server が返す thread ID。完全一致した場合だけ自動確定する。
+- `project_path`: task の作業ディレクトリの絶対パス。
+- `task_title`: Task Hub に表示する明示タイトル。
+- `task_state`: `running`、`waiting`、`completed` のいずれか。
+- `approval_state`: 承認待ちなど、明示的に `waiting` と扱う状態。
+- `updated_at`: timezone を含む ISO 8601 の更新日時。
+
+`thread_id` がない場合、path・title・更新時刻による一致は候補表示にだけ使い、自動確定しない。JSON が壊れている場合もタスク自体は一覧から消さず、詳細の `metadataError` に読み取りエラーを表示する。
+
 ### Live Roadmap Viewer
 
 `roadmap.html` は `scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task>` で生成する。Codex app の横で開きっぱなしにして進捗を見たい場合は次を使う:
