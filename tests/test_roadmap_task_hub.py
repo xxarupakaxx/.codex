@@ -369,6 +369,28 @@ class TaskHubSessionTest(unittest.TestCase):
         self.assertEqual(opened.status, 409)
         self.assertEqual(opened_payload["threadId"], "thread-1")
 
+    def test_root_serves_viewer_without_exposing_session_and_api_stays_protected(self):
+        session = hub.TaskHubSession()
+        server = hub.create_task_hub_server(("127.0.0.1", 0), session)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        connection = HTTPConnection(*server.server_address)
+
+        connection.request("GET", "/")
+        response = connection.getresponse()
+        body = response.read().decode()
+        self.assertEqual(response.status, 200)
+        self.assertEqual(response.getheader("Cache-Control"), "no-store")
+        self.assertIn('id="task-hub"', body)
+        self.assertNotIn(session.key, body)
+
+        connection.request("GET", "/api/tasks")
+        protected = connection.getresponse()
+        protected.read()
+        self.assertEqual(protected.status, 403)
+
     def test_server_rejects_non_loopback_bind(self):
         session = hub.TaskHubSession()
         with self.assertRaisesRegex(ValueError, "loopback"):

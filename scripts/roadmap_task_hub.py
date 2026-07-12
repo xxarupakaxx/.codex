@@ -210,6 +210,16 @@ class TaskHubRequestHandler(BaseHTTPRequestHandler):
         if body:
             self.wfile.write(body)
 
+    def _send_viewer(self) -> None:
+        viewer = Path(__file__).parents[1] / "tools" / "roadmap_viewer.html"
+        body = viewer.read_bytes()
+        self.send_response(200)
+        self.send_header("Cache-Control", "no-store")
+        self.send_header("Content-Type", "text/html; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        self.wfile.write(body)
+
     def _require_auth(self) -> bool:
         if self._authorized():
             return True
@@ -217,9 +227,12 @@ class TaskHubRequestHandler(BaseHTTPRequestHandler):
         return False
 
     def do_GET(self) -> None:
+        path = urlsplit(self.path).path
+        if path == "/":
+            self._send_viewer()
+            return
         if not self._require_auth():
             return
-        path = urlsplit(self.path).path
         if path == "/api/session":
             payload = self.session.payload()
             payload.pop("tasks", None)
