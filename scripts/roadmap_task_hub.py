@@ -3,11 +3,18 @@
 import argparse
 from dataclasses import dataclass
 from datetime import datetime, timezone
+from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+import hmac
 import importlib.util
+import ipaddress
 import json
 from pathlib import Path
+import secrets
 import subprocess
+import threading
+import time
 from typing import Callable, Literal, TextIO
+from urllib.parse import quote, unquote, urlsplit
 
 
 @dataclass(frozen=True)
@@ -65,6 +72,241 @@ class UnifiedTask:
 
 class ProviderError(RuntimeError):
     """Raised when the Codex app-server protocol cannot be completed."""
+
+
+class TaskHubSession:
+    def __init__(
+        self,
+        heartbeat_timeout: float = 10.0,
+        monotonic: Callable[[], float] = time.monotonic,
+        index_builder: Callable[[], dict[str, object]] | None = None,
+    ):
+        self.key = secrets.token_urlsafe(32)
+        self.timeout = heartbeat_timeout
+        self.monotonic = monotonic
+        self.last_heartbeat = monotonic()
+        self._index_builder = index_builder
+        self._lock = threading.Lock()
+        self._tasks: tuple[UnifiedTask, ...] = ()
+        self._archived_count = 0
+        self._fingerprint: str | None = None
+        self.connected = False
+        self.last_successful_sync: str | None = None
+        self.error: str | None = None
+
+    def heartbeat(self) -> None:
+        self.last_heartbeat = self.monotonic()
+
+    def should_stop(self) -> bool:
+        return self.monotonic() - self.last_heartbeat > self.timeout
+
+    def start_url(self, port: int) -> str:
+        return f"http://127.0.0.1:{port}/#session={quote(self.key)}"
+
+    def refresh(self) -> bool:
+        if self._index_builder is None:
+            return False
+        try:
+            update = self._index_builder()
+            provider = update["provider"]
+            if not isinstance(provider, ProviderSnapshot):
+                raise TypeError("index builder provider is not a ProviderSnapshot")
+            if not provider.connected:
+                with self._lock:
+                    self.connected = False
+                    self.error = provider.error or "provider unavailable"
+                return False
+            index = update.get("index")
+            if not isinstance(index, dict):
+                raise TypeError("index builder result has no index")
+            tasks = tuple(index.get("tasks", ()))
+            fingerprint = json.dumps(
+                {
+                    "tasks": [_task_to_dict(task) for task in tasks],
+                    "archivedCount": int(index.get("archivedCount", 0)),
+                },
+                ensure_ascii=False,
+                sort_keys=True,
+                separators=(",", ":"),
+            )
+            with self._lock:
+                changed = fingerprint != self._fingerprint
+                if changed:
+                    self._tasks = tasks
+                    self._archived_count = int(index.get("archivedCount", 0))
+                    self._fingerprint = fingerprint
+                self.connected = True
+                self.last_successful_sync = provider.synced_at
+                self.error = None
+            return changed
+        except Exception as error:
+            with self._lock:
+                self.connected = False
+                self.error = str(error)
+            return False
+
+    def payload(self) -> dict[str, object]:
+        with self._lock:
+            return {
+                "connected": self.connected,
+                "lastSuccessfulSync": self.last_successful_sync,
+                "error": self.error,
+                "tasks": [_task_to_dict(task) for task in self._tasks],
+                "archivedCount": self._archived_count,
+            }
+
+    def task(self, task_id: str) -> dict[str, object] | None:
+        with self._lock:
+            for task in self._tasks:
+                if task.id == task_id:
+                    return _task_to_dict(task)
+        return None
+
+
+def _task_to_dict(task: UnifiedTask) -> dict[str, object]:
+    return {
+        "id": task.id,
+        "title": task.title,
+        "section": task.section,
+        "explicitState": task.explicit_state,
+        "freshness": task.freshness,
+        "updatedAt": task.updated_at,
+        "threadId": task.thread_id,
+        "memoryPath": task.memory_path,
+        "matchState": task.match_state,
+        "matchCandidates": list(task.match_candidates),
+        "summary": task.summary,
+        "detail": task.detail,
+    }
+
+
+class TaskHubRequestHandler(BaseHTTPRequestHandler):
+    server_version = "RoadmapTaskHub/0.1"
+
+    @property
+    def session(self) -> TaskHubSession:
+        return self.server.session  # type: ignore[attr-defined]
+
+    def log_message(self, format: str, *args: object) -> None:
+        # Header values are intentionally never included in request logs.
+        super().log_message(format, *args)
+
+    def _authorized(self) -> bool:
+        supplied = self.headers.get("X-Roadmap-Session", "")
+        return hmac.compare_digest(supplied, self.session.key)
+
+    def _send_json(self, status: int, payload: object | None = None) -> None:
+        body = b"" if payload is None else json.dumps(
+            payload, ensure_ascii=False, separators=(",", ":")
+        ).encode()
+        self.send_response(status)
+        self.send_header("Cache-Control", "no-store")
+        if body:
+            self.send_header("Content-Type", "application/json; charset=utf-8")
+        self.send_header("Content-Length", str(len(body)))
+        self.end_headers()
+        if body:
+            self.wfile.write(body)
+
+    def _require_auth(self) -> bool:
+        if self._authorized():
+            return True
+        self._send_json(403, {"error": "forbidden"})
+        return False
+
+    def do_GET(self) -> None:
+        if not self._require_auth():
+            return
+        path = urlsplit(self.path).path
+        if path == "/api/session":
+            payload = self.session.payload()
+            payload.pop("tasks", None)
+            self._send_json(200, payload)
+            return
+        if path == "/api/tasks":
+            self._send_json(200, self.session.payload())
+            return
+        prefix = "/api/tasks/"
+        if path.startswith(prefix):
+            task = self.session.task(unquote(path[len(prefix):]))
+            self._send_json(200, task) if task else self._send_json(
+                404, {"error": "task not found"}
+            )
+            return
+        self._send_json(404, {"error": "not found"})
+
+    def do_POST(self) -> None:
+        if not self._require_auth():
+            return
+        path = urlsplit(self.path).path
+        if path == "/api/heartbeat":
+            self.session.heartbeat()
+            self._send_json(204)
+            return
+        prefix, suffix = "/api/tasks/", "/open"
+        if path.startswith(prefix) and path.endswith(suffix):
+            task_id = unquote(path[len(prefix):-len(suffix)])
+            task = self.session.task(task_id)
+            if task is None:
+                self._send_json(404, {"error": "task not found"})
+                return
+            self._send_json(
+                409,
+                {
+                    "error": "host navigation unavailable",
+                    "threadId": task["threadId"],
+                },
+            )
+            return
+        self._send_json(404, {"error": "not found"})
+
+
+def create_task_hub_server(
+    address: tuple[str, int], session: TaskHubSession
+) -> ThreadingHTTPServer:
+    host, port = address
+    try:
+        loopback = host == "localhost" or ipaddress.ip_address(host).is_loopback
+    except ValueError:
+        loopback = False
+    if not loopback:
+        raise ValueError("Task Hub must bind to a loopback address")
+    server = ThreadingHTTPServer((host, port), TaskHubRequestHandler)
+    server.session = session  # type: ignore[attr-defined]
+    return server
+
+
+def run_refresh_lifecycle(
+    session: TaskHubSession,
+    *,
+    poll_interval: float = 2.0,
+    wait: Callable[[float], object] = time.sleep,
+) -> None:
+    """Refresh the index until the viewer heartbeat expires."""
+    while not session.should_stop():
+        session.refresh()
+        wait(poll_interval)
+
+
+def make_task_index_builder(
+    provider: object, memory_roots: list[Path]
+) -> Callable[[], dict[str, object]]:
+    """Compose the provider and memory discovery into a session refresh."""
+    def build() -> dict[str, object]:
+        try:
+            snapshot = provider.list_threads()  # type: ignore[attr-defined]
+        except Exception as error:
+            snapshot = ProviderSnapshot(
+                (), False, _now_iso(), str(error)
+            )
+        result: dict[str, object] = {"provider": snapshot}
+        if snapshot.connected:
+            result["index"] = build_task_index(
+                snapshot, discover_memory_tasks(memory_roots)
+            )
+        return result
+
+    return build
 
 
 class CodexAppServerProvider:

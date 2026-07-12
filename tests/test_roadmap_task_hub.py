@@ -1,10 +1,12 @@
 import importlib.util
 import io
 import json
+from http.client import HTTPConnection
 from datetime import datetime, timezone
 from pathlib import Path
 import sys
 import tempfile
+import threading
 import unittest
 
 
@@ -241,6 +243,175 @@ class UnifiedTaskIndexTest(unittest.TestCase):
             ],
         )
         self.assertEqual(index["archivedCount"], 1)
+
+
+class FakeClock:
+    def __init__(self):
+        self.value = 0.0
+
+    def monotonic(self):
+        return self.value
+
+    def advance(self, seconds):
+        self.value += seconds
+
+
+class TaskHubSessionTest(unittest.TestCase):
+    def test_session_stops_after_heartbeat_timeout(self):
+        clock = FakeClock()
+        session = hub.TaskHubSession(
+            heartbeat_timeout=10, monotonic=clock.monotonic
+        )
+
+        session.heartbeat()
+        clock.advance(11)
+
+        self.assertTrue(session.should_stop())
+
+    def test_api_requires_session_key_and_sets_no_store(self):
+        session = hub.TaskHubSession(index_builder=lambda: {
+            "provider": hub.ProviderSnapshot((), True, "2026-07-12T00:00:00+00:00"),
+            "index": {"tasks": (), "archivedCount": 0},
+        })
+        session.refresh()
+        server = hub.create_task_hub_server(("127.0.0.1", 0), session)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        connection = HTTPConnection(*server.server_address)
+
+        connection.request("GET", "/api/tasks")
+        forbidden = connection.getresponse()
+        forbidden.read()
+        self.assertEqual(forbidden.status, 403)
+        self.assertEqual(forbidden.getheader("Cache-Control"), "no-store")
+
+        connection.request(
+            "GET", "/api/tasks", headers={"X-Roadmap-Session": session.key}
+        )
+        response = connection.getresponse()
+        payload = json.loads(response.read())
+        self.assertEqual(response.status, 200)
+        self.assertEqual(payload["tasks"], [])
+
+    def test_refresh_keeps_last_good_tasks_and_recovers(self):
+        states = [
+            {
+                "provider": hub.ProviderSnapshot(
+                    (hub.CodexThread("t1", "One", "/repo", "active", 0, 1),),
+                    True,
+                    "2026-07-12T00:00:00+00:00",
+                ),
+                "index": {
+                    "tasks": (
+                        hub.UnifiedTask("t1", "One", "running", "active", "fresh", "1970-01-01T00:00:01+00:00", "t1", None, "unmatched", (), {}, {}),
+                    ),
+                    "archivedCount": 0,
+                },
+            },
+            {"provider": hub.ProviderSnapshot((), False, "2026-07-12T00:00:02+00:00", "offline")},
+            {
+                "provider": hub.ProviderSnapshot((), True, "2026-07-12T00:00:04+00:00"),
+                "index": {"tasks": (), "archivedCount": 0},
+            },
+        ]
+        session = hub.TaskHubSession(index_builder=lambda: states.pop(0))
+
+        self.assertTrue(session.refresh())
+        last_success = session.payload()["lastSuccessfulSync"]
+        self.assertFalse(session.refresh())
+        degraded = session.payload()
+        self.assertFalse(degraded["connected"])
+        self.assertEqual(degraded["error"], "offline")
+        self.assertEqual(degraded["lastSuccessfulSync"], last_success)
+        self.assertEqual(degraded["tasks"][0]["id"], "t1")
+        self.assertTrue(session.refresh())
+        self.assertTrue(session.payload()["connected"])
+        self.assertEqual(session.payload()["tasks"], [])
+
+    def test_routes_return_detail_404_heartbeat_and_open_fallback(self):
+        task = hub.UnifiedTask(
+            "t/1", "One", "waiting", "idle", "fresh",
+            "2026-07-12T00:00:00+00:00", "thread-1", None,
+            "unmatched", (), {"x": 1}, {"body": "detail"},
+        )
+        session = hub.TaskHubSession(index_builder=lambda: {
+            "provider": hub.ProviderSnapshot((), True, "2026-07-12T00:00:00+00:00"),
+            "index": {"tasks": (task,), "archivedCount": 0},
+        })
+        session.refresh()
+        server = hub.create_task_hub_server(("127.0.0.1", 0), session)
+        thread = threading.Thread(target=server.serve_forever, daemon=True)
+        thread.start()
+        self.addCleanup(server.server_close)
+        self.addCleanup(server.shutdown)
+        headers = {"X-Roadmap-Session": session.key}
+        connection = HTTPConnection(*server.server_address)
+
+        connection.request("GET", "/api/session", headers=headers)
+        self.assertEqual(connection.getresponse().status, 200)
+        connection.request("GET", "/api/tasks/t%2F1", headers=headers)
+        detail = connection.getresponse()
+        self.assertEqual(json.loads(detail.read())["detail"]["body"], "detail")
+        connection.request("GET", "/api/tasks/missing", headers=headers)
+        missing = connection.getresponse()
+        missing.read()
+        self.assertEqual(missing.status, 404)
+        connection.request("POST", "/api/heartbeat", headers=headers)
+        heartbeat = connection.getresponse()
+        heartbeat.read()
+        self.assertEqual(heartbeat.status, 204)
+        connection.request("POST", "/api/tasks/t%2F1/open", headers=headers)
+        opened = connection.getresponse()
+        opened_payload = json.loads(opened.read())
+        self.assertEqual(opened.status, 409)
+        self.assertEqual(opened_payload["threadId"], "thread-1")
+
+    def test_server_rejects_non_loopback_bind(self):
+        session = hub.TaskHubSession()
+        with self.assertRaisesRegex(ValueError, "loopback"):
+            hub.create_task_hub_server(("0.0.0.0", 0), session)
+
+    def test_start_url_keeps_key_in_fragment(self):
+        session = hub.TaskHubSession()
+        url = session.start_url(3210)
+        self.assertEqual(url.split("#", 1)[0], "http://127.0.0.1:3210/")
+        self.assertEqual(url.split("#", 1)[1], f"session={session.key}")
+
+    def test_lifecycle_refreshes_every_two_seconds_until_heartbeat_expires(self):
+        clock = FakeClock()
+        refreshes = []
+        waits = []
+        session = hub.TaskHubSession(
+            heartbeat_timeout=3,
+            monotonic=clock.monotonic,
+            index_builder=lambda: refreshes.append(clock.monotonic()) or {
+                "provider": hub.ProviderSnapshot((), True, str(clock.monotonic())),
+                "index": {"tasks": (), "archivedCount": 0},
+            },
+        )
+
+        def wait(seconds):
+            waits.append(seconds)
+            clock.advance(seconds)
+
+        hub.run_refresh_lifecycle(session, wait=wait)
+
+        self.assertEqual(waits, [2.0, 2.0])
+        self.assertEqual(refreshes, [0.0, 2.0])
+
+    def test_index_builder_consumes_provider_and_memory_roots(self):
+        class Provider:
+            def list_threads(self):
+                return hub.ProviderSnapshot((), True, "sync")
+
+        builder = hub.make_task_index_builder(Provider(), [])
+
+        result = builder()
+
+        self.assertTrue(result["provider"].connected)
+        self.assertEqual(result["index"]["tasks"], ())
 
 
 if __name__ == "__main__":
