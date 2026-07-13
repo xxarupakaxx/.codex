@@ -11,7 +11,7 @@ Codex では `goal` で長い作業の目的を固定し、Superpowers で計画
 
 ## 使う前に — 本当にチームが要るか
 
-マルチは高コスト。まず単一セッション + 良い文脈を基準にし、並列の幅が本当に要る時だけ team-run。
+マルチの本当のコストは金銭・トークンではなく、**文脈分断**（sub-agent は lead の会話履歴を持たず、結果は要約で戻る）と**無駄撃ち**（価値を生まない起動）にある。独立した作業幅・隔離された専門知識・独立検証のいずれかに価値があれば躊躇なく使い、無いのに同じ文脈を分業させない。基準は単一セッション + 良い文脈、並列の幅が本当に要る時だけ team-run。
 
 | 状況 | 使うもの |
 |------|---------|
@@ -55,7 +55,7 @@ draft objective → evidence pass → Goal Quality Gate → goalを作る → Sp
 
 ## Cost/Budget Gate
 
-team-run は高価なので、起動前に次を順に確認する。
+team-run のコストは文脈分断と調整オーバーヘッドにある（金銭・トークンは本質ではない）。無駄撃ちを避けるため、起動前に次を順に確認する。
 
 1. **L0 local で足りるか**: `rg`、`git diff`、既存スクリプト、`multi_tool_use.parallel` で独立読み取りを処理できるなら sub-agent を起動しない。
 2. **L1 mini で足りるか**: commit文案、短いログ要約、定型整形、重複検出だけなら、現セッションの metadata で利用可能な場合に限り、必要時のみ `default` + `model="gpt-5.4-mini"` + `service_tier="priority"` + `reasoning_effort="low"` を使う。利用不可なら role 既定または model 省略へ戻す。
