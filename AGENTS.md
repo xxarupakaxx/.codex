@@ -24,6 +24,7 @@ Codex (conductor)
   ├── multi_agent_v1.spawn_agent(role) → 専門 sub-agent
   ├── Goal tools → 長い作業の目的・完了状態管理
   ├── ask-skill-router / skills → 小さな規律の選択とプロセス補強
+  ├── consult-fable → Fable 5への単発戦略相談（Board Advisor）
   └── 専門agents → arch/security/perf-reviewer 等
 ```
 

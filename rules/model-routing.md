@@ -7,7 +7,7 @@ Codex で sub-agent を起動する際のモデル/role選択ルール。
 - まず `multi_agent_v1.spawn_agent` の `agent_type` を選ぶ。
 - role に model/service_tier が設定されている場合は role 既定を使う。
 - `default` / custom sub-agent で model を明示する場合は、`service_tier = "priority"` も必ず明示する。
-- Claude-only model aliases or slugs are not valid in Codex examples or prompts.
+- Claude-only model aliases or slugs are not valid in Codex examples or prompts.（例外: 外部相談ブリッジ `scripts/consult-fable.sh` 内の `--model fable` は claude CLI への引数であり対象外。末尾の External Consult 節を参照）
 - plugin / skill / agent role の選択は `context/agent-team-routing.md` を参照する。このファイルは model / service_tier 方針に集中する。
 
 ## Codex Model Pairs
