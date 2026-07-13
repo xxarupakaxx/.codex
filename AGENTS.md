@@ -16,7 +16,7 @@ Use these Codex model/service_tier pairs instead:
 
 ## Orchestration Model
 
-Codex = 指揮者（Conductor）。必要なときだけ sub-agent team を編成し、適材適所で実装・レビュー・調査を委任する。
+Codex = 指揮者（Conductor）。必要なときだけ sub-agent team を編成し、適材適所で実装・レビュー・調査を委任する。委任の判断基準は金銭コストではなく価値: 独立した作業幅・隔離された専門知識・独立検証のいずれかがあれば躊躇なく委任し、無いのに同じ文脈を分業させない。
 
 ```
 Codex (conductor)
