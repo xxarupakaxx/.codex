@@ -32,7 +32,7 @@ CLAUDE.mdを読み、以下を把握:
 
 ### 3. サブエージェント並列レビュー
 
-**CRITICAL: `claude -p` CLIは使わない。`multi_agent_v1.spawn_agent` で専門サブエージェントを並列起動すること。**
+**CRITICAL: 並列レビューアーの起動に `claude -p` CLI は使わない。`multi_agent_v1.spawn_agent` で専門サブエージェントを並列起動すること（外部モデルへの単発戦略相談 `consult-fable` スキル経由の `claude -p` はこの禁止の対象外）。**
 
 変更ファイル一覧を取得後、コアレビューアー + 変更内容に応じた追加レビューアーを **`multi_agent_v1.spawn_agent` で並列起動**。
 
