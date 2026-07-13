@@ -55,10 +55,39 @@
 | 30_plan.md | 実装計画 | 計画立案後 |
 | 40_progress.md | 実装進捗 | 実装中（随時更新） |
 | 80_review.md | レビュー結果 | レビュー実施後 |
+| 90_verification.md | 検証結果 | 検証実施後（任意） |
+| team-journal.md | agentの稼働・引継ぎ記録 | team-run実行中（任意） |
 | 90_pr.md | PR内容 | PR作成時 |
 | 99_history.md | 意思決定ログ | 随時 |
 | roadmap.html | ブラウザ用ロードマップビュー | Phase 2完了後・実装中に再生成 |
 | roadmap-snapshot.json | live更新用snapshot | `--serve --watch` 利用時に自動更新 |
+
+### task-meta.json（任意）
+
+Roadmap Task Hub と Codex task を確実に対応付ける場合は、タスクディレクトリ直下に `task-meta.json` を置く。
+
+```json
+{"thread_id":"019f...","project_path":"/absolute/path","task_title":"Roadmap Viewer UX","task_state":"running","approval_state":"waiting","updated_at":"2026-07-12T12:00:00+09:00"}
+```
+
+- `thread_id`: Codex app-server が返す thread ID。完全一致した場合だけ自動確定する。
+- `project_path`: task の作業ディレクトリの絶対パス。
+- `task_title`: Task Hub に表示する明示タイトル。
+- `task_state`: `running`、`waiting`、`completed` のいずれか。
+- `approval_state`: 承認待ちなど、明示的に `waiting` と扱う状態。
+- `updated_at`: timezone を含む ISO 8601 の更新日時。
+
+current thread ID を取得できた場合は、その ID を `task-meta.json` の `thread_id` に保存する。`thread_id` の完全一致だけを確定済み対応として扱う。`thread_id` がない場合、path・title・更新時刻による一致は候補表示にだけ使い、自動確定しない。候補を採用するかどうかの承認は Codex 会話を正本とし、承認後に `thread_id` を保存する。JSON が壊れている場合もタスク自体は一覧から消さず、詳細の `metadataError` に読み取りエラーを表示する。
+
+複数 task を一覧する Roadmap Task Hub は次で起動する:
+
+```bash
+python3 scripts/generate-roadmap-view.py --hub --memory-root "$MEMORY_DIR/memory" --open
+```
+
+Live Activityはmemory fileへ複製しない。Codex app-serverが返すsession pathのJSONL末尾を一時的に読み、直近24時間・最大100イベントだけをAPI responseへ正規化する。古いcontext、command arguments、tool output全文はsnapshotやmemoryへ保存しない。
+
+`--memory-root` は複数回指定できる。Hub は loopback 上の OS 割当 port で起動し、Codex app-server の thread と memory task を定期再取得する。起動 URL の fragment にある session key でローカル API を保護し、ブラウザの heartbeat が途絶えると終了する。provider の一時障害時は直近の成功結果を保持して degraded 状態を表示する。
 
 ### Live Roadmap Viewer
 
@@ -69,7 +98,9 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 ```
 
 - 既定では `127.0.0.1` にbindし、port `0` で空きポートを自動割当する。
-- ブラウザはHTTP経由で `roadmap-snapshot.json` をpollingし、ログ・進捗・レビューが更新されると再描画する。
+- ブラウザはHTTP経由で `roadmap-snapshot.json` をpollingし、ログ・進捗・レビュー・agent記録・検証結果・成果物metadataが更新されると再描画する。
+- generatorはtask directory配下の通常ファイルを成果物metadataとして再帰収集する。symlink、`roadmap.html`、`roadmap-snapshot.json`、一時ファイルは対象外とし、内容はsnapshotへ埋め込まない。
+- source内容と表示対象artifact metadataのfingerprintが不変なら、HTMLとsnapshotを書き換えない。
 - 複数セッションで同時に使う場合は、セッションごとに `${MEMORY_DIR}/memory/YYMMDD_<task_name>/` を分ける。必要なら `--port <port>` で明示的に分ける。
 - live表示は補助ビューであり、05_log.md / 40_progress.md / 80_review.md が正本。
 

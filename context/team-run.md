@@ -2,21 +2,24 @@
 
 `/team-run` のチーム構成・レビュー熱量・終了判定を定義する。
 
-このファイルは `context/workflow-rules.md` の Phase 0-5.5 を置き換えない。Phase 順序、05_log.md、Sprint Contract、レビュー戦略の詳細は `context/workflow-rules.md` が SSoT。ここでは team-run 固有の「誰をいつ呼ぶか」「何を疑うか」「どこで止めるか」だけを扱う。
+このファイルは `context/workflow-rules.md` の Phase 0-5.5 を置き換えない。Phase 順序、05_log.md、Sprint Contract、Outcome Trace、レビュー戦略の詳細は `context/workflow-rules.md` が SSoT。Goal readiness の詳細は `skills/goal-setter/SKILL.md` が SSoT。ここでは team-run 固有の「誰をいつ呼ぶか」「何を疑うか」「どこで止めるか」だけを扱う。
 
 ## Harmony Contract
 
-`goal` と `goal-setter` は目的と Done を固定する背骨だが、それだけでは team-run は閉じない。team-run では次の4点を必ず揃える。
+`goal` と `goal-setter` は目的と Done を固定する背骨だが、それだけでは team-run は閉じない。team-run では次の6要素を区別し、先頭5要素を必ず揃える。Live Roadmapは任意の補助表示である。
 
 | 要素 | 役割 | 主な保存先 |
 |------|------|------------|
-| Goal | 目的、Done、停止条件を固定する | `create_goal` / active goal |
-| Sprint Contract | 機械判定できる合格基準を定義する | `checkpoint.md` |
+| Goal | Goal Quality Gate を通った目的と Done を固定する | `create_goal` / active goal |
+| Sprint Contract / 代替検証 | 機械判定できる合格基準を定義する。自明なタスクで正式なContractを省略する場合は代替検証を明示する | `checkpoint.md` / Team Journal |
+| Outcome Trace | Goal outcome から acceptance と evidence までの未対応をなくす | `checkpoint.md` / Team Journal |
 | Team Journal | 周回をまたぐ状態、決定、失敗原因を共有する | `${MEMORY_DIR}/memory/YYMMDD_<task_name>/team-journal.md` |
 | Review Heat | 変更のリスクに応じて checker / judge を選ぶ | このファイル + `workflow-rules.md` |
-| Live Roadmap | 現在地を横で見るための補助ビュー | `${MEMORY_DIR}/memory/YYMMDD_<task_name>/roadmap.html` |
+| Live Roadmap（任意） | 現在地を横で見るための補助ビュー | `${MEMORY_DIR}/memory/YYMMDD_<task_name>/roadmap.html` |
 
-Goal は「完了の定義」であり、レビュー体制ではない。Team Journal は「現在地」であり、合格証明ではない。Review Heat は「疑い方」であり、実装計画ではない。Live Roadmap は見える化であり、正本ログではない。この分離を崩さない。
+Goal は「価値と完了の定義」であり、Sprint Contractまたは明示した代替検証は「成果物の合格基準」である。Outcome Trace は両者の対応であり、どちらの代替でもない。Team Journal は「現在地」であり、合格証明ではない。Review Heat は「疑い方」であり、実装計画ではない。Live Roadmap は見える化であり、正本ログではない。この分離を崩さない。
+
+Team Journal には Goal Gate の状態、選択した lane と省略理由、未対応 Goal outcome 数、holistic check の状態を置く。判定項目と trace schema はここへ複製せず、各 SSoT を参照する。
 
 ## Team Roles
 
@@ -69,14 +72,16 @@ PRD や受入条件がある場合は `prd-reviewer` を足す。性能が主目
 - validation が同じ理由で3回失敗する。
 - reviewer 間で出荷可否が割れ、lead が根拠を持って裁けない。
 - 外部書き込み、破壊的操作、認証/課金/個人情報、production 影響に踏み込む。
-- Goal、Sprint Contract、Review Heat のどれかを変更しないと Done に届かない。
+- Goal、承認済み Phase 2 artifact、Sprint Contract、Review Heat のどれかを material に変更しないと Done に届かない。
 
 ## Exit Gate
 
 team-run を完了扱いにするには、少なくとも次を満たす。
 
 - Goal の Done が現在の成果物で満たされている。
+- 最新のGoalがGoal Quality GateをPASSしている。
 - Sprint Contract または代替の検証結果が fresh に確認されている。
+- 未対応 Goal outcome が0で、統合成果物の holistic check がPASSしている。
 - CRITICAL が0件。
 - IMPORTANT は修正済み、または残す理由とリスクを Team Journal に記録済み。
 - Team Journal に最終状態、検証、レビュー結果、残存リスクが記録されている。
