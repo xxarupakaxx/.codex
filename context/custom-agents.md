@@ -1,5 +1,7 @@
 # カスタムエージェント定義リファレンス
 
+> この文書の Claude frontmatter は互換性確認のための legacy reference であり、Codex の current schema ではない。Codex の role 定義は `~/.codex/agents/*.toml`、model / service tier は `rules/model-routing.md` を正本とする。Claude 形式を Codex agent の新規定義に使わない。
+
 ## ファイル配置
 
 ```
@@ -52,15 +54,9 @@ color: purple             # 任意: 表示色
 | `Task` | サブエージェント起動 |
 | `AskUserQuestion` | ユーザーへの質問 |
 
-## 呼び出し方法
+## Codex での呼び出し
 
-Codex の multi-agent tool で `agent_type` に指定:
-
-```
-multi_agent_v1.spawn_agent(agent_type: "arch-reviewer", message: "...")
-multi_agent_v1.wait_agent(targets: ["<agent-id>"])
-multi_agent_v1.close_agent(target: "<agent-id>")
-```
+Codex では、まず `rules/model-routing.md` と `context/agent-team-routing.md` を読み、local-first と Delegation Gate を満たすか確認する。現在の session が collaboration capability を提供する場合だけ、role、read / write scope、acceptance を明示して spawn / wait / cleanup を使う。capability がなければ lead が逐次実行し、同じ検証基準を維持する。
 
 ## 例: レビュワーエージェント
 
