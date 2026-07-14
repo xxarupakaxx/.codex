@@ -10,9 +10,9 @@
 | 用途 | 機構 |
 |------|------|
 | ローカル並列実行・独立コマンド | `multi_tool_use.parallel` |
-| 専門レビュー・調査・軽量ワーカー | `multi_agent_v1.spawn_agent(agent_type: "...")` |
-| 複数ターンの協調 | `team-run` skill（`/team-run` shim）+ Goal + Team Journal + Review Heat + `spawn_agent` |
-| 重い実装の委任 | `implementer` / `worker` role に write scope を明示して `spawn_agent` |
+| 専門レビュー・調査・軽量ワーカー | Delegation Gate 後の session-provided collaboration capability。なければ lead が逐次実行 |
+| 複数ターンの協調 | `team-run` skill（`/team-run` shim）+ Goal + Team Journal + Review Heat。利用可能な capability は必要な役割だけに使う |
+| 重い実装の委任 | 独立した write scope がある場合だけ `implementer` / `worker` role に委任。なければ lead が逐次実行 |
 | プラグイン由来の運用規律 | Superpowers skills（計画・レビュー・完了前検証など） |
 
 > **parallel と team-run の使い分け**: 独立した読み取り・検証は `multi_tool_use.parallel` で足りる。複数ロールが状態を共有しながら継続判断する場合だけ `team-run` skill を使い、Goal、Team Journal、Review Heat で目的・担当・未解決事項・疑い方を同期する。
@@ -83,7 +83,7 @@ Layer 3: Project Override   (<repo>/.codex/ or AGENTS.md — PJごと)
 |------|------|
 | **目的** | ワークフロー全体制御、タスク分解、適切なエージェントへの委任 |
 | **出力形式** | Orchestration Report（委任先・理由・結果のJSON構造） |
-| **ツール** | `multi_agent_v1.spawn_agent`, `multi_tool_use.parallel`, Read/Grep/Glob相当, Bash, Write/Edit相当, Team Journal |
+| **ツール** | session-provided collaboration capability、`multi_tool_use.parallel`、Read/Grep/Glob相当、Bash、Write/Edit相当、Team Journal |
 | **境界** | 直接コード編集しない。実装はimplementerに委任 |
 | **モデル** | `gpt-5.5` + `priority` |
 
@@ -232,21 +232,23 @@ Summary ──→ Slack日次サマリー投稿
 |---------|------|
 | `/loop-status` | 全ループの状態表示（スケジュールタスク/ワークフロー/コスト/改善提案） |
 | `/pr-watch [PR]` | PRのCI/レビューを監視し未対応を自動対応。`/loop` を起動できる環境では `/loop 30m /pr-watch <PR>` を開始し、できない環境では起動コマンドを提示（Esc で停止） |
-| `/team-run "<タスク>"` (`/team-run` shim) | Agent Team編成。完了後に `/pr-watch <PR>` を実行すると、可能な環境ではCI/レビュー継続監視を開始 |
+| `/team-run "<タスク>"` (`/team-run` shim) | capability を使える場合だけ協調する overlay。PR監視は別 route と必要な承認に従う |
 
 > **`/pr-watch` 監視と `scheduled-tasks/pr-review` の役割差**: `/pr-watch <PR>` は `/loop` を起動できる環境では `/loop 30m /pr-watch <PR>` を開始し、**現セッション中**に特定PR1本を30分おき能動監視する（team-run成果のコンテキストを引き継げる／`Esc` で停止）。自動起動APIがない環境では、起動コマンドをユーザーに提示し、本サイクルは1回だけ実行する。2回目以降の呼び出しは state の `loop_active: true` により二重起動を防止。一方 `scheduled-tasks/pr-review` は**全 watch_repos** を毎時バッチ巡回（アプリ起動中のベストエフォート）。CI失敗の自動修正（`gh pr checks`→失敗ログ→修正→push）は `/pr-watch` のみが行う。
 
 ## Codex role ディスパッチ
 
+以下の role は local-first の後、Delegation Gate を通り、現在の session に利用可能な collaboration capability がある場合だけ委任する。満たさない場合は lead が同じ acceptance で逐次実行する。
+
 | 用途 | 呼び出し方法 | モデル方針 |
 |------|---------|------------|
-| コードベース探索 | `multi_agent_v1.spawn_agent(agent_type: "explorer")` / `architecture-explorer` | role既定 |
-| 軽量ワーカー | `multi_agent_v1.spawn_agent(agent_type: "worker")` | role既定 |
+| コードベース探索 | `explorer` / `architecture-explorer` | role既定 |
+| 軽量ワーカー | `worker` | role既定 |
 | 判定・設計判断・レビュー | `technical-evaluator` / `go-nogo-advisor` / reviewer role | role既定 |
 | 重い実装 | `implementer` / `worker` に write scope を明示 | `gpt-5.5` + `priority` |
 | 専門レビュー | `arch-reviewer` 等 | role既定 |
 | 過去知見検索 | `learnings-researcher` | role既定 |
-| パイプライン制御 | `multi_tool_use.parallel` + `multi_agent_v1.wait_agent` | — |
+| パイプライン制御 | `multi_tool_use.parallel` + session-provided wait/message capability。なければ逐次実行 | — |
 
 詳細: `rules/model-routing.md`（model / service_tier の SSoT）。plugin / skill / agent role の選択は `context/agent-team-routing.md` を参照する。
 
