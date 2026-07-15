@@ -38,6 +38,7 @@ For Vault automations, follow [[11_one-page-concept-sketch]].
   The target aspect ratio is about 1.414:1, such as 1400 x 990 CSS px rendered at 2x, unless the user explicitly asks for portrait or square.
 - Do not rename or delete existing notes.
 - Put final Markdown artifacts under `Inbox/automation/concept-sketches/` and final image artifacts under `attachments/`. Do not write final artifacts elsewhere unless the caller explicitly asks for another target. Temporary files outside the Vault are allowed only for an explicitly approved CLI fallback.
+- For scheduled Vault automations, do not let concept sketch production dominate the run. If deterministic PNG rasterization or image persistence is not working within 10 minutes, save the Markdown concept-sketch note with `Source Coverage`, `## Text Board`, and `Companion Note`, omit broken image wikilinks, record `PNG未生成: timebox`, and link that note as the substitute artifact.
 
 ## Output Mode
 
@@ -248,6 +249,7 @@ Do not mix more than two patterns in one image.
 9. Apply the Imagegen persistence gate. Embed an imagegen wikilink only after the selected output has been copied into `attachments/` and verified.
 10. Check both artifacts as A4 landscape boards. The exact board must preserve text; the imagegen companion must preserve meaning and must not drift into a vertical poster.
 11. Remove any decorative element that does not explain the idea.
+12. In scheduled automation, if steps 7-10 would push the parent workflow beyond its time budget, stop the image path and ship the text-bearing substitute note. Do not spend hours repairing rasterization.
 
 ## Quality Check
 
@@ -273,6 +275,7 @@ Except in Prompt-only mode, pass the artifact only if all checks are true:
 - Imagegen-only and Dual outputs must not present a wordless generated drawing as the whole artifact.
   The generated image may be a metaphor, but the Markdown note must carry the precise textual explanation.
 - An actual PNG exists in `attachments/` and is embedded with an Obsidian image wikilink.
+- Exception: scheduled Vault automations may pass with a Markdown-only substitute when PNG generation hit the 10-minute timebox. The note must explicitly say `PNG未生成: timebox`, must not include a broken image wikilink, and must still contain complete `Source Coverage`, `Text Board`, and `Companion Note` sections.
 - When Imagegen or Dual mode applies, the available `imagegen` skill was read and a built-in `image_gen` call was made. A prompt or layout spec alone is a failure.
 - Imagegen is saved only when the selected built-in output was copied from a concrete tool-returned path or an unambiguous new `$CODEX_HOME/generated_images/` output, and the copied bitmap was verified before linking.
 - In Dual mode, the exact board and imagegen companion use different filenames, and the generated file does not overwrite the exact board.
