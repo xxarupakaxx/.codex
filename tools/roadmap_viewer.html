@@ -345,13 +345,14 @@
     }
     .trace-table {
       margin: 12px 16px 16px;
-      overflow: hidden;
+      overflow-x: auto;
       border: 1px solid var(--line);
       border-radius: var(--radius);
     }
+    .trace-row { min-width: 1040px; }
     .trace-row {
       display: grid;
-      grid-template-columns: minmax(180px, 1.2fr) minmax(170px, 1fr) minmax(150px, .8fr) minmax(130px, .7fr) minmax(170px, 1fr) minmax(150px, .8fr);
+      grid-template-columns: minmax(190px, .9fr) minmax(420px, 2fr) minmax(260px, 1.15fr) minmax(135px, .55fr);
       gap: 10px;
       align-items: start;
       padding: 9px 11px;
@@ -361,6 +362,10 @@
     .trace-row:last-child { border-bottom: 0; }
     .trace-row.header { background: var(--surface-soft); color: var(--muted); font-size: 11px; font-weight: 760; }
     .trace-row:not(.header) > span { min-width: 0; overflow-wrap: anywhere; }
+    .trace-chain { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
+    .trace-chain > span { min-width: 0; overflow-wrap: anywhere; }
+    .trace-chain small,
+    .human-check small { display: block; margin-bottom: 2px; color: var(--muted); font-size: 9px; font-weight: 780; text-transform: uppercase; letter-spacing: .03em; }
     .trace-state {
       display: inline-flex;
       width: fit-content;
@@ -378,7 +383,26 @@
     .trace-state.missing-acceptance,
     .trace-state.missing-evidence { color: var(--warn-text); border-color: color-mix(in srgb, var(--warn-text) 40%, var(--line)); }
     .trace-state.failed-holistic { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 38%, var(--line)); }
+    .human-check { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+    .human-check strong { font-size: 11px; }
     .trace-cards { display: none; }
+    .revision-panel { margin-bottom: 12px; overflow: hidden; }
+    .revision-list { display: grid; gap: 8px; padding: 12px 16px 14px; }
+    .revision-row {
+      display: grid;
+      grid-template-columns: 90px minmax(150px, .9fr) minmax(190px, 1.2fr) minmax(130px, .7fr) 90px;
+      gap: 10px;
+      align-items: start;
+      padding: 9px 10px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      font-size: 12px;
+    }
+    .revision-row small { display: block; margin-bottom: 3px; color: var(--muted); font-size: 10px; font-weight: 760; text-transform: uppercase; }
+    .supporting-disclosure { margin-bottom: 12px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
+    .supporting-disclosure > summary { padding: 11px 15px; color: var(--muted); font-size: 12px; font-weight: 760; cursor: pointer; }
+    .supporting-disclosure > .panel { margin: 0; border-width: 1px 0 0; border-radius: 0; box-shadow: none; }
     .implementation-strip { margin-bottom: 12px; overflow: hidden; }
     .implementation-body { padding: 12px 16px; }
     .implementation-items { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -744,9 +768,11 @@
       .shell { display: flex; flex-direction: column; }
       .wayfinder { order: 1; }
       .outcome-trace { order: 2; }
-      .implementation-strip { order: 3; }
+      .revision-panel { order: 3; }
+      .supporting-disclosure { order: 4; }
+      .implementation-strip { order: 4; }
       .evidence-shortcuts { order: 4; }
-      .utility-disclosure { order: 4; }
+      .utility-disclosure { order: 5; }
       .artifact-jump { display: inline-flex; }
       .now-strip { grid-template-columns: 64px repeat(6, minmax(118px, 1fr)); overflow: hidden; }
       .now-cell { padding: 1px 10px; }
@@ -775,6 +801,7 @@
       }
       .trace-card strong { display: block; margin-bottom: 5px; overflow-wrap: anywhere; }
       .trace-card span { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+      .revision-row { grid-template-columns: 1fr 1fr; }
       .implementation-items { grid-template-columns: 1fr; }
       .now-strip { grid-template-columns: 64px repeat(2, minmax(0, 1fr)); row-gap: 8px; }
       .now-label { grid-row: 1 / 4; }
@@ -912,7 +939,7 @@
         <button class="btn icon-only" type="button" id="open-utility" aria-label="診断と詳細を開く" aria-controls="utility-disclosure" aria-expanded="false" title="診断と詳細を開く">
           <img class="icon" data-icon="dots" alt="">
         </button>
-        <input class="file-input" id="file-input" type="file" multiple accept=".md,.markdown,.txt,.json">
+        <input class="file-input" id="file-input" type="file" multiple accept=".md,.markdown,.txt,.json" aria-label="Roadmapファイルを選択">
       </div>
     </div>
   </header>
@@ -934,17 +961,17 @@
     <section class="panel wayfinder" id="wayfinder" aria-labelledby="wayfinder-heading">
       <div class="wayfinder-head">
         <div>
-          <h2 id="wayfinder-heading">Wayfinder</h2>
+          <h2 id="wayfinder-heading">Now / Next</h2>
           <p class="section-meta" id="plan-meta">Outcome Traceを読み込み中</p>
         </div>
         <span class="wayfinder-status" id="wayfinder-status" aria-live="polite">状態確認待ち</span>
         <button class="btn" type="button" id="show-history" aria-controls="utility-disclosure" aria-expanded="false">詳細ログ<img class="icon" data-icon="chevron" alt=""></button>
       </div>
       <div class="wayfinder-grid">
-        <div class="wayfinder-cell"><small>現在地</small><strong id="wayfinder-phase">Phase —</strong></div>
-        <div class="wayfinder-cell"><small>次の判断</small><strong id="wayfinder-next-decision">計画を読み込む</strong></div>
-        <div class="wayfinder-cell"><small>未接続</small><strong id="wayfinder-unmatched">0 outcomes</strong></div>
-        <div class="wayfinder-cell"><small>失敗中</small><strong id="wayfinder-failed">なし</strong></div>
+        <div class="wayfinder-cell"><small>Now</small><strong id="wayfinder-phase">Phase —</strong></div>
+        <div class="wayfinder-cell"><small>Next human decision（次の判断）</small><strong id="wayfinder-next-decision">計画を読み込む</strong></div>
+        <div class="wayfinder-cell"><small>Coverage</small><strong id="wayfinder-unmatched">0 / 0 outcomes</strong></div>
+        <div class="wayfinder-cell"><small>Failed holistic check</small><strong id="wayfinder-failed">なし</strong></div>
       </div>
     </section>
 
@@ -959,25 +986,36 @@
       <div class="trace-cards" id="outcome-trace-cards" aria-label="Outcome Trace mobile cards"></div>
     </section>
 
-    <section class="panel implementation-strip" id="implementation-strip" aria-labelledby="implementation-title">
+    <section class="panel revision-panel" id="revision-panel" aria-labelledby="revision-title">
       <div class="section-heading">
-        <h2 class="section-title" id="implementation-title">Implementation Strip</h2>
-        <span class="section-meta" id="freshness-label">Static</span>
+        <h2 class="section-title" id="revision-title">Observation / Revision</h2>
+        <span><span class="section-meta" id="revision-meta">0 events</span> <span id="teach-shortcut"></span></span>
       </div>
-      <div class="implementation-body">
-        <div class="phase-rail" id="phase-rail" role="list" aria-label="ワークフローのPhase"></div>
-        <div class="implementation-items" id="implementation-items"></div>
-      </div>
+      <div class="revision-list" id="revision-list"></div>
     </section>
 
-    <section class="panel evidence-shortcuts" id="evidence-shortcuts" tabindex="-1" aria-labelledby="artifact-title">
-      <div class="section-heading">
-        <h2 class="section-title" id="artifact-title">Spec / Contract / Verification / Review</h2>
-        <span class="section-meta" id="artifact-meta">0件</span>
-      </div>
-      <div class="artifact-grid" id="artifact-grid"></div>
-      <div style="padding:0 16px 12px"><button class="artifact-jump" id="artifact-jump" type="button">全成果物を見る</button></div>
-    </section>
+    <details class="supporting-disclosure">
+      <summary>実装Phaseと証拠ファイルを確認する</summary>
+      <section class="panel implementation-strip" id="implementation-strip" aria-labelledby="implementation-title">
+        <div class="section-heading">
+          <h2 class="section-title" id="implementation-title">Implementation Strip</h2>
+          <span class="section-meta" id="freshness-label">Static</span>
+        </div>
+        <div class="implementation-body">
+          <div class="phase-rail" id="phase-rail" role="list" aria-label="ワークフローのPhase"></div>
+          <div class="implementation-items" id="implementation-items"></div>
+        </div>
+      </section>
+
+      <section class="panel evidence-shortcuts" id="evidence-shortcuts" tabindex="-1" aria-labelledby="artifact-title">
+        <div class="section-heading">
+          <h2 class="section-title" id="artifact-title">Spec / Contract / Verification / Review</h2>
+          <span class="section-meta" id="artifact-meta">0件</span>
+        </div>
+        <div class="artifact-grid" id="artifact-grid"></div>
+        <div style="padding:0 16px 12px"><button class="artifact-jump" id="artifact-jump" type="button">全成果物を見る</button></div>
+      </section>
+    </details>
 
     <details class="utility-disclosure" id="utility-disclosure">
       <summary>
@@ -1522,6 +1560,8 @@
         implementation: indexFor(['implementation']),
         acceptance: indexFor(['acceptance']),
         evidence: indexFor(['evidence']),
+        humanReview: indexFor(['human review', 'human-review', 'human']),
+        objection: indexFor(['objection', 'objections']),
         state: indexFor(['state'])
       };
       if (columns.outcome < 0 || columns.requirement < 0 || columns.implementation < 0 || columns.acceptance < 0 || columns.evidence < 0 || columns.state < 0) return null;
@@ -1533,6 +1573,8 @@
           implementation: stripMarkdown(row[columns.implementation]),
           acceptance: stripMarkdown(row[columns.acceptance]),
           evidence: stripMarkdown(row[columns.evidence]),
+          humanReview: columns.humanReview >= 0 ? stripMarkdown(row[columns.humanReview]) : '',
+          objection: columns.objection >= 0 ? stripMarkdown(row[columns.objection]) : '',
           source: 'team-journal.md',
           explicit: true
         };
@@ -1544,6 +1586,27 @@
         return outcome;
       }).filter(item => item.outcome);
       return outcomes.length ? outcomes : null;
+    }
+    function extractRevisionLog(files) {
+      const section = markdownSection(files['team-journal.md'], /^Revision Log$/i);
+      const table = parseMarkdownTable(section);
+      if (!table) return [];
+      const indexFor = variants => table.headers.findIndex(header => variants.some(variant => header.toLowerCase() === variant));
+      const columns = {
+        id: indexFor(['id']),
+        observed: indexFor(['observed']),
+        change: indexFor(['plan change', 'change']),
+        revalidate: indexFor(['revalidate']),
+        status: indexFor(['status'])
+      };
+      if (Object.values(columns).some(index => index < 0)) return [];
+      return table.rows.map(row => ({
+        id: stripMarkdown(row[columns.id]),
+        observed: stripMarkdown(row[columns.observed]),
+        change: stripMarkdown(row[columns.change]),
+        revalidate: stripMarkdown(row[columns.revalidate]),
+        status: stripMarkdown(row[columns.status])
+      })).filter(item => item.id);
     }
     function extractSpecRequirements(spec) {
       const section = markdownSection(spec, /^(必須要件|requirements)$/i) || asText(spec);
@@ -1688,6 +1751,7 @@
       const activePhase = phases.find(phase => phase.status === 'in-progress') || phases.find(phase => phase.status === 'planned') || phases[phases.length - 1];
       const nextSteps = tasks.filter(task => task.status !== 'complete').slice(0, 3);
       const trace = buildOutcomeTrace(snapshot.files, reviews);
+      const revisions = extractRevisionLog(snapshot.files);
       const unresolvedDependencies = recordedActiveTask
         ? Array.from(recordedActiveTask.blockedBy.matchAll(/(?:Task|タスク)\s+(\d+(?:\.\d+)?)/gi))
             .map(match => match[1])
@@ -1711,7 +1775,8 @@
         outcomes: trace.outcomes,
         traceSummary: trace.traceSummary,
         artifactWarnings: trace.artifactWarnings,
-        nextDecision: trace.nextDecision
+        nextDecision: trace.nextDecision,
+        revisions
       };
     }
     function artifactStateFor(artifact, model) {
@@ -1735,7 +1800,7 @@
       extractRisks, extractPhaseSignals, buildModel, artifactStateFor,
       renderInlineMarkdown, renderWorkflowMarkdown, groupTaskSections,
       extractPlanSections, taskHubSettings, extractExplicitOutcomeTrace,
-      buildOutcomeTrace, stateLabel
+      extractRevisionLog, buildOutcomeTrace, stateLabel
     };
     /* ROADMAP_MODEL_END */
 
@@ -1898,6 +1963,7 @@
       renderHeader(currentModel);
       renderNowStrip(currentModel);
       renderOutcomeTrace(currentModel);
+      renderRevisions(currentModel);
       renderPhases(currentModel);
       renderTasks(currentModel);
       renderPulse(currentModel);
@@ -1924,7 +1990,7 @@
           ? 'Outcome Trace matched'
           : 'Outcome Traceなし';
       byId('wayfinder-next-decision').textContent = model.nextDecision.label;
-      byId('wayfinder-unmatched').textContent = `${summary.missingTotal} / ${summary.total} outcomes`;
+      byId('wayfinder-unmatched').textContent = `${summary.matched} / ${summary.total} outcomes`;
       byId('wayfinder-failed').textContent = summary.failedHolistic ? `failed holistic ${summary.failedHolistic}` : 'なし';
       byId('artifact-jump').textContent = `全${model.artifacts.length}件を見る`;
       byId('plan-meta').textContent = active
@@ -1953,14 +2019,17 @@
       byId('artifact-warnings').innerHTML = model.artifactWarnings.length
         ? model.artifactWarnings.map(warning => `<button class="artifact-warning" type="button" data-artifact="${escapeHtml(warning.file)}">${escapeHtml(warning.message)} -> ${escapeHtml(warning.file)}</button>`).join('')
         : '<span class="trace-token good">artifact warnings 0</span>';
-      const header = '<div class="trace-row header" role="row"><span role="columnheader">Outcome</span><span role="columnheader">Requirement</span><span role="columnheader">Implementation</span><span role="columnheader">Acceptance</span><span role="columnheader">Evidence</span><span role="columnheader">State</span></div>';
+      const header = '<div class="trace-row header" role="row"><span role="columnheader">Outcome</span><span role="columnheader">Plan → Evidence</span><span role="columnheader">Human check</span><span role="columnheader">State</span></div>';
       const rows = model.outcomes.map(outcome => `
         <div class="trace-row" role="row" aria-label="${escapeHtml(outcome.outcome)} は ${escapeHtml(outcome.stateLabel)}">
           <span role="cell"><strong>${escapeHtml(outcome.outcome)}</strong></span>
-          <span role="cell">${escapeHtml(outcome.requirement || 'Spec missing')}</span>
-          <span role="cell">${escapeHtml(outcome.implementation || 'Implementation missing')}</span>
-          <span role="cell">${escapeHtml(outcome.acceptance || 'Acceptance missing')}</span>
-          <span role="cell">${escapeHtml(outcome.evidence || 'Evidence missing')}</span>
+          <span role="cell" class="trace-chain">
+            <span><small>Spec</small>${escapeHtml(outcome.requirement || 'missing')}</span>
+            <span><small>Implementation</small>${escapeHtml(outcome.implementation || 'missing')}</span>
+            <span><small>Acceptance</small>${escapeHtml(outcome.acceptance || 'missing')}</span>
+            <span><small>Evidence</small>${escapeHtml(outcome.evidence || 'missing')}</span>
+          </span>
+          <span role="cell" class="human-check"><span><small>Review</small><strong>${escapeHtml(outcome.humanReview || 'Human review missing')}</strong></span><span><small>Objection</small>${escapeHtml(outcome.objection || 'Objection not recorded')}</span></span>
           <span role="cell"><span class="trace-state ${escapeHtml(outcome.state)}">${escapeHtml(outcome.stateLabel)}</span></span>
         </div>`);
       byId('outcome-trace-table').innerHTML = model.outcomes.length ? header + rows.join('') : '<div class="empty">Outcome Traceを読み込めません。</div>';
@@ -1971,8 +2040,27 @@
               <span>State: ${escapeHtml(outcome.stateLabel)}</span>
               <span>Open: ${escapeHtml(outcome.suggestedFile)}</span>
               <span>${escapeHtml(outcome.evidence || outcome.acceptance || outcome.implementation || outcome.requirement || 'Trace missing')}</span>
+              <span>Human review: ${escapeHtml(outcome.humanReview || 'missing')}</span>
+              <span>Objection: ${escapeHtml(outcome.objection || 'not recorded')}</span>
             </article>`).join('')
         : '<div class="empty">Outcome Traceを読み込めません。</div>';
+    }
+    function renderRevisions(model) {
+      byId('revision-meta').textContent = `${model.revisions.length} events`;
+      const lesson = model.artifacts.find(item => item.path === 'lessons/0001-reading-the-harness-roadmap.html');
+      byId('teach-shortcut').innerHTML = lesson
+        ? '<a class="btn" href="./lessons/0001-reading-the-harness-roadmap.html">Teach: 読み方</a>'
+        : '';
+      byId('revision-list').innerHTML = model.revisions.length
+        ? model.revisions.map(item => `
+            <article class="revision-row">
+              <span><small>Event</small><strong>${escapeHtml(item.id)}</strong></span>
+              <span><small>Observed</small>${escapeHtml(item.observed)}</span>
+              <span><small>Plan change</small>${escapeHtml(item.change)}</span>
+              <span><small>Revalidate</small>${escapeHtml(item.revalidate)}</span>
+              <span><small>Status</small><span class="trace-state ${escapeHtml(item.status === 'verified' ? 'matched' : 'missing-evidence')}">${escapeHtml(item.status)}</span></span>
+            </article>`).join('')
+        : '<div class="empty">観察による計画変更はまだありません。</div>';
     }
     function renderPhases(model) {
       const visible = model.phases;
