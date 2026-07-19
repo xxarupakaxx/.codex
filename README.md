@@ -60,7 +60,7 @@ custom prompts. Invoke them as `/prompts:<name>` after restarting Codex.
 workflow before reaching for a heavy process gate. It keeps the distinction
 between user-invoked flows, such as `team-run`, `orchestrate`, `grill-me`,
 PRD writing, and issue splitting, and model-invoked disciplines, such as
-`research`, `tdd`, `diagnosing-bugs`, `ubiquitous-language`, and verification.
+`research`, `tdd`, `diagnosing-bugs`, `modeling-domains`, and verification.
 
 Superpowers remains available as a strong option, but it is no longer treated
 as the default route for every non-trivial task.

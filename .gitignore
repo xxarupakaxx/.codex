@@ -11,6 +11,7 @@ chrome-native-hosts-v2.json
 .codex-global-state*
 ..codex-global-state*
 cloud-*-cache.json
+**/__pycache__/
 models_cache.json
 version.json
 logs*.sqlite*
