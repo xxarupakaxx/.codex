@@ -598,7 +598,7 @@ test('the trace-first roadmap information architecture remains in the HTML', () 
   assert.match(html, /全体検証/);
   assert.match(html, /人間レビュー/);
   assert.match(html, /Observation \/ Revision/);
-  assert.match(html, /class="supporting-disclosure"/);
+  assert.doesNotMatch(html, /class="supporting-disclosure"/);
   assert.match(html, /id="wayfinder-failed"/);
   assert.match(html, /summary\.failedHolistic \? `失敗/);
   assert.match(html, /document\.title = taskTitle/);
@@ -612,10 +612,11 @@ test('the trace-first roadmap information architecture remains in the HTML', () 
   assert.match(html, /@media \(max-width: 960px\)[\s\S]*\.trace-table\s*\{\s*display:\s*none/);
   assert.match(html, /@media \(max-width: 960px\)[\s\S]*\.trace-cards\s*\{\s*display:\s*grid/);
   assert.match(html, /@media \(max-width: 1180px\)[\s\S]*\.wayfinder\s*\{\s*order:\s*1/);
-  assert.match(html, /@media \(max-width: 1180px\)[\s\S]*\.outcome-trace\s*\{\s*order:\s*2/);
-  assert.match(html, /@media \(max-width: 1180px\)[\s\S]*\.revision-panel\s*\{\s*order:\s*3/);
-  assert.match(html, /@media \(max-width: 1180px\)[\s\S]*\.supporting-disclosure\s*\{\s*order:\s*4/);
-  assert.match(html, /@media \(max-width: 1180px\)[\s\S]*\.utility-disclosure\s*\{\s*order:\s*5/);
+  assert.match(html, /\.implementation-strip\s*\{\s*order:\s*2/);
+  assert.match(html, /\.evidence-shortcuts\s*\{\s*order:\s*3/);
+  assert.match(html, /\.outcome-trace\s*\{\s*order:\s*4/);
+  assert.match(html, /\.revision-panel\s*\{\s*order:\s*5/);
+  assert.match(html, /\.utility-disclosure\s*\{\s*order:\s*6/);
   assert.match(html, /--ease-out:\s*cubic-bezier/);
   assert.match(html, /@media \(hover: hover\) and \(pointer: fine\)/);
   assert.doesNotMatch(html, /transition:\s*all/);
@@ -634,6 +635,40 @@ test('the trace-first roadmap information architecture remains in the HTML', () 
   assert.match(html, /id="preview-raw"/);
   assert.doesNotMatch(html, /id="source-preview"[^>]*aria-live/);
   assert.doesNotMatch(html, /function brandData\(/);
+});
+
+test('decision beacon navigation exposes first-class artifacts and an accessible mobile drawer', () => {
+  for (const id of [
+    'viewer-layout',
+    'viewer-sidebar',
+    'open-viewer-nav',
+    'close-viewer-nav',
+    'nav-scrim',
+    'nav-artifacts-meta',
+    'nav-outcomes-meta',
+    'nav-verification-meta',
+    'nav-reports-meta',
+    'viewer-settings'
+  ]) {
+    assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
+  }
+  for (const label of ['ダッシュボード', 'ロードマップ', '成果物', 'アウトカム', '検証', 'レポート', '設定']) {
+    assert.match(html, new RegExp(`<span>${label}</span>`));
+  }
+  assert.match(html, /data-nav-target="implementation-strip"/);
+  assert.match(html, /data-nav-target="evidence-shortcuts"/);
+  assert.match(html, /data-nav-artifact="90_verification\.md"/);
+  assert.match(html, /data-nav-artifact="80_review\.md"/);
+  assert.match(html, /@media \(max-width: 1023px\)[\s\S]*body\.viewer-nav-open \.app-sidebar/);
+  assert.match(html, /function openViewerNav\(/);
+  assert.match(html, /function closeViewerNav\(/);
+  assert.match(html, /function updateViewerNavFromScroll\(/);
+  assert.match(html, /viewerNavScrollLockUntil/);
+  assert.match(html, /event\.key === 'Escape'/);
+  assert.match(html, /event\.key !== 'Tab'/);
+  assert.match(html, /aria-modal/);
+  assert.match(html, /byId\('main-content'\)\.inert = true/);
+  assert.match(html, /prefers-reduced-motion:[\s\S]*\.app-sidebar, \.nav-scrim/);
 });
 
 test('warning tokens and missing artifacts have accessible contrast contracts', () => {
