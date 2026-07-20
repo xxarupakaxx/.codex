@@ -33,6 +33,7 @@
       --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
       --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
       --header-height: 64px;
+      --sidebar-width: 236px;
       color-scheme: light;
     }
 
@@ -182,14 +183,107 @@
     }
     .btn.primary { border-color: var(--accent-button); background: var(--accent-button); color: #fff; }
     .btn.primary .icon { filter: brightness(0) invert(1); }
-    .btn.icon-only { width: 44px; padding: 9px; }
+    .btn.icon-only { width: 44px; padding: 9px; flex: 0 0 44px; }
     @media (hover: hover) and (pointer: fine) {
       .btn:hover { border-color: var(--accent); background: var(--surface-accent); }
       .btn.primary:hover { border-color: var(--accent-button-hover); background: var(--accent-button-hover); }
     }
     .file-input { display: none; }
     .icon { width: 18px; height: 18px; flex: 0 0 auto; object-fit: contain; }
-    .shell { max-width: 1540px; margin: 0 auto; padding: 18px 20px 24px; }
+    .viewer-layout {
+      width: min(100%, 1540px);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: var(--sidebar-width) minmax(0, 1fr);
+      align-items: start;
+    }
+    .viewer-layout[hidden] { display: none; }
+    .app-sidebar {
+      position: sticky;
+      top: var(--header-height);
+      height: calc(100vh - var(--header-height));
+      padding: 18px 14px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+      border-right: 1px solid var(--line);
+      background: color-mix(in srgb, var(--bg) 92%, var(--surface));
+    }
+    .sidebar-mobile-head { display: none; }
+    .sidebar-kicker {
+      margin: 2px 10px 10px;
+      color: var(--faint);
+      font-size: 12px;
+      font-weight: 780;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .viewer-nav { display: grid; gap: 3px; }
+    .viewer-nav-button {
+      width: 100%;
+      min-height: 44px;
+      padding: 9px 10px;
+      display: grid;
+      grid-template-columns: 22px minmax(0, 1fr) auto;
+      align-items: center;
+      gap: 9px;
+      border: 1px solid transparent;
+      border-radius: var(--radius);
+      background: transparent;
+      color: var(--muted);
+      text-align: left;
+      cursor: pointer;
+      font-weight: 680;
+    }
+    .viewer-nav-button .icon { width: 19px; height: 19px; }
+    .viewer-nav-button[aria-current="page"] {
+      border-color: color-mix(in srgb, var(--accent) 24%, var(--line));
+      background: var(--surface-accent);
+      color: var(--accent-strong);
+      font-weight: 760;
+    }
+    .nav-meta {
+      min-width: 24px;
+      padding: 2px 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 12px;
+      font-variant-numeric: tabular-nums;
+      line-height: 1.3;
+      text-align: center;
+    }
+    .viewer-nav-button[aria-current="page"] .nav-meta {
+      border-color: color-mix(in srgb, var(--accent) 30%, var(--line));
+      color: var(--accent-strong);
+    }
+    .sidebar-status {
+      margin-top: 16px;
+      padding: 11px;
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.5;
+    }
+    .sidebar-status strong { display: block; margin-bottom: 2px; color: var(--ink); font-size: 12px; }
+    .menu-button { display: none; }
+    .nav-scrim { display: none; }
+    @media (hover: hover) and (pointer: fine) {
+      .viewer-nav-button:hover { border-color: var(--line); background: var(--surface); color: var(--ink); }
+    }
+    .shell {
+      width: 100%;
+      min-width: 0;
+      margin: 0;
+      padding: 18px 20px 24px;
+      display: flex;
+      flex-direction: column;
+    }
+    .wayfinder { order: 1; }
+    .implementation-strip { order: 2; }
+    .evidence-shortcuts { order: 3; }
+    .outcome-trace { order: 4; }
+    .revision-panel { order: 5; }
+    .utility-disclosure { order: 6; }
     .panel { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
     .section-title { margin: 0; font-size: 16px; font-weight: 760; letter-spacing: -0.01em; }
     .section-heading {
@@ -495,9 +589,6 @@
       font-size: 12px;
     }
     .revision-row small { display: block; margin-bottom: 3px; color: var(--muted); font-size: 12px; font-weight: 760; }
-    .supporting-disclosure { margin-bottom: 12px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
-    .supporting-disclosure > summary { min-height: 44px; padding: 11px 15px; color: var(--muted); font-size: 12px; font-weight: 760; cursor: pointer; }
-    .supporting-disclosure > .panel { margin: 0; border-width: 1px 0 0; border-radius: 0; box-shadow: none; }
     .implementation-strip { margin-bottom: 12px; overflow: hidden; }
     .implementation-body { padding: 12px 16px; }
     .implementation-items { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 10px; }
@@ -863,14 +954,12 @@
     .toast.show { opacity: 1; transform: translateY(0); }
     .flash { outline: 3px solid color-mix(in srgb, var(--accent) 32%, transparent); outline-offset: 3px; }
     @media (max-width: 1180px) {
-      .shell { display: flex; flex-direction: column; }
       .wayfinder { order: 1; }
-      .outcome-trace { order: 2; }
-      .revision-panel { order: 3; }
-      .supporting-disclosure { order: 4; }
-      .implementation-strip { order: 4; }
-      .evidence-shortcuts { order: 4; }
-      .utility-disclosure { order: 5; }
+      .implementation-strip { order: 2; }
+      .evidence-shortcuts { order: 3; }
+      .outcome-trace { order: 4; }
+      .revision-panel { order: 5; }
+      .utility-disclosure { order: 6; }
       .artifact-jump { display: inline-flex; }
       .now-strip { grid-template-columns: 64px repeat(6, minmax(118px, 1fr)); overflow: hidden; }
       .now-cell { padding: 1px 10px; }
@@ -996,6 +1085,53 @@
     .hub-status-token { font-weight: 700; }
     .hub-settings label { display: grid; grid-template-columns: 1fr 72px; gap: 8px; margin: 8px 0; }
     @media (max-width: 1023px) {
+      body.viewer-nav-open { overflow: hidden; }
+      .viewer-layout { display: block; }
+      .menu-button { display: inline-flex; flex: 0 0 44px; }
+      .app-sidebar {
+        position: fixed;
+        z-index: 80;
+        top: 0;
+        bottom: 0;
+        left: 0;
+        width: min(320px, 88vw);
+        height: 100dvh;
+        padding: 14px;
+        border-right: 1px solid var(--line-strong);
+        background: var(--surface);
+        box-shadow: 18px 0 42px rgba(17, 28, 22, .18);
+        visibility: hidden;
+        transform: translateX(-104%);
+        transition: transform 220ms var(--ease-out), visibility 0s linear 220ms;
+      }
+      body.viewer-nav-open .app-sidebar {
+        visibility: visible;
+        transform: translateX(0);
+        transition-delay: 0s;
+      }
+      .sidebar-mobile-head {
+        min-height: 50px;
+        margin-bottom: 12px;
+        padding-bottom: 10px;
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 10px;
+        border-bottom: 1px solid var(--line);
+      }
+      .sidebar-mobile-head strong { font-size: 14px; }
+      .nav-scrim {
+        position: fixed;
+        z-index: 70;
+        inset: 0;
+        display: block;
+        border: 0;
+        background: rgba(12, 19, 15, .42);
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 180ms var(--ease-out);
+      }
+      body.viewer-nav-open .nav-scrim { opacity: 1; pointer-events: auto; }
       .task-hub { display: block; }
       .task-sidebar { border-right: 0; }
       .task-detail { display: none; }
@@ -1006,6 +1142,9 @@
       .hub-event-list li { grid-template-columns: 72px 1fr; }
       .hub-event-list li strong { grid-column: 1 / -1; }
     }
+    @media (prefers-reduced-motion: reduce) {
+      .app-sidebar, .nav-scrim { transition: none !important; }
+    }
   </style>
 </head>
 <body>
@@ -1014,6 +1153,9 @@
   <header class="app-header">
     <div class="header-inner">
       <div class="brand">
+        <button class="btn icon-only menu-button" type="button" id="open-viewer-nav" aria-label="ナビゲーションを開く" aria-controls="viewer-sidebar" aria-expanded="false">
+          <img class="icon" data-icon="menu" alt="">
+        </button>
         <img class="brand-mark" id="brand-mark" data-icon="slash" alt="">
         <div class="brand-copy">
           <h1 id="task-title">Roadmap</h1>
@@ -1042,6 +1184,7 @@
       </div>
     </div>
   </header>
+  <button class="nav-scrim" id="nav-scrim" type="button" aria-label="ナビゲーションを閉じる" aria-hidden="true" tabindex="-1"></button>
 
   <div class="task-hub" id="task-hub" hidden>
     <aside class="task-sidebar" aria-label="全task一覧">
@@ -1056,8 +1199,46 @@
     <main class="task-detail" id="task-detail" tabindex="-1"></main>
   </div>
 
-  <main class="shell" id="main-content" tabindex="-1">
-    <section class="panel wayfinder" id="wayfinder" aria-labelledby="wayfinder-heading">
+  <div class="viewer-layout" id="viewer-layout">
+    <aside class="app-sidebar" id="viewer-sidebar" aria-label="Roadmap内の移動">
+      <div class="sidebar-mobile-head">
+        <strong>Roadmapメニュー</strong>
+        <button class="btn icon-only" type="button" id="close-viewer-nav" aria-label="ナビゲーションを閉じる">
+          <img class="icon" data-icon="x" alt="">
+        </button>
+      </div>
+      <p class="sidebar-kicker">Workspace</p>
+      <nav class="viewer-nav" aria-label="Roadmapのセクション">
+        <button class="viewer-nav-button" type="button" data-nav-target="wayfinder" aria-current="page">
+          <img class="icon" data-icon="chart" alt=""><span>ダッシュボード</span>
+        </button>
+        <button class="viewer-nav-button" type="button" data-nav-target="implementation-strip">
+          <img class="icon" data-icon="list" alt=""><span>ロードマップ</span>
+        </button>
+        <button class="viewer-nav-button" type="button" data-nav-target="evidence-shortcuts">
+          <img class="icon" data-icon="folder" alt=""><span>成果物</span><span class="nav-meta" id="nav-artifacts-meta">0/4</span>
+        </button>
+        <button class="viewer-nav-button" type="button" data-nav-target="outcome-trace-summary">
+          <img class="icon" data-icon="users" alt=""><span>アウトカム</span><span class="nav-meta" id="nav-outcomes-meta">0</span>
+        </button>
+        <button class="viewer-nav-button" type="button" data-nav-artifact="90_verification.md">
+          <img class="icon" data-icon="clipboard" alt=""><span>検証</span><span class="nav-meta" id="nav-verification-meta">未</span>
+        </button>
+        <button class="viewer-nav-button" type="button" data-nav-artifact="80_review.md">
+          <img class="icon" data-icon="file" alt=""><span>レポート</span><span class="nav-meta" id="nav-reports-meta">未</span>
+        </button>
+        <button class="viewer-nav-button" type="button" data-nav-utility="viewer-settings">
+          <img class="icon" data-icon="dots" alt=""><span>設定</span>
+        </button>
+      </nav>
+      <div class="sidebar-status" id="sidebar-status">
+        <strong>主要成果物</strong>
+        読み込み待ち
+      </div>
+    </aside>
+
+    <main class="shell" id="main-content" tabindex="-1">
+    <section class="panel wayfinder" id="wayfinder" tabindex="-1" aria-labelledby="wayfinder-heading">
       <div class="decision-main">
         <div class="decision-overline">
           <span class="decision-phase" id="wayfinder-phase">Phase —</span>
@@ -1083,7 +1264,7 @@
       </dl>
     </section>
 
-    <section class="panel outcome-trace" id="outcome-trace-summary" aria-labelledby="outcome-trace-title">
+    <section class="panel outcome-trace" id="outcome-trace-summary" tabindex="-1" aria-labelledby="outcome-trace-title">
       <div class="section-heading">
         <h2 class="section-title" id="outcome-trace-title">Outcome Trace</h2>
         <span class="section-meta" id="outcome-trace-meta">0件</span>
@@ -1102,9 +1283,7 @@
       <div class="revision-list" id="revision-list"></div>
     </section>
 
-    <details class="supporting-disclosure">
-      <summary>実装Phaseと証拠ファイルを確認する</summary>
-      <section class="panel implementation-strip" id="implementation-strip" aria-labelledby="implementation-title">
+      <section class="panel implementation-strip" id="implementation-strip" tabindex="-1" aria-labelledby="implementation-title">
         <div class="section-heading">
           <h2 class="section-title" id="implementation-title">Implementation Strip</h2>
           <span class="section-meta" id="freshness-label">Static</span>
@@ -1123,7 +1302,6 @@
         <div class="artifact-grid" id="artifact-grid"></div>
         <div style="padding:0 16px 12px"><button class="artifact-jump" id="artifact-jump" type="button">全成果物を見る</button></div>
       </section>
-    </details>
 
     <details class="utility-disclosure" id="utility-disclosure">
       <summary>
@@ -1139,8 +1317,8 @@
             <strong>次の3ステップ:</strong><span class="next-step-sequence" id="next-step-sequence">計画を読み込む</span>
           </div>
         </section>
-        <section class="utility-card">
-          <h3>手動ファイル読込</h3>
+        <section class="utility-card" id="viewer-settings" tabindex="-1">
+          <h3>表示と読込</h3>
           <div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="Roadmapファイルを読み込む"><span>Markdownまたはroadmap JSONをドロップ</span></div>
           <div class="utility-stats" id="review-stats"></div>
         </section>
@@ -1161,7 +1339,8 @@
         </section>
       </div>
     </details>
-  </main>
+    </main>
+  </div>
 
   <div class="visually-hidden" id="state-announcer" role="status" aria-live="polite"></div>
   <div class="toast" id="toast" role="status" aria-live="polite"></div>
@@ -1942,6 +2121,9 @@
     let selectedSource = '';
     let previewMode = storageGet('roadmapViewerPreviewMode') === 'raw' ? 'raw' : 'rendered';
     let previewSourceText = '';
+    let viewerNavRestoreFocus = null;
+    let viewerNavScrollFrame = null;
+    let viewerNavScrollLockUntil = 0;
     const expandedTasks = new Set();
 
     // Tabler Icons 3.x paths (MIT). Encoded as image data URIs for self-contained file:// mode.
@@ -1961,6 +2143,8 @@
       chart: "<path d='M4 19v-6h4v6z'/><path d='M10 19v-10h4v10z'/><path d='M16 19v-14h4v14z'/>",
       clipboard: "<path d='M9 5h6'/><path d='M9 3h6a2 2 0 0 1 2 2v1h1a2 2 0 0 1 2 2v11a2 2 0 0 1 -2 2h-12a2 2 0 0 1 -2 -2v-11a2 2 0 0 1 2 -2h1v-1a2 2 0 0 1 2 -2z'/><path d='M9 14l2 2l4 -4'/>",
       users: "<path d='M9 11a4 4 0 1 0 0 -8a4 4 0 0 0 0 8'/><path d='M17 11a4 4 0 1 0 0 -8'/><path d='M3 21v-2a6 6 0 0 1 12 0v2'/><path d='M15 15a6 6 0 0 1 6 6'/>",
+      menu: "<path d='M4 6h16'/><path d='M4 12h16'/><path d='M4 18h16'/>",
+      x: "<path d='M18 6l-12 12'/><path d='M6 6l12 12'/>",
       slash: "<path d='M5 19l14 -14'/>"
     };
     function iconColor() { return document.body?.dataset.theme === 'dark' ? '#9bd0be' : '#2f6f5e'; }
@@ -2092,6 +2276,7 @@
       renderTasks(currentModel);
       renderPulse(currentModel);
       renderArtifacts(currentModel);
+      renderNavigation(currentModel);
       renderUtility(currentModel);
       if (previousModel && options.announce !== false) announceMeaningfulChange(previousModel, currentModel);
       requestAnimationFrame(() => restoreFocusKey(focusKey));
@@ -2290,6 +2475,19 @@
               ${iconHtml('chevron')}
             </button>`).join('');
     }
+    function renderNavigation(model) {
+      const files = model.snapshot.files;
+      const essentials = ['00_spec.md', 'checkpoint.md', '90_verification.md', '80_review.md'];
+      const ready = essentials.filter(name => Object.hasOwn(files, name)).length;
+      const unresolved = model.traceSummary.missingTotal + model.traceSummary.failedHolistic;
+      const verificationReady = Object.hasOwn(files, '90_verification.md');
+      const reportReady = Object.hasOwn(files, '80_review.md');
+      byId('nav-artifacts-meta').textContent = `${ready}/4`;
+      byId('nav-outcomes-meta').textContent = unresolved ? String(unresolved) : '済';
+      byId('nav-verification-meta').textContent = verificationReady ? (model.traceSummary.failedHolistic ? '要' : '済') : '未';
+      byId('nav-reports-meta').textContent = reportReady ? '済' : '未';
+      byId('sidebar-status').innerHTML = `<strong>主要成果物 ${ready}/4</strong>${model.freshness.label}・Outcome ${model.traceSummary.matched}/${model.traceSummary.total} 接続`;
+    }
     function renderUtility(model) {
       const review = model.reviews;
       byId('review-stats').innerHTML = [['Critical', review.critical], ['Important', review.important], ['Minor', review.minor]]
@@ -2364,6 +2562,104 @@
       const target = section ? byId(section) : details.querySelector('summary');
       requestAnimationFrame(() => target?.focus({ preventScroll: true }));
     }
+    function openArtifact(name) {
+      selectedSource = name;
+      openUtility('source-preview');
+      const preview = currentSnapshot.files[name] || `成果物: ${name}\n本文はmetadataのみ収集しています。`;
+      renderSourcePreview(preview, name);
+      document.querySelectorAll('[data-source]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.source === name)));
+      byId('state-announcer').textContent = `${name}を表示しました。`;
+    }
+    function viewerNavIsMobile() {
+      return window.matchMedia('(max-width: 1023px)').matches;
+    }
+    function viewerNavFocusable() {
+      return Array.from(byId('viewer-sidebar').querySelectorAll('button:not([disabled]), [href], [tabindex]:not([tabindex="-1"])'))
+        .filter(element => !element.hidden && element.offsetParent !== null);
+    }
+    function syncViewerNavMode() {
+      const sidebar = byId('viewer-sidebar');
+      const mobile = viewerNavIsMobile();
+      if (!mobile) {
+        document.body.classList.remove('viewer-nav-open');
+        sidebar.removeAttribute('role');
+        sidebar.removeAttribute('aria-modal');
+        sidebar.setAttribute('aria-hidden', 'false');
+        document.querySelector('.app-header').inert = false;
+        byId('main-content').inert = false;
+        byId('nav-scrim').setAttribute('aria-hidden', 'true');
+        byId('open-viewer-nav').setAttribute('aria-expanded', 'false');
+        return;
+      }
+      const open = document.body.classList.contains('viewer-nav-open');
+      sidebar.setAttribute('aria-hidden', String(!open));
+    }
+    function openViewerNav() {
+      if (!viewerNavIsMobile()) return;
+      const sidebar = byId('viewer-sidebar');
+      viewerNavRestoreFocus = document.activeElement;
+      document.body.classList.add('viewer-nav-open');
+      sidebar.setAttribute('role', 'dialog');
+      sidebar.setAttribute('aria-modal', 'true');
+      sidebar.setAttribute('aria-hidden', 'false');
+      document.querySelector('.app-header').inert = true;
+      byId('main-content').inert = true;
+      byId('nav-scrim').setAttribute('aria-hidden', 'false');
+      byId('open-viewer-nav').setAttribute('aria-expanded', 'true');
+      byId('close-viewer-nav').focus();
+    }
+    function closeViewerNav({ restoreFocus = true } = {}) {
+      const sidebar = byId('viewer-sidebar');
+      document.body.classList.remove('viewer-nav-open');
+      sidebar.removeAttribute('role');
+      sidebar.removeAttribute('aria-modal');
+      if (viewerNavIsMobile()) sidebar.setAttribute('aria-hidden', 'true');
+      else sidebar.setAttribute('aria-hidden', 'false');
+      document.querySelector('.app-header').inert = false;
+      byId('main-content').inert = false;
+      byId('nav-scrim').setAttribute('aria-hidden', 'true');
+      byId('open-viewer-nav').setAttribute('aria-expanded', 'false');
+      if (restoreFocus) viewerNavRestoreFocus?.focus?.();
+      else byId('main-content').focus({ preventScroll: true });
+    }
+    function setCurrentViewerNav(button) {
+      document.querySelectorAll('.viewer-nav-button').forEach(item => {
+        if (item === button) item.setAttribute('aria-current', 'page');
+        else item.removeAttribute('aria-current');
+      });
+    }
+    function updateViewerNavFromScroll() {
+      viewerNavScrollFrame = null;
+      if (Date.now() < viewerNavScrollLockUntil || document.body.classList.contains('viewer-nav-open')) return;
+      const headerBottom = document.querySelector('.app-header')?.getBoundingClientRect().bottom || 0;
+      const candidates = Array.from(document.querySelectorAll('.viewer-nav-button[data-nav-target]'))
+        .map(button => ({ button, target: byId(button.dataset.navTarget) }))
+        .filter(item => item.target)
+        .map(item => ({ ...item, rect: item.target.getBoundingClientRect() }))
+        .filter(item => item.rect.bottom > headerBottom && item.rect.top < innerHeight)
+        .sort((a, b) => Math.abs(a.rect.top - headerBottom) - Math.abs(b.rect.top - headerBottom));
+      if (candidates[0]) setCurrentViewerNav(candidates[0].button);
+    }
+    function activateViewerNav(button) {
+      viewerNavScrollLockUntil = Date.now() + 400;
+      window.setTimeout(updateViewerNavFromScroll, 420);
+      setCurrentViewerNav(button);
+      if (button.dataset.navArtifact) {
+        closeViewerNav({ restoreFocus: false });
+        openArtifact(button.dataset.navArtifact);
+        return;
+      }
+      if (button.dataset.navUtility) {
+        closeViewerNav({ restoreFocus: false });
+        openUtility(button.dataset.navUtility);
+        return;
+      }
+      const target = byId(button.dataset.navTarget);
+      closeViewerNav({ restoreFocus: false });
+      if (!target) return;
+      target.scrollIntoView({ block: 'start', behavior: 'auto' });
+      requestAnimationFrame(() => target.focus({ preventScroll: true }));
+    }
     function stopLivePolling() {
       if (liveTimer !== null) window.clearInterval(liveTimer);
       liveTimer = null;
@@ -2383,6 +2679,7 @@
       renderTasks(next);
       renderPulse(next);
       renderArtifacts(next);
+      renderNavigation(next);
       renderUtility(next);
       requestAnimationFrame(() => restoreFocusKey(focusKey, focusKey?.type === 'data-artifact' ? 'evidence-shortcuts' : ''));
       if (previous.freshness.state !== next.freshness.state || previous.activeTask?.number !== next.activeTask?.number || previous.waiting.reason !== next.waiting.reason) {
@@ -2465,6 +2762,40 @@
     }
     function setupInteractions() {
       const fileInput = byId('file-input');
+      byId('open-viewer-nav').addEventListener('click', openViewerNav);
+      byId('close-viewer-nav').addEventListener('click', () => closeViewerNav());
+      byId('nav-scrim').addEventListener('click', () => closeViewerNav());
+      byId('viewer-sidebar').addEventListener('click', event => {
+        const button = event.target.closest('.viewer-nav-button');
+        if (button) activateViewerNav(button);
+      });
+      document.addEventListener('keydown', event => {
+        if (!document.body.classList.contains('viewer-nav-open')) return;
+        if (event.key === 'Escape') {
+          event.preventDefault();
+          closeViewerNav();
+          return;
+        }
+        if (event.key !== 'Tab') return;
+        const focusable = viewerNavFocusable();
+        if (!focusable.length) return;
+        const first = focusable[0];
+        const last = focusable[focusable.length - 1];
+        if (event.shiftKey && document.activeElement === first) {
+          event.preventDefault();
+          last.focus();
+        } else if (!event.shiftKey && document.activeElement === last) {
+          event.preventDefault();
+          first.focus();
+        }
+      });
+      const navMedia = window.matchMedia('(max-width: 1023px)');
+      navMedia.addEventListener?.('change', syncViewerNavMode);
+      syncViewerNavMode();
+      window.addEventListener('scroll', () => {
+        if (viewerNavScrollFrame !== null) return;
+        viewerNavScrollFrame = requestAnimationFrame(updateViewerNavFromScroll);
+      }, { passive: true });
       byId('open-files').addEventListener('click', () => fileInput.click());
       fileInput.addEventListener('change', async () => {
         try { await loadFiles(fileInput.files); }
@@ -2535,11 +2866,8 @@
         }
         const artifact = event.target.closest('[data-artifact]');
         if (artifact) {
-          openUtility('source-preview');
           const name = artifact.dataset.artifact;
-          const preview = currentSnapshot.files[name] || `成果物: ${name}\n本文はmetadataのみ収集しています。`;
-          renderSourcePreview(preview, name);
-          byId('state-announcer').textContent = `${name}を表示しました。`;
+          openArtifact(name);
         }
       });
       let resizeTimer = null;
@@ -2549,6 +2877,7 @@
           if (!currentModel) return;
           const focusKey = captureFocusKey();
           renderArtifacts(currentModel);
+          renderNavigation(currentModel);
           requestAnimationFrame(() => restoreFocusKey(focusKey, focusKey?.type === 'data-artifact' ? 'evidence-shortcuts' : ''));
         }, 120);
       });
@@ -2690,7 +3019,7 @@
     async function initializeTaskHub() {
       document.body.classList.add('task-hub-active');
       document.querySelector('.app-header').hidden = true;
-      byId('main-content').hidden = true;
+      byId('viewer-layout').hidden = true;
       byId('task-hub').hidden = false;
       const settings = hubStoredSettings();
       byId('hub-stale-minutes').value = settings.staleMinutes;
