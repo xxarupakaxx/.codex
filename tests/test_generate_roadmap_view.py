@@ -86,6 +86,15 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
         self.assertEqual(snapshot["files"]["team-journal.md"], "# Team Journal\n")
         self.assertEqual(snapshot["files"]["90_verification.md"], "# Verification\n")
 
+    def test_snapshot_title_uses_task_directory_name_without_date_prefix(self) -> None:
+        task_dir = self.root / "260719_emilkowalski_skills_roadmap_ui"
+        task_dir.mkdir()
+        (task_dir / "00_spec.md").write_text("# Generic specification heading\n")
+
+        snapshot = roadmap.build_snapshot(task_dir)
+
+        self.assertEqual(snapshot["title"], "emilkowalski skills roadmap ui")
+
     def test_default_source_symlink_is_not_followed(self) -> None:
         target = self.root / "outside-plan.md"
         target.write_text("# Outside secret\n")

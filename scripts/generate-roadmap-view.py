@@ -159,6 +159,11 @@ def build_fingerprint(files: dict[str, str], artifacts: list[dict[str, object]])
 
 
 def infer_title(files: dict[str, str], task_dir: Path) -> str:
+    directory_title = re.sub(r"^\d{6,8}[_-]+", "", task_dir.name)
+    directory_title = re.sub(r"[_-]+", " ", directory_title).strip()
+    if directory_title:
+        return directory_title
+
     for name in ("30_plan.md", "00_spec.md", "05_log.md"):
         text = files.get(name, "")
         for line in text.splitlines():
@@ -166,7 +171,7 @@ def infer_title(files: dict[str, str], task_dir: Path) -> str:
                 title = line[2:].strip()
                 if title:
                     return title
-    return task_dir.name.replace("_", " ")
+    return "Roadmap"
 
 
 def build_snapshot(task_dir: Path, output: Path | None = None) -> dict[str, object]:

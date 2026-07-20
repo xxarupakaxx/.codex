@@ -527,7 +527,7 @@ test('renders workflow markdown safely without an external parser', () => {
 <img src=x onerror=alert(1)>
 [危険](javascript:alert(1))`);
 
-  assert.match(rendered, /<h1>見出し<\/h1>/);
+  assert.match(rendered, /<h4 class="md-heading-1">見出し<\/h4>/);
   assert.match(rendered, /type="checkbox" disabled checked/);
   assert.match(rendered, /<table>/);
   assert.match(rendered, /<blockquote>補足<\/blockquote>/);
@@ -569,7 +569,10 @@ test('task hub shell exposes list detail status settings and responsive behavior
 
 test('the trace-first roadmap information architecture remains in the HTML', () => {
   for (const id of [
+    'task-title',
     'wayfinder',
+    'decision-evidence',
+    'wayfinder-task-progress',
     'outcome-trace-summary',
     'outcome-trace-table',
     'outcome-trace-cards',
@@ -588,15 +591,21 @@ test('the trace-first roadmap information architecture remains in the HTML', () 
   assert.match(html, /prefers-reduced-motion/);
   assert.match(html, /Tabler Icons/);
   assert.match(html, /id="phase-rail" role="list"/);
-  assert.match(html, /id="task-tree" role="table"/);
-  assert.match(html, /Outcome Trace Summary/);
-  assert.match(html, /Next human decision/);
+  assert.match(html, /id="task-tree" role="list"/);
+  assert.match(html, /<h2 class="section-title" id="outcome-trace-title">Outcome Trace<\/h2>/);
   assert.match(html, /次の判断/);
-  assert.match(html, /Human check/);
+  assert.match(html, /接続状況/);
+  assert.match(html, /全体検証/);
+  assert.match(html, /人間レビュー/);
   assert.match(html, /Observation \/ Revision/);
   assert.match(html, /class="supporting-disclosure"/);
   assert.match(html, /id="wayfinder-failed"/);
-  assert.match(html, /summary\.failedHolistic \? `failed holistic/);
+  assert.match(html, /summary\.failedHolistic \? `失敗/);
+  assert.match(html, /document\.title = taskTitle/);
+  assert.match(html, /class="matched-trace"/);
+  assert.match(html, /class="trace-outcome \$\{escapeHtml\(outcome\.state\)\}"/);
+  assert.match(html, /issues\.map\(outcome => outcomeDisclosure\(outcome, true\)\)/);
+  assert.match(html, /issues\.map\(outcome => outcomeDisclosure\(outcome, false\)\)/);
   assert.match(html, /Spec \/ Contract \/ Verification \/ Review/);
   assert.match(html, /aria-label="\$\{escapeHtml\(outcome\.outcome\)\} は \$\{escapeHtml\(outcome\.stateLabel\)\}"/);
   assert.match(html, /\.trace-cards\s*\{\s*display:\s*none/);
@@ -607,6 +616,10 @@ test('the trace-first roadmap information architecture remains in the HTML', () 
   assert.match(html, /@media \(max-width: 1180px\)[\s\S]*\.revision-panel\s*\{\s*order:\s*3/);
   assert.match(html, /@media \(max-width: 1180px\)[\s\S]*\.supporting-disclosure\s*\{\s*order:\s*4/);
   assert.match(html, /@media \(max-width: 1180px\)[\s\S]*\.utility-disclosure\s*\{\s*order:\s*5/);
+  assert.match(html, /--ease-out:\s*cubic-bezier/);
+  assert.match(html, /@media \(hover: hover\) and \(pointer: fine\)/);
+  assert.doesNotMatch(html, /transition:\s*all/);
+  assert.doesNotMatch(html, /\*, \*::before, \*::after\s*\{[^}]*transition:\s*none/);
   assert.match(html, /class="artifact-state\$\{artifact\.missing \? ' missing' : ''\}"/);
   assert.match(html, /missing-implementation/);
   assert.match(html, /id="open-files" aria-label="Roadmapファイルを開く"/);
