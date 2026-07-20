@@ -28,8 +28,8 @@
       --focus: #2f70c9;
       --radius: 8px;
       --radius-lg: 12px;
-      --shadow: 0 8px 24px rgba(28, 38, 33, 0.055);
-      --decision-shadow: 0 14px 34px rgba(32, 56, 46, 0.08);
+      --shadow: none;
+      --decision-shadow: none;
       --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
       --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
       --header-height: 64px;
@@ -57,7 +57,7 @@
       --warn-text: #f0c978;
       --danger: #e18c82;
       --focus: #8bbcff;
-      --shadow: 0 12px 30px rgba(0, 0, 0, 0.2);
+      --shadow: none;
       color-scheme: dark;
     }
 
@@ -285,7 +285,7 @@
     .revision-panel { order: 5; }
     .utility-disclosure { order: 6; }
     .panel { border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface); box-shadow: var(--shadow); }
-    .section-title { margin: 0; font-size: 16px; font-weight: 760; letter-spacing: -0.01em; }
+    .section-title { margin: 0; font-size: 17px; font-weight: 780; letter-spacing: -0.015em; }
     .section-heading {
       min-height: 48px;
       padding: 12px 16px;
@@ -829,12 +829,69 @@
     .utility-content {
       padding: 14px 16px 16px;
       display: grid;
+      gap: 16px;
+      border-top: 1px solid var(--line);
+    }
+    .utility-support-grid {
+      display: grid;
       grid-template-columns: minmax(230px, .8fr) minmax(260px, 1fr) minmax(300px, 1.25fr);
       gap: 12px;
-      border-top: 1px solid var(--line);
     }
     .utility-card { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-soft); }
     .utility-card h3 { margin: 0 0 8px; font-size: 12.5px; }
+    .document-workspace {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: minmax(228px, 280px) minmax(0, 1fr);
+      overflow: hidden;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+    .document-sidebar {
+      min-width: 0;
+      padding: 16px;
+      border-right: 1px solid var(--line);
+      background: color-mix(in srgb, var(--surface-soft) 68%, var(--surface));
+    }
+    .document-sidebar-section + .document-sidebar-section { margin-top: 20px; }
+    .document-sidebar h3 {
+      margin: 0 0 8px;
+      color: var(--faint);
+      font-size: 11px;
+      font-weight: 780;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .document-reader { min-width: 0; background: var(--surface); }
+    .document-reader-header {
+      min-height: 64px;
+      padding: 10px 20px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      border-bottom: 1px solid var(--line);
+      background: color-mix(in srgb, var(--surface) 94%, var(--bg));
+    }
+    .document-reader-title { min-width: 0; }
+    .document-reader-title span {
+      display: block;
+      color: var(--faint);
+      font-size: 11px;
+      font-weight: 760;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .document-reader-title strong {
+      display: block;
+      margin-top: 2px;
+      overflow: hidden;
+      color: var(--ink);
+      font-size: 15px;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .drop-zone {
       min-height: 86px;
       padding: 14px;
@@ -866,14 +923,6 @@
       .source-button:hover { border-color: var(--accent); }
     }
     .source-button strong, .artifact-record strong { display: block; color: var(--ink); }
-    .preview-toolbar {
-      margin-top: 8px;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      gap: 8px;
-    }
-    .preview-toolbar strong { color: var(--ink); font-size: 12px; }
     .preview-modes { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); }
     .preview-mode {
       min-height: 44px;
@@ -886,21 +935,19 @@
       font-size: 12px;
       font-weight: 700;
     }
-    .preview-mode[aria-pressed="true"] { background: var(--surface); color: var(--accent); box-shadow: 0 1px 3px rgba(20, 30, 25, .1); }
+    .preview-mode[aria-pressed="true"] { background: var(--surface); color: var(--accent); box-shadow: none; }
     .source-preview {
-      max-height: 380px;
-      margin: 8px 0 0;
-      padding: 12px;
-      overflow: auto;
-      border: 1px solid var(--line);
-      border-radius: 6px;
+      width: min(100%, 860px);
+      min-height: 520px;
+      margin: 0 auto;
+      padding: 40px clamp(24px, 5vw, 72px) 64px;
       background: var(--surface);
       color: var(--ink);
-      font-size: 12.5px;
-      line-height: 1.65;
+      font-size: 16px;
+      line-height: 1.75;
       word-break: break-word;
     }
-    .source-preview.raw { font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space: pre-wrap; }
+    .source-preview.raw { font: 14px/1.7 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space: pre-wrap; }
     .source-preview.rendered { white-space: normal; }
     .source-preview.rendered > :first-child { margin-top: 0; }
     .source-preview.rendered > :last-child { margin-bottom: 0; }
@@ -908,29 +955,31 @@
     .source-preview.rendered .md-heading-4, .source-preview.rendered .md-heading-5, .source-preview.rendered .md-heading-6 {
       margin: 18px 0 7px;
       color: var(--ink);
+      font-family: ui-serif, "Yu Mincho", "Hiragino Mincho ProN", Georgia, serif;
+      font-weight: 700;
       line-height: 1.35;
       letter-spacing: -.01em;
     }
-    .source-preview.rendered .md-heading-1 { padding-bottom: 7px; border-bottom: 1px solid var(--line); font-size: 20px; }
-    .source-preview.rendered .md-heading-2 { padding-bottom: 5px; border-bottom: 1px solid var(--line); font-size: 17px; }
-    .source-preview.rendered .md-heading-3 { font-size: 15px; }
+    .source-preview.rendered .md-heading-1 { padding-bottom: 10px; border-bottom: 1px solid var(--line); font-size: clamp(26px, 2.2vw, 34px); }
+    .source-preview.rendered .md-heading-2 { padding-bottom: 7px; border-bottom: 1px solid var(--line); font-size: 23px; }
+    .source-preview.rendered .md-heading-3 { font-size: 19px; }
     .source-preview.rendered .md-heading-4,
-    .source-preview.rendered .md-heading-5,
-    .source-preview.rendered .md-heading-6 { font-size: 13px; }
-    .source-preview.rendered p { margin: 7px 0; }
-    .source-preview.rendered ul, .source-preview.rendered ol { margin: 7px 0; padding-left: 22px; }
-    .source-preview.rendered li { margin: 3px 0; }
+    .source-preview.rendered .md-heading-5 { font-size: 16px; }
+    .source-preview.rendered .md-heading-6 { font-size: 15px; }
+    .source-preview.rendered p { margin: 12px 0; }
+    .source-preview.rendered ul, .source-preview.rendered ol { margin: 12px 0; padding-left: 26px; }
+    .source-preview.rendered li { margin: 6px 0; }
     .source-preview.rendered .md-check { margin-left: -20px; display: flex; align-items: flex-start; gap: 7px; list-style: none; }
     .source-preview.rendered .md-check input { width: 15px; height: 15px; margin: 3px 0 0; accent-color: var(--accent-button); }
-    .source-preview.rendered code { padding: 1px 4px; border-radius: 4px; background: var(--surface-soft); font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
-    .source-preview.rendered pre { margin: 9px 0; padding: 10px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); }
+    .source-preview.rendered code { padding: 2px 5px; border-radius: 4px; background: var(--surface-soft); font: 13px/1.6 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .source-preview.rendered pre { margin: 16px 0; padding: 16px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); }
     .source-preview.rendered pre code { padding: 0; background: transparent; white-space: pre; }
     .source-preview.rendered blockquote { margin: 9px 0; padding: 7px 10px; border-left: 3px solid var(--accent); background: var(--surface-soft); color: var(--muted); }
     .source-preview.rendered hr { margin: 14px 0; border: 0; border-top: 1px solid var(--line); }
     .source-preview.rendered a, .source-preview.rendered .md-wikilink { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
     .md-table-wrap { margin: 9px 0; overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
-    .source-preview.rendered table { width: 100%; border-collapse: collapse; font-size: 12px; }
-    .source-preview.rendered th, .source-preview.rendered td { padding: 7px 8px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .source-preview.rendered table { width: 100%; border-collapse: collapse; font-size: 14px; }
+    .source-preview.rendered th, .source-preview.rendered td { padding: 9px 10px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
     .source-preview.rendered th:last-child, .source-preview.rendered td:last-child { border-right: 0; }
     .source-preview.rendered tbody tr:last-child td { border-bottom: 0; }
     .source-preview.rendered th { background: var(--surface-soft); font-weight: 750; }
@@ -993,7 +1042,9 @@
       .pulse-summary { grid-row: span 2; }
       .history-button { margin-top: 0; }
       .artifact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .utility-content { grid-template-columns: 1fr 1fr; }
+      .utility-support-grid { grid-template-columns: 1fr 1fr; }
+      .utility-support-grid > :last-child { grid-column: 1 / -1; }
+      .document-workspace { grid-template-columns: minmax(210px, 250px) minmax(0, 1fr); }
       .utility-card:last-child { grid-column: 1 / -1; }
     }
     @media (max-width: 720px) {
@@ -1046,7 +1097,12 @@
       .artifact-grid { grid-template-columns: 1fr; }
       .artifact-card { min-height: 78px; }
       .utility-links { display: none; }
-      .utility-content { grid-template-columns: 1fr; }
+      .utility-support-grid { grid-template-columns: 1fr; }
+      .utility-support-grid > :last-child { grid-column: auto; }
+      .document-workspace { grid-template-columns: 1fr; }
+      .document-sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
+      .document-reader-header { padding: 10px 16px; }
+      .source-preview { min-height: 0; padding: 28px 20px 44px; font-size: 16px; }
       .utility-card:last-child { grid-column: auto; }
     }
     @media (prefers-reduced-motion: reduce) {
@@ -1310,32 +1366,45 @@
         <img class="icon summary-chevron" data-icon="chevron" alt="">
       </summary>
       <div class="utility-content">
-        <section class="utility-card">
-          <h3>Task一覧</h3>
-          <div class="task-tree" id="task-tree" role="list" aria-label="実装計画のTask"></div>
-          <div class="next-steps" id="next-steps">
-            <strong>次の3ステップ:</strong><span class="next-step-sequence" id="next-step-sequence">計画を読み込む</span>
-          </div>
-        </section>
-        <section class="utility-card" id="viewer-settings" tabindex="-1">
-          <h3>表示と読込</h3>
-          <div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="Roadmapファイルを読み込む"><span>Markdownまたはroadmap JSONをドロップ</span></div>
-          <div class="utility-stats" id="review-stats"></div>
-        </section>
-        <section class="utility-card"><h3>リスク・直近ログ</h3><div class="risk-list" id="risk-list"></div><div class="log-list" id="log-list" tabindex="-1"></div></section>
-        <section class="utility-card">
-          <h3>ソースとMarkdown</h3>
-          <div class="source-list" id="source-list"></div>
-          <div class="preview-toolbar">
-            <strong id="preview-label">プレビュー</strong>
-            <div class="preview-modes" role="group" aria-label="Markdown表示方法">
+        <div class="utility-support-grid">
+          <section class="utility-card">
+            <h3>Task一覧</h3>
+            <div class="task-tree" id="task-tree" role="list" aria-label="実装計画のTask"></div>
+            <div class="next-steps" id="next-steps">
+              <strong>次の3ステップ:</strong><span class="next-step-sequence" id="next-step-sequence">計画を読み込む</span>
+            </div>
+          </section>
+          <section class="utility-card" id="viewer-settings" tabindex="-1">
+            <h3>表示と読込</h3>
+            <div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="Roadmapファイルを読み込む"><span>Markdownまたはroadmap JSONをドロップ</span></div>
+            <div class="utility-stats" id="review-stats"></div>
+          </section>
+          <section class="utility-card"><h3>リスク・直近ログ</h3><div class="risk-list" id="risk-list"></div><div class="log-list" id="log-list" tabindex="-1"></div></section>
+        </div>
+        <section class="document-workspace" aria-label="Markdownワークスペース">
+          <aside class="document-sidebar" aria-label="Markdownソース">
+            <div class="document-sidebar-section">
+              <h3>Workflow documents</h3>
+              <div class="source-list" id="source-list"></div>
+            </div>
+            <div class="document-sidebar-section">
+              <h3>All artifacts</h3>
+              <div class="source-list" id="all-artifact-list" tabindex="-1"></div>
+            </div>
+          </aside>
+          <article class="document-reader" aria-label="選択したMarkdown">
+            <header class="document-reader-header">
+              <div class="document-reader-title">
+                <span>Document</span>
+                <strong id="preview-label">プレビュー</strong>
+              </div>
+              <div class="preview-modes" role="group" aria-label="Markdown表示方法">
               <button class="preview-mode" id="preview-rendered" type="button" data-preview-mode="rendered" aria-pressed="true">整形</button>
               <button class="preview-mode" id="preview-raw" type="button" data-preview-mode="raw" aria-pressed="false">原文</button>
-            </div>
-          </div>
-          <div class="source-preview rendered" id="source-preview" role="region" aria-label="選択したソースの整形表示" tabindex="-1">ソースを選択してください。</div>
-          <h3>全成果物</h3>
-          <div class="source-list" id="all-artifact-list" tabindex="-1"></div>
+              </div>
+            </header>
+            <div class="source-preview rendered" id="source-preview" role="region" aria-label="選択したソースの整形表示" tabindex="-1">ソースを選択してください。</div>
+          </article>
         </section>
       </div>
     </details>
