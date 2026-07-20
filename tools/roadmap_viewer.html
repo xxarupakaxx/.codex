@@ -4,7 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
-  <title>Roadmap Viewer</title>
+  <title>Roadmap</title>
   <style>
     :root {
       --bg: #f7f7f4;
@@ -27,7 +27,11 @@
       --danger: #a4473e;
       --focus: #2f70c9;
       --radius: 8px;
+      --radius-lg: 12px;
       --shadow: 0 8px 24px rgba(28, 38, 33, 0.055);
+      --decision-shadow: 0 14px 34px rgba(32, 56, 46, 0.08);
+      --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+      --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
       --header-height: 64px;
       color-scheme: light;
     }
@@ -82,7 +86,8 @@
       z-index: 100;
       top: 8px;
       left: 8px;
-      padding: 8px 12px;
+      min-height: 44px;
+      padding: 11px 14px;
       border-radius: var(--radius);
       background: var(--ink);
       color: var(--bg);
@@ -130,13 +135,13 @@
       padding: 6px;
     }
     .brand-copy { min-width: 0; }
-    .brand-copy h1 { margin: 0; font-size: 17px; font-weight: 760; line-height: 1.2; letter-spacing: -0.01em; }
+    .brand-copy h1 { margin: 0; overflow: hidden; font-size: 17px; font-weight: 760; line-height: 1.2; letter-spacing: -0.01em; text-overflow: ellipsis; white-space: nowrap; }
     .brand-copy p {
       max-width: min(58vw, 760px);
       margin: 2px 0 0;
       overflow: hidden;
       color: var(--muted);
-      font-size: 11.5px;
+      font-size: 12px;
       line-height: 1.2;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -162,7 +167,7 @@
     .live-badge.error { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 42%, var(--line)); }
     .last-updated { color: var(--muted); font-size: 12px; white-space: nowrap; }
     .btn {
-      min-height: 38px;
+      min-height: 44px;
       padding: 7px 11px;
       border: 1px solid var(--line-strong);
       border-radius: var(--radius);
@@ -174,14 +179,14 @@
       justify-content: center;
       gap: 7px;
       font-weight: 650;
-      transition: background 140ms ease, border-color 140ms ease, transform 140ms ease;
     }
-    .btn:hover { border-color: var(--accent); background: var(--surface-accent); }
-    .btn:active { transform: translateY(1px); }
     .btn.primary { border-color: var(--accent-button); background: var(--accent-button); color: #fff; }
-    .btn.primary:hover { border-color: var(--accent-button-hover); background: var(--accent-button-hover); }
     .btn.primary .icon { filter: brightness(0) invert(1); }
-    .btn.icon-only { width: 38px; padding: 7px; }
+    .btn.icon-only { width: 44px; padding: 9px; }
+    @media (hover: hover) and (pointer: fine) {
+      .btn:hover { border-color: var(--accent); background: var(--surface-accent); }
+      .btn.primary:hover { border-color: var(--accent-button-hover); background: var(--accent-button-hover); }
+    }
     .file-input { display: none; }
     .icon { width: 18px; height: 18px; flex: 0 0 auto; object-fit: contain; }
     .shell { max-width: 1540px; margin: 0 auto; padding: 18px 20px 24px; }
@@ -224,7 +229,7 @@
     }
     .now-cell { min-width: 0; padding: 1px 18px; border-left: 1px solid var(--line); }
     .now-cell:first-of-type { border-left: 0; }
-    .now-cell small { display: block; margin-bottom: 2px; color: var(--muted); font-size: 11.5px; }
+    .now-cell small { display: block; margin-bottom: 2px; color: var(--muted); font-size: 12px; }
     .now-cell strong {
       display: block;
       overflow: hidden;
@@ -249,33 +254,38 @@
     .task-count strong { font-size: 18px; }
     .task-count span { color: var(--muted); font-size: 12px; }
     .count-track { height: 5px; margin-top: 6px; overflow: hidden; border-radius: 999px; background: var(--line); }
-    .count-fill { width: 0; height: 100%; background: var(--accent); transition: width 220ms ease; }
+    .count-fill { width: 0; height: 100%; background: var(--accent); }
     .artifact-jump {
       display: inline-flex;
       margin-top: 5px;
-      padding: 0;
+      min-height: 44px;
+      padding: 8px 0;
       border: 0;
       background: transparent;
       color: var(--accent);
       cursor: pointer;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 720;
       text-decoration: underline;
       text-underline-offset: 2px;
     }
     .wayfinder {
       margin-bottom: 12px;
-      padding: 14px 16px;
+      padding: 0;
+      display: grid;
+      grid-template-columns: minmax(0, 1.7fr) minmax(320px, .8fr);
+      overflow: hidden;
+      border-color: color-mix(in srgb, var(--accent) 24%, var(--line));
+      box-shadow: var(--decision-shadow);
     }
-    .wayfinder-head {
-      display: flex;
-      align-items: flex-start;
-      justify-content: space-between;
-      gap: 12px;
-      margin-bottom: 12px;
+    .decision-main { min-width: 0; padding: 24px; }
+    .decision-overline { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; }
+    .decision-phase {
+      color: var(--accent);
+      font-size: 12px;
+      font-weight: 780;
+      letter-spacing: .02em;
     }
-    .wayfinder-head h2 { margin: 0; font-size: 18px; line-height: 1.25; }
-    .wayfinder-head .section-meta { text-align: left; overflow-wrap: anywhere; }
     .wayfinder-status {
       display: inline-flex;
       align-items: center;
@@ -288,20 +298,57 @@
       font-weight: 720;
       white-space: nowrap;
     }
-    .wayfinder-grid {
-      display: grid;
-      grid-template-columns: minmax(150px, .65fr) minmax(260px, 1.35fr) minmax(190px, .8fr) minmax(190px, .8fr);
-      gap: 10px;
+    .decision-kicker {
+      margin: 24px 0 4px;
+      color: var(--muted);
+      font-size: 12px;
+      font-weight: 760;
+      letter-spacing: .04em;
     }
-    .wayfinder-cell {
-      min-width: 0;
-      padding: 10px 12px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
+    .decision-main h2 {
+      max-width: 820px;
+      margin: 0;
+      overflow-wrap: anywhere;
+      font-size: clamp(24px, 3vw, 38px);
+      font-weight: 790;
+      line-height: 1.16;
+      letter-spacing: -0.035em;
+    }
+    .decision-context {
+      max-width: 760px;
+      margin: 6px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+      overflow-wrap: anywhere;
+    }
+    .decision-subject {
+      max-width: 820px;
+      margin: 10px 0 0;
+      color: var(--ink);
+      font-size: 14px;
+      font-weight: 650;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .decision-actions { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; }
+    .decision-metrics {
+      margin: 0;
+      padding: 18px;
+      display: grid;
+      align-content: center;
+      gap: 8px;
+      border-left: 1px solid var(--line);
       background: var(--surface-soft);
     }
-    .wayfinder-cell small { display: block; margin-bottom: 4px; color: var(--muted); font-size: 11px; font-weight: 720; }
-    .wayfinder-cell strong { display: block; overflow-wrap: anywhere; font-size: 14px; line-height: 1.35; }
+    .decision-metric {
+      min-width: 0;
+      padding: 12px 16px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+    .decision-metric dt { margin-bottom: 3px; color: var(--muted); font-size: 12px; font-weight: 720; }
+    .decision-metric dd { margin: 0; overflow-wrap: anywhere; font-size: 15px; font-weight: 760; line-height: 1.35; }
     .outcome-trace { margin-bottom: 12px; overflow: hidden; }
     .trace-summary-bar {
       padding: 10px 16px;
@@ -315,12 +362,12 @@
       display: inline-flex;
       align-items: center;
       gap: 4px;
-      padding: 3px 7px;
+      padding: 4px 8px;
       border: 1px solid var(--line);
       border-radius: 999px;
       background: var(--surface-soft);
       color: var(--muted);
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 720;
       overflow-wrap: anywhere;
       white-space: normal;
@@ -332,46 +379,80 @@
       padding: 10px 16px 0;
       display: flex;
       flex-wrap: wrap;
-      gap: 7px;
+      gap: 8px;
     }
     .artifact-warning {
-      padding: 4px 7px;
+      min-height: 44px;
+      padding: 8px 10px;
       border: 1px solid color-mix(in srgb, var(--warn-text) 40%, var(--line));
       border-radius: 6px;
       background: color-mix(in srgb, var(--warn-text) 7%, var(--surface));
       color: var(--warn-text);
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 720;
     }
     .trace-table {
       margin: 12px 16px 16px;
-      overflow-x: auto;
+      display: grid;
+      gap: 8px;
+    }
+    .trace-outcome,
+    .matched-trace {
+      overflow: hidden;
       border: 1px solid var(--line);
       border-radius: var(--radius);
+      background: var(--surface);
     }
-    .trace-row { min-width: 1040px; }
-    .trace-row {
+    .trace-outcome.failed-holistic { border-color: color-mix(in srgb, var(--danger) 44%, var(--line)); }
+    .trace-outcome.missing-spec,
+    .trace-outcome.missing-implementation,
+    .trace-outcome.missing-acceptance,
+    .trace-outcome.missing-evidence { border-color: color-mix(in srgb, var(--warn-text) 36%, var(--line)); }
+    .trace-outcome > summary,
+    .matched-trace > summary {
+      min-height: 52px;
+      padding: 10px 12px;
       display: grid;
-      grid-template-columns: minmax(190px, .9fr) minmax(420px, 2fr) minmax(260px, 1.15fr) minmax(135px, .55fr);
+      grid-template-columns: minmax(0, 1fr) auto 20px;
+      align-items: center;
       gap: 10px;
-      align-items: start;
-      padding: 9px 11px;
-      border-bottom: 1px solid var(--line);
-      font-size: 12px;
+      cursor: pointer;
+      list-style: none;
     }
-    .trace-row:last-child { border-bottom: 0; }
-    .trace-row.header { background: var(--surface-soft); color: var(--muted); font-size: 11px; font-weight: 760; }
-    .trace-row:not(.header) > span { min-width: 0; overflow-wrap: anywhere; }
-    .trace-chain { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 7px; }
-    .trace-chain > span { min-width: 0; overflow-wrap: anywhere; }
+    .trace-outcome > summary::-webkit-details-marker,
+    .matched-trace > summary::-webkit-details-marker { display: none; }
+    .trace-outcome > summary strong,
+    .matched-trace > summary strong { min-width: 0; overflow-wrap: anywhere; font-size: 13px; }
+    .trace-outcome[open] > summary,
+    .matched-trace[open] > summary { background: var(--surface-soft); }
+    .trace-chevron { width: 18px; height: 18px; }
+    .trace-outcome[open] .trace-chevron,
+    .matched-trace[open] .trace-chevron { transform: rotate(90deg); }
+    .trace-detail {
+      padding: 14px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.8fr) minmax(260px, .8fr);
+      gap: 14px;
+      border-top: 1px solid var(--line);
+    }
+    .trace-chain { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
+    .trace-chain > span,
+    .human-check > span {
+      min-width: 0;
+      padding: 10px;
+      overflow-wrap: anywhere;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface-soft);
+    }
     .trace-chain small,
-    .human-check small { display: block; margin-bottom: 2px; color: var(--muted); font-size: 9px; font-weight: 780; text-transform: uppercase; letter-spacing: .03em; }
+    .human-check small { display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px; font-weight: 760; }
     .trace-state {
       display: inline-flex;
       width: fit-content;
       align-items: center;
       gap: 5px;
-      padding: 2px 7px;
+      padding: 4px 8px;
       border: 1px solid var(--line);
       border-radius: 999px;
       color: var(--muted);
@@ -383,8 +464,22 @@
     .trace-state.missing-acceptance,
     .trace-state.missing-evidence { color: var(--warn-text); border-color: color-mix(in srgb, var(--warn-text) 40%, var(--line)); }
     .trace-state.failed-holistic { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 38%, var(--line)); }
-    .human-check { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
-    .human-check strong { font-size: 11px; }
+    .human-check { display: grid; grid-template-columns: 1fr; gap: 8px; }
+    .human-check strong { font-size: 12px; }
+    .trace-open-artifact { width: 100%; margin-top: 8px; }
+    .matched-trace { border-style: dashed; }
+    .matched-outcomes { padding: 8px; display: grid; gap: 6px; border-top: 1px solid var(--line); }
+    .matched-outcome {
+      min-height: 44px;
+      padding: 8px 10px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 10px;
+      border-radius: 6px;
+      background: var(--surface-soft);
+    }
+    .matched-outcome strong { min-width: 0; overflow-wrap: anywhere; font-size: 12px; }
     .trace-cards { display: none; }
     .revision-panel { margin-bottom: 12px; overflow: hidden; }
     .revision-list { display: grid; gap: 8px; padding: 12px 16px 14px; }
@@ -399,9 +494,9 @@
       background: var(--surface);
       font-size: 12px;
     }
-    .revision-row small { display: block; margin-bottom: 3px; color: var(--muted); font-size: 10px; font-weight: 760; text-transform: uppercase; }
+    .revision-row small { display: block; margin-bottom: 3px; color: var(--muted); font-size: 12px; font-weight: 760; }
     .supporting-disclosure { margin-bottom: 12px; border: 1px solid var(--line); border-radius: var(--radius-lg); background: var(--surface); }
-    .supporting-disclosure > summary { padding: 11px 15px; color: var(--muted); font-size: 12px; font-weight: 760; cursor: pointer; }
+    .supporting-disclosure > summary { min-height: 44px; padding: 11px 15px; color: var(--muted); font-size: 12px; font-weight: 760; cursor: pointer; }
     .supporting-disclosure > .panel { margin: 0; border-width: 1px 0 0; border-radius: 0; box-shadow: none; }
     .implementation-strip { margin-bottom: 12px; overflow: hidden; }
     .implementation-body { padding: 12px 16px; }
@@ -413,7 +508,7 @@
       border-radius: var(--radius);
       background: var(--surface);
     }
-    .implementation-card small { display: block; margin-bottom: 4px; color: var(--muted); font-size: 11px; font-weight: 720; }
+    .implementation-card small { display: block; margin-bottom: 4px; color: var(--muted); font-size: 12px; font-weight: 720; }
     .implementation-card strong { display: block; overflow-wrap: anywhere; font-size: 13px; }
     .evidence-shortcuts { margin-bottom: 12px; overflow: hidden; }
     .workspace { display: grid; grid-template-columns: minmax(0, 1fr) 350px; gap: 12px; align-items: stretch; }
@@ -444,7 +539,6 @@
       height: 2px;
       background: var(--accent);
       content: "";
-      transition: width 220ms ease;
     }
     .phase-step { position: relative; z-index: 1; min-width: 0; display: grid; justify-items: center; text-align: center; }
     .phase-marker {
@@ -472,7 +566,7 @@
       box-shadow: 0 0 0 4px color-mix(in srgb, var(--accent) 11%, transparent);
     }
     .phase-step strong { margin-top: 6px; font-size: 12.5px; }
-    .phase-step span { color: var(--muted); font-size: 11px; }
+    .phase-step span { color: var(--muted); font-size: 12px; }
     .phase-marker .icon { width: 16px; height: 16px; }
     .task-tree { overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius); }
     .task-table-head, .task-row-main {
@@ -487,7 +581,7 @@
       border-bottom: 1px solid var(--line);
       background: var(--surface-soft);
       color: var(--muted);
-      font-size: 11.5px;
+      font-size: 12px;
       font-weight: 680;
     }
     .task-row { border-bottom: 1px solid var(--line); background: var(--surface); }
@@ -498,10 +592,10 @@
     .task-row.recorded > .task-row-main { background: color-mix(in srgb, var(--surface-soft) 62%, transparent); }
     .task-primary { min-width: 0; display: flex; align-items: center; gap: 8px; }
     .task-toggle {
-      width: 36px;
-      height: 36px;
+      width: 44px;
+      height: 44px;
       padding: 5px;
-      flex: 0 0 36px;
+      flex: 0 0 44px;
       display: grid;
       place-items: center;
       border: 0;
@@ -509,8 +603,10 @@
       background: transparent;
       cursor: pointer;
     }
-    .task-toggle:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
-    .task-toggle .icon { width: 16px; height: 16px; transition: transform 140ms ease; }
+    .task-toggle .icon { width: 16px; height: 16px; }
+    @media (hover: hover) and (pointer: fine) {
+      .task-toggle:hover { background: color-mix(in srgb, var(--accent) 10%, transparent); }
+    }
     .task-toggle[aria-expanded="true"] .icon { transform: rotate(90deg); }
     .task-status-icon { width: 23px; height: 23px; flex: 0 0 23px; }
     .task-name { min-width: 0; }
@@ -522,7 +618,7 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .task-name span { display: inline; margin-left: 7px; color: var(--muted); font-size: 11.5px; }
+    .task-name span { display: inline; margin-left: 7px; color: var(--muted); font-size: 12px; }
     .task-cell {
       min-width: 0;
       overflow: hidden;
@@ -553,13 +649,13 @@
       border-radius: var(--radius);
       background: color-mix(in srgb, var(--accent-blue) 6%, var(--surface));
       color: var(--accent-blue);
-      font-size: 11.5px;
+      font-size: 12px;
     }
     .next-steps > strong { white-space: nowrap; }
     .next-step-sequence { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
     .execution-pulse { min-width: 0; }
     .pulse-body { height: calc(100% - 49px); padding: 16px; display: flex; flex-direction: column; gap: 14px; }
-    .pulse-kicker { color: var(--muted); font-size: 11px; font-weight: 720; letter-spacing: .03em; }
+    .pulse-kicker { color: var(--muted); font-size: 12px; font-weight: 720; letter-spacing: .03em; }
     .pulse-task { margin: 4px 0 0; font-size: 21px; font-weight: 780; line-height: 1.25; letter-spacing: -0.02em; }
     .pulse-phase { margin-top: 6px; display: flex; align-items: center; gap: 8px; color: var(--muted); font-size: 12px; }
     .pulse-metrics { display: grid; gap: 7px; color: var(--muted); font-size: 12px; }
@@ -571,7 +667,7 @@
     .recent-item { display: grid; grid-template-columns: 18px minmax(0, 1fr) auto; align-items: center; gap: 7px; font-size: 12px; }
     .recent-item .icon { width: 16px; height: 16px; }
     .recent-item strong { overflow: hidden; font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
-    .recent-item time { color: var(--muted); font-size: 11px; }
+    .recent-item time { color: var(--muted); font-size: 12px; }
     .waiting-copy { margin: 0; color: var(--muted); font-size: 12px; }
     .history-button { width: 100%; margin-top: auto; }
     .artifact-shelf { margin-top: 12px; overflow: hidden; }
@@ -590,7 +686,9 @@
       text-align: left;
       cursor: pointer;
     }
-    .artifact-card:hover { border-color: var(--accent); background: var(--surface-accent); }
+    @media (hover: hover) and (pointer: fine) {
+      .artifact-card:hover { border-color: var(--accent); background: var(--surface-accent); }
+    }
     .artifact-icon {
       width: 35px;
       height: 35px;
@@ -603,7 +701,7 @@
     .artifact-icon .icon { width: 22px; height: 22px; }
     .artifact-copy { min-width: 0; }
     .artifact-copy strong { display: block; overflow: hidden; font-size: 13px; text-overflow: ellipsis; white-space: nowrap; }
-    .artifact-copy span { display: block; margin-top: 4px; overflow: hidden; color: var(--muted); font-size: 11px; text-overflow: ellipsis; white-space: nowrap; }
+    .artifact-copy span { display: block; margin-top: 4px; overflow: hidden; color: var(--muted); font-size: 12px; text-overflow: ellipsis; white-space: nowrap; }
     .artifact-state {
       display: inline-flex !important;
       width: fit-content;
@@ -635,7 +733,7 @@
     .utility-disclosure > summary strong { font-size: 13px; }
     .utility-title { margin: 0; font-size: 13px; font-weight: 760; }
     .utility-links { color: var(--muted); }
-    .summary-chevron { margin-left: auto; transition: transform 140ms ease; }
+    .summary-chevron { margin-left: auto; }
     .utility-disclosure[open] .summary-chevron { transform: rotate(90deg); }
     .utility-content {
       padding: 14px 16px 16px;
@@ -662,7 +760,7 @@
     .utility-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
     .utility-stat { padding: 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); text-align: center; }
     .utility-stat strong { display: block; font-size: 17px; }
-    .utility-stat span { color: var(--muted); font-size: 10px; }
+    .utility-stat span { color: var(--muted); font-size: 12px; }
     .risk-list, .source-list, .log-list { display: grid; gap: 6px; }
     .risk-item, .source-button, .artifact-record, .log-item {
       padding: 7px 8px;
@@ -670,10 +768,12 @@
       border-radius: 6px;
       background: var(--surface);
       color: var(--muted);
-      font-size: 11px;
+      font-size: 12px;
     }
     .source-button { width: 100%; text-align: left; cursor: pointer; }
-    .source-button:hover { border-color: var(--accent); }
+    @media (hover: hover) and (pointer: fine) {
+      .source-button:hover { border-color: var(--accent); }
+    }
     .source-button strong, .artifact-record strong { display: block; color: var(--ink); }
     .preview-toolbar {
       margin-top: 8px;
@@ -682,17 +782,17 @@
       justify-content: space-between;
       gap: 8px;
     }
-    .preview-toolbar strong { color: var(--ink); font-size: 11px; }
+    .preview-toolbar strong { color: var(--ink); font-size: 12px; }
     .preview-modes { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); }
     .preview-mode {
-      min-height: 30px;
-      padding: 4px 9px;
+      min-height: 44px;
+      padding: 8px 10px;
       border: 0;
       border-radius: 4px;
       background: transparent;
       color: var(--muted);
       cursor: pointer;
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 700;
     }
     .preview-mode[aria-pressed="true"] { background: var(--surface); color: var(--accent); box-shadow: 0 1px 3px rgba(20, 30, 25, .1); }
@@ -709,34 +809,36 @@
       line-height: 1.65;
       word-break: break-word;
     }
-    .source-preview.raw { font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space: pre-wrap; }
+    .source-preview.raw { font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; white-space: pre-wrap; }
     .source-preview.rendered { white-space: normal; }
     .source-preview.rendered > :first-child { margin-top: 0; }
     .source-preview.rendered > :last-child { margin-bottom: 0; }
-    .source-preview.rendered h1, .source-preview.rendered h2, .source-preview.rendered h3,
-    .source-preview.rendered h4, .source-preview.rendered h5, .source-preview.rendered h6 {
+    .source-preview.rendered .md-heading-1, .source-preview.rendered .md-heading-2, .source-preview.rendered .md-heading-3,
+    .source-preview.rendered .md-heading-4, .source-preview.rendered .md-heading-5, .source-preview.rendered .md-heading-6 {
       margin: 18px 0 7px;
       color: var(--ink);
       line-height: 1.35;
       letter-spacing: -.01em;
     }
-    .source-preview.rendered h1 { padding-bottom: 7px; border-bottom: 1px solid var(--line); font-size: 20px; }
-    .source-preview.rendered h2 { padding-bottom: 5px; border-bottom: 1px solid var(--line); font-size: 17px; }
-    .source-preview.rendered h3 { font-size: 15px; }
-    .source-preview.rendered h4, .source-preview.rendered h5, .source-preview.rendered h6 { font-size: 13px; }
+    .source-preview.rendered .md-heading-1 { padding-bottom: 7px; border-bottom: 1px solid var(--line); font-size: 20px; }
+    .source-preview.rendered .md-heading-2 { padding-bottom: 5px; border-bottom: 1px solid var(--line); font-size: 17px; }
+    .source-preview.rendered .md-heading-3 { font-size: 15px; }
+    .source-preview.rendered .md-heading-4,
+    .source-preview.rendered .md-heading-5,
+    .source-preview.rendered .md-heading-6 { font-size: 13px; }
     .source-preview.rendered p { margin: 7px 0; }
     .source-preview.rendered ul, .source-preview.rendered ol { margin: 7px 0; padding-left: 22px; }
     .source-preview.rendered li { margin: 3px 0; }
     .source-preview.rendered .md-check { margin-left: -20px; display: flex; align-items: flex-start; gap: 7px; list-style: none; }
     .source-preview.rendered .md-check input { width: 15px; height: 15px; margin: 3px 0 0; accent-color: var(--accent-button); }
-    .source-preview.rendered code { padding: 1px 4px; border-radius: 4px; background: var(--surface-soft); font: 11px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .source-preview.rendered code { padding: 1px 4px; border-radius: 4px; background: var(--surface-soft); font: 12px/1.55 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
     .source-preview.rendered pre { margin: 9px 0; padding: 10px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); }
     .source-preview.rendered pre code { padding: 0; background: transparent; white-space: pre; }
     .source-preview.rendered blockquote { margin: 9px 0; padding: 7px 10px; border-left: 3px solid var(--accent); background: var(--surface-soft); color: var(--muted); }
     .source-preview.rendered hr { margin: 14px 0; border: 0; border-top: 1px solid var(--line); }
     .source-preview.rendered a, .source-preview.rendered .md-wikilink { color: var(--accent); text-decoration: underline; text-underline-offset: 2px; }
     .md-table-wrap { margin: 9px 0; overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
-    .source-preview.rendered table { width: 100%; border-collapse: collapse; font-size: 11.5px; }
+    .source-preview.rendered table { width: 100%; border-collapse: collapse; font-size: 12px; }
     .source-preview.rendered th, .source-preview.rendered td { padding: 7px 8px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
     .source-preview.rendered th:last-child, .source-preview.rendered td:last-child { border-right: 0; }
     .source-preview.rendered tbody tr:last-child td { border-bottom: 0; }
@@ -756,14 +858,10 @@
       opacity: 0;
       pointer-events: none;
       transform: translateY(18px);
-      transition: opacity 160ms ease, transform 160ms ease;
+      transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
     }
     .toast.show { opacity: 1; transform: translateY(0); }
-    .flash { animation: evidence-pulse 900ms ease; }
-    @keyframes evidence-pulse {
-      0%, 100% { box-shadow: var(--shadow); }
-      45% { box-shadow: 0 0 0 3px color-mix(in srgb, var(--accent) 28%, transparent), var(--shadow); }
-    }
+    .flash { outline: 3px solid color-mix(in srgb, var(--accent) 32%, transparent); outline-offset: 3px; }
     @media (max-width: 1180px) {
       .shell { display: flex; flex-direction: column; }
       .wayfinder { order: 1; }
@@ -790,17 +888,12 @@
     @media (max-width: 960px) {
       .header-inner { align-items: flex-start; }
       .last-updated { display: none; }
-      .wayfinder-grid { grid-template-columns: 1fr 1fr; }
+      .wayfinder { grid-template-columns: 1fr; }
+      .decision-metrics { grid-template-columns: repeat(3, minmax(0, 1fr)); border-top: 1px solid var(--line); border-left: 0; }
       .trace-table { display: none; }
       .trace-cards { display: grid; gap: 8px; padding: 10px 12px 12px; }
-      .trace-card {
-        padding: 10px;
-        border: 1px solid var(--line);
-        border-radius: var(--radius);
-        background: var(--surface);
-      }
-      .trace-card strong { display: block; margin-bottom: 5px; overflow-wrap: anywhere; }
-      .trace-card span { display: block; margin-top: 3px; color: var(--muted); font-size: 12px; overflow-wrap: anywhere; }
+      .trace-detail { grid-template-columns: 1fr; }
+      .trace-chain { grid-template-columns: 1fr 1fr; }
       .revision-row { grid-template-columns: 1fr 1fr; }
       .implementation-items { grid-template-columns: 1fr; }
       .now-strip { grid-template-columns: 64px repeat(2, minmax(0, 1fr)); row-gap: 8px; }
@@ -825,9 +918,11 @@
       .toolbar .btn { min-width: 44px; min-height: 44px; }
       .live-badge { min-height: 38px; }
       .shell { padding: 12px; }
-      .wayfinder { padding: 12px; }
-      .wayfinder-head { flex-direction: column; align-items: stretch; }
-      .wayfinder-grid { grid-template-columns: 1fr; }
+      .decision-main { padding: 18px 16px; }
+      .decision-main h2 { font-size: 25px; }
+      .decision-kicker { margin-top: 18px; }
+      .decision-actions { display: grid; grid-template-columns: 1fr; }
+      .decision-metrics { padding: 12px; grid-template-columns: 1fr; }
       .now-strip { padding: 8px; grid-template-columns: 52px 1fr; }
       .now-label { grid-row: 1 / 7; margin-right: 8px; font-size: 15px; }
       .now-cell { min-height: 42px; padding: 3px 10px; border-left: 1px solid var(--line); }
@@ -849,11 +944,11 @@
       .phase-step strong, .phase-step span { margin: 0; }
       .task-table-head { display: none; }
       .task-row-main { grid-template-columns: minmax(0, 1fr); gap: 5px; padding: 9px; }
-      .task-toggle { width: 40px; height: 40px; flex-basis: 40px; }
+      .task-toggle { width: 44px; height: 44px; flex-basis: 44px; }
       .task-name strong, .task-name span { display: block; margin-left: 0; }
       .task-cell { padding-left: 59px; white-space: normal; }
       .task-cell:empty { display: none; }
-      .mobile-label { display: inline-block; min-width: 58px; color: var(--muted); font-size: 10.5px; font-weight: 700; }
+      .mobile-label { display: inline-block; min-width: 58px; color: var(--muted); font-size: 12px; font-weight: 700; }
       .task-details { padding: 0 10px 10px 68px; }
       .next-steps { align-items: flex-start; flex-direction: column; gap: 3px; }
       .next-step-sequence { white-space: normal; }
@@ -866,7 +961,11 @@
       .utility-card:last-child { grid-column: auto; }
     }
     @media (prefers-reduced-motion: reduce) {
-      *, *::before, *::after { scroll-behavior: auto !important; animation: none !important; transition: none !important; }
+      html { scroll-behavior: auto !important; }
+      .toast { transform: none; transition: opacity 160ms var(--ease-out); }
+      .trace-chevron,
+      .task-toggle .icon,
+      .summary-chevron { transform: none !important; }
     }
     body.task-hub-active { height: 100vh; overflow: hidden; }
     .task-hub { height: 100vh; overflow: hidden; display: grid; grid-template-columns: minmax(260px, 320px) 1fr; }
@@ -911,13 +1010,13 @@
 </head>
 <body>
   <a class="skip-link" href="#main-content">メイン内容へ移動</a>
-  <!-- Existing Roadmap Viewer brand asset. UI icons use Tabler Icons (MIT), encoded as data URIs for offline use. -->
+  <!-- Existing brand asset. UI icons use Tabler Icons (MIT), encoded as data URIs for offline use. -->
   <header class="app-header">
     <div class="header-inner">
       <div class="brand">
         <img class="brand-mark" id="brand-mark" data-icon="slash" alt="">
         <div class="brand-copy">
-          <h1>Roadmap Viewer</h1>
+          <h1 id="task-title">Roadmap</h1>
           <p id="source-line">計画・実行・成果物を一つの画面で確認</p>
         </div>
       </div>
@@ -959,31 +1058,40 @@
 
   <main class="shell" id="main-content" tabindex="-1">
     <section class="panel wayfinder" id="wayfinder" aria-labelledby="wayfinder-heading">
-      <div class="wayfinder-head">
-        <div>
-          <h2 id="wayfinder-heading">Now / Next</h2>
-          <p class="section-meta" id="plan-meta">Outcome Traceを読み込み中</p>
+      <div class="decision-main">
+        <div class="decision-overline">
+          <span class="decision-phase" id="wayfinder-phase">Phase —</span>
+          <span class="wayfinder-status" id="wayfinder-status" aria-live="polite">状態確認待ち</span>
         </div>
-        <span class="wayfinder-status" id="wayfinder-status" aria-live="polite">状態確認待ち</span>
-        <button class="btn" type="button" id="show-history" aria-controls="utility-disclosure" aria-expanded="false">詳細ログ<img class="icon" data-icon="chevron" alt=""></button>
+        <p class="decision-kicker">次の判断</p>
+        <h2 id="wayfinder-heading"><span class="visually-hidden">次の判断：</span><span id="wayfinder-next-decision">計画を読み込む</span></h2>
+        <p class="decision-subject" id="decision-subject">判断対象を読み込み中</p>
+        <p class="decision-context" id="plan-meta">Outcome Traceを読み込み中</p>
+        <div class="decision-actions">
+          <button class="btn primary" type="button" id="decision-evidence" data-artifact="team-journal.md">
+            <img class="icon" data-icon="file" alt="">判断の証拠を確認
+          </button>
+          <button class="btn" type="button" id="show-history" aria-controls="utility-disclosure" aria-expanded="false">
+            詳細ログ<img class="icon" data-icon="chevron" alt="">
+          </button>
+        </div>
       </div>
-      <div class="wayfinder-grid">
-        <div class="wayfinder-cell"><small>Now</small><strong id="wayfinder-phase">Phase —</strong></div>
-        <div class="wayfinder-cell"><small>Next human decision（次の判断）</small><strong id="wayfinder-next-decision">計画を読み込む</strong></div>
-        <div class="wayfinder-cell"><small>Coverage</small><strong id="wayfinder-unmatched">0 / 0 outcomes</strong></div>
-        <div class="wayfinder-cell"><small>Failed holistic check</small><strong id="wayfinder-failed">なし</strong></div>
-      </div>
+      <dl class="decision-metrics">
+        <div class="decision-metric"><dt>接続状況</dt><dd id="wayfinder-unmatched">0 / 0</dd></div>
+        <div class="decision-metric"><dt>全体検証</dt><dd id="wayfinder-failed">問題なし</dd></div>
+        <div class="decision-metric"><dt>Task進捗</dt><dd id="wayfinder-task-progress">0 / 0</dd></div>
+      </dl>
     </section>
 
     <section class="panel outcome-trace" id="outcome-trace-summary" aria-labelledby="outcome-trace-title">
       <div class="section-heading">
-        <h2 class="section-title" id="outcome-trace-title">Outcome Trace Summary</h2>
-        <span class="section-meta" id="outcome-trace-meta">0 outcomes</span>
+        <h2 class="section-title" id="outcome-trace-title">Outcome Trace</h2>
+        <span class="section-meta" id="outcome-trace-meta">0件</span>
       </div>
       <div class="trace-summary-bar" id="trace-summary-bar" aria-label="Outcome Trace集計"></div>
       <div class="artifact-warning-list" id="artifact-warnings" aria-label="成果物欠損"></div>
-      <div class="trace-table" id="outcome-trace-table" role="table" aria-label="Outcome Trace"></div>
-      <div class="trace-cards" id="outcome-trace-cards" aria-label="Outcome Trace mobile cards"></div>
+      <div class="trace-table" id="outcome-trace-table" aria-label="Outcome Trace"></div>
+      <div class="trace-cards" id="outcome-trace-cards" aria-label="モバイル用Outcome Trace"></div>
     </section>
 
     <section class="panel revision-panel" id="revision-panel" aria-labelledby="revision-title">
@@ -1026,7 +1134,7 @@
       <div class="utility-content">
         <section class="utility-card">
           <h3>Task一覧</h3>
-          <div class="task-tree" id="task-tree" role="table" aria-label="実装計画のTask"></div>
+          <div class="task-tree" id="task-tree" role="list" aria-label="実装計画のTask"></div>
           <div class="next-steps" id="next-steps">
             <strong>次の3ステップ:</strong><span class="next-step-sequence" id="next-step-sequence">計画を読み込む</span>
           </div>
@@ -1288,8 +1396,9 @@
         }
         const heading = line.match(/^(#{1,6})\s+(.+)$/);
         if (heading) {
-          const level = heading[1].length;
-          output.push(`<h${level}>${renderInlineMarkdown(heading[2])}</h${level}>`);
+          const sourceLevel = heading[1].length;
+          const level = Math.min(6, sourceLevel + 3);
+          output.push(`<h${level} class="md-heading-${sourceLevel}">${renderInlineMarkdown(heading[2])}</h${level}>`);
           index += 1;
           continue;
         }
@@ -1313,7 +1422,8 @@
             const checkbox = item[1].match(/^\[([ xX])\]\s+(.+)$/);
             if (checkbox) {
               const checked = checkbox[1].toLowerCase() === 'x';
-              items.push(`<li class="md-check"><input type="checkbox" disabled ${checked ? 'checked ' : ''}aria-label="${checked ? '完了' : '未完了'}"><span>${renderInlineMarkdown(checkbox[2])}</span></li>`);
+              const checkboxLabel = `${checked ? '完了' : '未完了'}：${stripMarkdown(checkbox[2])}`;
+              items.push(`<li class="md-check"><input type="checkbox" disabled ${checked ? 'checked ' : ''}aria-label="${escapeMarkdownHtml(checkboxLabel)}"><span>${renderInlineMarkdown(checkbox[2])}</span></li>`);
             } else {
               items.push(`<li>${renderInlineMarkdown(item[1])}</li>`);
             }
@@ -1508,13 +1618,13 @@
     }
     function stateLabel(state) {
       return {
-        matched: 'Matched',
-        'missing-spec': 'Spec missing',
-        'missing-implementation': 'Implementation missing',
-        'missing-acceptance': 'Acceptance missing',
-        'missing-evidence': 'Evidence missing',
-        'failed-holistic': 'Holistic failed'
-      }[state] || 'Unknown';
+        matched: '接続済み',
+        'missing-spec': '仕様不足',
+        'missing-implementation': '実装不足',
+        'missing-acceptance': '合格条件不足',
+        'missing-evidence': '証拠不足',
+        'failed-holistic': '全体検証失敗'
+      }[state] || '状態不明';
     }
     function suggestedFileForState(state) {
       return {
@@ -1714,12 +1824,26 @@
     }
     function buildNextDecision(outcomes, warnings, summary) {
       const failed = outcomes.find(outcome => outcome.state === 'failed-holistic');
-      if (failed) return { label: `${failed.outcome} -> holistic checkを確認`, file: failed.suggestedFile, state: failed.state };
+      if (failed) return { label: `${failed.outcome}：全体検証を確認`, action: '全体検証を確認する', context: failed.outcome, file: failed.suggestedFile, state: failed.state };
       const missing = outcomes.find(outcome => outcome.state !== 'matched');
-      if (missing) return { label: `${missing.outcome} -> ${stateLabel(missing.state)}`, file: missing.suggestedFile, state: missing.state };
+      if (missing) {
+        const action = {
+          'missing-spec': '仕様を接続する',
+          'missing-implementation': '実装記録を接続する',
+          'missing-acceptance': '合格条件を接続する',
+          'missing-evidence': '検証の証拠を紐づける'
+        }[missing.state] || '未接続を確認する';
+        return { label: `${missing.outcome}：${stateLabel(missing.state)}`, action, context: missing.outcome, file: missing.suggestedFile, state: missing.state };
+      }
       const warning = warnings[0];
-      if (warning) return { label: warning.message, file: warning.file, state: warning.kind };
-      return { label: summary.total ? 'Outcome Traceは接続済み。検証bundleを確認' : 'Outcome Traceを作成', file: 'team-journal.md', state: 'matched' };
+      if (warning) return { label: warning.message, action: '不足している成果物を確認する', context: warning.message, file: warning.file, state: warning.kind };
+      return {
+        label: summary.total ? 'Outcome Traceは接続済み。検証bundleを確認' : 'Outcome Traceを作成',
+        action: summary.total ? '検証bundleを確認する' : 'Outcome Traceを作成する',
+        context: summary.total ? 'すべてのOutcomeが接続済み' : 'Outcome Traceがまだありません',
+        file: 'team-journal.md',
+        state: 'matched'
+      };
     }
     function buildOutcomeTrace(files, reviews) {
       const explicit = extractExplicitOutcomeTrace(files);
@@ -1806,7 +1930,7 @@
 
     const ROADMAP_MODEL = globalThis.__ROADMAP_MODEL__;
     const KNOWN_FILES = ROADMAP_MODEL.MODEL_KNOWN_FILES;
-    let currentSnapshot = ROADMAP_MODEL.normalizeSnapshot({ title: 'Roadmap Viewer', files: {} });
+    let currentSnapshot = ROADMAP_MODEL.normalizeSnapshot({ title: 'Roadmap', files: {} });
     let currentModel = null;
     let lastSnapshotSignature = '';
     let liveTimer = null;
@@ -1973,7 +2097,13 @@
       requestAnimationFrame(() => restoreFocusKey(focusKey));
     }
     function renderHeader(model) {
-      byId('source-line').textContent = model.snapshot.taskDir || `${Object.keys(model.snapshot.files).length} files loaded`;
+      const taskTitle = String(model.snapshot.title || '').trim() || 'Roadmap';
+      byId('task-title').textContent = taskTitle;
+      document.title = taskTitle;
+      byId('source-line').textContent = model.snapshot.taskDir
+        ? `${Object.keys(model.snapshot.files).length}ファイルから生成`
+        : `${Object.keys(model.snapshot.files).length}ファイルを読込`;
+      byId('source-line').title = model.snapshot.taskDir || '';
       const updated = model.snapshot.generatedAt;
       byId('header-updated').textContent = updated ? `最終更新: ${formatRelative(updated)}` : '最終更新: —';
       byId('header-updated').title = updated ? formatAbsolute(updated) : '';
@@ -1987,11 +2117,15 @@
       byId('wayfinder-status').textContent = summary.missingTotal
         ? `未接続 ${summary.missingTotal}/${summary.total}`
         : summary.total
-          ? 'Outcome Trace matched'
+          ? '全Outcome接続済み'
           : 'Outcome Traceなし';
-      byId('wayfinder-next-decision').textContent = model.nextDecision.label;
-      byId('wayfinder-unmatched').textContent = `${summary.matched} / ${summary.total} outcomes`;
-      byId('wayfinder-failed').textContent = summary.failedHolistic ? `failed holistic ${summary.failedHolistic}` : 'なし';
+      byId('wayfinder-next-decision').textContent = model.nextDecision.action || model.nextDecision.label;
+      byId('decision-subject').textContent = model.nextDecision.context || model.nextDecision.label;
+      byId('wayfinder-unmatched').textContent = `${summary.matched} / ${summary.total} 接続済み`;
+      byId('wayfinder-failed').textContent = summary.failedHolistic ? `失敗 ${summary.failedHolistic}件` : '問題なし';
+      byId('wayfinder-task-progress').textContent = `${progress.done} / ${progress.total} 完了`;
+      const firstIssue = model.outcomes.find(outcome => outcome.state !== 'matched');
+      byId('decision-evidence').dataset.artifact = firstIssue?.suggestedFile || 'team-journal.md';
       byId('artifact-jump').textContent = `全${model.artifacts.length}件を見る`;
       byId('plan-meta').textContent = active
         ? `現在: ${active.title} / Task ${progress.done}/${progress.total}`
@@ -2004,46 +2138,61 @@
     }
     function renderOutcomeTrace(model) {
       const summary = model.traceSummary;
-      byId('outcome-trace-meta').textContent = `${summary.matched}/${summary.total} matched`;
+      byId('outcome-trace-meta').textContent = `${summary.matched}/${summary.total} 接続済み`;
       const tokens = [
-        ['Matched', summary.matched, 'good'],
-        ['Spec missing', summary.missingSpec, summary.missingSpec ? 'warn' : 'good'],
-        ['Implementation missing', summary.missingImplementation, summary.missingImplementation ? 'warn' : 'good'],
-        ['Acceptance missing', summary.missingAcceptance, summary.missingAcceptance ? 'warn' : 'good'],
-        ['Evidence missing', summary.missingEvidence, summary.missingEvidence ? 'warn' : 'good'],
-        ['Holistic failed', summary.failedHolistic, summary.failedHolistic ? 'danger' : 'good']
+        ['全体検証失敗', summary.failedHolistic, 'danger'],
+        ['証拠不足', summary.missingEvidence, 'warn'],
+        ['合格条件不足', summary.missingAcceptance, 'warn'],
+        ['実装不足', summary.missingImplementation, 'warn'],
+        ['仕様不足', summary.missingSpec, 'warn'],
+        ['接続済み', summary.matched, 'good']
       ];
       byId('trace-summary-bar').innerHTML = tokens
+        .filter(([label, count]) => count > 0 || label === '接続済み')
         .map(([label, count, tone]) => `<span class="trace-token ${tone}"><strong>${count}</strong>${label}</span>`)
         .join('');
       byId('artifact-warnings').innerHTML = model.artifactWarnings.length
-        ? model.artifactWarnings.map(warning => `<button class="artifact-warning" type="button" data-artifact="${escapeHtml(warning.file)}">${escapeHtml(warning.message)} -> ${escapeHtml(warning.file)}</button>`).join('')
-        : '<span class="trace-token good">artifact warnings 0</span>';
-      const header = '<div class="trace-row header" role="row"><span role="columnheader">Outcome</span><span role="columnheader">Plan → Evidence</span><span role="columnheader">Human check</span><span role="columnheader">State</span></div>';
-      const rows = model.outcomes.map(outcome => `
-        <div class="trace-row" role="row" aria-label="${escapeHtml(outcome.outcome)} は ${escapeHtml(outcome.stateLabel)}">
-          <span role="cell"><strong>${escapeHtml(outcome.outcome)}</strong></span>
-          <span role="cell" class="trace-chain">
-            <span><small>Spec</small>${escapeHtml(outcome.requirement || 'missing')}</span>
-            <span><small>Implementation</small>${escapeHtml(outcome.implementation || 'missing')}</span>
-            <span><small>Acceptance</small>${escapeHtml(outcome.acceptance || 'missing')}</span>
-            <span><small>Evidence</small>${escapeHtml(outcome.evidence || 'missing')}</span>
-          </span>
-          <span role="cell" class="human-check"><span><small>Review</small><strong>${escapeHtml(outcome.humanReview || 'Human review missing')}</strong></span><span><small>Objection</small>${escapeHtml(outcome.objection || 'Objection not recorded')}</span></span>
-          <span role="cell"><span class="trace-state ${escapeHtml(outcome.state)}">${escapeHtml(outcome.stateLabel)}</span></span>
-        </div>`);
-      byId('outcome-trace-table').innerHTML = model.outcomes.length ? header + rows.join('') : '<div class="empty">Outcome Traceを読み込めません。</div>';
+        ? model.artifactWarnings.map(warning => `<button class="artifact-warning" type="button" data-artifact="${escapeHtml(warning.file)}">要確認：${escapeHtml(warning.message)}（${escapeHtml(warning.file)}）</button>`).join('')
+        : '<span class="trace-token good">成果物の欠損なし</span>';
+
+      const issues = model.outcomes.filter(outcome => outcome.state !== 'matched');
+      const matched = model.outcomes.filter(outcome => outcome.state === 'matched');
+      const outcomeDisclosure = (outcome, expanded) => `
+        <details class="trace-outcome ${escapeHtml(outcome.state)}"${expanded ? ' open' : ''} aria-label="${escapeHtml(outcome.outcome)} は ${escapeHtml(outcome.stateLabel)}">
+          <summary>
+            <strong>${escapeHtml(outcome.outcome)}</strong>
+            <span class="trace-state ${escapeHtml(outcome.state)}">${escapeHtml(outcome.stateLabel)}</span>
+            ${iconHtml('chevron', 'trace-chevron')}
+          </summary>
+          <div class="trace-detail">
+            <div class="trace-chain">
+              <span><small>仕様</small>${escapeHtml(outcome.requirement || '未接続')}</span>
+              <span><small>実装</small>${escapeHtml(outcome.implementation || '未接続')}</span>
+              <span><small>合格条件</small>${escapeHtml(outcome.acceptance || '未接続')}</span>
+              <span><small>証拠</small>${escapeHtml(outcome.evidence || '未接続')}</span>
+            </div>
+            <div>
+              <div class="human-check">
+                <span><small>人間レビュー</small><strong>${escapeHtml(outcome.humanReview || '未記録')}</strong></span>
+                <span><small>異議</small>${escapeHtml(outcome.objection || '未記録')}</span>
+              </div>
+              <button class="btn trace-open-artifact" type="button" data-artifact="${escapeHtml(outcome.suggestedFile)}">${iconHtml('file')}証拠を開く</button>
+            </div>
+          </div>
+        </details>`;
+      const matchedDisclosure = matched.length
+        ? `<details class="matched-trace">
+            <summary><strong>接続済みOutcome ${matched.length}件</strong><span class="trace-state matched">確認済み</span>${iconHtml('chevron', 'trace-chevron')}</summary>
+            <div class="matched-outcomes">${matched.map(outcome => `<div class="matched-outcome"><strong>${escapeHtml(outcome.outcome)}</strong><span class="trace-state matched">${escapeHtml(outcome.stateLabel)}</span></div>`).join('')}</div>
+          </details>`
+        : '';
+      const empty = '<div class="empty">Outcome Traceを読み込めません。</div>';
+      byId('outcome-trace-table').innerHTML = model.outcomes.length
+        ? issues.map(outcome => outcomeDisclosure(outcome, true)).join('') + matchedDisclosure
+        : empty;
       byId('outcome-trace-cards').innerHTML = model.outcomes.length
-        ? model.outcomes.map(outcome => `
-            <article class="trace-card" aria-label="${escapeHtml(outcome.outcome)} は ${escapeHtml(outcome.stateLabel)}">
-              <strong>${escapeHtml(outcome.outcome)}</strong>
-              <span>State: ${escapeHtml(outcome.stateLabel)}</span>
-              <span>Open: ${escapeHtml(outcome.suggestedFile)}</span>
-              <span>${escapeHtml(outcome.evidence || outcome.acceptance || outcome.implementation || outcome.requirement || 'Trace missing')}</span>
-              <span>Human review: ${escapeHtml(outcome.humanReview || 'missing')}</span>
-              <span>Objection: ${escapeHtml(outcome.objection || 'not recorded')}</span>
-            </article>`).join('')
-        : '<div class="empty">Outcome Traceを読み込めません。</div>';
+        ? issues.map(outcome => outcomeDisclosure(outcome, false)).join('') + matchedDisclosure
+        : empty;
     }
     function renderRevisions(model) {
       byId('revision-meta').textContent = `${model.revisions.length} events`;
@@ -2081,7 +2230,7 @@
         tree.innerHTML = '<div class="empty">30_plan.mdのTask見出しを読み込むと計画を表示します。</div>';
         return;
       }
-      const head = '<div class="task-table-head" role="row"><span role="columnheader">タスク</span><span role="columnheader">状態</span><span role="columnheader">依存（blockedBy）</span><span role="columnheader">備考</span></div>';
+      const head = '<div class="task-table-head" aria-hidden="true"><span>タスク</span><span>状態</span><span>依存（blockedBy）</span><span>備考</span></div>';
       const rows = model.tasks.map(task => {
         const current = model.activeTask?.number === task.number;
         const recordedOnly = !current && model.recordedActiveTask?.number === task.number;
@@ -2089,16 +2238,16 @@
         const expanded = expandedTasks.has(task.number);
         const detailId = `task-detail-${task.number.replace('.', '-')}`;
         return `
-          <article class="task-row ${current ? 'current' : recordedOnly ? 'recorded' : ''}" data-task="${escapeHtml(task.number)}" role="rowgroup">
-            <div class="task-row-main" role="row">
-              <div class="task-primary" role="cell">
+          <article class="task-row ${current ? 'current' : recordedOnly ? 'recorded' : ''}" data-task="${escapeHtml(task.number)}" role="listitem">
+            <div class="task-row-main">
+              <div class="task-primary">
                 <button class="task-toggle" type="button" data-task-toggle="${escapeHtml(task.number)}" aria-expanded="${expanded}" aria-controls="${detailId}" aria-label="Task ${escapeHtml(task.number)}の詳細を${expanded ? '閉じる' : '開く'}">${iconHtml('chevron')}</button>
                 ${iconHtml(iconForStatus(task.status), 'task-status-icon')}
                 <span class="task-name"><strong>${escapeHtml(task.title)}</strong><span>Task ${escapeHtml(task.number)}${current ? '・現在' : recordedOnly ? '・記録' : ''}</span></span>
               </div>
-              <span class="task-cell" role="cell" aria-label="状態: ${escapeHtml(displayedStatus)}"><span class="mobile-label" aria-hidden="true">状態</span><span class="state-chip ${recordedOnly ? 'recorded' : escapeHtml(task.status)}">${iconHtml(recordedOnly ? 'clock' : iconForStatus(task.status))}${escapeHtml(displayedStatus)}</span></span>
-              <span class="task-cell" role="cell" aria-label="依存: ${escapeHtml(task.blockedBy || 'なし')}"><span class="mobile-label" aria-hidden="true">依存</span>${escapeHtml(task.blockedBy || '—')}</span>
-              <span class="task-cell" role="cell" aria-label="備考: ${escapeHtml(task.note || task.target || (task.total ? `${task.done}/${task.total}チェック` : 'なし'))}"><span class="mobile-label" aria-hidden="true">備考</span>${escapeHtml(task.note || task.target || (task.total ? `${task.done}/${task.total}チェック` : '—'))}</span>
+              <span class="task-cell" aria-label="状態: ${escapeHtml(displayedStatus)}"><span class="mobile-label" aria-hidden="true">状態</span><span class="state-chip ${recordedOnly ? 'recorded' : escapeHtml(task.status)}">${iconHtml(recordedOnly ? 'clock' : iconForStatus(task.status))}${escapeHtml(displayedStatus)}</span></span>
+              <span class="task-cell" aria-label="依存: ${escapeHtml(task.blockedBy || 'なし')}"><span class="mobile-label" aria-hidden="true">依存</span>${escapeHtml(task.blockedBy || '—')}</span>
+              <span class="task-cell" aria-label="備考: ${escapeHtml(task.note || task.target || (task.total ? `${task.done}/${task.total}チェック` : 'なし'))}"><span class="mobile-label" aria-hidden="true">備考</span>${escapeHtml(task.note || task.target || (task.total ? `${task.done}/${task.total}チェック` : '—'))}</span>
             </div>
             <div class="task-details" id="${detailId}" role="region" aria-label="Task ${escapeHtml(task.number)}の詳細" ${expanded ? '' : 'hidden'}>
               ${task.target ? `<strong>変更対象:</strong> ${escapeHtml(task.target)}` : ''}
@@ -2211,7 +2360,7 @@
       const details = byId('utility-disclosure');
       details.open = true;
       ['open-utility', 'show-history'].forEach(id => byId(id).setAttribute('aria-expanded', 'true'));
-      details.scrollIntoView({ block: 'start', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+      details.scrollIntoView({ block: 'start', behavior: 'auto' });
       const target = section ? byId(section) : details.querySelector('summary');
       requestAnimationFrame(() => target?.focus({ preventScroll: true }));
     }
@@ -2604,7 +2753,7 @@
       byId('theme-toggle').setAttribute('aria-label', dark ? 'ライトテーマに切り替える' : 'ダークテーマに切り替える');
       applyIcons();
       setupInteractions();
-      render(parseEmbeddedSnapshot() || { title: 'Roadmap Viewer', files: {} }, { announce: false });
+      render(parseEmbeddedSnapshot() || { title: 'Roadmap', files: {} }, { announce: false });
       startLivePolling();
       clockTimer = window.setInterval(refreshFreshness, 30000);
     }
