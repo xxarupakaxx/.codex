@@ -682,3 +682,17 @@ test('warning tokens and missing artifacts have accessible contrast contracts', 
   assert.match(html, /\.artifact-warning\s*\{[^}]*color:\s*var\(--warn-text\)/);
   assert.match(html, /\.artifact-state\.missing\s*\{[^}]*color:\s*var\(--warn-text\)\s*!important/);
 });
+
+test('focused document workspace keeps markdown readable and responsive', () => {
+  assert.match(html, /class="document-workspace" aria-label="Markdownワークスペース"/);
+  assert.match(html, /class="document-sidebar" aria-label="Markdownソース"/);
+  assert.match(html, /class="document-reader" aria-label="選択したMarkdown"/);
+  assert.match(html, /\.document-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(228px,\s*280px\)\s*minmax\(0,\s*1fr\)/);
+  assert.match(html, /\.source-preview\s*\{[^}]*font-size:\s*16px/);
+  assert.match(html, /\.source-preview\s*\{[^}]*line-height:\s*1\.75/);
+  assert.doesNotMatch(html, /\.source-preview\s*\{[^}]*max-height/);
+  assert.match(html, /--shadow:\s*none/);
+  assert.match(html, /font-family:\s*ui-serif,\s*"Yu Mincho"/);
+  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.document-workspace\s*\{\s*grid-template-columns:\s*1fr/);
+  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.document-sidebar\s*\{[^}]*border-bottom:\s*1px solid var\(--line\)/);
+});
