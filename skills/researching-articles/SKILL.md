@@ -1,6 +1,6 @@
 ---
 name: researching-articles
-description: URLや記事・ドキュメントを受け取り、周辺コンテキスト（関連リポジトリ・仕様書・比較技術）まで調査して、10年後の新人でも理解できる詳細なknowledgeノートをInbox/knowledge/に作成する。「詳しく調べて」「ノートにして」「周辺コンテキストも拾って」「深掘りして」「わかりやすくまとめて」等のフレーズで使用。captureの深掘りモードとして機能する。
+description: URLや記事・ドキュメントを受け取り、周辺コンテキスト（関連リポジトリ・仕様書・比較技術）まで調査して、10年後の新人でも理解できる詳細なknowledgeノートをInbox/knowledge/に作成し、検証後にone-page-concept-sketchを生成する。「詳しく調べて」「ノートにして」「周辺コンテキストも拾って」「深掘りして」「わかりやすくまとめて」等のフレーズで使用。captureの深掘りモードとして機能する。
 ---
 
 # URL深掘り調査 → Knowledgeノート作成
@@ -90,6 +90,22 @@ related: ["[[関連ノートやMOC]]"]
 - `## 💭 メモ` 配下に元URLがあれば、その行直下に `    - → 整理済み [[ノート名]]` を追記
 - `## 🔗 今日のノート` がある場合はそこにも `[[ノート名]]` を追記
 
+### Step 6: Knowledgeノートの検証
+
+Vaultルートで `ruby _shared-ai/scripts/validate-vault-knowledge.rb` を実行する。
+FAILがあれば同じ作業内で修正して再実行し、PASSするまで次へ進まない。
+
+### Step 7: one-page-concept-sketch（直列）
+
+Knowledgeノートの保存、Dailyリンク、Step 6の検証が完了した後に `$one-page-concept-sketch` を実行する。
+
+1. `.codex/skills/one-page-concept-sketch/SKILL.md` を正本として全文読み、最新のVault Output ContractとQuality Checkに従う。
+2. 完成したKnowledgeノートを入力にし、複数ノートを作成した場合は1ノートにつき1件のスケッチを作る。
+3. source-based summaryとしてExact Board modeを既定にし、lane名は `researching-articles` とする。ImagegenまたはDualはユーザーが明示した場合だけ使う。
+4. Source Coverageには元URL、周辺調査の根拠、中心主張、仕組み、制限を引き継ぐ。スケッチ段階で新しい事実を推測して追加しない。
+5. 保存先、版管理、source noteとDailyへのリンクは`one-page-concept-sketch`の正本に委譲する。
+6. Markdownノート、Exact Board PNG、全wikilinkの実在確認が終わるまで調査タスク全体を完了扱いにしない。生成できない場合は、壊れたリンクを残さず未完了理由を報告する。
+
 ## 品質チェック
 
 ノートを書き終えたら以下を自問する：
@@ -100,6 +116,9 @@ related: ["[[関連ノートやMOC]]"]
 - [ ] 既知の制限・落とし穴を書いているか
 - [ ] LLMっぽい空虚な表現（「重要なのは」「掘り下げる」）を使っていないか（japanese-tech-writing規範）
 - [ ] フロー・アーキテクチャ・比較など図にした方が分かりやすい箇所にMermaidを使っているか
+- [ ] 作成したKnowledgeノートごとにconcept sketchが1件あり、source noteとDailyから辿れるか
+- [ ] Exact Boardだけで主題、中心主張、仕組み、次の判断、望ましい終点、重要な制限を説明できるか
+- [ ] 埋め込んだ画像wikilinkが実在するPNGへ解決するか
 
 ## ガード
 
