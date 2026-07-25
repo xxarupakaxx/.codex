@@ -78,6 +78,7 @@ LLM コーディングで陥りがちな失敗を減らすための行動規範�
    - よりシンプルな道があれば push back する
 
 2. **Simplicity First** — 問題を解く最小コードのみ書く・投機的拡張をしない
+   - IMPORTANT: Do not write overly defensive code. Always prefer simplicity over pathological complexity.
    - 依頼にない機能を勝手に足さない
    - 1 回しか使わないコードを抽象化しない（YAGNI）
    - 起こり得ないシナリオへのエラーハンドリングを書かない
