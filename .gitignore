@@ -41,7 +41,6 @@ computer-use/
 /hooks/
 /plugins/
 /plugins/cache/
-pets/
 skills/.system/
 # Business-specific automation, excluded from version control
 /scheduled-tasks/
