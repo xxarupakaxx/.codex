@@ -1280,6 +1280,34 @@ test('implementation workspaceはTask indexと選択detailを持つsplit viewで
   assert.match(html, /\.brief-source-code\s*\{[^}]*overflow-x:\s*auto/);
 });
 
+test('選択Taskは現在Taskと別の主状態で、計画と実コードも異なるsurfaceであるべき', () => {
+  assert.match(
+    html,
+    /\.brief-flow-item\.current:not\(\[aria-selected="true"\]\)\s*\{/,
+    'current-but-not-selected needs a secondary visual state',
+  );
+  assert.match(
+    html,
+    /\.brief-flow-item\[aria-selected="true"\]\s*\{/,
+    'selected task needs its own primary visual state',
+  );
+  assert.doesNotMatch(
+    html,
+    /\.brief-flow-item\.current,\s*\.brief-flow-item\[aria-selected="true"\]/,
+    'current and selected must not share one visual rule',
+  );
+  assert.match(
+    html,
+    /\.brief-implementation\s*\{[^}]*border-left:[^;]+;[^}]*background:/s,
+    'planned steps need a dedicated plan surface',
+  );
+  assert.match(
+    html,
+    /\.brief-source-preview\s*\{[^}]*border-top:[^;]+;/s,
+    'current source fact needs a distinct source surface',
+  );
+});
+
 test('implementation workspaceはsourceのpath・anchor・codeをHTML escapeして描画すべき', () => {
   const renderSource = html.match(/function renderExecutionBrief\(model\) \{([\s\S]*?)\n    \}\n    function renderHeader/)?.[1] || '';
 

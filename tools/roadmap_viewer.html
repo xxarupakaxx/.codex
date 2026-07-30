@@ -395,11 +395,20 @@
       text-align: left;
       cursor: pointer;
     }
-    .brief-flow-item.current,
+    .brief-flow-item.current:not([aria-selected="true"]) {
+      border-color: var(--line-strong);
+      background: var(--surface);
+      box-shadow: inset 2px 0 0 var(--line-strong);
+    }
     .brief-flow-item[aria-selected="true"] {
-      border-color: color-mix(in srgb, var(--accent) 48%, var(--line));
+      border-color: var(--accent);
       background: var(--surface-accent);
-      box-shadow: inset 3px 0 0 var(--accent);
+      box-shadow: inset 4px 0 0 var(--accent);
+    }
+    .brief-flow-item[aria-selected="true"] .brief-step-number {
+      border-color: var(--accent);
+      background: var(--accent);
+      color: var(--surface);
     }
     .brief-flow-item.status-complete { color: var(--muted); }
     .brief-step-number {
@@ -462,7 +471,13 @@
       font-weight: 720;
       overflow-wrap: anywhere;
     }
-    .brief-implementation { margin-top: 16px; }
+    .brief-implementation {
+      margin-top: 16px;
+      padding: 12px 14px;
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius);
+      background: var(--surface-accent);
+    }
     .brief-implementation h5,
     .brief-source-heading h5 {
       margin: 0;
@@ -480,8 +495,9 @@
     .brief-implementation li + li { margin-top: 4px; }
     .brief-source-preview {
       min-width: 0;
-      margin-top: 16px;
+      margin-top: 12px;
       border: 1px solid var(--line);
+      border-top: 3px solid #17201c;
       border-radius: var(--radius);
       overflow: hidden;
       background: var(--surface);
@@ -493,6 +509,13 @@
       justify-content: space-between;
       gap: 12px;
       border-bottom: 1px solid var(--line);
+    }
+    .brief-source-heading h5 span {
+      padding: 2px 6px;
+      border-radius: 999px;
+      background: #17201c;
+      color: #e9f1ed;
+      letter-spacing: .02em;
     }
     .brief-source-location { margin: 5px 0 0; color: var(--faint); font-size: 10px; overflow-wrap: anywhere; }
     .brief-source-location code { color: var(--accent-strong); font-size: 10px; }
