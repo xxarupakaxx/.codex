@@ -85,6 +85,17 @@ function buildSnapshot() {
 - contract testを追加する。
 - source previewの境界を固定する。
 
+### 実装図
+
+\`\`\`mermaid
+flowchart LR
+T["contract test"]
+M["Viewer model"]
+U["実装UI"]
+T -->|"固定する"| M
+M -->|"描画する"| U
+\`\`\`
+
 ### 成果物
 
 - contract test
@@ -454,6 +465,25 @@ test("implementation workspace keeps every task visible and binds selection to p
     assert.equal(await tasks.nth(1).getAttribute("aria-selected"), "true");
     await page.keyboard.press("Home");
     assert.equal(await tasks.nth(0).getAttribute("aria-selected"), "true");
+  }, buildImplementationSnapshot());
+});
+
+test("implementation workspace renders syntax color and only the selected task explicit diagram", async (t) => {
+  await withPage(t, { width: 1440, height: 1000 }, async (page) => {
+    assert.ok(await page.locator("#implementation-code .syntax-keyword").count() >= 1);
+    assert.ok(await page.locator("#implementation-code .syntax-string").count() >= 1);
+    assert.deepEqual(
+      await page.locator("#implementation-diagram-flow [data-diagram-node]").allTextContents(),
+      ["contract test", "Viewer model", "実装UI"],
+    );
+    assert.deepEqual(
+      await page.locator("#implementation-diagram-relations li").allTextContents(),
+      ["contract test → 固定する → Viewer model", "Viewer model → 描画する → 実装UI"],
+    );
+
+    await page.locator('[data-implementation-task="2"]').click();
+    assert.equal(await page.locator("#implementation-diagram-flow [data-diagram-node]").count(), 0);
+    assert.match(await page.locator("#implementation-diagram-message").textContent(), /未記録.*明示された関係だけ/);
   }, buildImplementationSnapshot());
 });
 

@@ -196,6 +196,16 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 - [ ] 手順1
 - [ ] 手順2
 
+#### 実装図
+```mermaid
+flowchart LR
+A["入力"]
+B["処理"]
+C["成果物"]
+A -->|"変換する"| B
+B -->|"生成する"| C
+```
+
 #### 成果物
 - [このTaskで生まれるfile、document、state]
 
@@ -211,13 +221,15 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 |-------|-------|------|
 ```
 
-Roadmap Viewerは各Taskの `目的`、`変更対象`、`実装根拠`、`実装`、`成果物`、`検証`をsource-boundで表示する。記載がないfieldをViewer側で推測して埋めない。
+Roadmap Viewerは各Taskの `目的`、`変更対象`、`実装根拠`、`実装`、任意の`実装図`、`成果物`、`検証`をsource-boundで表示する。記載がないfieldをViewer側で推測して埋めない。
+
+`実装図` は任意fieldであり、最初のMermaid `flowchart TB` / `TD` / `LR`を選択Taskの実装フローへ使う。矩形・判断nodeと明示edge・edge labelの限定構文だけを扱う。Viewerは実装手順、変更対象、実コードからnodeやedgeを補作しない。図と同じ関係をテキスト一覧でも表示する。
 
 `実装根拠` は任意fieldであり、最初のinline code参照1件だけを実ソース抜粋へ使う。書式は `repo:<source-rootからの相対path>#<anchor>` または `repo:<source-rootからの相対path>#L<開始行>-L<終了行>` とする。bare path、absolute path、`..` を含むpathは解決しない。
 
 generatorは実コードを最大12行・4KiBに制限し、snapshot全体でも32KiBを超えて埋め込まない。既定allowlist外のprefixは `--source-allow-prefix` で明示する。個人ノート領域、hidden state、secret file、`automation_read: false`、symlink、binary、非UTF-8、1MiB超のfile、high-confidenceなsecret contentは本文を表示しない。
 
-Viewerでは `実装` を「こう実装する」という計画、generatorが解決した抜粋を「現在の実コード」という生成時点の事実として分離する。sourceが未記録または拒否された場合、plan中のcodeらしい文字列から補作しない。
+Viewerでは `実装` を「こう実装する」という計画、`実装図`をplanに明示した変更フロー、generatorが解決した抜粋を「現在の実コード」という生成時点の事実として分離する。sourceが未記録または拒否された場合、plan中のcodeらしい文字列から補作しない。source previewはtokenごとにescapeしてから色付けし、未対応言語は色なしのescape済み本文へ戻す。
 
 `事実・判断・未確定`のsource priorityは `viewing-plans` を正本とする。既存taskの `team-journal.md` にある `Decisions` と `Open Questions` も有効なsourceとして扱う。
 

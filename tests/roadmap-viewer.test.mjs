@@ -1236,6 +1236,7 @@ test('single-task HTMLは具体的な実行briefをConcept Mapより先に配置
     assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
   }
   assert.doesNotMatch(html, /id=["']brief-summary["']/);
+  assert.doesNotMatch(html, /id=["']source-line["']/);
   assert.ok(html.indexOf('id="execution-brief"') < html.indexOf('id="concept-map-disclosure"'));
 });
 
@@ -1318,6 +1319,94 @@ test('implementation workspaceはsourceのpath・anchor・codeをHTML escapeし�
   assert.match(html, /<pre[^>]*id=["']brief-source-code["'][^>]*>[\s\S]*?<code/);
 });
 
+test('source highlighterはtokenを色分けしつつscript breakoutを文字列として保持すべき', () => {
+  const highlighted = model.highlightSourceCode(
+    'const value = 42; // note\nconst payload = "</script><script>alert(1)</script>";',
+    'javascript',
+  );
+
+  assert.match(highlighted, /class="syntax-token syntax-keyword">const<\/span>/);
+  assert.match(highlighted, /class="syntax-token syntax-number">42<\/span>/);
+  assert.match(highlighted, /class="syntax-token syntax-comment">\/\/ note<\/span>/);
+  assert.match(highlighted, /class="syntax-token syntax-string">/);
+  assert.match(highlighted, /&lt;\/script&gt;&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.doesNotMatch(highlighted, /<script>/);
+});
+
+test('source highlighterは主要なplan実装言語へ最低1つの意味tokenを付けるべき', () => {
+  const examples = new Map([
+    ['python', ['def build():\\n    return True', /syntax-keyword/]],
+    ['typescript', ['const ready: boolean = true;', /syntax-(?:keyword|literal)/]],
+    ['html', ['<section aria-label="plan">', /syntax-tag/]],
+    ['css', ['.plan { opacity: 0.8; }', /syntax-number/]],
+    ['json', ['{"ready": true}', /syntax-(?:string|literal)/]],
+    ['shell', ['if test -f plan; then # ready', /syntax-(?:keyword|comment)/]],
+    ['markdown', ['# 実装計画', /syntax-keyword/]],
+  ]);
+
+  for (const [language, [source, expected]] of examples) {
+    assert.match(model.highlightSourceCode(source.replaceAll('\\n', '\n'), language), expected, language);
+  }
+  assert.equal(model.highlightSourceCode('<raw>', 'unknown'), '&lt;raw&gt;');
+});
+
+test('Task別実装図は明示Mermaidだけを選択Taskへ結び付け、未記録Taskを補完しないべき', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: {
+      '30_plan.md': `## Task 1: 図あり
+
+### 実装
+
+- parserへ渡す。
+
+### 実装図
+
+\`\`\`mermaid
+flowchart LR
+S["source"]
+P["parser"]
+V["viewer"]
+S -->|"解析する"| P
+P -->|"描画する"| V
+\`\`\`
+
+## Task 2: 図なし
+
+### 実装
+
+- sourceから関係を推測しない。`
+    }
+  }), { nowMs });
+
+  const explicit = model.buildExecutionBrief(result, '1');
+  const absent = model.buildExecutionBrief(result, '2');
+  assert.equal(explicit.selectedImplementationDiagram.direction, 'LR');
+  assert.deepEqual(Array.from(explicit.selectedImplementationDiagram.nodes, node => node.title), ['source', 'parser', 'viewer']);
+  assert.deepEqual(Array.from(explicit.selectedImplementationDiagram.edges, edge => edge.predicate), ['解析する', '描画する']);
+  assert.equal(absent.selectedImplementationDiagram, null);
+});
+
+test('implementation workspaceは選択Taskの実装図と同値な関係一覧を持つべき', () => {
+  const renderDiagramSource = html.match(/function renderImplementationDiagram\(diagram\) \{([\s\S]*?)\n    \}\n    function renderExecutionBrief/)?.[1] || '';
+  for (const id of [
+    'implementation-diagram',
+    'implementation-diagram-flow',
+    'implementation-diagram-relations',
+    'implementation-diagram-message',
+  ]) {
+    assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
+  }
+  assert.match(html, /function renderImplementationDiagram\(diagram\)/);
+  assert.match(html, /aria-label="実装図の関係"/);
+  assert.match(html, /\.implementation-diagram-flow\s*\{[^}]*display:\s*grid/);
+  assert.match(html, /@media \(max-width:\s*720px\)[\s\S]*\.implementation-diagram-flow/);
+  assert.match(html, /\.implementation-diagram-node\.decision\s*\{[^}]*var\(--warn\)/);
+  assert.match(html, /@media \(max-width:\s*720px\)[\s\S]*\.implementation-diagram-bridge span\s*\{[^}]*font-size:\s*10px/);
+  assert.match(renderDiagramSource, /escapeHtml\(node\.title\)/);
+  assert.match(renderDiagramSource, /escapeHtml\(edge\.predicate\)/);
+});
+
 test('viewing-plansのauthoring contractはbrief-firstの6項目とTask実行契約を要求すべき', () => {
   for (const label of ['実施Task', '仕様', '実装根拠', '実行順序', '事実・判断・未確定', '成果物']) {
     assert.match(viewingPlansSkill, new RegExp(label));
@@ -1325,12 +1414,13 @@ test('viewing-plansのauthoring contractはbrief-firstの6項目とTask実行契
   for (const contract of ['compact status bar', '固定の全体目的をheroとして重複表示せず', '`現在` と `次`', 'quick link', 'source drawer']) {
     assert.match(viewingPlansSkill, new RegExp(contract));
   }
-  for (const heading of ['#### 目的', '#### 変更対象', '#### 実装根拠', '#### 実装', '#### 成果物', '#### 検証']) {
+  for (const heading of ['#### 目的', '#### 変更対象', '#### 実装根拠', '#### 実装', '#### 実装図', '#### 成果物', '#### 検証']) {
     assert.match(memoryFileFormats, new RegExp(heading));
   }
   assert.match(memoryFileFormats, /repo:<relative-path>#<anchor-or-Lx-Ly>/);
   assert.match(viewingPlansSkill, /現在の実コード/);
   assert.match(viewingPlansSkill, /存在しないafter codeを生成しない/);
+  assert.match(viewingPlansSkill, /実装図.*関係を推測しない/s);
 });
 
 test('the tree-first roadmap information architecture remains in the HTML', () => {
