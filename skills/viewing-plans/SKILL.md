@@ -106,11 +106,16 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 
 ### Roadmap Viewer（成果マップビューア）
 - `00_spec.md` / `30_plan.md` / `40_progress.md` / `80_review.md` を第一画面の正本とし、task、spec、approach、flow、claims、artifactsをbriefへ割り当てる
-- heroの目的は `00_spec.md` の `目的` / `概要`、仕様cardは `必須要件` / `機能要件` と `制約` または `Done` から別々に作る。同じ要約を重複表示しない
+- 上段は `Phase / 進捗 / 選択中Task` のcompact status barとし、Task選択に同期させる。固定の全体目的をheroとして重複表示せず、全体仕様は仕様cardと `00_spec.md` quick linkから読む
 - `現在` と `次` を明示する。次のTaskがなければ、計画完了か未記録かを区別して表示する
 - `00_spec.md` と `30_plan.md` のquick linkを初期viewportに置き、成果物linkからsource drawerで正本本文を開けるようにする
 - `graph-map.md` があればMermaid flowchartを補助のConcept Mapとして読む。なければ既存sourceからfallback graphを作る
-- `30_plan.md` の各Taskは `目的`、`変更対象`、`成果物`、`検証`を持つ。欠落時はViewerが補作せず、`未記録`と表示する
+- `30_plan.md` の各Taskは `目的`、`変更対象`、`実装`、`成果物`、`検証`を持つ。欠落時はViewerが補作せず、`未記録`と表示する
+- 任意の `実装根拠` に `repo:<relative-path>#<anchor-or-Lx-Ly>` を1件記録すると、generatorが生成時点の実sourceを最大12行だけ取得する。bare pathや `変更対象` からsource参照を推測しない
+- 第一画面は全Taskのcompact indexと選択Task detailを同時に表示する。全Taskには短い実装方針、選択Taskには `こう実装する` と `現在の実コード`、変更対象、成果物、検証を表示する
+- Tablet / MobileではTask indexを順序どおりのhorizontal railにし、その直後へ選択Task detailを置く。tablistのorientationと矢印keyも表示方向へ合わせる
+- `こう実装する` は `30_plan.md` の計画、`現在の実コード` はgeneratorが解決した事実として区別する。存在しないafter codeを生成しない
+- source previewはcode/automation prefix allowlist内だけを対象とし、個人ノート領域、hidden state、secret file/content、`automation_read: false`、symlink、binary、非UTF-8、1MiB超のfileを拒否する。追加prefixは `--source-allow-prefix` で明示する
 - `事実・判断・未確定`は明示見出しだけから読む。source priorityは次の通り
   - 事実: `40_progress.md` の実測・検証結果 → `20_survey.md` の現在の事実・確認済み事実 → `00_spec.md` の現在の事実
   - 判断: `team-journal.md` のDecisions・判断 → `30_plan.md` の採用判断・実装方針・Final implementation supersession → `00_spec.md` の採用判断

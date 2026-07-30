@@ -213,6 +213,74 @@ const executionBriefFiles = {
   'graph-map.md': graphMap
 };
 
+const implementationPreviewFiles = {
+  '30_plan.md': `# 実装プレビュー計画
+
+## Task 1: source契約を固定する
+
+### 目的
+
+実コード抜粋の契約を先に固定する。
+
+### 実装
+
+- [x] optional fieldを正規化する。
+- [x] live signatureへsourceを含める。
+
+## Task 2: 選択Taskへ実コードを結び付ける
+
+### 目的
+
+計画と現在の実コードを同じdetailで読めるようにする。
+
+### 実装
+
+- [ ] Task indexから選択状態を決める。
+- [ ] 選択Taskと同じtaskNumberのsourceだけを表示する。
+
+## Task 3: 完了済みTask
+
+### 実装
+
+- [x] legacy fallbackを維持する。
+`,
+  '40_progress.md': `# 進捗
+
+| Task | 状態 | 進捗 |
+| --- | --- | --- |
+| Task 1 | 完了 | 2/2 |
+| Task 2 | 進行中 | 0/2 |
+| Task 3 | 完了 | 1/1 |
+`
+};
+
+const implementationSourcePreviews = [
+  {
+    taskNumber: '1',
+    path: '.codex/scripts/generate-roadmap-view.py',
+    anchor: 'def build_snapshot',
+    language: 'python',
+    startLine: 178,
+    endLine: 180,
+    code: 'def build_snapshot(task_dir):\n    files = read_files(task_dir)\n    return {"files": files}',
+    status: 'resolved',
+    message: '',
+    truncated: false
+  },
+  {
+    taskNumber: '2',
+    path: '.codex/tools/roadmap_viewer.html',
+    anchor: 'function buildExecutionBrief',
+    language: 'javascript',
+    startLine: 3130,
+    endLine: 3132,
+    code: 'function buildExecutionBrief(model) {\n  const plan = model.snapshot.files["30_plan.md"];\n  return { plan };',
+    status: 'resolved',
+    message: '',
+    truncated: false
+  }
+];
+
 function contrastRatio(foreground, background) {
   const channel = value => {
     const normalized = value / 255;
@@ -294,6 +362,172 @@ test('normalizes heading, colon, decimal task, Japanese checklist and progress t
   assert.equal(result.tasks[2].status, 'planned');
   assert.equal(result.activeTask.number, '1.5');
   assert.deepEqual(Array.from(result.nextSteps, task => task.number), ['1.5', '2']);
+});
+
+test('sourcePreviewsはsnapshot v1のoptional additive fieldとして正規化されるべき', () => {
+  const normalized = model.normalizeSnapshot({
+    version: 1,
+    generatedAt,
+    files: implementationPreviewFiles,
+    sourcePreviews: [{
+      ...implementationSourcePreviews[1],
+      ignoredAbsolutePath: '/Users/example/private/source.js'
+    }]
+  });
+
+  assert.equal(normalized.version, 1);
+  assert.ok(Array.isArray(normalized.sourcePreviews), 'sourcePreviews must normalize to an array');
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(normalized.sourcePreviews)),
+    [implementationSourcePreviews[1]]
+  );
+  const legacy = model.normalizeSnapshot({ version: 1, files: {} });
+  assert.ok(Array.isArray(legacy.sourcePreviews), 'legacy snapshots must receive an empty sourcePreviews array');
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(legacy.sourcePreviews)),
+    []
+  );
+});
+
+test('source previewの変更はsnapshot signatureを変えてlive更新対象になるべき', () => {
+  const base = {
+    version: 1,
+    generatedAt,
+    files: implementationPreviewFiles,
+    sourcePreviews: implementationSourcePreviews
+  };
+  const changed = {
+    ...base,
+    sourcePreviews: implementationSourcePreviews.map(preview => preview.taskNumber === '2'
+      ? { ...preview, code: `${preview.code}\n// changed at source` }
+      : preview)
+  };
+
+  assert.notEqual(model.snapshotSignature(base), model.snapshotSignature(changed));
+});
+
+test('Taskの実装sectionは選択Taskのこう実装する手順として抽出されるべき', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: implementationPreviewFiles,
+    sourcePreviews: implementationSourcePreviews
+  }), { nowMs });
+  const brief = model.buildExecutionBrief(result);
+
+  assert.deepEqual(
+    Array.from(brief.selectedImplementation),
+    ['Task indexから選択状態を決める。', '選択Taskと同じtaskNumberのsourceだけを表示する。']
+  );
+});
+
+test('default選択はactive Taskを使い、実装説明とsource previewを同じTaskへ結び付けるべき', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: implementationPreviewFiles,
+    sourcePreviews: implementationSourcePreviews
+  }), { nowMs });
+  const brief = model.buildExecutionBrief(result);
+
+  assert.equal(brief.selectedTask.number, '2');
+  assert.equal(brief.selectedSourcePreview.taskNumber, '2');
+  assert.match(brief.selectedImplementation.join(' '), /同じtaskNumber/);
+  assert.match(brief.selectedSourcePreview.code, /buildExecutionBrief/);
+
+  const explicitlySelected = model.buildExecutionBrief(result, '1');
+  assert.equal(explicitlySelected.selectedTask.number, '1');
+  assert.equal(explicitlySelected.selectedSourcePreview.taskNumber, '1');
+  assert.match(explicitlySelected.selectedImplementation.join(' '), /optional field/);
+  assert.doesNotMatch(explicitlySelected.selectedSourcePreview.code, /buildExecutionBrief/);
+});
+
+test('active Taskがなければ最初の未完了Task、全完了なら先頭Taskをdefault選択すべき', () => {
+  const firstIncomplete = model.buildModel(model.normalizeSnapshot({
+    files: {
+      '30_plan.md': `## Task 1: 完了
+
+### 実装
+
+- [x] 完了した。
+
+## Task 2: 未完了
+
+### 実装
+
+- [ ] これから実装する。`
+    }
+  }), { nowMs });
+  assert.equal(model.buildExecutionBrief(firstIncomplete).selectedTask.number, '2');
+
+  const allComplete = model.buildModel(model.normalizeSnapshot({
+    files: {
+      '30_plan.md': `## Task 1: 一つ目
+
+### 実装
+
+- [x] 完了した。
+
+## Task 2: 二つ目
+
+### 実装
+
+- [x] 完了した。`
+    }
+  }), { nowMs });
+  assert.equal(model.buildExecutionBrief(allComplete).selectedTask.number, '1');
+});
+
+test('legacy snapshotはsource未記録を明示し、planからcodeを補作しないべき', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    files: {
+      '30_plan.md': `## Task 1: legacy Task
+
+### 実装
+
+- [ ] \`function inventedAfterCode() {}\` を実装する。`
+    }
+  }), { nowMs });
+  const brief = model.buildExecutionBrief(result);
+
+  assert.equal(brief.selectedTask.number, '1');
+  assert.equal(brief.selectedSourcePreview.status, 'source-unavailable');
+  assert.equal(brief.selectedSourcePreview.code, '');
+  assert.ok(brief.selectedSourcePreview.message);
+  assert.doesNotMatch(JSON.stringify(brief.selectedSourcePreview), /inventedAfterCode/);
+});
+
+test('missing・secret・unavailable sourceは理由だけを返しcodeを保持しないべき', () => {
+  for (const [status, message] of [
+    ['anchor-missing', 'anchorが見つかりません'],
+    ['secret-content', 'secret patternを検出しました'],
+    ['source-unavailable', 'sourceを読み取れません']
+  ]) {
+    const result = model.buildModel(model.normalizeSnapshot({
+      files: {
+        '30_plan.md': `## Task 1: source状態を表示する
+
+### 実装
+
+- [ ] 理由を明示する。`
+      },
+      sourcePreviews: [{
+        taskNumber: '1',
+        path: '.codex/tools/roadmap_viewer.html',
+        anchor: 'missing-anchor',
+        language: 'html',
+        startLine: 0,
+        endLine: 0,
+        code: '<script>never-render-this()</script>',
+        status,
+        message,
+        truncated: false
+      }]
+    }), { nowMs });
+    const preview = model.buildExecutionBrief(result).selectedSourcePreview;
+
+    assert.equal(preview.status, status);
+    assert.equal(preview.code, '', `${status} must not preserve source code`);
+    assert.equal(preview.message, message);
+  }
 });
 
 test('具体的な計画があるとき first-screen brief は現在と次のTaskを返すべき', () => {
@@ -993,13 +1227,15 @@ test('single-task HTMLは具体的な実行briefをConcept Mapより先に配置
     'brief-approach',
     'brief-claims',
     'brief-artifacts',
-    'brief-next-status',
+    'implementation-task-purpose',
+    'implementation-task-output',
     'brief-quick-links',
     'concept-map-disclosure'
   ];
   for (const id of ids) {
     assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
   }
+  assert.doesNotMatch(html, /id=["']brief-summary["']/);
   assert.ok(html.indexOf('id="execution-brief"') < html.indexOf('id="concept-map-disclosure"'));
 });
 
@@ -1027,6 +1263,33 @@ test('brief-first layoutはdesktopの情報階層とmobileの一列順序を維�
   assert.match(html, /id="brief-quick-links"[\s\S]*data-artifact="00_spec\.md"[\s\S]*data-artifact="30_plan\.md"/);
 });
 
+test('implementation workspaceはTask indexと選択detailを持つsplit viewであるべき', () => {
+  for (const id of [
+    'brief-workspace',
+    'brief-task-index',
+    'brief-task-detail',
+    'brief-implementation',
+    'brief-source-preview',
+    'brief-source-location',
+    'brief-source-code'
+  ]) {
+    assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
+  }
+  assert.match(html, /\.brief-workspace\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:/);
+  assert.match(html, /@media \(max-width:\s*900px\)[\s\S]*\.brief-workspace\s*\{[^}]*grid-template-columns:\s*1fr/);
+  assert.match(html, /\.brief-source-code\s*\{[^}]*overflow-x:\s*auto/);
+});
+
+test('implementation workspaceはsourceのpath・anchor・codeをHTML escapeして描画すべき', () => {
+  const renderSource = html.match(/function renderExecutionBrief\(model\) \{([\s\S]*?)\n    \}\n    function renderHeader/)?.[1] || '';
+
+  assert.match(renderSource, /escapeHtml\([^)]*\.path\)/);
+  assert.match(renderSource, /escapeHtml\([^)]*\.anchor\)/);
+  assert.match(renderSource, /escapeHtml\([^)]*\.code\)/);
+  assert.doesNotMatch(renderSource, /\.innerHTML\s*=\s*[^;\n]*\.code\b/);
+  assert.match(html, /<pre[^>]*id=["']brief-source-code["'][^>]*>[\s\S]*?<code/);
+});
+
 test('viewing-plansのauthoring contractはbrief-firstの6項目とTask実行契約を要求すべき', () => {
   for (const label of ['実施Task', '仕様', '実装根拠', '実行順序', '事実・判断・未確定', '成果物']) {
     assert.match(viewingPlansSkill, new RegExp(label));
@@ -1034,9 +1297,12 @@ test('viewing-plansのauthoring contractはbrief-firstの6項目とTask実行契
   for (const contract of ['同じ要約を重複表示しない', '`現在` と `次`', 'quick link', 'source drawer']) {
     assert.match(viewingPlansSkill, new RegExp(contract));
   }
-  for (const heading of ['#### 目的', '#### 変更対象', '#### 成果物', '#### 検証']) {
+  for (const heading of ['#### 目的', '#### 変更対象', '#### 実装根拠', '#### 実装', '#### 成果物', '#### 検証']) {
     assert.match(memoryFileFormats, new RegExp(heading));
   }
+  assert.match(memoryFileFormats, /repo:<relative-path>#<anchor-or-Lx-Ly>/);
+  assert.match(viewingPlansSkill, /現在の実コード/);
+  assert.match(viewingPlansSkill, /存在しないafter codeを生成しない/);
 });
 
 test('the tree-first roadmap information architecture remains in the HTML', () => {
@@ -1055,7 +1321,10 @@ test('the tree-first roadmap information architecture remains in the HTML', () =
   ]) {
     assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
   }
-  assert.match(html, /aria-live="polite"/);
+  assert.match(html, /id="state-announcer" role="status" aria-live="polite"/);
+  assert.doesNotMatch(html, /id="live-status"[^>]*aria-live=/);
+  assert.doesNotMatch(html, /id="implementation-source-message"[^>]*aria-live=/);
+  assert.match(html, /byId\('state-announcer'\)\.textContent = `接続状態: \$\{text\}`/);
   assert.match(html, /prefers-reduced-motion/);
   assert.match(html, /Tabler Icons/);
   assert.match(html, /id="graph-shell" role="region"/);
@@ -1079,6 +1348,8 @@ test('the tree-first roadmap information architecture remains in the HTML', () =
   assert.match(html, /\.inspector-facts\s*\{\s*display:\s*none/);
   assert.match(html, /function pathNodeIds\(tree, selectedId\)/);
   assert.match(html, /function visibleGraphNodeIds\(tree, selected\)/);
+  assert.match(html, /function canReceiveRestoredFocus\(element\)/);
+  assert.match(html, /function fallbackFocusTarget\(key, fallbackId = ''\)/);
   assert.match(html, /function selectedPathEdges\(tree, selectedId\)/);
   assert.match(html, /function buildTreeViewModel\(model\)/);
   assert.match(html, /function parseMermaidGraphMap\(markdown\)/);
