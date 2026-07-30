@@ -367,7 +367,7 @@
       margin-bottom: 12px;
       padding: 0;
       display: grid;
-      grid-template-columns: minmax(0, 1fr) minmax(300px, 360px);
+      grid-template-columns: minmax(0, 1fr);
       overflow: hidden;
       border-color: color-mix(in srgb, var(--accent) 24%, var(--line));
       box-shadow: var(--decision-shadow);
@@ -427,20 +427,25 @@
     .decision-actions { margin-top: 20px; display: flex; flex-wrap: wrap; gap: 8px; }
     .graph-inspector {
       margin: 0;
-      padding: 16px;
+      padding: 20px;
       display: grid;
       align-content: start;
-      gap: 12px;
-      border-left: 1px solid var(--line);
+      grid-template-columns: minmax(220px, .7fr) minmax(0, 1.3fr);
+      gap: 16px 28px;
+      border-top: 1px solid var(--line);
       background: var(--surface-soft);
     }
+    .graph-inspector[hidden] { display: none; }
+    .graph-inspector .inspector-kicker,
+    .graph-inspector .inspector-title,
+    .graph-inspector .inspector-summary { grid-column: 1; }
     .graph-shell {
       position: relative;
-      min-height: 540px;
-      padding: 12px;
+      min-height: 0;
+      padding: 20px 0 4px;
       display: grid;
-      grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 16px;
+      grid-template-columns: minmax(0, 1.35fr) minmax(300px, .65fr);
+      gap: 28px 20px;
     }
     .graph-edges {
       position: absolute;
@@ -467,16 +472,157 @@
       align-content: start;
       gap: 10px;
     }
+    .graph-column[data-graph-column="outcome"] { grid-column: 1 / -1; }
+    .graph-column[data-graph-column="task"] { grid-column: 1; }
+    .graph-column[data-graph-column="artifact"] { grid-column: 2; }
     .graph-column-title {
       margin: 0;
-      padding: 0 2px 2px;
+      padding: 0 0 5px;
       color: var(--muted);
-      font-size: 11px;
+      font-size: 12px;
       font-weight: 780;
       letter-spacing: .08em;
       text-transform: uppercase;
     }
     .graph-column > div { display: grid; gap: 10px; }
+    .goal-map {
+      position: relative;
+      max-width: 880px;
+      margin: 0 auto 34px;
+    }
+    .goal-map::after {
+      position: absolute;
+      left: 50%;
+      bottom: -34px;
+      width: 1px;
+      height: 28px;
+      background: var(--line-strong);
+      content: "";
+    }
+    .goal-map .graph-node {
+      min-height: 136px;
+      padding: 22px 24px;
+      grid-template-columns: 48px minmax(0, 1fr);
+      border-left-width: 1px;
+      background: var(--surface-accent);
+    }
+    .goal-map .node-glyph {
+      width: 48px;
+      height: 48px;
+      border-radius: 8px;
+      font-size: 16px;
+    }
+    .goal-map .node-kind { font-size: 12px; }
+    .goal-map .node-title {
+      margin-top: 4px;
+      -webkit-line-clamp: 3;
+      font-size: clamp(22px, 2.4vw, 34px);
+      line-height: 1.15;
+      letter-spacing: -.025em;
+    }
+    .goal-map .node-meta {
+      max-width: 720px;
+      margin-top: 8px;
+      display: -webkit-box;
+      overflow: hidden;
+      -webkit-box-orient: vertical;
+      -webkit-line-clamp: 3;
+      font-size: 14px;
+      line-height: 1.5;
+    }
+    .outcome-cluster-grid {
+      position: relative;
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 14px;
+    }
+    .outcome-cluster {
+      position: relative;
+      min-width: 0;
+      padding: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-soft);
+    }
+    .outcome-cluster:not(:last-child)::after {
+      position: absolute;
+      top: 30px;
+      right: -14px;
+      z-index: 2;
+      width: 14px;
+      color: var(--muted);
+      content: "→";
+      font-size: 16px;
+      font-weight: 760;
+      text-align: center;
+    }
+    .outcome-cluster-header {
+      min-height: 50px;
+      margin-bottom: 10px;
+      display: grid;
+      grid-template-columns: 28px minmax(0, 1fr) auto;
+      align-items: start;
+      gap: 8px;
+    }
+    .cluster-step {
+      width: 28px;
+      height: 28px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line-strong);
+      border-radius: 50%;
+      background: var(--surface);
+      color: var(--muted);
+      font: 780 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .outcome-cluster-header h4 { margin: 0; font-size: 16px; line-height: 1.25; }
+    .outcome-cluster-header p { margin: 3px 0 0; color: var(--muted); font-size: 12px; line-height: 1.35; }
+    .cluster-count {
+      padding: 3px 6px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      color: var(--muted);
+      font: 700 11px/1.2 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .outcome-cluster-items { display: grid; gap: 8px; }
+    .outcome-cluster .graph-node {
+      min-height: 112px;
+      padding: 14px;
+      grid-template-columns: 34px minmax(0, 1fr);
+      border-left-width: 1px;
+    }
+    .outcome-cluster .node-glyph { width: 34px; height: 34px; font-size: 11px; }
+    .outcome-cluster .node-title {
+      margin-top: 5px;
+      -webkit-line-clamp: 3;
+      font-size: 15px;
+      line-height: 1.35;
+    }
+    .outcome-cluster .node-meta { font-size: 11px; }
+    @media (min-width: 1181px) {
+      .cluster-design .outcome-cluster-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    }
+    #graph-tasks {
+      display: grid;
+      grid-template-columns: repeat(5, minmax(0, 1fr));
+      gap: 8px;
+    }
+    #graph-tasks .graph-node {
+      position: relative;
+      min-height: 118px;
+      padding: 12px;
+      grid-template-columns: 32px minmax(0, 1fr);
+      border-left-width: 1px;
+    }
+    #graph-tasks .node-title { -webkit-line-clamp: 3; font-size: 13px; }
+    #graph-artifacts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    #graph-artifacts .graph-node {
+      min-height: 82px;
+      padding: 10px;
+      grid-template-columns: 28px minmax(0, 1fr);
+      border-left-width: 1px;
+    }
+    #graph-artifacts .node-title { font-size: 13px; }
     .graph-node {
       width: 100%;
       min-height: 86px;
@@ -567,12 +713,12 @@
     .inspector-title {
       margin: 0;
       overflow-wrap: anywhere;
-      font-size: 18px;
+      font-size: 22px;
       font-weight: 790;
       line-height: 1.3;
     }
-    .inspector-summary { margin: 0; color: var(--muted); font-size: 13px; overflow-wrap: anywhere; }
-    .inspector-facts { display: grid; gap: 7px; margin: 0; }
+    .inspector-summary { margin: 0; color: var(--muted); font-size: 14px; line-height: 1.55; overflow-wrap: anywhere; }
+    .inspector-facts { display: none; }
     .inspector-fact {
       min-width: 0;
       padding: 8px 9px;
@@ -582,6 +728,31 @@
     }
     .inspector-fact dt { margin: 0 0 3px; color: var(--muted); font-size: 11px; font-weight: 760; }
     .inspector-fact dd { margin: 0; overflow-wrap: anywhere; font-size: 12px; font-weight: 680; }
+    .inspector-relations { grid-column: 2; grid-row: 1 / 5; display: grid; align-content: start; gap: 8px; }
+    .relation-map-title { margin: 0; color: var(--muted); font-size: 11px; font-weight: 760; letter-spacing: .06em; text-transform: uppercase; }
+    .relation-map {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) 28px minmax(0, 1fr);
+      align-items: center;
+      gap: 8px;
+    }
+    .relation-group { min-width: 0; display: grid; gap: 6px; }
+    .relation-group-label { color: var(--muted); font-size: 11px; font-weight: 720; }
+    .relation-node {
+      min-height: 44px;
+      padding: 8px 10px;
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 700;
+      line-height: 1.35;
+      text-align: left;
+      cursor: pointer;
+    }
+    .relation-empty { padding: 8px 0; color: var(--muted); font-size: 12px; }
+    .relation-arrow { color: var(--muted); font-size: 18px; text-align: center; }
     .inspector-actions { display: grid; gap: 8px; }
     .decision-metric {
       min-width: 0;
@@ -1171,6 +1342,11 @@
       .now-label { grid-row: 1 / 3; }
       .now-cell { min-height: 42px; border-left: 1px solid var(--line); }
       .now-cell strong { white-space: normal; }
+      .graph-shell { grid-template-columns: 1fr; }
+      .graph-column[data-graph-column="task"],
+      .graph-column[data-graph-column="artifact"] { grid-column: 1; }
+      #graph-tasks { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+      #graph-artifacts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
     @media (max-width: 960px) {
       .header-inner { align-items: flex-start; }
@@ -1213,32 +1389,47 @@
       .decision-actions { display: grid; grid-template-columns: 1fr; }
       .graph-shell {
         min-height: 0;
-        padding: 4px;
+        padding: 12px 0 0;
         grid-template-columns: 1fr;
-        gap: 14px;
+        gap: 24px;
       }
       .graph-edges { display: none; }
       .graph-column {
-        padding-left: 14px;
-        border-left: 2px solid var(--line-strong);
+        grid-column: 1 !important;
+        padding-left: 0;
+        border-left: 0;
       }
-      .graph-column-title { margin-left: -14px; }
+      .graph-column-title { margin-left: 0; }
+      .goal-map { margin-bottom: 28px; }
+      .goal-map::after { bottom: -28px; height: 22px; }
+      .goal-map .graph-node {
+        min-height: 120px;
+        padding: 16px;
+        grid-template-columns: 40px minmax(0, 1fr);
+      }
+      .goal-map .node-glyph { width: 40px; height: 40px; }
+      .goal-map .node-title { display: block; overflow: visible; font-size: 23px; }
+      .outcome-cluster-grid { grid-template-columns: 1fr; gap: 10px; }
+      .outcome-cluster:not(:last-child)::after {
+        top: auto;
+        right: 50%;
+        bottom: -11px;
+        width: 16px;
+        transform: translateX(50%) rotate(90deg);
+      }
+      .outcome-cluster { padding: 12px; }
+      .outcome-cluster-items { grid-template-columns: 1fr; }
+      #graph-tasks { grid-template-columns: 1fr; }
+      #graph-artifacts { grid-template-columns: 1fr 1fr; }
       .graph-node {
         min-height: 76px;
         position: relative;
       }
-      .graph-node::before {
-        position: absolute;
-        top: 38px;
-        left: -15px;
-        width: 14px;
-        height: 2px;
-        background: var(--line-strong);
-        content: "";
-      }
-      .graph-node:not(.is-selected):not(.is-related) { display: none; }
-      .graph-column:not(:has(.graph-node.is-selected, .graph-node.is-related)) { display: none; }
-      .graph-inspector { padding: 12px; }
+      .graph-inspector { padding: 16px; grid-template-columns: 1fr; }
+      .inspector-facts { grid-template-columns: 1fr 1fr; }
+      .inspector-relations { grid-column: 1; }
+      .relation-map { grid-template-columns: 1fr; }
+      .relation-arrow { transform: rotate(90deg); }
       .now-strip { padding: 8px; grid-template-columns: 52px 1fr; }
       .now-label { grid-row: 1 / 7; margin-right: 8px; font-size: 15px; }
       .now-cell { min-height: 42px; padding: 3px 10px; border-left: 1px solid var(--line); }
@@ -1506,16 +1697,16 @@
         <p class="decision-context" id="plan-meta">Outcome Traceを読み込み中</p>
         <div class="graph-shell" id="graph-shell" role="region" aria-label="成果までの構造グラフ" tabindex="-1">
           <svg class="graph-edges" id="graph-edges" aria-hidden="true"></svg>
-          <div class="graph-column" data-graph-column="outcome" role="group" aria-label="目標と成果">
-            <h3 class="graph-column-title">目標 / 成果</h3>
+          <div class="graph-column" data-graph-column="outcome" role="group" aria-label="目的と成果の観点">
+            <h3 class="graph-column-title">目的と成果の地図</h3>
             <div id="graph-outcomes"></div>
           </div>
-          <div class="graph-column" data-graph-column="task" role="group" aria-label="作業">
-            <h3 class="graph-column-title">作業</h3>
+          <div class="graph-column" data-graph-column="task" role="group" aria-label="実行の流れ">
+            <h3 class="graph-column-title">実行の流れ</h3>
             <div id="graph-tasks"></div>
           </div>
-          <div class="graph-column" data-graph-column="artifact" role="group" aria-label="成果物と検証">
-            <h3 class="graph-column-title">成果物 / 検証</h3>
+          <div class="graph-column" data-graph-column="artifact" role="group" aria-label="残った証拠">
+            <h3 class="graph-column-title">残った証拠</h3>
             <div id="graph-artifacts"></div>
           </div>
         </div>
@@ -1525,6 +1716,7 @@
         <h3 class="inspector-title" id="inspector-title">ノードを選択してください</h3>
         <p class="inspector-summary" id="inspector-summary">Tabまたは矢印キーでノードを移動できます。</p>
         <dl class="inspector-facts" id="inspector-facts"></dl>
+        <div class="inspector-relations" id="inspector-relations" aria-label="選択項目の関係"></div>
         <div class="inspector-actions">
           <button class="btn primary" type="button" id="decision-evidence" data-artifact="team-journal.md">
             <img class="icon" data-icon="file" alt="">成果物を開く
@@ -1766,6 +1958,8 @@
     function extractTasks(files) {
       const plan = asText(files['30_plan.md'] || files['10_task.md']);
       const progress = asText(files['40_progress.md']);
+      const globalComplete = /(?:進捗|progress)\s*[:：]\s*100\s*%/i.test(progress)
+        || /(?:現在地|current)\s*[:：]\s*(?:完了|complete|completed)/i.test(progress);
       const headingRe = /^#{2,3}\s+(?:Task|タスク)\s+(\d+(?:\.\d+)?)\s*[:：]\s*(.+)$/gmi;
       const matches = Array.from(plan.matchAll(headingRe));
       const allHeadings = Array.from(plan.matchAll(/^(#{1,6})\s+.+$/gm));
@@ -1789,7 +1983,8 @@
         const total = Number.isFinite(signal.total) ? signal.total : stats.total;
         let done = Number.isFinite(signal.done) ? signal.done : stats.done;
         let status = signal.status || 'planned';
-        if (signal.checked === true) status = 'complete';
+        if (globalComplete && !signal.status && signal.checked !== false) status = 'complete';
+        else if (signal.checked === true) status = 'complete';
         else if (signal.checked === false && status === 'planned' && done > 0) status = 'in-progress';
         if (!signal.status) {
           if (total > 0 && done >= total) status = 'complete';
@@ -2391,6 +2586,44 @@
       const nodes = [];
       const edges = [];
       const taskStatusLabel = status => ({ complete: '完了', 'in-progress': '進行中', blocked: 'ブロック', planned: '未着手' })[status] || '未着手';
+      const outcomeCluster = title => {
+        const text = stripMarkdown(title);
+        if (/障害|失敗分離|機密|security|安全|prompt injection|権限|secret/i.test(text)) return 'guardrail';
+        if (/現在|現行|読み取り|調査|確認する|把握/i.test(text)) return 'discovery';
+        return 'design';
+      };
+      const compactOutcomeTitle = title => {
+        const text = stripMarkdown(title).replace(/^O-\d+\s*/i, '').replace(/[。.]+$/, '');
+        const patterns = [
+          [/Slack.*(?:現在|現行|用途|到達)/i, 'Slackの現状'],
+          [/GitHub.*(?:現在|現行|通知|自動化)/i, 'GitHubの現状'],
+          [/通知する.*通知しない|通知.*イベント.*分け/i, '通知の境界'],
+          [/Issue.*Slack.*責務/i, 'IssueとSlackの責務'],
+          [/通知本文.*契約/i, '通知本文の契約'],
+          [/メンション.*重複|再通知|解決時/i, '通知のライフサイクル'],
+          [/Slack障害|CI.*壊さない|失敗分離/i, 'Slack障害の分離'],
+          [/機密情報|prompt injection|未検証テキスト/i, '安全な入力境界'],
+          [/少数Issue|pilot|測定指標/i, '小規模pilot'],
+          [/Knowledgeノート.*事実.*提案|事実と提案.*追記/i, '事実と提案の記録']
+        ];
+        return patterns.find(([pattern]) => pattern.test(text))?.[1] || (text.length > 34 ? `${text.slice(0, 33)}…` : text);
+      };
+      const artifactDisplayTitle = path => {
+        const labels = [
+          [/slack.*context/i, 'Slackの現状'],
+          [/github.*automation/i, 'GitHub自動化調査'],
+          [/notification.*policy/i, '通知ポリシー'],
+          [/review.*architecture/i, '設計レビュー'],
+          [/review.*security/i, '安全性レビュー'],
+          [/90_verification/i, '検証結果'],
+          [/80_review/i, '最終レビュー'],
+          [/checkpoint/i, '合格基準'],
+          [/30_plan/i, '実装計画'],
+          [/00_spec/i, '要求仕様'],
+          [/team-journal/i, '実行記録']
+        ];
+        return labels.find(([pattern]) => pattern.test(path))?.[1] || path.replace(/\.md$/i, '').replaceAll('-', ' ');
+      };
       const artifactRelation = path => {
         if (/survey|research/i.test(path)) return '調査';
         if (/checkpoint|verification|review/i.test(path)) return '品質確認';
@@ -2407,14 +2640,18 @@
         if (!edges.some(edge => edge.from === from && edge.to === to && edge.kind === kind)) edges.push({ from, to, kind, active: Boolean(active) });
       };
       const statusForOutcome = outcome => outcome.state === 'matched' ? 'complete' : outcome.state;
+      const spec = model.snapshot.files['00_spec.md'] || '';
+      const objective = stripMarkdown(spec.match(/^\s*-\s*Objective\s*[:：]\s*(.+)$/mi)?.[1] || '');
+      const overview = summarize(markdownSection(spec, /^(概要|ビジョン|overview)$/i));
       const goalId = addNode({
         id: 'goal-root',
         kind: 'goal',
         column: 'outcome',
-        title: model.snapshot.title || 'Roadmap',
+        title: objective || model.snapshot.title || 'Roadmap',
+        displayTitle: objective || model.snapshot.title || 'Roadmap',
         status: model.traceSummary.missingTotal ? 'attention' : 'complete',
         meta: `${model.traceSummary.matched}/${model.traceSummary.total} 接続`,
-        summary: model.nextDecision.context || model.waiting.reason,
+        summary: overview || model.nextDecision.context || model.waiting.reason,
         artifact: 'team-journal.md',
         facts: [
           ['現在地', model.activePhase ? `Phase ${model.activePhase.workflowNumber || model.activePhase.number} ${model.activePhase.workflowLabel || model.activePhase.label}` : 'Phase不明'],
@@ -2439,6 +2676,7 @@
           kind: 'task',
           column: 'task',
           title: `Task ${task.number}: ${task.title}`,
+          displayTitle: task.title,
           status: active ? 'in-progress' : task.status,
           meta: task.total ? `${task.done}/${task.total} 項目` : taskStatusLabel(task.status),
           summary: stripMarkdown(task.note || task.target || task.blockedBy || 'Task本文から抽出'),
@@ -2451,13 +2689,20 @@
           ]
         });
       });
-      const outcomeNodes = model.outcomes.slice(0, 8);
+      visibleTasks.slice(1).forEach((task, index) => {
+        const previous = visibleTasks[index];
+        addEdge(taskIds.get(previous.number), taskIds.get(task.number), 'task-flow', false);
+      });
+      const outcomeNodes = model.outcomes;
       outcomeNodes.forEach((outcome, index) => {
+        const title = outcome.outcome || `Outcome ${index + 1}`;
         const id = addNode({
           id: outcome.id || `outcome-${index + 1}`,
           kind: 'outcome',
           column: 'outcome',
-          title: outcome.outcome || `Outcome ${index + 1}`,
+          title,
+          displayTitle: compactOutcomeTitle(title),
+          cluster: outcomeCluster(title),
           status: statusForOutcome(outcome),
           meta: outcome.stateLabel,
           summary: outcome.requirement || outcome.evidence || 'Outcome Traceから抽出',
@@ -2474,8 +2719,27 @@
           addEdge(id, taskId, 'implementation', model.freshness.state === 'fresh' && model.activeTask?.number === number);
         });
       });
-      const artifactPaths = ['00_spec.md', 'checkpoint.md', '90_verification.md', '80_review.md', 'team-journal.md', '30_plan.md'];
       const artifactByPath = new Map(model.artifacts.map(artifact => [artifact.path, artifact]));
+      const domainPaths = model.artifacts
+        .map(artifact => artifact.path)
+        .filter(path => /\.md$/i.test(path))
+        .filter(path => !/^(00_spec|05_log|30_plan|40_progress|checkpoint|team-journal|roadmap|80_review|90_verification)\.md$/i.test(path));
+      const preferredPatterns = [
+        /slack.*context/i,
+        /github.*automation/i,
+        /notification.*policy/i,
+        /review.*architecture/i,
+        /review.*security/i
+      ];
+      const artifactPaths = preferredPatterns
+        .map(pattern => domainPaths.find(path => pattern.test(path)))
+        .filter(Boolean);
+      for (const path of domainPaths) {
+        if (artifactPaths.length >= 5) break;
+        if (!artifactPaths.includes(path)) artifactPaths.push(path);
+      }
+      if (!artifactPaths.includes('90_verification.md')) artifactPaths.push('90_verification.md');
+      if (artifactPaths.length < 6 && !artifactPaths.includes('80_review.md')) artifactPaths.push('80_review.md');
       const artifactIds = new Map();
       artifactPaths.forEach(path => {
         const artifact = artifactByPath.get(path);
@@ -2487,6 +2751,7 @@
           kind: /verification|review/i.test(path) ? 'evidence' : 'artifact',
           column: 'artifact',
           title: path,
+          displayTitle: artifactDisplayTitle(path),
           status: exists ? 'complete' : 'missing-evidence',
           meta: exists ? artifactStateFor(artifact, model) : '未作成',
           summary: exists ? `${Number(artifact.size || 0).toLocaleString()} bytes` : 'この成果物はまだsnapshotにありません',
@@ -2742,14 +3007,40 @@
         const incoming = tree.edges.filter(edge => edge.to === node.id).map(edge => tree.nodes.find(item => item.id === edge.from)?.title).filter(Boolean);
         const outgoing = tree.edges.filter(edge => edge.from === node.id).map(edge => tree.nodes.find(item => item.id === edge.to)?.title).filter(Boolean);
         const relationId = `graph-relation-${node.id.replace(/[^a-z0-9_-]+/gi, '-')}`;
+        const relationDescription = node.kind === 'goal'
+          ? `上流なし。成果の観点 ${outgoing.length}件。`
+          : `上流 ${incoming.length}件。下流 ${outgoing.length}件。`;
         return `
         <button class="graph-node kind-${escapeHtml(node.kind)} status-${escapeHtml(node.status)}${node.id === tree.activeNodeId ? ' is-active' : ''}${node.id === selected?.id ? ' is-selected' : ''}${relatedIds.has(node.id) && node.id !== selected?.id ? ' is-related' : ''}" type="button" data-graph-node="${escapeHtml(node.id)}" aria-current="${node.id === selected?.id}" aria-describedby="${relationId}" aria-label="${escapeHtml(nodeKindLabel(node.kind))} ${escapeHtml(node.title)}、${escapeHtml(node.meta)}" tabindex="${node.id === selected?.id ? '0' : '-1'}">
           <span class="node-glyph" aria-hidden="true">${escapeHtml(nodeGlyph(node))}</span>
-          <span class="node-copy"><span class="node-kind">${escapeHtml(nodeKindLabel(node.kind))}</span><span class="node-title">${escapeHtml(node.title)}</span><span class="node-meta">${escapeHtml(node.meta || node.status)}</span></span>
+          <span class="node-copy"><span class="node-kind">${escapeHtml(nodeKindLabel(node.kind))}</span><span class="node-title">${escapeHtml(node.displayTitle || node.title)}</span><span class="node-meta">${escapeHtml(node.kind === 'goal' ? node.summary : node.meta || node.status)}</span></span>
         </button>
-        <span class="visually-hidden" id="${relationId}">上流: ${escapeHtml(incoming.join('、') || 'なし')}。下流: ${escapeHtml(outgoing.join('、') || 'なし')}。</span>`;
+        <span class="visually-hidden" id="${relationId}">${escapeHtml(relationDescription)}</span>`;
       };
-      byId('graph-outcomes').innerHTML = tree.columns.outcome.map(nodeHtml).join('') || '<div class="empty">Outcomeなし</div>';
+      const goal = tree.columns.outcome.find(node => node.kind === 'goal');
+      const outcomes = tree.columns.outcome.filter(node => node.kind === 'outcome');
+      const clusters = [
+        { id: 'discovery', label: '現状を知る', description: '事実を読み取り、出発点を揃える' },
+        { id: 'design', label: '仕組みを決める', description: '責務と運用契約を設計する' },
+        { id: 'guardrail', label: '安全に守る', description: '障害と未信頼入力を分離する' }
+      ];
+      const clusterHtml = clusters
+        .map((cluster, index) => {
+          const items = outcomes.filter(node => node.cluster === cluster.id);
+          if (!items.length) return '';
+          return `<section class="outcome-cluster cluster-${cluster.id}" data-outcome-cluster="${cluster.id}" aria-labelledby="cluster-${cluster.id}-title">
+            <header class="outcome-cluster-header">
+              <span class="cluster-step" aria-hidden="true">${index + 1}</span>
+              <span><h4 id="cluster-${cluster.id}-title">${cluster.label}</h4><p>${cluster.description}</p></span>
+              <span class="cluster-count">${items.length}</span>
+            </header>
+            <div class="outcome-cluster-items">${items.map(nodeHtml).join('')}</div>
+          </section>`;
+        })
+        .join('');
+      byId('graph-outcomes').innerHTML = goal
+        ? `<div class="goal-map">${nodeHtml(goal)}</div><div class="outcome-cluster-grid">${clusterHtml}</div>`
+        : '<div class="empty">目的を読み込めません。</div>';
       byId('graph-tasks').innerHTML = tree.columns.task.map(nodeHtml).join('') || '<div class="empty">Taskなし</div>';
       byId('graph-artifacts').innerHTML = tree.columns.artifact.map(nodeHtml).join('') || '<div class="empty">Artifactなし</div>';
       renderGraphInspector(selected, tree);
@@ -2757,18 +3048,39 @@
     }
     function renderGraphInspector(node, tree) {
       if (!node) return;
+      byId('node-inspector').hidden = node.kind === 'goal';
       byId('inspector-kind').textContent = nodeKindLabel(node.kind);
       byId('inspector-title').textContent = node.title;
       byId('inspector-summary').textContent = node.summary || node.meta || '';
       byId('inspector-facts').innerHTML = (node.facts || [])
         .map(([label, value]) => `<div class="inspector-fact"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value || '未記録')}</dd></div>`)
         .join('');
-      const incoming = tree.edges.filter(edge => edge.to === node.id).map(edge => tree.nodes.find(item => item.id === edge.from)?.title).filter(Boolean);
-      const outgoing = tree.edges.filter(edge => edge.from === node.id).map(edge => tree.nodes.find(item => item.id === edge.to)?.title).filter(Boolean);
-      byId('inspector-facts').insertAdjacentHTML('beforeend', [
-        ['上流', incoming.join(' / ') || 'なし'],
-        ['下流', outgoing.join(' / ') || 'なし']
-      ].map(([label, value]) => `<div class="inspector-fact"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value)}</dd></div>`).join(''));
+      const incoming = tree.edges
+        .filter(edge => edge.to === node.id)
+        .map(edge => tree.nodes.find(item => item.id === edge.from))
+        .filter(Boolean);
+      const outgoing = tree.edges
+        .filter(edge => edge.from === node.id)
+        .map(edge => tree.nodes.find(item => item.id === edge.to))
+        .filter(Boolean);
+      const relationNode = related => `<button class="relation-node" type="button" data-related-node="${escapeHtml(related.id)}">${escapeHtml(related.displayTitle || related.title)}</button>`;
+      const relationGroup = (label, items) => `<div class="relation-group"><span class="relation-group-label">${label}</span>${items.length ? items.map(relationNode).join('') : '<span class="relation-empty">記録なし</span>'}</div>`;
+      const goalClusters = node.kind === 'goal'
+        ? ['discovery', 'design', 'guardrail']
+          .map(cluster => tree.nodes.filter(item => item.kind === 'outcome' && item.cluster === cluster))
+          .filter(items => items.length)
+          .map(items => ({
+            ...items[0],
+            displayTitle: `${({ discovery: '現状を知る', design: '仕組みを決める', guardrail: '安全に守る' })[items[0].cluster]}（${items.length}件）`
+          }))
+        : null;
+      byId('inspector-relations').innerHTML = `
+        <p class="relation-map-title">関係をnodeでたどる</p>
+        <div class="relation-map">
+          ${relationGroup('この前', incoming)}
+          <span class="relation-arrow" aria-hidden="true">→</span>
+          ${relationGroup(node.kind === 'goal' ? '成果の観点' : 'この先', goalClusters || outgoing)}
+        </div>`;
       byId('decision-evidence').dataset.artifact = node.artifact || 'team-journal.md';
       byId('wayfinder-next-decision').textContent = node.title;
       byId('decision-subject').textContent = node.summary || node.title;
@@ -2785,16 +3097,28 @@
         if (!from || !to) return '';
         const a = from.getBoundingClientRect();
         const b = to.getBoundingClientRect();
+        const neighbor = edge.from === selectedGraphNodeId || edge.to === selectedGraphNodeId;
+        const vertical = b.top >= a.bottom;
+        if (vertical) {
+          const x1 = a.left + a.width / 2 - shellRect.left;
+          const y1 = a.bottom - shellRect.top;
+          const x2 = b.left + b.width / 2 - shellRect.left;
+          const y2 = b.top - shellRect.top;
+          const mid = Math.max(18, (y2 - y1) / 2);
+          return `<path class="graph-edge ${escapeHtml(edge.kind)}${neighbor ? ' neighbor' : ''}${edge.active ? ' active' : ''}" d="M ${x1} ${y1} C ${x1} ${y1 + mid}, ${x2} ${y2 - mid}, ${x2} ${y2}"></path>`;
+        }
         const x1 = a.right - shellRect.left;
         const y1 = a.top + a.height / 2 - shellRect.top;
         const x2 = b.left - shellRect.left;
         const y2 = b.top + b.height / 2 - shellRect.top;
-        const mid = Math.max(24, (x2 - x1) / 2);
-        const neighbor = edge.from === selectedGraphNodeId || edge.to === selectedGraphNodeId;
+        const mid = Math.max(24, Math.abs(x2 - x1) / 2);
         return `<path class="graph-edge ${escapeHtml(edge.kind)}${neighbor ? ' neighbor' : ''}${edge.active ? ' active' : ''}" d="M ${x1} ${y1} C ${x1 + mid} ${y1}, ${x2 - mid} ${y2}, ${x2} ${y2}"></path>`;
       };
+      const selected = tree.nodes.find(node => node.id === selectedGraphNodeId);
       svg.innerHTML = window.matchMedia('(max-width: 720px)').matches
         ? ''
+        : selected?.kind === 'goal'
+          ? ''
         : tree.edges
           .filter(edge => edge.from === selectedGraphNodeId || edge.to === selectedGraphNodeId)
           .map(pathFor)
@@ -3389,6 +3713,11 @@
         if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fileInput.click(); }
       });
       document.addEventListener('click', event => {
+        const relatedNode = event.target.closest('[data-related-node]');
+        if (relatedNode) {
+          selectGraphNode(relatedNode.dataset.relatedNode);
+          return;
+        }
         const graphNode = event.target.closest('[data-graph-node]');
         if (graphNode) {
           selectGraphNode(graphNode.dataset.graphNode, { focus: false });

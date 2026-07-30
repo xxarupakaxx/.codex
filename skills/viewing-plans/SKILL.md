@@ -103,13 +103,15 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 
 ## 機能概要
 
-### Roadmap Viewer（成果ツリービューア）
+### Roadmap Viewer（成果マップビューア）
 - `00_spec.md` / `30_plan.md` / `40_progress.md` / `80_review.md` / `05_log.md` を統合し、`team-journal.md` / `90_verification.md` も存在すれば読み込む
-- 第一画面を Goal / Outcome、Task、Artifact / Evidence の三層ツリーに限定する
+- 第一画面は Goal を起点に、Outcome を「現状を知る / 仕組みを決める / 安全に守る」の意味単位へまとめ、その先に Task flow と Artifact / Evidence を配置する
+- Outcome は本文を並べず、人が識別できる短い意味ラベルへ変換する。原文は選択時の詳細に残す
+- Outcome を省略しない。Desktop は横方向の成果マップ、Mobile は全ノードを保った縦方向のツリーへ変換する
 - 明示された Outcome Trace の Task 参照と evidence file、Task の `blockedBy` だけを edge にする
 - 推測した関連や fallback edge を表示しない
-- node 選択時は、状態、依存、上流、下流を Inspector に表示する
-- Desktop は三列 graph、Mobile は縦 tree へ変換する
+- node 選択時は要点と1-hopの関連ノードだけを Inspector に表示する。「上流」「下流」を連結した長文として表示しない
+- Goal 選択時はマップ自体が詳細を担うため、重複する Inspector を表示しない
 - Arrow、Home、End、Enter、Escape で node を移動できる
 - 固定Phaseと固定Taskだけを算定可能な進捗として扱い、推測の百分率を表示しない
 - task directory配下の通常ファイルを成果物metadataとして再帰収集する。symlinkは追跡せず、Viewer出力と一時ファイルは除外する

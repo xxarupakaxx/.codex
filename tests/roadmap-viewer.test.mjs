@@ -309,6 +309,16 @@ test('stops parent task bodies before nested task headings', () => {
   assert.deepEqual(Array.from(nested.tasks, task => [task.number, task.done, task.total]), [['1', 0, 1], ['1.1', 1, 1]]);
 });
 
+test('treats an explicit global 100 percent progress signal as task completion', () => {
+  const tasks = model.extractTasks({
+    '30_plan.md': `## Task 1: 調査\n\n- [x] 事実を確認\n\n## Task 2: 設計\n\n- [ ] 契約を定義`,
+    '40_progress.md': `## ステータス\n\n- 進捗: 100%`
+  });
+
+  assert.equal(tasks.map(task => task.status).join(','), 'complete,complete');
+  assert.equal(tasks.map(task => task.done).join(','), '1,1');
+});
+
 test('stale snapshots stop presenting recorded work as actively running', () => {
   const staleNow = Date.parse('2026-07-12T04:00:00.000Z');
   const result = model.buildModel(model.normalizeSnapshot({ generatedAt, files }), { nowMs: staleNow });
@@ -506,6 +516,37 @@ test('falls back safely when Outcome Trace is absent', () => {
   assert.ok(result.artifactWarnings.some(warning => warning.file === '30_plan.md'));
 });
 
+test('groups a notification design into discovery design and guardrail outcomes without dropping items', () => {
+  const requirements = [
+    'Slackチャンネルの現在の用途と、担当者への到達方法を読み取りで確認する。',
+    'GitHub Issue、Project、Actionsの現行通知を読み取りで確認する。',
+    '通知するイベントと通知しないイベントを分ける。',
+    'GitHub IssueとSlackの責務を分ける。',
+    '通知本文の最小契約を定義する。',
+    'メンション、重複防止、再通知、解決時の扱いを定義する。',
+    'Slack障害がCIを壊さない失敗分離を定義する。',
+    '機密情報、未検証テキスト、prompt injectionの境界を定義する。',
+    '少数Issueで試せるpilotを定義する。',
+    '既存Knowledgeノートへ事実と提案を分けて追記する。'
+  ];
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: {
+      '00_spec.md': `## 必須要件\n\n${requirements.map(item => `- [ ] ${item}`).join('\n')}`,
+      '30_plan.md': '# 実装計画',
+      'checkpoint.md': '# Sprint Contract'
+    }
+  }), { nowMs });
+  const tree = model.buildTreeViewModel(result);
+  const outcomes = tree.nodes.filter(node => node.kind === 'outcome');
+
+  assert.equal(outcomes.length, requirements.length);
+  assert.equal(outcomes.filter(node => node.cluster === 'discovery').length, 2);
+  assert.equal(outcomes.filter(node => node.cluster === 'guardrail').length, 2);
+  assert.ok(outcomes.some(node => node.displayTitle === '通知の境界'));
+  assert.ok(outcomes.some(node => node.displayTitle === '安全な入力境界'));
+});
+
 test('builds an outcome task artifact tree with dependency edges and no stale active branch', () => {
   const result = model.buildModel(model.normalizeSnapshot({
     generatedAt,
@@ -522,9 +563,12 @@ test('builds an outcome task artifact tree with dependency edges and no stale ac
   const tree = model.buildTreeViewModel(result);
 
   assert.ok(tree.nodes.some(node => node.kind === 'outcome' && node.title.includes('Reduce cognitive load')));
+  assert.ok(tree.nodes.some(node => node.kind === 'outcome' && node.cluster === 'design'));
+  assert.ok(tree.nodes.some(node => node.kind === 'outcome' && node.displayTitle));
   assert.ok(tree.nodes.some(node => node.kind === 'task' && node.taskNumber === '1.5'));
   assert.ok(tree.nodes.some(node => node.kind === 'evidence' && node.title === '90_verification.md'));
   assert.ok(tree.edges.some(edge => edge.from.includes('trace') && edge.to === 'task-1.5' && edge.kind === 'implementation'));
+  assert.ok(tree.edges.some(edge => edge.from === 'task-0' && edge.to === 'task-1.5' && edge.kind === 'task-flow'));
   assert.ok(tree.edges.some(edge => edge.from === 'task-0' && edge.to === 'task-1.5' && edge.kind === 'dependency'));
   assert.ok(tree.edges.some(edge => edge.from === 'task-1.5' && edge.to.startsWith('artifact-') && edge.kind === 'evidence'));
   assert.equal(tree.activeNodeId, 'task-1.5');
@@ -607,7 +651,8 @@ test('the tree-first roadmap information architecture remains in the HTML', () =
     'graph-artifacts',
     'node-inspector',
     'inspector-title',
-    'inspector-facts'
+    'inspector-facts',
+    'inspector-relations'
   ]) {
     assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
   }
@@ -619,9 +664,18 @@ test('the tree-first roadmap information architecture remains in the HTML', () =
   assert.match(html, /data-graph-column="outcome"/);
   assert.match(html, /data-graph-column="task"/);
   assert.match(html, /data-graph-column="artifact"/);
-  assert.match(html, /neighbor \? ' neighbor'/);
   assert.match(html, /aria-describedby="\$\{relationId\}"/);
-  assert.match(html, /上流: \$\{escapeHtml\(incoming/);
+  assert.match(html, /成果の観点 \$\{outgoing\.length\}件/);
+  assert.match(html, /data-outcome-cluster/);
+  assert.match(html, /現状を知る/);
+  assert.match(html, /仕組みを決める/);
+  assert.match(html, /安全に守る/);
+  assert.match(html, /data-related-node/);
+  assert.match(html, /node-inspector'\)\.hidden = node\.kind === 'goal'/);
+  assert.match(html, /\.graph-inspector\[hidden\]\s*\{\s*display:\s*none/);
+  assert.match(html, /\.inspector-facts\s*\{\s*display:\s*none/);
+  assert.doesNotMatch(html, /incoming\.join\(' \/ '\)/);
+  assert.doesNotMatch(html, /outgoing\.join\(' \/ '\)/);
   assert.match(html, /function buildTreeViewModel\(model\)/);
   assert.match(html, /function renderGraph\(model\)/);
   assert.match(html, /function drawGraphEdges\(tree\)/);
@@ -634,9 +688,10 @@ test('the tree-first roadmap information architecture remains in the HTML', () =
   assert.match(html, /event\.key === 'End'/);
   assert.match(html, /event\.key === 'Enter'/);
   assert.match(html, /event\.key === 'Escape'/);
-  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.graph-shell\s*\{\s*min-height:\s*0;[\s\S]*grid-template-columns:\s*1fr/);
+  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.graph-shell\s*\{[\s\S]*grid-template-columns:\s*1fr/);
   assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.graph-edges\s*\{\s*display:\s*none/);
-  assert.match(html, /\.graph-node:not\(\.is-selected\):not\(\.is-related\)\s*\{\s*display:\s*none/);
+  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.outcome-cluster-grid\s*\{\s*grid-template-columns:\s*1fr/);
+  assert.doesNotMatch(html, /\.graph-node:not\(\.is-selected\):not\(\.is-related\)\s*\{\s*display:\s*none/);
   assert.match(html, /document\.title = taskTitle/);
   assert.match(html, /--ease-out:\s*cubic-bezier/);
   assert.match(html, /@media \(hover: hover\) and \(pointer: fine\)/);
