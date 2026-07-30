@@ -136,6 +136,10 @@ def validate_contract(contract: dict[str, Any]) -> list[str]:
             errors.append(f"invalid edge route: {source} -> {target}")
         else:
             outgoing_routes[source].add(route)
+            if route != "static" and not edge.get("condition"):
+                errors.append(
+                    f"decision edge requires condition: {source} -> {target}"
+                )
         adjacency[source].append(target)
         if edge.get("loop") is not True:
             non_loop_adjacency[source].append(target)

@@ -54,7 +54,11 @@ contract は JSON object とし、`templates/graph-engineering/graph-contract.ex
 - `reads` / `writes`: state field 名の配列
 - `side_effect`: `none` または `external`
 
-`checker` と `judge` は artifact scope を書き換えない。artifact の writer は一人に固定し、review verdict は別の run state field に書く。
+`authority` は artifact を変更できるかを表す。
+`read_only` node も、contract で writer に指定された non-artifact state には書き込める。
+
+`checker` と `judge` は artifact scope を書き換えない。
+artifact の writer は一人に固定し、checker は review verdict を別の run state field に書く。
 
 `side_effect: external` の node は `safeguards` に次の三つを持つ。
 

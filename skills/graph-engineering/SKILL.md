@@ -53,7 +53,7 @@ python3 scripts/validate-graph-contract.py <task-memory>/graph-contract.json
 2. predecessor が完了し、edge condition を満たした node だけを frontier にする。
 3. Delegation Gate を通る node だけを委任する。通らない node は lead が逐次実行する。
 4. maker の write scope は重複させず、artifact writer は一人に固定する。
-5. checker / judge は read-only とし、fresh context と外部証拠で判定する。
+5. checker / judge は artifact に対して read-only とし、fresh context と外部証拠で判定する。判定結果は contract で割り当てた run state field にだけ書く。
 6. node 完了ごとに `templates/graph-engineering/graph-run.md` 形式の receipt を記録する。
 7. deterministic edge は code、test result、明示 state で判定する。model / human routing は contract に記載された場合だけ使う。
 8. loop は `max_iterations` と node budget を消費する。上限到達時は別 edge を推測せず停止する。

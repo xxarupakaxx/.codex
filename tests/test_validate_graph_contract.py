@@ -173,6 +173,14 @@ class ValidateGraphContractTests(unittest.TestCase):
             any("mixed routing ownership: review" in error for error in errors)
         )
 
+    def test_decision_routingには判定条件が必要であるべき(self):
+        contract = valid_contract()
+        del contract["edges"][3]["condition"]
+
+        errors = VALIDATOR.validate_contract(contract)
+
+        self.assertIn("decision edge requires condition: review -> done", errors)
+
     def test_artifact_writer権限なしではartifactを書けないべき(self):
         contract = valid_contract()
         contract["nodes"]["write"]["authority"] = "read_only"
