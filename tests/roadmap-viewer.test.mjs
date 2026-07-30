@@ -1294,7 +1294,7 @@ test('viewing-plansのauthoring contractはbrief-firstの6項目とTask実行契
   for (const label of ['実施Task', '仕様', '実装根拠', '実行順序', '事実・判断・未確定', '成果物']) {
     assert.match(viewingPlansSkill, new RegExp(label));
   }
-  for (const contract of ['同じ要約を重複表示しない', '`現在` と `次`', 'quick link', 'source drawer']) {
+  for (const contract of ['compact status bar', '固定の全体目的をheroとして重複表示せず', '`現在` と `次`', 'quick link', 'source drawer']) {
     assert.match(viewingPlansSkill, new RegExp(contract));
   }
   for (const heading of ['#### 目的', '#### 変更対象', '#### 実装根拠', '#### 実装', '#### 成果物', '#### 検証']) {
