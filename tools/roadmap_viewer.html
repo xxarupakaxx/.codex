@@ -487,7 +487,7 @@
     .graph-column[data-graph-column="task"] { grid-column: 1; }
     .graph-column[data-graph-column="artifact"] { grid-column: 1; }
     .graph-shell.explicit-graph {
-      min-height: 720px;
+      min-height: 0;
       grid-template-columns: minmax(0, 1fr);
       align-items: stretch;
     }
@@ -510,6 +510,10 @@
       align-self: center;
       border-left-width: 2px;
       border-radius: 0;
+    }
+    .explicit-node-layer .graph-node.is-single-rank {
+      width: min(260px, 100%);
+      justify-self: center;
     }
     .explicit-node-layer .graph-node.kind-goal {
       min-height: 76px;
@@ -1449,14 +1453,47 @@
       .graph-edges { display: none; }
       .graph-shell.explicit-graph .graph-edges { display: block; }
       .explicit-node-layer {
-        grid-template-columns: repeat(2, minmax(0, 1fr));
-        gap: 42px 10px;
+        grid-template-columns: repeat(var(--graph-columns, 4), minmax(0, 1fr));
+        grid-auto-rows: minmax(86px, auto);
+        gap: 68px 8px;
+        padding-inline: 0;
       }
-      .explicit-node-layer .graph-node { padding: 9px; }
+      .explicit-graph .graph-edge-label { font-size: 10px; }
+      .explicit-graph .graph-edge-label:not(.active) { display: none; }
+      .explicit-node-layer .graph-node {
+        width: min(100%, 190px);
+        min-height: 80px;
+        justify-self: center;
+        padding: 7px 3px;
+        grid-template-columns: 1fr;
+        justify-items: center;
+        gap: 5px;
+        border: 0;
+        background: transparent;
+        text-align: center;
+      }
+      .explicit-node-layer .graph-node[aria-current="true"] {
+        border: 1px solid var(--focus);
+        background: var(--surface-accent);
+      }
+      .explicit-node-layer .node-glyph { width: 40px; height: 40px; }
+      .explicit-node-layer .node-kind { display: none; }
+      .explicit-node-layer .node-title {
+        display: -webkit-box;
+        overflow: hidden;
+        -webkit-box-orient: vertical;
+        -webkit-line-clamp: 3;
+        font-size: 12px;
+        line-height: 1.25;
+        overflow-wrap: anywhere;
+      }
       .explicit-node-layer .graph-node.kind-decision,
       .explicit-node-layer .graph-node.kind-risk {
-        min-height: 92px;
-        padding: 18px;
+        min-height: 80px;
+        padding: 7px 3px;
+        border: 0;
+        clip-path: none;
+        background: transparent;
       }
       .graph-column {
         grid-column: 1 !important;
@@ -2730,6 +2767,7 @@
           artifact: 'graph-map.md',
           rank,
           order,
+          rankSize: siblings.length,
           gridColumn: Math.max(1, Math.floor((maxColumns - siblings.length) / 2) + order + 1),
           gridRow: rank + 1,
           facts: [['ID', node.id], ['型', kind], ['形', node.shape]]
@@ -3313,11 +3351,14 @@
       const selected = selectedGraphNode(tree);
       const pathIds = pathNodeIds(tree, selected?.id || tree.activeNodeId);
       const visibleIds = new Set(tree.nodes.map(node => node.id));
-      const nodeHtml = node => `
-        <button class="graph-node kind-${escapeHtml(node.kind)} status-${escapeHtml(node.status)}${node.id === selected?.id ? ' is-selected' : ''}${pathIds.has(node.id) && node.id !== selected?.id ? ' is-related' : ''}" type="button" data-graph-node="${escapeHtml(node.id)}" style="grid-column:${Number(node.gridColumn) || 1};grid-row:${Number(node.gridRow) || 1}" aria-current="${node.id === selected?.id}" aria-label="${escapeHtml(nodeKindLabel(node.kind))} ${escapeHtml(node.title)}" tabindex="${node.id === selected?.id ? '0' : '-1'}">
+      const nodeHtml = node => {
+        const column = Number(node.rankSize) === 1 ? '1 / -1' : String(Number(node.gridColumn) || 1);
+        return `
+        <button class="graph-node kind-${escapeHtml(node.kind)} status-${escapeHtml(node.status)}${Number(node.rankSize) === 1 ? ' is-single-rank' : ''}${node.id === selected?.id ? ' is-selected' : ''}${pathIds.has(node.id) && node.id !== selected?.id ? ' is-related' : ''}" type="button" data-graph-node="${escapeHtml(node.id)}" style="grid-column:${column};grid-row:${Number(node.gridRow) || 1}" aria-current="${node.id === selected?.id}" aria-label="${escapeHtml(nodeKindLabel(node.kind))} ${escapeHtml(node.title)}" tabindex="${node.id === selected?.id ? '0' : '-1'}">
           <span class="node-glyph" aria-hidden="true"><span>${escapeHtml(nodeGlyph(node))}</span></span>
           <span class="node-copy"><span class="node-kind">${escapeHtml(nodeKindLabel(node.kind))}</span><span class="node-title">${escapeHtml(node.displayTitle || node.title)}</span></span>
         </button>`;
+      };
       byId('graph-outcomes').className = 'explicit-node-layer';
       byId('graph-outcomes').style.setProperty('--graph-columns', String(Math.max(1, tree.maxColumns || 1)));
       byId('graph-outcomes').innerHTML = tree.nodes.map(nodeHtml).join('');
@@ -3396,7 +3437,8 @@
           const x2 = b.left + b.width / 2 - shellRect.left;
           const y2 = b.top - shellRect.top;
           const mid = Math.max(18, (y2 - y1) / 2);
-          const lx = (x1 + x2) / 2;
+          const explicitMobile = tree.explicitGraphMap && window.matchMedia('(max-width: 720px)').matches;
+          const lx = explicitMobile ? x1 + (x2 - x1) * .18 : (x1 + x2) / 2;
           const ly = y1 + mid;
           return `<g><path class="graph-edge ${escapeHtml(edge.kind)} neighbor${highlighted ? ' active' : ''}" d="M ${x1} ${y1} C ${x1} ${y1 + mid}, ${x2} ${y2 - mid}, ${x2} ${y2}"></path><text class="graph-edge-label${highlighted ? ' active' : ''}" x="${lx}" y="${ly - 4}">${escapeHtml(edge.verb)}</text></g>`;
         }
@@ -3440,8 +3482,11 @@
       const active = model.activeTask;
       const progress = model.fixedProgress;
       const summary = model.traceSummary;
+      const explicitGraph = parseMermaidGraphMap(model.snapshot.files['graph-map.md']);
       byId('wayfinder-phase').textContent = phase ? `Phase ${phase.workflowNumber || phase.number} ${phase.workflowLabel || phase.label}` : 'Phase —';
-      byId('wayfinder-status').textContent = summary.missingTotal
+      byId('wayfinder-status').textContent = explicitGraph
+        ? `関係 ${explicitGraph.edges.length}件`
+        : summary.missingTotal
         ? `未接続 ${summary.missingTotal}/${summary.total}`
         : summary.total
           ? '全Outcome接続済み'

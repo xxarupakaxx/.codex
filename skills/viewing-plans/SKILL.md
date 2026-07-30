@@ -104,8 +104,11 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 ## 機能概要
 
 ### Roadmap Viewer（成果マップビューア）
-- `00_spec.md` / `30_plan.md` / `40_progress.md` / `80_review.md` / `05_log.md` を統合し、`team-journal.md` / `90_verification.md` も存在すれば読み込む
-- 第一画面は Goal を起点に、Outcome を「現状を知る / 仕組みを決める / 安全に守る」の意味単位へまとめ、その先に Task flow と Artifact / Evidence を配置する
+- `graph-map.md` があれば、そのMermaid flowchartを第一優先の明示graphとして読む。なければ `00_spec.md` / `30_plan.md` / `40_progress.md` / `80_review.md` / `05_log.md` と、任意の `team-journal.md` / `90_verification.md` からfallback graphを作る
+- 明示graphは型付きnodeとpredicate edgeで構成し、`node → 関係語 → node` が単独で意味を持つようにする
+- node表面は短い名詞句に限定し、要求文、ファイルパス、Markdown本文は選択後の詳細へ移す
+- Desktop / Tablet / Mobileのすべてでnodeとedgeを保持する。Mobileはselected pathのpredicateだけを優先表示し、線を消してカード一覧へ戻さない
+- 明示graphがないfallbackでは、Goalを起点にOutcome、Task、Artifact / Evidenceの確実な関係だけを配置する
 - Outcome は本文を並べず、人が識別できる短い意味ラベルへ変換する。原文は選択時の詳細に残す
 - Outcome を省略しない。Desktop は横方向の成果マップ、Mobile は全ノードを保った縦方向のツリーへ変換する
 - 明示された Outcome Trace の Task 参照と evidence file、Task の `blockedBy` だけを edge にする
