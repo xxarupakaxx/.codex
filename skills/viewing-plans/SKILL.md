@@ -8,7 +8,10 @@ allowed-tools: Read, mcp__workflow-html-app__view-plan
 
 計画ファイル・ログ・レビュー結果をHTMLビューアに自動表示する。
 
-Roadmap Viewer は「現在地」「稼働中の作業」「成果物」「計画」「更新鮮度」を一つの画面で確認する俯瞰ビューを担当する。`--serve --watch` で起動すると、Codex app の横に置いたブラウザが自動更新される。Plan Viewer / Log Viewer はMarkdownの詳細確認用として使う。
+Roadmap Viewer は、task directory に揃っている記録から、Goal / Outcome → Task → Artifact / Evidence の成果ツリーを生成する。
+第一画面はツリーと選択ノードの要点だけを表示し、Markdown、手動ファイル読込、JSON操作、KPIカード、Task表を並べない。
+`--serve --watch` で起動すると、Codex app の横に置いたブラウザが自動更新される。
+Plan Viewer / Log Viewer は、明示的に文書本文を確認するときだけ使う。
 
 複数 task を横断して見る場合は Roadmap Task Hub を使う:
 
@@ -69,7 +72,8 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task>
 ${MEMORY_DIR}/memory/<task>/roadmap.html
 ```
 
-ユーザーには生成されたHTMLパスを案内する。ブラウザで開けば、タスク全体の現在地、実行パルス、計画、成果物、レビュー、リスクが一画面で見える。
+ユーザーには生成されたHTMLパスを案内する。
+ブラウザで開けば、現在地、Task のつながり、各 Task が生んだ成果物と検証を一つの木として追える。
 
 ライブ更新:
 
@@ -99,15 +103,20 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 
 ## 機能概要
 
-### Roadmap Viewer（ロードマップビューア）
+### Roadmap Viewer（成果ツリービューア）
 - `00_spec.md` / `30_plan.md` / `40_progress.md` / `80_review.md` / `05_log.md` を統合し、`team-journal.md` / `90_verification.md` も存在すれば読み込む
-- 上部の「いま」、計画キャンバス、実行パルス、成果物シェルフを第一画面へ表示する
+- 第一画面を Goal / Outcome、Task、Artifact / Evidence の三層ツリーに限定する
+- 明示された Outcome Trace の Task 参照と evidence file、Task の `blockedBy` だけを edge にする
+- 推測した関連や fallback edge を表示しない
+- node 選択時は、状態、依存、上流、下流を Inspector に表示する
+- Desktop は三列 graph、Mobile は縦 tree へ変換する
+- Arrow、Home、End、Enter、Escape で node を移動できる
 - 固定Phaseと固定Taskだけを算定可能な進捗として扱い、推測の百分率を表示しない
 - task directory配下の通常ファイルを成果物metadataとして再帰収集する。symlinkは追跡せず、Viewer出力と一時ファイルは除外する
 - 生成済みHTMLにsnapshotを埋め込むため、追加サーバーなしで `file://` 表示できる
 - `--serve --watch` では `roadmap-snapshot.json` をpollingし、source内容または表示対象artifact metadataが変化したときだけ自動更新する
-- 手動で複数Markdown/JSONをドラッグ&ドロップして確認可能
-- 選択したMarkdownは、HTMLをescapeした自己完結の整形プレビューと原文を切り替えて確認できる
+- 単一 task 表示では手動のMarkdown/JSON読込やJSON出力を提供しない
+- Markdown本文は第一画面へ表示しない
 
 ### Plan Viewer（計画ビューア）
 - Markdownレンダリング（見出し、リスト、コードブロック）

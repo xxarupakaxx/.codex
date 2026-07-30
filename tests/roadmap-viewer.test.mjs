@@ -506,6 +506,35 @@ test('falls back safely when Outcome Trace is absent', () => {
   assert.ok(result.artifactWarnings.some(warning => warning.file === '30_plan.md'));
 });
 
+test('builds an outcome task artifact tree with dependency edges and no stale active branch', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: {
+      ...files,
+      'team-journal.md': `## Outcome Trace
+
+| Outcome | Requirement | Implementation | Acceptance | Evidence | State |
+| --- | --- | --- | --- | --- | --- |
+| O-1 Reduce cognitive load | R1 | Task 1.5 | AC-01 | 90_verification.md | missing-evidence |
+`
+    }
+  }), { nowMs });
+  const tree = model.buildTreeViewModel(result);
+
+  assert.ok(tree.nodes.some(node => node.kind === 'outcome' && node.title.includes('Reduce cognitive load')));
+  assert.ok(tree.nodes.some(node => node.kind === 'task' && node.taskNumber === '1.5'));
+  assert.ok(tree.nodes.some(node => node.kind === 'evidence' && node.title === '90_verification.md'));
+  assert.ok(tree.edges.some(edge => edge.from.includes('trace') && edge.to === 'task-1.5' && edge.kind === 'implementation'));
+  assert.ok(tree.edges.some(edge => edge.from === 'task-0' && edge.to === 'task-1.5' && edge.kind === 'dependency'));
+  assert.ok(tree.edges.some(edge => edge.from === 'task-1.5' && edge.to.startsWith('artifact-') && edge.kind === 'evidence'));
+  assert.equal(tree.activeNodeId, 'task-1.5');
+
+  const stale = model.buildModel(model.normalizeSnapshot({ generatedAt, files }), { nowMs: Date.parse('2026-07-12T04:00:00.000Z') });
+  const staleTree = model.buildTreeViewModel(stale);
+  assert.notEqual(staleTree.activeNodeId, 'task-1.5');
+  assert.equal(staleTree.edges.some(edge => edge.active), false);
+});
+
 test('renders workflow markdown safely without an external parser', () => {
   const rendered = model.renderWorkflowMarkdown(`# 見出し
 
@@ -567,73 +596,60 @@ test('task hub shell exposes list detail status settings and responsive behavior
   assert.match(html, /overscroll-behavior:\s*contain/);
 });
 
-test('the trace-first roadmap information architecture remains in the HTML', () => {
+test('the tree-first roadmap information architecture remains in the HTML', () => {
   for (const id of [
     'task-title',
     'wayfinder',
-    'decision-evidence',
-    'wayfinder-task-progress',
-    'outcome-trace-summary',
-    'outcome-trace-table',
-    'outcome-trace-cards',
-    'revision-panel',
-    'revision-list',
-    'implementation-strip',
-    'phase-rail',
-    'task-tree',
-    'next-steps',
-    'evidence-shortcuts',
-    'utility-disclosure'
+    'graph-shell',
+    'graph-edges',
+    'graph-outcomes',
+    'graph-tasks',
+    'graph-artifacts',
+    'node-inspector',
+    'inspector-title',
+    'inspector-facts'
   ]) {
     assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
   }
   assert.match(html, /aria-live="polite"/);
   assert.match(html, /prefers-reduced-motion/);
   assert.match(html, /Tabler Icons/);
-  assert.match(html, /id="phase-rail" role="list"/);
-  assert.match(html, /id="task-tree" role="list"/);
-  assert.match(html, /<h2 class="section-title" id="outcome-trace-title">Outcome Trace<\/h2>/);
-  assert.match(html, /次の判断/);
-  assert.match(html, /接続状況/);
-  assert.match(html, /全体検証/);
-  assert.match(html, /人間レビュー/);
-  assert.match(html, /Observation \/ Revision/);
-  assert.doesNotMatch(html, /class="supporting-disclosure"/);
-  assert.match(html, /id="wayfinder-failed"/);
-  assert.match(html, /summary\.failedHolistic \? `失敗/);
+  assert.match(html, /id="graph-shell" role="region"/);
+  assert.match(html, /data-graph-column="outcome" role="group"/);
+  assert.match(html, /data-graph-column="outcome"/);
+  assert.match(html, /data-graph-column="task"/);
+  assert.match(html, /data-graph-column="artifact"/);
+  assert.match(html, /neighbor \? ' neighbor'/);
+  assert.match(html, /aria-describedby="\$\{relationId\}"/);
+  assert.match(html, /上流: \$\{escapeHtml\(incoming/);
+  assert.match(html, /function buildTreeViewModel\(model\)/);
+  assert.match(html, /function renderGraph\(model\)/);
+  assert.match(html, /function drawGraphEdges\(tree\)/);
+  assert.match(html, /data-graph-node/);
+  assert.match(html, /ArrowDown/);
+  assert.match(html, /ArrowUp/);
+  assert.match(html, /ArrowLeft/);
+  assert.match(html, /ArrowRight/);
+  assert.match(html, /event\.key === 'Home'/);
+  assert.match(html, /event\.key === 'End'/);
+  assert.match(html, /event\.key === 'Enter'/);
+  assert.match(html, /event\.key === 'Escape'/);
+  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.graph-shell\s*\{\s*min-height:\s*0;[\s\S]*grid-template-columns:\s*1fr/);
+  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.graph-edges\s*\{\s*display:\s*none/);
+  assert.match(html, /\.graph-node:not\(\.is-selected\):not\(\.is-related\)\s*\{\s*display:\s*none/);
   assert.match(html, /document\.title = taskTitle/);
-  assert.match(html, /class="matched-trace"/);
-  assert.match(html, /class="trace-outcome \$\{escapeHtml\(outcome\.state\)\}"/);
-  assert.match(html, /issues\.map\(outcome => outcomeDisclosure\(outcome, true\)\)/);
-  assert.match(html, /issues\.map\(outcome => outcomeDisclosure\(outcome, false\)\)/);
-  assert.match(html, /Spec \/ Contract \/ Verification \/ Review/);
-  assert.match(html, /aria-label="\$\{escapeHtml\(outcome\.outcome\)\} は \$\{escapeHtml\(outcome\.stateLabel\)\}"/);
-  assert.match(html, /\.trace-cards\s*\{\s*display:\s*none/);
-  assert.match(html, /@media \(max-width: 960px\)[\s\S]*\.trace-table\s*\{\s*display:\s*none/);
-  assert.match(html, /@media \(max-width: 960px\)[\s\S]*\.trace-cards\s*\{\s*display:\s*grid/);
-  assert.match(html, /@media \(max-width: 1180px\)[\s\S]*\.wayfinder\s*\{\s*order:\s*1/);
-  assert.match(html, /\.implementation-strip\s*\{\s*order:\s*2/);
-  assert.match(html, /\.evidence-shortcuts\s*\{\s*order:\s*3/);
-  assert.match(html, /\.outcome-trace\s*\{\s*order:\s*4/);
-  assert.match(html, /\.revision-panel\s*\{\s*order:\s*5/);
-  assert.match(html, /\.utility-disclosure\s*\{\s*order:\s*6/);
   assert.match(html, /--ease-out:\s*cubic-bezier/);
   assert.match(html, /@media \(hover: hover\) and \(pointer: fine\)/);
   assert.doesNotMatch(html, /transition:\s*all/);
   assert.doesNotMatch(html, /\*, \*::before, \*::after\s*\{[^}]*transition:\s*none/);
-  assert.match(html, /class="artifact-state\$\{artifact\.missing \? ' missing' : ''\}"/);
   assert.match(html, /missing-implementation/);
-  assert.match(html, /id="open-files" aria-label="Roadmapファイルを開く"/);
-  assert.match(html, /id="file-input"[^>]*aria-label="Roadmapファイルを選択"/);
-  assert.match(html, /id="export-json" aria-label="Roadmap JSONを書き出す"/);
+  assert.match(html, /body:not\(\.task-hub-active\) #open-files,[\s\S]*#export-json,[\s\S]*#open-utility,[\s\S]*\.utility-disclosure\s*\{[\s\S]*display:\s*none !important/);
+  assert.match(html, /body:not\(\.task-hub-active\) \.outcome-trace,[\s\S]*\.revision-panel,[\s\S]*\.implementation-strip,[\s\S]*\.evidence-shortcuts/);
   assert.match(html, /function stopLivePolling\(/);
   assert.match(html, /generation !== pollGeneration/);
   assert.match(html, /const current = model\.activeTask/);
   assert.match(html, /function refreshFreshness\(/);
-  assert.match(html, /id="all-artifact-list"/);
-  assert.match(html, /id="preview-rendered"/);
-  assert.match(html, /id="preview-raw"/);
-  assert.doesNotMatch(html, /id="source-preview"[^>]*aria-live/);
+  assert.match(html, /renderGraph\(next\)/);
   assert.doesNotMatch(html, /function brandData\(/);
 });
 
