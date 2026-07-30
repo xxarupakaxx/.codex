@@ -810,6 +810,9 @@ test('the tree-first roadmap information architecture remains in the HTML', () =
   assert.match(html, /\.explicit-node-layer \.graph-node\.kind-decision/);
   assert.match(html, /\.explicit-node-layer \.graph-node\.kind-risk/);
   assert.match(html, /\.explicit-node-layer \.graph-node\.kind-verification/);
+  assert.match(html, /\.explicit-node-layer \.graph-node\.kind-decision,[\s\S]*?clip-path:\s*none/);
+  assert.match(html, /\.explicit-node-layer \.graph-node\[aria-current="true"\] \.node-glyph/);
+  assert.doesNotMatch(html, /\.explicit-node-layer \.graph-node\.kind-decision,[\s\S]{0,360}clip-path:\s*polygon/);
   assert.match(html, /function renderGraph\(model\)/);
   assert.match(html, /function drawGraphEdges\(tree, selectedId, visibleIds\)/);
   assert.match(html, /data-graph-node/);

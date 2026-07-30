@@ -499,38 +499,95 @@
       min-width: 0;
       display: grid !important;
       grid-template-columns: repeat(var(--graph-columns, 3), minmax(96px, 1fr));
-      grid-auto-rows: minmax(70px, auto);
+      grid-auto-rows: minmax(96px, auto);
       align-items: center;
-      gap: 54px 28px;
-      padding: 8px 4px 36px;
+      gap: 64px 24px;
+      padding: 12px 4px 40px;
     }
     .explicit-node-layer .graph-node {
+      width: min(176px, 100%);
       min-width: 0;
-      min-height: 62px;
+      min-height: 92px;
       align-self: center;
-      border-left-width: 2px;
-      border-radius: 0;
+      justify-self: center;
+      padding: 8px;
+      grid-template-columns: 1fr;
+      justify-items: center;
+      gap: 7px;
+      border: 0;
+      border-radius: 12px;
+      background: transparent;
+      text-align: center;
+      overflow: visible;
     }
     .explicit-node-layer .graph-node.is-single-rank {
-      width: min(260px, 100%);
+      width: min(176px, 100%);
       justify-self: center;
     }
     .explicit-node-layer .graph-node.kind-goal {
-      min-height: 76px;
-      border-radius: 6px;
-      background: var(--surface-accent);
+      min-height: 92px;
+      border-radius: 12px;
+      background: transparent;
     }
     .explicit-node-layer .graph-node.kind-fact { border-radius: 2px; }
     .explicit-node-layer .graph-node.kind-decision,
     .explicit-node-layer .graph-node.kind-risk {
-      clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
-      min-height: 104px;
-      padding: 20px 22px;
-      border-left-width: 1px;
+      clip-path: none;
+      min-height: 92px;
+      padding: 8px;
+      border: 0;
     }
-    .explicit-node-layer .graph-node.kind-risk { border-style: dashed; }
+    .explicit-node-layer .graph-node.kind-risk { border-style: none; }
     .explicit-node-layer .graph-node.kind-artifact { border-radius: 10px 2px 10px 2px; }
     .explicit-node-layer .graph-node.kind-verification { border-radius: 999px; border-style: double; }
+    .explicit-node-layer .node-glyph {
+      width: 44px;
+      height: 44px;
+      background: var(--surface);
+      color: var(--ink);
+      font-size: 11px;
+    }
+    .explicit-node-layer .graph-node.kind-artifact .node-glyph {
+      width: 52px;
+      height: 38px;
+      border-radius: 8px 2px 8px 2px;
+    }
+    .explicit-node-layer .graph-node.kind-verification .node-glyph {
+      border-style: double;
+      border-width: 3px;
+    }
+    .explicit-node-layer .node-copy { max-width: 100%; }
+    .explicit-node-layer .node-kind {
+      font-size: 10px;
+      line-height: 1.2;
+    }
+    .explicit-node-layer .node-title {
+      display: block;
+      margin-top: 2px;
+      overflow: visible;
+      -webkit-line-clamp: unset;
+      font-size: 13px;
+      line-height: 1.3;
+      overflow-wrap: anywhere;
+    }
+    .explicit-node-layer .graph-node[aria-current="true"] {
+      border: 0;
+      background: transparent;
+      outline: 0;
+    }
+    .explicit-node-layer .graph-node[aria-current="true"] .node-glyph {
+      border-color: var(--focus);
+      background: var(--surface-accent);
+      box-shadow: 0 0 0 4px color-mix(in srgb, var(--focus) 20%, transparent);
+    }
+    .explicit-node-layer .graph-node.is-related {
+      border: 0;
+      background: transparent;
+    }
+    .explicit-node-layer .graph-node.is-related .node-glyph {
+      border-color: color-mix(in srgb, var(--accent) 42%, var(--line-strong));
+      background: color-mix(in srgb, var(--surface-accent) 72%, var(--surface));
+    }
     .sr-proposition-list { margin: 0; padding: 0; list-style: none; }
     .graph-column-title {
       margin: 0;
@@ -1473,8 +1530,8 @@
         text-align: center;
       }
       .explicit-node-layer .graph-node[aria-current="true"] {
-        border: 1px solid var(--focus);
-        background: var(--surface-accent);
+        border: 0;
+        background: transparent;
       }
       .explicit-node-layer .node-glyph { width: 40px; height: 40px; }
       .explicit-node-layer .node-kind { display: none; }
