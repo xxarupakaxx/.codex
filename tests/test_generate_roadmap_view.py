@@ -79,12 +79,14 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
     def test_snapshot_v1_includes_optional_workflow_inputs(self) -> None:
         (self.task_dir / "team-journal.md").write_text("# Team Journal\n")
         (self.task_dir / "90_verification.md").write_text("# Verification\n")
+        (self.task_dir / "graph-map.md").write_text("# Graph\n")
 
         snapshot = roadmap.build_snapshot(self.task_dir)
 
         self.assertEqual(snapshot["version"], 1)
         self.assertEqual(snapshot["files"]["team-journal.md"], "# Team Journal\n")
         self.assertEqual(snapshot["files"]["90_verification.md"], "# Verification\n")
+        self.assertEqual(snapshot["files"]["graph-map.md"], "# Graph\n")
 
     def test_snapshot_title_uses_task_directory_name_without_date_prefix(self) -> None:
         task_dir = self.root / "260719_emilkowalski_skills_roadmap_ui"

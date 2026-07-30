@@ -90,6 +90,30 @@ const files = {
 
 const generatedAt = '2026-07-12T02:59:30.000Z';
 const nowMs = Date.parse('2026-07-12T03:00:00.000Z');
+const graphMap = `# View Plan Graph
+
+\`\`\`mermaid
+flowchart TB
+    G["判断を見落とさず決定"]
+    F1["Slackの現状"]
+    F2["GitHubの現状"]
+    D{"判断通知の設計"}
+    R{"安全と失敗の境界"}
+    A1["通知ポリシー"]
+    A2["Knowledgeノート"]
+    A3["Daily導線"]
+    V["pilotと独立レビュー"]
+
+    G -->|"必要とする"| D
+    F1 -->|"判断材料にする"| D
+    F2 -->|"判断材料にする"| D
+    R -->|"制約する"| D
+    D -->|"記録する"| A1
+    A1 -->|"反映する"| A2
+    A2 -->|"導線を作る"| A3
+    V -->|"検証する"| A1
+\`\`\`
+`;
 
 function contrastRatio(foreground, background) {
   const channel = value => {
@@ -609,6 +633,69 @@ test('orders graph ranks by explicit relations instead of raw file order', () =>
   );
 });
 
+test('parses graph-map mermaid into explicit node-link graph contract', () => {
+  const parsed = model.parseMermaidGraphMap(graphMap);
+
+  assert.equal(parsed.explicitGraphMap, true);
+  assert.equal(parsed.nodes.length, 9);
+  assert.equal(parsed.edges.length, 8);
+  assert.deepEqual(
+    Array.from(parsed.nodes, node => [node.id, node.kind, node.title]),
+    [
+      ['G', 'goal', '判断を見落とさず決定'],
+      ['F1', 'fact', 'Slackの現状'],
+      ['F2', 'fact', 'GitHubの現状'],
+      ['D', 'decision', '判断通知の設計'],
+      ['R', 'risk', '安全と失敗の境界'],
+      ['A1', 'artifact', '通知ポリシー'],
+      ['A2', 'artifact', 'Knowledgeノート'],
+      ['A3', 'artifact', 'Daily導線'],
+      ['V', 'verification', 'pilotと独立レビュー']
+    ]
+  );
+  for (const edge of parsed.edges) {
+    assert.ok(edge.from);
+    assert.ok(edge.to);
+    assert.ok(edge.predicate);
+  }
+  assert.ok(parsed.edges.some(edge => edge.from === 'G' && edge.to === 'D' && edge.predicate === '必要とする'));
+  assert.ok(parsed.edges.some(edge => edge.from === 'D' && edge.to === 'A1' && edge.predicate === '記録する'));
+  assert.ok(parsed.edges.some(edge => edge.from === 'V' && edge.to === 'A1' && edge.predicate === '検証する'));
+});
+
+test('graph-map snapshot takes over the first-screen tree while fallback remains available', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: { ...files, 'graph-map.md': graphMap }
+  }), { nowMs });
+  const tree = model.buildTreeViewModel(result);
+
+  assert.equal(tree.explicitGraphMap, true);
+  assert.equal(tree.nodes.length, 9);
+  assert.equal(tree.edges.length, 8);
+  assert.equal(tree.columns.task.length, 0);
+  assert.equal(tree.columns.artifact.length, 0);
+  assert.ok(tree.propositions.includes('判断を見落とさず決定 必要とする 判断通知の設計'));
+
+  const path = new Set(['G']);
+  for (let changed = true; changed;) {
+    changed = false;
+    for (const edge of tree.edges) {
+      if (path.has(edge.from) && !path.has(edge.to)) {
+        path.add(edge.to);
+        changed = true;
+      }
+    }
+  }
+  assert.ok(path.has('A1'));
+  assert.ok(path.has('A2'));
+  assert.ok(path.has('A3'));
+
+  const fallback = model.buildTreeViewModel(model.buildModel(model.normalizeSnapshot({ generatedAt, files }), { nowMs }));
+  assert.notEqual(fallback.explicitGraphMap, true);
+  assert.ok(fallback.columns.task.length > 0);
+});
+
 test('renders workflow markdown safely without an external parser', () => {
   const rendered = model.renderWorkflowMarkdown(`# 見出し
 
@@ -705,13 +792,24 @@ test('the tree-first roadmap information architecture remains in the HTML', () =
   assert.match(html, /waits for/);
   assert.match(html, /proves/);
   assert.match(html, /data-related-node/);
-  assert.match(html, /node-inspector'\)\.hidden = node\.kind === 'goal'/);
+  assert.match(html, /node-inspector'\)\.hidden = tree\.explicitGraphMap \? node\.id === tree\.activeNodeId : node\.kind === 'goal'/);
   assert.match(html, /\.graph-inspector\[hidden\]\s*\{\s*display:\s*none/);
   assert.match(html, /\.inspector-facts\s*\{\s*display:\s*none/);
   assert.match(html, /function pathNodeIds\(tree, selectedId\)/);
   assert.match(html, /function visibleGraphNodeIds\(tree, selected\)/);
   assert.match(html, /function selectedPathEdges\(tree, selectedId\)/);
   assert.match(html, /function buildTreeViewModel\(model\)/);
+  assert.match(html, /function parseMermaidGraphMap\(markdown\)/);
+  assert.match(html, /firstMermaidFlowchart/);
+  assert.match(html, /graph-map\.md/);
+  assert.match(html, /if \(tree\.explicitGraphMap\) \{\s*renderExplicitGraph\(tree\);\s*return;\s*\}/);
+  assert.match(html, /className = 'explicit-node-layer'/);
+  assert.match(html, /id="graph-propositions"/);
+  assert.match(html, /tree\.propositions\.map/);
+  assert.match(html, /tree\.explicitGraphMap \? tree\.edges : selectedPathEdges/);
+  assert.match(html, /\.explicit-node-layer \.graph-node\.kind-decision/);
+  assert.match(html, /\.explicit-node-layer \.graph-node\.kind-risk/);
+  assert.match(html, /\.explicit-node-layer \.graph-node\.kind-verification/);
   assert.match(html, /function renderGraph\(model\)/);
   assert.match(html, /function drawGraphEdges\(tree, selectedId, visibleIds\)/);
   assert.match(html, /data-graph-node/);
