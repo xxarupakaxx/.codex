@@ -442,10 +442,10 @@
     .graph-shell {
       position: relative;
       min-height: 0;
-      padding: 20px 0 4px;
+      padding: 20px 0 8px;
       display: grid;
-      grid-template-columns: minmax(0, 1.35fr) minmax(300px, .65fr);
-      gap: 28px 20px;
+      grid-template-columns: minmax(0, 1fr);
+      gap: 18px;
     }
     .graph-edges {
       position: absolute;
@@ -457,13 +457,24 @@
     .graph-edge {
       fill: none;
       stroke: var(--line-strong);
-      stroke-width: 1.25;
+      stroke-width: 1.4;
       stroke-linecap: round;
-      opacity: .16;
+      opacity: .28;
     }
-    .graph-edge.neighbor { opacity: .82; stroke-width: 2; }
+    .graph-edge.neighbor { opacity: .9; stroke-width: 2; }
     .graph-edge.active { stroke: var(--accent); stroke-width: 3; opacity: 1; }
     .graph-edge.dependency { stroke-dasharray: 5 5; }
+    .graph-edge-label {
+      fill: var(--muted);
+      font: 700 11px/1.1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .02em;
+      paint-order: stroke;
+      stroke: var(--bg);
+      stroke-width: 4px;
+      stroke-linejoin: round;
+      text-anchor: middle;
+    }
+    .graph-edge-label.active { fill: var(--accent-strong); }
     .graph-column {
       position: relative;
       z-index: 1;
@@ -472,38 +483,81 @@
       align-content: start;
       gap: 10px;
     }
-    .graph-column[data-graph-column="outcome"] { grid-column: 1 / -1; }
+    .graph-column[data-graph-column="outcome"] { grid-column: 1; }
     .graph-column[data-graph-column="task"] { grid-column: 1; }
-    .graph-column[data-graph-column="artifact"] { grid-column: 2; }
+    .graph-column[data-graph-column="artifact"] { grid-column: 1; }
+    .graph-shell.explicit-graph {
+      min-height: 720px;
+      grid-template-columns: minmax(0, 1fr);
+      align-items: stretch;
+    }
+    .graph-shell.explicit-graph .graph-column[data-graph-column="outcome"] { grid-column: 1; }
+    .graph-shell.explicit-graph .graph-column[data-graph-column="task"],
+    .graph-shell.explicit-graph .graph-column[data-graph-column="artifact"],
+    .graph-shell.explicit-graph .graph-column-title { display: none; }
+    .explicit-node-layer {
+      min-width: 0;
+      display: grid !important;
+      grid-template-columns: repeat(var(--graph-columns, 3), minmax(96px, 1fr));
+      grid-auto-rows: minmax(70px, auto);
+      align-items: center;
+      gap: 54px 28px;
+      padding: 8px 4px 36px;
+    }
+    .explicit-node-layer .graph-node {
+      min-width: 0;
+      min-height: 62px;
+      align-self: center;
+      border-left-width: 2px;
+      border-radius: 0;
+    }
+    .explicit-node-layer .graph-node.kind-goal {
+      min-height: 76px;
+      border-radius: 6px;
+      background: var(--surface-accent);
+    }
+    .explicit-node-layer .graph-node.kind-fact { border-radius: 2px; }
+    .explicit-node-layer .graph-node.kind-decision,
+    .explicit-node-layer .graph-node.kind-risk {
+      clip-path: polygon(50% 0, 100% 50%, 50% 100%, 0 50%);
+      min-height: 104px;
+      padding: 20px 22px;
+      border-left-width: 1px;
+    }
+    .explicit-node-layer .graph-node.kind-risk { border-style: dashed; }
+    .explicit-node-layer .graph-node.kind-artifact { border-radius: 10px 2px 10px 2px; }
+    .explicit-node-layer .graph-node.kind-verification { border-radius: 999px; border-style: double; }
+    .sr-proposition-list { margin: 0; padding: 0; list-style: none; }
     .graph-column-title {
       margin: 0;
-      padding: 0 0 5px;
+      padding: 0 0 2px;
       color: var(--muted);
       font-size: 12px;
       font-weight: 780;
       letter-spacing: .08em;
       text-transform: uppercase;
     }
-    .graph-column > div { display: grid; gap: 10px; }
+    .graph-column > div { display: grid; gap: 12px; }
     .goal-map {
       position: relative;
-      max-width: 880px;
-      margin: 0 auto 34px;
+      max-width: 920px;
+      margin: 0 auto 18px;
     }
     .goal-map::after {
       position: absolute;
       left: 50%;
-      bottom: -34px;
+      bottom: -18px;
       width: 1px;
-      height: 28px;
+      height: 16px;
       background: var(--line-strong);
       content: "";
     }
     .goal-map .graph-node {
-      min-height: 136px;
-      padding: 22px 24px;
-      grid-template-columns: 48px minmax(0, 1fr);
-      border-left-width: 1px;
+      min-height: 116px;
+      padding: 20px 24px;
+      grid-template-columns: 44px minmax(0, 1fr);
+      border-left-width: 2px;
+      border-radius: 24px;
       background: var(--surface-accent);
     }
     .goal-map .node-glyph {
@@ -534,51 +588,39 @@
       position: relative;
       display: grid;
       grid-template-columns: repeat(3, minmax(0, 1fr));
-      gap: 14px;
+      gap: 18px;
+      align-items: start;
     }
     .outcome-cluster {
       position: relative;
       min-width: 0;
-      padding: 14px;
-      border: 1px solid var(--line);
-      border-radius: var(--radius);
-      background: var(--surface-soft);
-    }
-    .outcome-cluster:not(:last-child)::after {
-      position: absolute;
-      top: 30px;
-      right: -14px;
-      z-index: 2;
-      width: 14px;
-      color: var(--muted);
-      content: "→";
-      font-size: 16px;
-      font-weight: 760;
-      text-align: center;
+      padding: 0;
+      border: 0;
+      background: transparent;
     }
     .outcome-cluster-header {
-      min-height: 50px;
-      margin-bottom: 10px;
+      min-height: 38px;
+      margin-bottom: 8px;
       display: grid;
-      grid-template-columns: 28px minmax(0, 1fr) auto;
+      grid-template-columns: 20px minmax(0, 1fr) auto;
       align-items: start;
       gap: 8px;
     }
     .cluster-step {
-      width: 28px;
-      height: 28px;
+      width: 20px;
+      height: 20px;
       display: grid;
       place-items: center;
       border: 1px solid var(--line-strong);
       border-radius: 50%;
-      background: var(--surface);
+      background: transparent;
       color: var(--muted);
-      font: 780 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+      font: 780 10px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
     }
-    .outcome-cluster-header h4 { margin: 0; font-size: 16px; line-height: 1.25; }
-    .outcome-cluster-header p { margin: 3px 0 0; color: var(--muted); font-size: 12px; line-height: 1.35; }
+    .outcome-cluster-header h4 { margin: 0; font-size: 13px; line-height: 1.2; }
+    .outcome-cluster-header p { margin: 2px 0 0; color: var(--muted); font-size: 11px; line-height: 1.35; }
     .cluster-count {
-      padding: 3px 6px;
+      padding: 2px 6px;
       border: 1px solid var(--line);
       border-radius: 999px;
       color: var(--muted);
@@ -586,53 +628,55 @@
     }
     .outcome-cluster-items { display: grid; gap: 8px; }
     .outcome-cluster .graph-node {
-      min-height: 112px;
-      padding: 14px;
-      grid-template-columns: 34px minmax(0, 1fr);
-      border-left-width: 1px;
+      min-height: 66px;
+      padding: 10px 12px;
+      grid-template-columns: 26px minmax(0, 1fr);
+      border-left-width: 2px;
+      border-radius: 18px;
     }
-    .outcome-cluster .node-glyph { width: 34px; height: 34px; font-size: 11px; }
+    .outcome-cluster .node-glyph { width: 24px; height: 24px; font-size: 10px; }
     .outcome-cluster .node-title {
-      margin-top: 5px;
-      -webkit-line-clamp: 3;
-      font-size: 15px;
-      line-height: 1.35;
+      margin-top: 1px;
+      -webkit-line-clamp: 2;
+      font-size: 13px;
+      line-height: 1.3;
     }
-    .outcome-cluster .node-meta { font-size: 11px; }
-    @media (min-width: 1181px) {
-      .cluster-design .outcome-cluster-items { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-    }
+    .outcome-cluster .node-meta { margin-top: 2px; font-size: 11px; }
     #graph-tasks {
       display: grid;
       grid-template-columns: repeat(5, minmax(0, 1fr));
-      gap: 8px;
+      gap: 10px;
     }
     #graph-tasks .graph-node {
       position: relative;
-      min-height: 118px;
-      padding: 12px;
-      grid-template-columns: 32px minmax(0, 1fr);
-      border-left-width: 1px;
+      min-height: 70px;
+      padding: 10px 12px;
+      grid-template-columns: 26px minmax(0, 1fr);
+      border-left-width: 2px;
+      border-radius: 18px;
     }
-    #graph-tasks .node-title { -webkit-line-clamp: 3; font-size: 13px; }
-    #graph-artifacts { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
+    #graph-tasks .node-title { -webkit-line-clamp: 2; font-size: 13px; }
+    #graph-tasks .node-meta { margin-top: 2px; font-size: 11px; }
+    #graph-artifacts { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 10px; }
     #graph-artifacts .graph-node {
-      min-height: 82px;
-      padding: 10px;
-      grid-template-columns: 28px minmax(0, 1fr);
-      border-left-width: 1px;
+      min-height: 58px;
+      padding: 10px 12px;
+      grid-template-columns: 24px minmax(0, 1fr);
+      border-left-width: 2px;
+      border-radius: 16px;
     }
-    #graph-artifacts .node-title { font-size: 13px; }
+    #graph-artifacts .node-title { font-size: 12px; }
+    #graph-artifacts .node-meta { margin-top: 2px; font-size: 10px; }
     .graph-node {
       width: 100%;
-      min-height: 86px;
+      min-height: 56px;
       padding: 10px 12px;
       display: grid;
-      grid-template-columns: 28px minmax(0, 1fr);
-      gap: 9px;
+      grid-template-columns: 24px minmax(0, 1fr);
+      gap: 8px;
       border: 1px solid var(--line-strong);
-      border-left-width: 5px;
-      border-radius: var(--radius);
+      border-left-width: 2px;
+      border-radius: 18px;
       background: var(--surface);
       color: var(--ink);
       text-align: left;
@@ -645,15 +689,15 @@
       outline-offset: 1px;
     }
     .node-glyph {
-      width: 28px;
-      height: 28px;
+      width: 22px;
+      height: 22px;
       display: grid;
       place-items: center;
       border: 1px solid var(--line-strong);
       border-radius: 50%;
       background: var(--surface-soft);
       color: var(--muted);
-      font-size: 12px;
+      font-size: 10px;
       font-weight: 820;
       font-variant-numeric: tabular-nums;
     }
@@ -668,7 +712,7 @@
     }
     .node-title {
       display: -webkit-box;
-      margin-top: 2px;
+      margin-top: 0;
       overflow: hidden;
       -webkit-box-orient: vertical;
       -webkit-line-clamp: 2;
@@ -678,9 +722,9 @@
     }
     .node-meta {
       display: block;
-      margin-top: 5px;
+      margin-top: 2px;
       color: var(--muted);
-      font-size: 12px;
+      font-size: 11px;
       line-height: 1.35;
       overflow-wrap: anywhere;
     }
@@ -695,12 +739,22 @@
     .graph-node.status-missing-evidence { border-left-style: dashed; }
     .graph-node.kind-goal .node-glyph { border-radius: 6px; }
     .graph-node.kind-task .node-glyph { border-radius: 50%; }
+    .graph-node.kind-fact .node-glyph { border-radius: 2px; }
+    .graph-node.kind-decision .node-glyph,
+    .graph-node.kind-risk .node-glyph { transform: rotate(45deg); border-radius: 2px; }
+    .graph-node.kind-decision .node-glyph span,
+    .graph-node.kind-risk .node-glyph span { transform: rotate(-45deg); }
     .graph-node.kind-artifact .node-glyph,
     .graph-node.kind-evidence .node-glyph { border-radius: 3px; }
+    .graph-node.kind-verification .node-glyph { border-radius: 999px; }
     .graph-node.kind-evidence { border-top-style: dashed; border-bottom-style: dashed; }
     .graph-node.is-active {
       border-color: var(--accent);
       background: var(--surface-accent);
+    }
+    .graph-node.is-related {
+      border-color: color-mix(in srgb, var(--accent) 20%, var(--line-strong));
+      background: color-mix(in srgb, var(--surface-accent) 48%, var(--surface));
     }
     .inspector-kicker {
       margin: 0;
@@ -751,6 +805,8 @@
       text-align: left;
       cursor: pointer;
     }
+    .relation-node strong { display: block; font-size: 12px; }
+    .relation-node span { display: block; margin-top: 2px; color: var(--muted); font-size: 10px; font-weight: 760; text-transform: uppercase; letter-spacing: .04em; }
     .relation-empty { padding: 8px 0; color: var(--muted); font-size: 12px; }
     .relation-arrow { color: var(--muted); font-size: 18px; text-align: center; }
     .inspector-actions { display: grid; gap: 8px; }
@@ -1342,9 +1398,6 @@
       .now-label { grid-row: 1 / 3; }
       .now-cell { min-height: 42px; border-left: 1px solid var(--line); }
       .now-cell strong { white-space: normal; }
-      .graph-shell { grid-template-columns: 1fr; }
-      .graph-column[data-graph-column="task"],
-      .graph-column[data-graph-column="artifact"] { grid-column: 1; }
       #graph-tasks { grid-template-columns: repeat(3, minmax(0, 1fr)); }
       #graph-artifacts { grid-template-columns: repeat(3, minmax(0, 1fr)); }
     }
@@ -1394,35 +1447,38 @@
         gap: 24px;
       }
       .graph-edges { display: none; }
+      .graph-shell.explicit-graph .graph-edges { display: block; }
+      .explicit-node-layer {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 42px 10px;
+      }
+      .explicit-node-layer .graph-node { padding: 9px; }
+      .explicit-node-layer .graph-node.kind-decision,
+      .explicit-node-layer .graph-node.kind-risk {
+        min-height: 92px;
+        padding: 18px;
+      }
       .graph-column {
         grid-column: 1 !important;
         padding-left: 0;
         border-left: 0;
       }
       .graph-column-title { margin-left: 0; }
-      .goal-map { margin-bottom: 28px; }
-      .goal-map::after { bottom: -28px; height: 22px; }
+      .goal-map { margin-bottom: 18px; }
+      .goal-map::after { bottom: -18px; height: 14px; }
       .goal-map .graph-node {
-        min-height: 120px;
+        min-height: 102px;
         padding: 16px;
         grid-template-columns: 40px minmax(0, 1fr);
       }
       .goal-map .node-glyph { width: 40px; height: 40px; }
       .goal-map .node-title { display: block; overflow: visible; font-size: 23px; }
       .outcome-cluster-grid { grid-template-columns: 1fr; gap: 10px; }
-      .outcome-cluster:not(:last-child)::after {
-        top: auto;
-        right: 50%;
-        bottom: -11px;
-        width: 16px;
-        transform: translateX(50%) rotate(90deg);
-      }
-      .outcome-cluster { padding: 12px; }
       .outcome-cluster-items { grid-template-columns: 1fr; }
       #graph-tasks { grid-template-columns: 1fr; }
-      #graph-artifacts { grid-template-columns: 1fr 1fr; }
+      #graph-artifacts { grid-template-columns: 1fr; }
       .graph-node {
-        min-height: 76px;
+        min-height: 64px;
         position: relative;
       }
       .graph-inspector { padding: 16px; grid-template-columns: 1fr; }
@@ -1697,6 +1753,7 @@
         <p class="decision-context" id="plan-meta">Outcome Traceを読み込み中</p>
         <div class="graph-shell" id="graph-shell" role="region" aria-label="成果までの構造グラフ" tabindex="-1">
           <svg class="graph-edges" id="graph-edges" aria-hidden="true"></svg>
+          <ol class="visually-hidden sr-proposition-list" id="graph-propositions" aria-label="グラフ内の命題"></ol>
           <div class="graph-column" data-graph-column="outcome" role="group" aria-label="目的と成果の観点">
             <h3 class="graph-column-title">目的と成果の地図</h3>
             <div id="graph-outcomes"></div>
@@ -1840,7 +1897,7 @@
     const MODEL_KNOWN_FILES = [
       '00_spec.md', '10_task.md', '20_survey.md', '20_survey_external.md', '30_plan.md',
       '40_progress.md', '80_review.md', '90_verification.md', '05_log.md', '99_history.md',
-      'checkpoint.md', 'team-journal.md'
+      'checkpoint.md', 'team-journal.md', 'graph-map.md'
     ];
     function asText(value) { return typeof value === 'string' ? value : ''; }
     function normalizeSnapshot(snapshotInput) {
@@ -2582,14 +2639,148 @@
       if (/team-journal/i.test(path)) return '稼働記録';
       return artifact.state || '生成済み';
     }
+    function firstMermaidFlowchart(markdown) {
+      for (const match of asText(markdown).matchAll(/```mermaid\s*([\s\S]*?)```/gi)) {
+        const body = match[1].trim();
+        if (/^flowchart\s+(?:TB|TD)\b/im.test(body)) return body;
+      }
+      return '';
+    }
+    function unquoteMermaidLabel(value) {
+      return stripMarkdown(asText(value).trim().replace(/^["'`]+|["'`]+$/g, ''));
+    }
+    function parseMermaidGraphMap(markdown) {
+      const source = firstMermaidFlowchart(markdown);
+      if (!source) return null;
+      const nodes = new Map();
+      const edges = [];
+      const ensureNode = (id, label = '', shape = '') => {
+        const cleanId = asText(id).trim();
+        if (!cleanId) return null;
+        const existing = nodes.get(cleanId) || {};
+        const next = {
+          id: cleanId,
+          label: label || existing.label || cleanId,
+          shape: shape || existing.shape || 'implicit'
+        };
+        nodes.set(cleanId, next);
+        return next;
+      };
+      const lines = source.split('\n')
+        .map(line => line.replace(/%%.*$/, '').trim())
+        .filter(line => line && !/^flowchart\s+/i.test(line));
+      for (const line of lines) {
+        const nodeMatch = line.match(/^([A-Za-z][\w-]*)\s*(\[\s*(?:"([^"]+)"|'([^']+)'|`([^`]+)`|([^\]]+))\s*\]|\{\s*(?:"([^"]+)"|'([^']+)'|`([^`]+)`|([^}]+))\s*\})\s*$/);
+        if (nodeMatch) {
+          const label = nodeMatch[3] || nodeMatch[4] || nodeMatch[5] || nodeMatch[6] || nodeMatch[7] || nodeMatch[8] || nodeMatch[9] || nodeMatch[10] || nodeMatch[1];
+          ensureNode(nodeMatch[1], unquoteMermaidLabel(label), nodeMatch[2].trim().startsWith('{') ? 'decision' : 'rect');
+          continue;
+        }
+        let edgeMatch = line.match(/^([A-Za-z][\w-]*)\s*-->\s*\|\s*([^|]+?)\s*\|\s*([A-Za-z][\w-]*)\s*$/);
+        if (!edgeMatch) edgeMatch = line.match(/^([A-Za-z][\w-]*)\s*--\s*["'`]([^"'`]+)["'`]\s*-->\s*([A-Za-z][\w-]*)\s*$/);
+        if (!edgeMatch) edgeMatch = line.match(/^([A-Za-z][\w-]*)\s*-->\s*([A-Za-z][\w-]*)\s*$/);
+        if (edgeMatch) {
+          const from = edgeMatch[1];
+          const predicate = edgeMatch.length === 4 ? unquoteMermaidLabel(edgeMatch[2]) : 'つながる';
+          const to = edgeMatch.length === 4 ? edgeMatch[3] : edgeMatch[2];
+          ensureNode(from);
+          ensureNode(to);
+          edges.push({ from, to, predicate });
+        }
+      }
+      if (!nodes.size || !edges.length) return null;
+      const indegree = new Map(Array.from(nodes.keys(), id => [id, 0]));
+      edges.forEach(edge => indegree.set(edge.to, (indegree.get(edge.to) || 0) + 1));
+      const outgoing = new Map(Array.from(nodes.keys(), id => [id, []]));
+      edges.forEach(edge => outgoing.get(edge.from)?.push(edge.to));
+      const ranks = new Map(Array.from(nodes.keys(), id => [id, 0]));
+      const queue = Array.from(indegree.entries()).filter(([, count]) => count === 0).map(([id]) => id);
+      const visited = [];
+      while (queue.length) {
+        const id = queue.shift();
+        visited.push(id);
+        for (const to of outgoing.get(id) || []) {
+          ranks.set(to, Math.max(ranks.get(to) || 0, (ranks.get(id) || 0) + 1));
+          indegree.set(to, (indegree.get(to) || 1) - 1);
+          if (indegree.get(to) === 0) queue.push(to);
+        }
+      }
+      const byRank = new Map();
+      Array.from(nodes.keys()).forEach(id => {
+        const rank = visited.includes(id) ? ranks.get(id) || 0 : 0;
+        if (!byRank.has(rank)) byRank.set(rank, []);
+        byRank.get(rank).push(id);
+      });
+      const maxColumns = Math.max(...Array.from(byRank.values(), ids => ids.length), 1);
+      const graphNodes = Array.from(nodes.values()).map(node => {
+        const rank = ranks.get(node.id) || 0;
+        const siblings = byRank.get(rank) || [node.id];
+        const order = siblings.indexOf(node.id);
+        const prefix = node.id.match(/^[A-Za-z]+/)?.[0]?.toUpperCase() || '';
+        const kind = ({ G: 'goal', F: 'fact', D: 'decision', R: 'risk', A: 'artifact', V: 'verification' })[prefix] || 'artifact';
+        return {
+          id: node.id,
+          kind,
+          shape: node.shape === 'decision' || ['D', 'R'].includes(prefix) ? 'decision' : 'rect',
+          title: node.label,
+          displayTitle: node.label,
+          status: kind === 'risk' ? 'attention' : kind === 'verification' ? 'complete' : 'planned',
+          meta: kind,
+          summary: node.label,
+          artifact: 'graph-map.md',
+          rank,
+          order,
+          gridColumn: Math.max(1, Math.floor((maxColumns - siblings.length) / 2) + order + 1),
+          gridRow: rank + 1,
+          facts: [['ID', node.id], ['型', kind], ['形', node.shape]]
+        };
+      });
+      return {
+        explicitGraphMap: true,
+        direction: 'TB',
+        nodes: graphNodes,
+        edges: edges.map(edge => ({
+          from: edge.from,
+          to: edge.to,
+          kind: 'predicate',
+          predicate: edge.predicate,
+          verb: edge.predicate,
+          active: false
+        })),
+        maxRank: Math.max(...graphNodes.map(node => node.rank), 0),
+        maxColumns
+      };
+    }
     function buildTreeViewModel(model) {
+      const explicitGraph = parseMermaidGraphMap(model.snapshot.files['graph-map.md']);
+      if (explicitGraph) {
+        const nodeById = new Map(explicitGraph.nodes.map(node => [node.id, node]));
+        const roots = explicitGraph.nodes.filter(node => !explicitGraph.edges.some(edge => edge.to === node.id));
+        const goal = explicitGraph.nodes.find(node => node.kind === 'goal') || roots[0] || explicitGraph.nodes[0];
+        return {
+          ...explicitGraph,
+          columns: { outcome: explicitGraph.nodes, task: [], artifact: [] },
+          activeNodeId: goal?.id || explicitGraph.nodes[0]?.id || '',
+          nextNodeId: goal?.id || explicitGraph.nodes[0]?.id || '',
+          propositions: explicitGraph.edges.map(edge => `${nodeById.get(edge.from)?.title || edge.from} ${edge.predicate} ${nodeById.get(edge.to)?.title || edge.to}`)
+        };
+      }
       const nodes = [];
       const edges = [];
+      const clusterOrder = { discovery: 0, design: 1, guardrail: 2 };
       const taskStatusLabel = status => ({ complete: '完了', 'in-progress': '進行中', blocked: 'ブロック', planned: '未着手' })[status] || '未着手';
+      const edgeVerbFor = kind => ({
+        outcome: 'requires',
+        implementation: 'implemented by',
+        dependency: 'waits for',
+        'task-flow': 'then',
+        artifact: 'produces',
+        evidence: 'proves'
+      })[kind] || 'links to';
       const outcomeCluster = title => {
         const text = stripMarkdown(title);
         if (/障害|失敗分離|機密|security|安全|prompt injection|権限|secret/i.test(text)) return 'guardrail';
-        if (/現在|現行|読み取り|調査|確認する|把握/i.test(text)) return 'discovery';
+        if (/現在|現行|読み取り|調査|確認する|把握|知る/i.test(text)) return 'discovery';
         return 'design';
       };
       const compactOutcomeTitle = title => {
@@ -2637,7 +2828,13 @@
       };
       const addEdge = (from, to, kind = 'link', active = false) => {
         if (!from || !to || from === to) return;
-        if (!edges.some(edge => edge.from === from && edge.to === to && edge.kind === kind)) edges.push({ from, to, kind, active: Boolean(active) });
+        if (!edges.some(edge => edge.from === from && edge.to === to && edge.kind === kind)) edges.push({
+          from,
+          to,
+          kind,
+          active: Boolean(active),
+          verb: edgeVerbFor(kind)
+        });
       };
       const statusForOutcome = outcome => outcome.state === 'matched' ? 'complete' : outcome.state;
       const spec = model.snapshot.files['00_spec.md'] || '';
@@ -2682,6 +2879,7 @@
           summary: stripMarkdown(task.note || task.target || task.blockedBy || 'Task本文から抽出'),
           artifact: '30_plan.md',
           taskNumber: task.number,
+          order: parseFloat(task.number) || 0,
           facts: [
             ['状態', active ? '進行中' : taskStatusLabel(task.status)],
             ['依存', task.blockedBy || 'なし'],
@@ -2696,13 +2894,17 @@
       const outcomeNodes = model.outcomes;
       outcomeNodes.forEach((outcome, index) => {
         const title = outcome.outcome || `Outcome ${index + 1}`;
+        const linkedNumbers = outcomeTaskNumbers(outcome);
+        const firstTaskOrder = linkedNumbers.length ? Math.min(...linkedNumbers.map(number => parseFloat(number) || Number.MAX_SAFE_INTEGER)) : Number.MAX_SAFE_INTEGER;
+        const cluster = outcomeCluster(title);
         const id = addNode({
           id: outcome.id || `outcome-${index + 1}`,
           kind: 'outcome',
           column: 'outcome',
           title,
           displayTitle: compactOutcomeTitle(title),
-          cluster: outcomeCluster(title),
+          cluster,
+          order: clusterOrder[cluster] * 1000 + firstTaskOrder + index / 100,
           status: statusForOutcome(outcome),
           meta: outcome.stateLabel,
           summary: outcome.requirement || outcome.evidence || 'Outcome Traceから抽出',
@@ -2714,7 +2916,7 @@
           ]
         });
         addEdge(goalId, id, 'outcome', model.freshness.state === 'fresh' && outcome.state !== 'matched');
-        outcomeTaskNumbers(outcome).forEach(number => {
+        linkedNumbers.forEach(number => {
           const taskId = taskIds.get(number);
           addEdge(id, taskId, 'implementation', model.freshness.state === 'fresh' && model.activeTask?.number === number);
         });
@@ -2746,12 +2948,16 @@
         const exists = Boolean(artifact);
         const id = `artifact-${path.replace(/[^a-z0-9]+/gi, '-')}`;
         artifactIds.set(path, id);
+        const linkedTaskOrders = model.tasks
+          .filter(task => path && (task.target.includes(path) || `${task.note} ${task.blockedBy}`.includes(path)))
+          .map(task => parseFloat(task.number) || Number.MAX_SAFE_INTEGER);
         addNode({
           id,
           kind: /verification|review/i.test(path) ? 'evidence' : 'artifact',
           column: 'artifact',
           title: path,
           displayTitle: artifactDisplayTitle(path),
+          order: (linkedTaskOrders.length ? Math.min(...linkedTaskOrders) : Number.MAX_SAFE_INTEGER) + (/verification|review/i.test(path) ? 0.2 : 0.1),
           status: exists ? 'complete' : 'missing-evidence',
           meta: exists ? artifactStateFor(artifact, model) : '未作成',
           summary: exists ? `${Number(artifact.size || 0).toLocaleString()} bytes` : 'この成果物はまだsnapshotにありません',
@@ -2791,13 +2997,18 @@
         addEdge(goalId, artifactIds.get('30_plan.md'), 'artifact', false);
       }
       const activeNodeId = model.freshness.state === 'fresh' && model.activeTask ? taskIds.get(model.activeTask.number) : goalId;
+      const sorted = list => list.slice().sort((left, right) => {
+        if (left.kind === 'goal' || right.kind === 'goal') return left.kind === 'goal' ? -1 : 1;
+        return (left.order ?? Number.MAX_SAFE_INTEGER) - (right.order ?? Number.MAX_SAFE_INTEGER)
+          || String(left.displayTitle || left.title).localeCompare(String(right.displayTitle || right.title), 'ja');
+      });
       return {
         nodes,
         edges,
         columns: {
-          outcome: nodes.filter(node => node.column === 'outcome'),
-          task: nodes.filter(node => node.column === 'task'),
-          artifact: nodes.filter(node => node.column === 'artifact')
+          outcome: sorted(nodes.filter(node => node.column === 'outcome')),
+          task: sorted(nodes.filter(node => node.column === 'task')),
+          artifact: sorted(nodes.filter(node => node.column === 'artifact'))
         },
         activeNodeId,
         nextNodeId: activeNodeId || nodes[0]?.id || ''
@@ -2809,7 +3020,8 @@
       extractRisks, extractPhaseSignals, buildModel, artifactStateFor,
       renderInlineMarkdown, renderWorkflowMarkdown, groupTaskSections,
       extractPlanSections, taskHubSettings, extractExplicitOutcomeTrace,
-      extractRevisionLog, buildOutcomeTrace, stateLabel, buildTreeViewModel
+      extractRevisionLog, buildOutcomeTrace, stateLabel, parseMermaidGraphMap,
+      buildTreeViewModel
     };
     /* ROADMAP_MODEL_END */
 
@@ -2989,36 +3201,87 @@
     }
     function nodeGlyph(node) {
       if (node.kind === 'goal') return 'G';
+      if (node.kind === 'fact') return 'F';
+      if (node.kind === 'decision') return 'D';
+      if (node.kind === 'risk') return 'R';
       if (node.kind === 'outcome') return 'O';
       if (node.kind === 'task') return node.taskNumber || 'T';
+      if (node.kind === 'verification') return 'V';
       if (node.kind === 'evidence') return 'E';
       return 'A';
     }
     function nodeKindLabel(kind) {
-      return ({ goal: '目標', outcome: '成果', task: '作業', artifact: '成果物', evidence: '検証' })[kind] || kind;
+      return ({ goal: '目標', fact: '事実', decision: '判断', risk: 'リスク', outcome: '成果', task: '作業', artifact: '成果物', verification: '検証', evidence: '検証' })[kind] || kind;
+    }
+    function pathNodeIds(tree, selectedId) {
+      if (!selectedId) return new Set();
+      const visited = new Set([selectedId]);
+      const walk = direction => {
+        const queue = [selectedId];
+        while (queue.length) {
+          const current = queue.shift();
+          tree.edges.forEach(edge => {
+            const next = direction === 'down' && edge.from === current
+              ? edge.to
+              : direction === 'up' && edge.to === current
+                ? edge.from
+                : '';
+            if (next && !visited.has(next)) {
+              visited.add(next);
+              queue.push(next);
+            }
+          });
+        }
+      }
+      walk('up');
+      walk('down');
+      return visited;
+    }
+    function visibleGraphNodeIds(tree, selected) {
+      const allOutcomes = tree.columns.outcome.filter(node => node.kind === 'outcome').map(node => node.id);
+      const isMobile = window.matchMedia('(max-width: 720px)').matches;
+      if (!isMobile) return new Set(tree.nodes.map(node => node.id));
+      const visible = new Set(allOutcomes);
+      if (tree.columns.outcome[0]?.id) visible.add(tree.columns.outcome[0].id);
+      const path = pathNodeIds(tree, selected?.id || tree.activeNodeId);
+      path.forEach(id => visible.add(id));
+      return visible;
+    }
+    function selectedPathEdges(tree, selectedId) {
+      const path = pathNodeIds(tree, selectedId);
+      return tree.edges.filter(edge => path.has(edge.from) && path.has(edge.to));
     }
     function renderGraph(model) {
       const tree = ROADMAP_MODEL.buildTreeViewModel(model);
+      byId('graph-shell').classList.toggle('explicit-graph', Boolean(tree.explicitGraphMap));
+      if (tree.explicitGraphMap) {
+        renderExplicitGraph(tree);
+        return;
+      }
       const selected = selectedGraphNode(tree);
-      const relatedIds = new Set(tree.edges
-        .filter(edge => edge.from === selected?.id || edge.to === selected?.id)
-        .flatMap(edge => [edge.from, edge.to]));
+      const pathIds = pathNodeIds(tree, selected?.id || tree.activeNodeId);
+      const visibleIds = visibleGraphNodeIds(tree, selected);
       const nodeHtml = node => {
-        const incoming = tree.edges.filter(edge => edge.to === node.id).map(edge => tree.nodes.find(item => item.id === edge.from)?.title).filter(Boolean);
-        const outgoing = tree.edges.filter(edge => edge.from === node.id).map(edge => tree.nodes.find(item => item.id === edge.to)?.title).filter(Boolean);
+        const incoming = tree.edges.filter(edge => edge.to === node.id).map(edge => `${edge.verb} ${tree.nodes.find(item => item.id === edge.from)?.title || ''}`.trim()).filter(Boolean);
+        const outgoing = tree.edges.filter(edge => edge.from === node.id).map(edge => `${edge.verb} ${tree.nodes.find(item => item.id === edge.to)?.title || ''}`.trim()).filter(Boolean);
         const relationId = `graph-relation-${node.id.replace(/[^a-z0-9_-]+/gi, '-')}`;
         const relationDescription = node.kind === 'goal'
           ? `上流なし。成果の観点 ${outgoing.length}件。`
-          : `上流 ${incoming.length}件。下流 ${outgoing.length}件。`;
+          : `上流 ${incoming.join('、') || 'なし'}。下流 ${outgoing.join('、') || 'なし'}。`;
         return `
-        <button class="graph-node kind-${escapeHtml(node.kind)} status-${escapeHtml(node.status)}${node.id === tree.activeNodeId ? ' is-active' : ''}${node.id === selected?.id ? ' is-selected' : ''}${relatedIds.has(node.id) && node.id !== selected?.id ? ' is-related' : ''}" type="button" data-graph-node="${escapeHtml(node.id)}" aria-current="${node.id === selected?.id}" aria-describedby="${relationId}" aria-label="${escapeHtml(nodeKindLabel(node.kind))} ${escapeHtml(node.title)}、${escapeHtml(node.meta)}" tabindex="${node.id === selected?.id ? '0' : '-1'}">
+        <button class="graph-node kind-${escapeHtml(node.kind)} status-${escapeHtml(node.status)}${node.id === tree.activeNodeId ? ' is-active' : ''}${node.id === selected?.id ? ' is-selected' : ''}${pathIds.has(node.id) && node.id !== selected?.id ? ' is-related' : ''}" type="button" data-graph-node="${escapeHtml(node.id)}" aria-current="${node.id === selected?.id}" aria-describedby="${relationId}" aria-label="${escapeHtml(nodeKindLabel(node.kind))} ${escapeHtml(node.title)}、${escapeHtml(node.meta)}" tabindex="${node.id === selected?.id ? '0' : '-1'}">
           <span class="node-glyph" aria-hidden="true">${escapeHtml(nodeGlyph(node))}</span>
           <span class="node-copy"><span class="node-kind">${escapeHtml(nodeKindLabel(node.kind))}</span><span class="node-title">${escapeHtml(node.displayTitle || node.title)}</span><span class="node-meta">${escapeHtml(node.kind === 'goal' ? node.summary : node.meta || node.status)}</span></span>
         </button>
         <span class="visually-hidden" id="${relationId}">${escapeHtml(relationDescription)}</span>`;
       };
       const goal = tree.columns.outcome.find(node => node.kind === 'goal');
-      const outcomes = tree.columns.outcome.filter(node => node.kind === 'outcome');
+      const outcomes = tree.columns.outcome.filter(node => node.kind === 'outcome' && visibleIds.has(node.id));
+      byId('graph-outcomes').className = '';
+      byId('graph-outcomes').removeAttribute('style');
+      byId('graph-propositions').innerHTML = tree.propositions?.length
+        ? tree.propositions.map(item => `<li>${escapeHtml(item)}</li>`).join('')
+        : '';
       const clusters = [
         { id: 'discovery', label: '現状を知る', description: '事実を読み取り、出発点を揃える' },
         { id: 'design', label: '仕組みを決める', description: '責務と運用契約を設計する' },
@@ -3041,14 +3304,32 @@
       byId('graph-outcomes').innerHTML = goal
         ? `<div class="goal-map">${nodeHtml(goal)}</div><div class="outcome-cluster-grid">${clusterHtml}</div>`
         : '<div class="empty">目的を読み込めません。</div>';
-      byId('graph-tasks').innerHTML = tree.columns.task.map(nodeHtml).join('') || '<div class="empty">Taskなし</div>';
-      byId('graph-artifacts').innerHTML = tree.columns.artifact.map(nodeHtml).join('') || '<div class="empty">Artifactなし</div>';
+      byId('graph-tasks').innerHTML = tree.columns.task.filter(node => visibleIds.has(node.id)).map(nodeHtml).join('') || '<div class="empty">Taskなし</div>';
+      byId('graph-artifacts').innerHTML = tree.columns.artifact.filter(node => visibleIds.has(node.id)).map(nodeHtml).join('') || '<div class="empty">Artifactなし</div>';
       renderGraphInspector(selected, tree);
-      requestAnimationFrame(() => drawGraphEdges(tree));
+      requestAnimationFrame(() => drawGraphEdges(tree, selected?.id || tree.activeNodeId, visibleIds));
+    }
+    function renderExplicitGraph(tree) {
+      const selected = selectedGraphNode(tree);
+      const pathIds = pathNodeIds(tree, selected?.id || tree.activeNodeId);
+      const visibleIds = new Set(tree.nodes.map(node => node.id));
+      const nodeHtml = node => `
+        <button class="graph-node kind-${escapeHtml(node.kind)} status-${escapeHtml(node.status)}${node.id === selected?.id ? ' is-selected' : ''}${pathIds.has(node.id) && node.id !== selected?.id ? ' is-related' : ''}" type="button" data-graph-node="${escapeHtml(node.id)}" style="grid-column:${Number(node.gridColumn) || 1};grid-row:${Number(node.gridRow) || 1}" aria-current="${node.id === selected?.id}" aria-label="${escapeHtml(nodeKindLabel(node.kind))} ${escapeHtml(node.title)}" tabindex="${node.id === selected?.id ? '0' : '-1'}">
+          <span class="node-glyph" aria-hidden="true"><span>${escapeHtml(nodeGlyph(node))}</span></span>
+          <span class="node-copy"><span class="node-kind">${escapeHtml(nodeKindLabel(node.kind))}</span><span class="node-title">${escapeHtml(node.displayTitle || node.title)}</span></span>
+        </button>`;
+      byId('graph-outcomes').className = 'explicit-node-layer';
+      byId('graph-outcomes').style.setProperty('--graph-columns', String(Math.max(1, tree.maxColumns || 1)));
+      byId('graph-outcomes').innerHTML = tree.nodes.map(nodeHtml).join('');
+      byId('graph-tasks').innerHTML = '';
+      byId('graph-artifacts').innerHTML = '';
+      byId('graph-propositions').innerHTML = tree.propositions.map(item => `<li>${escapeHtml(item)}</li>`).join('');
+      renderGraphInspector(selected, tree);
+      requestAnimationFrame(() => drawGraphEdges(tree, selected?.id || tree.activeNodeId, visibleIds));
     }
     function renderGraphInspector(node, tree) {
       if (!node) return;
-      byId('node-inspector').hidden = node.kind === 'goal';
+      byId('node-inspector').hidden = tree.explicitGraphMap ? node.id === tree.activeNodeId : node.kind === 'goal';
       byId('inspector-kind').textContent = nodeKindLabel(node.kind);
       byId('inspector-title').textContent = node.title;
       byId('inspector-summary').textContent = node.summary || node.meta || '';
@@ -3057,24 +3338,33 @@
         .join('');
       const incoming = tree.edges
         .filter(edge => edge.to === node.id)
-        .map(edge => tree.nodes.find(item => item.id === edge.from))
+        .map(edge => ({ edge, node: tree.nodes.find(item => item.id === edge.from) }))
         .filter(Boolean);
       const outgoing = tree.edges
         .filter(edge => edge.from === node.id)
-        .map(edge => tree.nodes.find(item => item.id === edge.to))
+        .map(edge => ({ edge, node: tree.nodes.find(item => item.id === edge.to) }))
         .filter(Boolean);
-      const relationNode = related => `<button class="relation-node" type="button" data-related-node="${escapeHtml(related.id)}">${escapeHtml(related.displayTitle || related.title)}</button>`;
+      const relationNode = related => `<button class="relation-node" type="button" data-related-node="${escapeHtml(related.node.id)}"><strong>${escapeHtml(related.node.displayTitle || related.node.title)}</strong><span>${escapeHtml(related.edge.verb)}</span></button>`;
       const relationGroup = (label, items) => `<div class="relation-group"><span class="relation-group-label">${label}</span>${items.length ? items.map(relationNode).join('') : '<span class="relation-empty">記録なし</span>'}</div>`;
       const goalClusters = node.kind === 'goal'
         ? ['discovery', 'design', 'guardrail']
           .map(cluster => tree.nodes.filter(item => item.kind === 'outcome' && item.cluster === cluster))
           .filter(items => items.length)
           .map(items => ({
-            ...items[0],
-            displayTitle: `${({ discovery: '現状を知る', design: '仕組みを決める', guardrail: '安全に守る' })[items[0].cluster]}（${items.length}件）`
+            edge: { verb: 'contains' },
+            node: {
+              ...items[0],
+              displayTitle: `${({ discovery: '現状を知る', design: '仕組みを決める', guardrail: '安全に守る' })[items[0].cluster]}（${items.length}件）`
+            }
           }))
         : null;
-      byId('inspector-relations').innerHTML = `
+      byId('inspector-relations').innerHTML = tree.explicitGraphMap ? `
+        <p class="relation-map-title">1-hop関係</p>
+        <div class="relation-map">
+          ${relationGroup('入ってくる', incoming)}
+          <span class="relation-arrow" aria-hidden="true">→</span>
+          ${relationGroup('出ていく', outgoing)}
+        </div>` : `
         <p class="relation-map-title">関係をnodeでたどる</p>
         <div class="relation-map">
           ${relationGroup('この前', incoming)}
@@ -3085,19 +3375,20 @@
       byId('wayfinder-next-decision').textContent = node.title;
       byId('decision-subject').textContent = node.summary || node.title;
     }
-    function drawGraphEdges(tree) {
+    function drawGraphEdges(tree, selectedId, visibleIds) {
       const shell = byId('graph-shell');
       const svg = byId('graph-edges');
       if (!shell || !svg) return;
       const shellRect = shell.getBoundingClientRect();
       svg.setAttribute('viewBox', `0 0 ${Math.max(1, shellRect.width)} ${Math.max(1, shellRect.height)}`);
+      const selectedEdgeKeys = new Set(selectedPathEdges(tree, selectedId).map(edge => `${edge.from}->${edge.to}`));
       const pathFor = edge => {
         const from = document.querySelector(`[data-graph-node="${CSS.escape(edge.from)}"]`);
         const to = document.querySelector(`[data-graph-node="${CSS.escape(edge.to)}"]`);
         if (!from || !to) return '';
+        const highlighted = tree.explicitGraphMap ? selectedEdgeKeys.has(`${edge.from}->${edge.to}`) : edge.active;
         const a = from.getBoundingClientRect();
         const b = to.getBoundingClientRect();
-        const neighbor = edge.from === selectedGraphNodeId || edge.to === selectedGraphNodeId;
         const vertical = b.top >= a.bottom;
         if (vertical) {
           const x1 = a.left + a.width / 2 - shellRect.left;
@@ -3105,22 +3396,23 @@
           const x2 = b.left + b.width / 2 - shellRect.left;
           const y2 = b.top - shellRect.top;
           const mid = Math.max(18, (y2 - y1) / 2);
-          return `<path class="graph-edge ${escapeHtml(edge.kind)}${neighbor ? ' neighbor' : ''}${edge.active ? ' active' : ''}" d="M ${x1} ${y1} C ${x1} ${y1 + mid}, ${x2} ${y2 - mid}, ${x2} ${y2}"></path>`;
+          const lx = (x1 + x2) / 2;
+          const ly = y1 + mid;
+          return `<g><path class="graph-edge ${escapeHtml(edge.kind)} neighbor${highlighted ? ' active' : ''}" d="M ${x1} ${y1} C ${x1} ${y1 + mid}, ${x2} ${y2 - mid}, ${x2} ${y2}"></path><text class="graph-edge-label${highlighted ? ' active' : ''}" x="${lx}" y="${ly - 4}">${escapeHtml(edge.verb)}</text></g>`;
         }
         const x1 = a.right - shellRect.left;
         const y1 = a.top + a.height / 2 - shellRect.top;
         const x2 = b.left - shellRect.left;
         const y2 = b.top + b.height / 2 - shellRect.top;
         const mid = Math.max(24, Math.abs(x2 - x1) / 2);
-        return `<path class="graph-edge ${escapeHtml(edge.kind)}${neighbor ? ' neighbor' : ''}${edge.active ? ' active' : ''}" d="M ${x1} ${y1} C ${x1 + mid} ${y1}, ${x2 - mid} ${y2}, ${x2} ${y2}"></path>`;
+        const lx = x1 + (x2 - x1) / 2;
+        const ly = Math.min(y1, y2) - 6;
+        return `<g><path class="graph-edge ${escapeHtml(edge.kind)} neighbor${highlighted ? ' active' : ''}" d="M ${x1} ${y1} C ${x1 + mid} ${y1}, ${x2 - mid} ${y2}, ${x2} ${y2}"></path><text class="graph-edge-label${highlighted ? ' active' : ''}" x="${lx}" y="${ly}">${escapeHtml(edge.verb)}</text></g>`;
       };
-      const selected = tree.nodes.find(node => node.id === selectedGraphNodeId);
-      svg.innerHTML = window.matchMedia('(max-width: 720px)').matches
+      svg.innerHTML = window.matchMedia('(max-width: 720px)').matches && !tree.explicitGraphMap
         ? ''
-        : selected?.kind === 'goal'
-          ? ''
-        : tree.edges
-          .filter(edge => edge.from === selectedGraphNodeId || edge.to === selectedGraphNodeId)
+        : (tree.explicitGraphMap ? tree.edges : selectedPathEdges(tree, selectedId))
+          .filter(edge => visibleIds.has(edge.from) && visibleIds.has(edge.to))
           .map(pathFor)
           .join('');
     }

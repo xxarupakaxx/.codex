@@ -33,6 +33,7 @@ DEFAULT_FILES = [
     "checkpoint.md",
     "team-journal.md",
     "90_verification.md",
+    "graph-map.md",
 ]
 
 OUTPUT_NAMES = {"roadmap.html", "roadmap-snapshot.json"}

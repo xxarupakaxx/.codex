@@ -567,16 +567,46 @@ test('builds an outcome task artifact tree with dependency edges and no stale ac
   assert.ok(tree.nodes.some(node => node.kind === 'outcome' && node.displayTitle));
   assert.ok(tree.nodes.some(node => node.kind === 'task' && node.taskNumber === '1.5'));
   assert.ok(tree.nodes.some(node => node.kind === 'evidence' && node.title === '90_verification.md'));
-  assert.ok(tree.edges.some(edge => edge.from.includes('trace') && edge.to === 'task-1.5' && edge.kind === 'implementation'));
-  assert.ok(tree.edges.some(edge => edge.from === 'task-0' && edge.to === 'task-1.5' && edge.kind === 'task-flow'));
-  assert.ok(tree.edges.some(edge => edge.from === 'task-0' && edge.to === 'task-1.5' && edge.kind === 'dependency'));
-  assert.ok(tree.edges.some(edge => edge.from === 'task-1.5' && edge.to.startsWith('artifact-') && edge.kind === 'evidence'));
+  assert.ok(tree.edges.some(edge => edge.from.includes('trace') && edge.to === 'task-1.5' && edge.kind === 'implementation' && edge.verb === 'implemented by'));
+  assert.ok(tree.edges.some(edge => edge.from === 'task-0' && edge.to === 'task-1.5' && edge.kind === 'task-flow' && edge.verb === 'then'));
+  assert.ok(tree.edges.some(edge => edge.from === 'task-0' && edge.to === 'task-1.5' && edge.kind === 'dependency' && edge.verb === 'waits for'));
+  assert.ok(tree.edges.some(edge => edge.from === 'task-1.5' && edge.to.startsWith('artifact-') && edge.kind === 'evidence' && edge.verb === 'proves'));
   assert.equal(tree.activeNodeId, 'task-1.5');
 
   const stale = model.buildModel(model.normalizeSnapshot({ generatedAt, files }), { nowMs: Date.parse('2026-07-12T04:00:00.000Z') });
   const staleTree = model.buildTreeViewModel(stale);
   assert.notEqual(staleTree.activeNodeId, 'task-1.5');
   assert.equal(staleTree.edges.some(edge => edge.active), false);
+});
+
+test('orders graph ranks by explicit relations instead of raw file order', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: {
+      '00_spec.md': '# Goal',
+      '30_plan.md': `## Task 2: Second\n\n**変更対象:** review-security.md\n\n## Task 1: First\n\n**変更対象:** github-automation.md`,
+      'team-journal.md': `## Outcome Trace
+
+| Outcome | Requirement | Implementation | Acceptance | Evidence | State |
+| --- | --- | --- | --- | --- | --- |
+| O-2 安全を守る | R2 | Task 2 | AC-02 | review-security.md | matched |
+| O-1 現状を知る | R1 | Task 1 | AC-01 | github-automation.md | matched |
+`,
+      'github-automation.md': '# Research',
+      'review-security.md': '# Review'
+    }
+  }), { nowMs });
+  const tree = model.buildTreeViewModel(result);
+
+  assert.deepEqual(
+    Array.from(tree.columns.outcome.filter(node => node.kind === 'outcome'), node => node.cluster),
+    ['discovery', 'guardrail']
+  );
+  assert.deepEqual(Array.from(tree.columns.task, node => node.taskNumber), ['1', '2']);
+  assert.deepEqual(
+    Array.from(tree.columns.artifact, node => node.title).slice(0, 2),
+    ['github-automation.md', 'review-security.md']
+  );
 });
 
 test('renders workflow markdown safely without an external parser', () => {
@@ -670,15 +700,20 @@ test('the tree-first roadmap information architecture remains in the HTML', () =
   assert.match(html, /現状を知る/);
   assert.match(html, /仕組みを決める/);
   assert.match(html, /安全に守る/);
+  assert.match(html, /requires/);
+  assert.match(html, /implemented by/);
+  assert.match(html, /waits for/);
+  assert.match(html, /proves/);
   assert.match(html, /data-related-node/);
   assert.match(html, /node-inspector'\)\.hidden = node\.kind === 'goal'/);
   assert.match(html, /\.graph-inspector\[hidden\]\s*\{\s*display:\s*none/);
   assert.match(html, /\.inspector-facts\s*\{\s*display:\s*none/);
-  assert.doesNotMatch(html, /incoming\.join\(' \/ '\)/);
-  assert.doesNotMatch(html, /outgoing\.join\(' \/ '\)/);
+  assert.match(html, /function pathNodeIds\(tree, selectedId\)/);
+  assert.match(html, /function visibleGraphNodeIds\(tree, selected\)/);
+  assert.match(html, /function selectedPathEdges\(tree, selectedId\)/);
   assert.match(html, /function buildTreeViewModel\(model\)/);
   assert.match(html, /function renderGraph\(model\)/);
-  assert.match(html, /function drawGraphEdges\(tree\)/);
+  assert.match(html, /function drawGraphEdges\(tree, selectedId, visibleIds\)/);
   assert.match(html, /data-graph-node/);
   assert.match(html, /ArrowDown/);
   assert.match(html, /ArrowUp/);
@@ -691,13 +726,14 @@ test('the tree-first roadmap information architecture remains in the HTML', () =
   assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.graph-shell\s*\{[\s\S]*grid-template-columns:\s*1fr/);
   assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.graph-edges\s*\{\s*display:\s*none/);
   assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.outcome-cluster-grid\s*\{\s*grid-template-columns:\s*1fr/);
-  assert.doesNotMatch(html, /\.graph-node:not\(\.is-selected\):not\(\.is-related\)\s*\{\s*display:\s*none/);
+  assert.match(html, /const visible = new Set\(allOutcomes\)/);
   assert.match(html, /document\.title = taskTitle/);
   assert.match(html, /--ease-out:\s*cubic-bezier/);
   assert.match(html, /@media \(hover: hover\) and \(pointer: fine\)/);
   assert.doesNotMatch(html, /transition:\s*all/);
   assert.doesNotMatch(html, /\*, \*::before, \*::after\s*\{[^}]*transition:\s*none/);
   assert.match(html, /missing-implementation/);
+  assert.match(html, /\.graph-edge-label\s*\{/);
   assert.match(html, /body:not\(\.task-hub-active\) #open-files,[\s\S]*#export-json,[\s\S]*#open-utility,[\s\S]*\.utility-disclosure\s*\{[\s\S]*display:\s*none !important/);
   assert.match(html, /body:not\(\.task-hub-active\) \.outcome-trace,[\s\S]*\.revision-panel,[\s\S]*\.implementation-strip,[\s\S]*\.evidence-shortcuts/);
   assert.match(html, /function stopLivePolling\(/);
