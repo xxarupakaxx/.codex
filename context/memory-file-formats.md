@@ -146,6 +146,15 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 ## 背景・目的
 [なぜ必要か]
 
+## 現在の事実
+- 確認済みの事実。提案や推測を混ぜない。
+
+## 採用判断
+- このtaskで採用した方針。根拠は別sourceへ接続してよい。
+
+## 未確定
+- 仮説、未決事項、確認が必要な境界。
+
 ## 機能要件
 ### 必須要件
 - [ ] 要件1
@@ -172,20 +181,24 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 ## タスク一覧
 
 ### Task 1: <タスク名>
-**変更対象:** <パス>
 
-#### 1. 調査
-- [ ] 項目
+#### 目的
+[このTaskで何を成立させるか]
 
-#### 2. 計画
-- [ ] 手順
+#### 変更対象
+- `<path/to/file>`
+- `moduleOrFunction`
 
-#### 3. 実行
-- [ ] 実装
-- [ ] コミット: `<メッセージ>`
+#### 実装
+- [ ] 手順1
+- [ ] 手順2
 
-#### 4. レビュー
-- [ ] 確認項目
+#### 成果物
+- [このTaskで生まれるfile、document、state]
+
+#### 検証
+- `<実行可能なcommand>`
+- [判断ベースの確認項目]
 
 ## agent reviewの結果
 [agentからの指摘と対応]
@@ -194,6 +207,10 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 | リスク | 影響度 | 対策 |
 |-------|-------|------|
 ```
+
+Roadmap Viewerは各Taskの `目的`、`変更対象`、`成果物`、`検証`をsource-boundで表示する。記載がないfieldをViewer側で推測して埋めない。
+
+`事実・判断・未確定`のsource priorityは `viewing-plans` を正本とする。既存taskの `team-journal.md` にある `Decisions` と `Open Questions` も有効なsourceとして扱う。
 
 ## 40_progress.md
 

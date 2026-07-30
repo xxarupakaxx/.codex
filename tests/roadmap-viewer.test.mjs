@@ -4,6 +4,8 @@ import test from 'node:test';
 import vm from 'node:vm';
 
 const html = readFileSync(new URL('../tools/roadmap_viewer.html', import.meta.url), 'utf8');
+const viewingPlansSkill = readFileSync(new URL('../skills/viewing-plans/SKILL.md', import.meta.url), 'utf8');
+const memoryFileFormats = readFileSync(new URL('../context/memory-file-formats.md', import.meta.url), 'utf8');
 const sourceMatch = html.match(/\/\* ROADMAP_MODEL_START \*\/([\s\S]*?)\/\* ROADMAP_MODEL_END \*\//);
 
 assert.ok(sourceMatch, 'roadmap_viewer.html must expose the exact browser model source between markers');
@@ -115,6 +117,102 @@ flowchart TB
 \`\`\`
 `;
 
+const executionBriefFiles = {
+  '00_spec.md': `# Roadmap Viewer
+
+## 目的
+
+具体的な実行計画を第一画面で理解できるようにする。
+
+## 必須要件
+
+- [ ] Taskと仕様を同時に読める。
+- [ ] 成果物へ直接移動できる。
+
+## 制約事項
+
+- snapshot schema version 1を維持する。
+
+## 現在の事実
+
+- snapshotにはMarkdown本文が残っている。
+
+## 採用判断
+
+- 第一画面をbrief-firstにする。
+
+## 未確定
+
+- 古いtaskの見出し揺れ。
+`,
+  '20_survey.md': `# 調査
+
+## 現在の事実
+
+- explicit graphがTask列を空にする。
+`,
+  '30_plan.md': `# 実装計画
+
+## 実装方針
+
+\`buildExecutionBrief()\` を \`.codex/tools/roadmap_viewer.html\` に追加する。
+
+## Task 1: contractを固定する
+
+### 目的
+
+第一画面の読解要件をtestにする。
+
+### 変更対象
+
+- \`.codex/tests/roadmap-viewer.test.mjs\`
+
+### 成果物
+
+- contract test
+
+### 検証
+
+\`node --test .codex/tests/roadmap-viewer.test.mjs\`
+
+## Task 2: brief UIを実装する
+
+### 目的
+
+6項目を画面へ表示する。
+
+### 変更対象
+
+- \`.codex/tools/roadmap_viewer.html\`
+
+## 未確定
+
+- viewportごとの情報量。
+`,
+  '40_progress.md': `# 進捗
+
+| Task | 状態 | 進捗 |
+| --- | --- | --- |
+| Task 1 | 進行中 | 1/2 |
+| Task 2 | 未着手 | 0/1 |
+
+## 実測
+
+- Node baselineは35件green。
+`,
+  'team-journal.md': `# Team Journal
+
+## Decisions
+
+- primary briefとgraph inspectorを分離する。
+
+## Open Questions
+
+- code anchorがないtaskの表示。
+`,
+  'graph-map.md': graphMap
+};
+
 function contrastRatio(foreground, background) {
   const channel = value => {
     const normalized = value / 255;
@@ -196,6 +294,130 @@ test('normalizes heading, colon, decimal task, Japanese checklist and progress t
   assert.equal(result.tasks[2].status, 'planned');
   assert.equal(result.activeTask.number, '1.5');
   assert.deepEqual(Array.from(result.nextSteps, task => task.number), ['1.5', '2']);
+});
+
+test('具体的な計画があるとき first-screen brief は現在と次のTaskを返すべき', () => {
+  const normalized = model.normalizeSnapshot({
+    generatedAt,
+    files: executionBriefFiles
+  });
+  const result = model.buildModel(normalized, { nowMs });
+  const brief = model.buildExecutionBrief(result);
+
+  assert.equal(brief.currentTask.number, '1');
+  assert.equal(brief.nextTask.number, '2');
+  assert.deepEqual(Array.from(brief.flow, task => task.number), ['1', '2']);
+});
+
+test('Taskに目的・変更対象・成果物・検証があるとき flowは実行契約を保持すべき', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: executionBriefFiles
+  }), { nowMs });
+  const task = model.buildExecutionBrief(result).flow[0];
+
+  assert.match(task.purpose, /読解要件をtest/);
+  assert.equal(task.target, '.codex/tests/roadmap-viewer.test.mjs');
+  assert.deepEqual(Array.from(task.outputs), ['contract test']);
+  assert.deepEqual(Array.from(task.verification), ['node --test .codex/tests/roadmap-viewer.test.mjs']);
+});
+
+test('目的・要件・制約が明示されているとき first-screen brief は目的と仕様を分離すべき', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: executionBriefFiles
+  }), { nowMs });
+  const brief = model.buildExecutionBrief(result);
+
+  assert.match(brief.purpose.summary, /具体的な実行計画/);
+  assert.match(brief.spec.summary, /要件:/);
+  assert.match(brief.spec.summary, /制約:/);
+  assert.notEqual(brief.purpose.summary, brief.spec.summary);
+  assert.equal(brief.spec.source, '00_spec.md');
+});
+
+test('実装方針が明示されているとき first-screen brief はcode anchorを返すべき', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: executionBriefFiles
+  }), { nowMs });
+  const brief = model.buildExecutionBrief(result);
+
+  assert.match(brief.approach.summary, /buildExecutionBrief/);
+  assert.deepEqual(
+    Array.from(brief.approach.anchors, anchor => anchor.label),
+    ['buildExecutionBrief()', '.codex/tools/roadmap_viewer.html']
+  );
+});
+
+test('final implementation supersessionがあるとき first-screen brief は旧案ではなく最終案を返すべき', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: {
+      '30_plan.md': `## 採用する最小モデル
+
+Dashboard labelを起点にする旧案。
+
+## 2026-07-30 Final implementation supersession
+
+中央Development Mapで \`pending_pdm\` を抽出する最終案。
+`
+    }
+  }), { nowMs });
+  const brief = model.buildExecutionBrief(result);
+
+  assert.match(brief.approach.summary, /中央Development Map/);
+  assert.doesNotMatch(brief.approach.summary, /旧案/);
+  assert.ok(brief.approach.anchors.some(anchor => anchor.label === 'pending_pdm'));
+});
+
+test('複数sourceに明示分類があるとき first-screen brief は事実・判断・未確定を分離すべき', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: executionBriefFiles
+  }), { nowMs });
+  const brief = model.buildExecutionBrief(result);
+
+  assert.match(brief.claims.facts[0].text, /Node baseline/);
+  assert.equal(brief.claims.facts[0].source, '40_progress.md');
+  assert.match(brief.claims.decisions[0].text, /primary brief/);
+  assert.equal(brief.claims.decisions[0].source, 'team-journal.md');
+  assert.match(brief.claims.openItems[0].text, /code anchor/);
+  assert.equal(brief.claims.openItems[0].source, 'team-journal.md');
+});
+
+test('実装根拠と分類sourceがないとき first-screen brief は推論せず空集合を返すべき', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: {
+      '00_spec.md': '## 目的\n\n古い計画を読む。',
+      '30_plan.md': '## Task 1: 記録だけのTask\n\n- [ ] 実行する'
+    }
+  }), { nowMs });
+  const brief = model.buildExecutionBrief(result);
+
+  assert.deepEqual(Array.from(brief.approach.anchors), []);
+  assert.deepEqual(Array.from(brief.claims.facts), []);
+  assert.deepEqual(Array.from(brief.claims.decisions), []);
+  assert.deepEqual(Array.from(brief.claims.openItems), []);
+});
+
+test('first-screen brief は仕様・計画・進捗・reviewを優先成果物として返すべき', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: executionBriefFiles
+  }), { nowMs });
+  const brief = model.buildExecutionBrief(result);
+
+  assert.deepEqual(
+    Array.from(brief.artifacts, artifact => [artifact.path, artifact.exists]),
+    [
+      ['00_spec.md', true],
+      ['30_plan.md', true],
+      ['40_progress.md', true],
+      ['80_review.md', false]
+    ]
+  );
 });
 
 test('normalizes review spelling variants and limits risks to risk sections', () => {
@@ -663,6 +885,12 @@ test('parses graph-map mermaid into explicit node-link graph contract', () => {
   assert.ok(parsed.edges.some(edge => edge.from === 'V' && edge.to === 'A1' && edge.predicate === '検証する'));
 });
 
+test('concept map nodeに実artifact provenanceがないとき artifact導線を付けるべきではない', () => {
+  const parsed = model.parseMermaidGraphMap(graphMap);
+
+  assert.ok(parsed.nodes.every(node => node.artifact === ''));
+});
+
 test('graph-map snapshot takes over the first-screen tree while fallback remains available', () => {
   const result = model.buildModel(model.normalizeSnapshot({
     generatedAt,
@@ -757,6 +985,60 @@ test('task hub shell exposes list detail status settings and responsive behavior
   assert.match(html, /overscroll-behavior:\s*contain/);
 });
 
+test('single-task HTMLは具体的な実行briefをConcept Mapより先に配置すべき', () => {
+  const ids = [
+    'execution-brief',
+    'brief-flow',
+    'brief-spec',
+    'brief-approach',
+    'brief-claims',
+    'brief-artifacts',
+    'brief-next-status',
+    'brief-quick-links',
+    'concept-map-disclosure'
+  ];
+  for (const id of ids) {
+    assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
+  }
+  assert.ok(html.indexOf('id="execution-brief"') < html.indexOf('id="concept-map-disclosure"'));
+});
+
+test('execution briefは初期renderとfreshness更新の両方で再描画すべき', () => {
+  assert.match(html, /function renderExecutionBrief\(model\)/);
+  assert.match(html, /function render\(snapshotInput,[\s\S]*?renderExecutionBrief\(currentModel\)/);
+  assert.match(html, /function refreshFreshness\(\)[\s\S]*?renderExecutionBrief\(next\)/);
+  assert.match(html, /concept-map-disclosure[\s\S]*?addEventListener\('toggle'/);
+});
+
+test('Concept Mapのinspectorはprimary briefを上書きせずprovenanceがある時だけartifact CTAを出すべき', () => {
+  const inspectorSource = html.match(/function renderGraphInspector\(node, tree\) \{([\s\S]*?)\n    \}\n    function drawGraphEdges/)?.[1] || '';
+
+  assert.doesNotMatch(inspectorSource, /wayfinder-next-decision/);
+  assert.doesNotMatch(inspectorSource, /decision-subject/);
+  assert.match(inspectorSource, /decision-evidence'\)\.hidden = !node\.artifact/);
+});
+
+test('brief-first layoutはdesktopの情報階層とmobileの一列順序を維持すべき', () => {
+  assert.match(html, /\.execution-brief\s*\{[^}]*order:\s*1/);
+  assert.match(html, /\.concept-map-disclosure\s*\{[^}]*order:\s*2/);
+  assert.match(html, /\.brief-detail-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,/);
+  assert.match(html, /\.claim-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3,/);
+  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.brief-detail-grid,[\s\S]*\.claim-grid\s*\{[^}]*grid-template-columns:\s*1fr/);
+  assert.match(html, /id="brief-quick-links"[\s\S]*data-artifact="00_spec\.md"[\s\S]*data-artifact="30_plan\.md"/);
+});
+
+test('viewing-plansのauthoring contractはbrief-firstの6項目とTask実行契約を要求すべき', () => {
+  for (const label of ['実施Task', '仕様', '実装根拠', '実行順序', '事実・判断・未確定', '成果物']) {
+    assert.match(viewingPlansSkill, new RegExp(label));
+  }
+  for (const contract of ['同じ要約を重複表示しない', '`現在` と `次`', 'quick link', 'source drawer']) {
+    assert.match(viewingPlansSkill, new RegExp(contract));
+  }
+  for (const heading of ['#### 目的', '#### 変更対象', '#### 成果物', '#### 検証']) {
+    assert.match(memoryFileFormats, new RegExp(heading));
+  }
+});
+
 test('the tree-first roadmap information architecture remains in the HTML', () => {
   for (const id of [
     'task-title',
@@ -835,7 +1117,8 @@ test('the tree-first roadmap information architecture remains in the HTML', () =
   assert.doesNotMatch(html, /\*, \*::before, \*::after\s*\{[^}]*transition:\s*none/);
   assert.match(html, /missing-implementation/);
   assert.match(html, /\.graph-edge-label\s*\{/);
-  assert.match(html, /body:not\(\.task-hub-active\) #open-files,[\s\S]*#export-json,[\s\S]*#open-utility,[\s\S]*\.utility-disclosure\s*\{[\s\S]*display:\s*none !important/);
+  assert.match(html, /body:not\(\.task-hub-active\) #open-files,[\s\S]*#export-json,[\s\S]*#open-utility,[\s\S]*\.inspector-actions/);
+  assert.doesNotMatch(html, /body:not\(\.task-hub-active\) \.utility-disclosure\s*\{[^}]*display:\s*none !important/);
   assert.match(html, /body:not\(\.task-hub-active\) \.outcome-trace,[\s\S]*\.revision-panel,[\s\S]*\.implementation-strip,[\s\S]*\.evidence-shortcuts/);
   assert.match(html, /function stopLivePolling\(/);
   assert.match(html, /generation !== pollGeneration/);
@@ -886,6 +1169,8 @@ test('warning tokens and missing artifacts have accessible contrast contracts', 
   assert.ok(contrastRatio('#6f4800', '#ffffff') >= 4.5);
   assert.ok(contrastRatio('#f0c978', '#242a26') >= 4.5);
   assert.ok(contrastRatio('#f0c978', '#1c211e') >= 4.5);
+  assert.ok(contrastRatio('#626a65', '#ffffff') >= 4.5);
+  assert.ok(contrastRatio('#626a65', '#f3f4f0') >= 4.5);
   assert.match(html, /\.trace-token\.warn\s*\{[^}]*color:\s*var\(--warn-text\)/);
   assert.match(html, /\.artifact-warning\s*\{[^}]*color:\s*var\(--warn-text\)/);
   assert.match(html, /\.artifact-state\.missing\s*\{[^}]*color:\s*var\(--warn-text\)\s*!important/);

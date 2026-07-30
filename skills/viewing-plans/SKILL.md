@@ -8,8 +8,9 @@ allowed-tools: Read, mcp__workflow-html-app__view-plan
 
 計画ファイル・ログ・レビュー結果をHTMLビューアに自動表示する。
 
-Roadmap Viewer は、task directory に揃っている記録から、Goal / Outcome → Task → Artifact / Evidence の成果ツリーを生成する。
-第一画面はツリーと選択ノードの要点だけを表示し、Markdown、手動ファイル読込、JSON操作、KPIカード、Task表を並べない。
+Roadmap Viewer は、task directory に揃っている記録から、実行計画のbriefと補助のConcept Mapを生成する。
+第一画面はbrief-firstとし、`実施Task`、`仕様`、`実装根拠`、`実行順序`、`事実・判断・未確定`、`成果物`を同じ読み順で表示する。`graph-map.md` のConcept Mapは折りたたみ可能な補助表示へ置き、第一画面の一次情報を置き換えない。
+Markdown全文、手動ファイル読込、JSON操作、KPIカードは第一画面へ並べず、要約から正本を直接開けるようにする。
 `--serve --watch` で起動すると、Codex app の横に置いたブラウザが自動更新される。
 Plan Viewer / Log Viewer は、明示的に文書本文を確認するときだけ使う。
 
@@ -73,7 +74,7 @@ ${MEMORY_DIR}/memory/<task>/roadmap.html
 ```
 
 ユーザーには生成されたHTMLパスを案内する。
-ブラウザで開けば、現在地、Task のつながり、各 Task が生んだ成果物と検証を一つの木として追える。
+ブラウザで開けば、taskの目的、仕様、実コード上の変更対象、実行順序、確認済み事項、成果物を一つのbriefとして追える。関係を深掘りするときだけConcept Mapを開く。
 
 ライブ更新:
 
@@ -104,7 +105,17 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 ## 機能概要
 
 ### Roadmap Viewer（成果マップビューア）
-- `graph-map.md` があれば、そのMermaid flowchartを第一優先の明示graphとして読む。なければ `00_spec.md` / `30_plan.md` / `40_progress.md` / `80_review.md` / `05_log.md` と、任意の `team-journal.md` / `90_verification.md` からfallback graphを作る
+- `00_spec.md` / `30_plan.md` / `40_progress.md` / `80_review.md` を第一画面の正本とし、task、spec、approach、flow、claims、artifactsをbriefへ割り当てる
+- heroの目的は `00_spec.md` の `目的` / `概要`、仕様cardは `必須要件` / `機能要件` と `制約` または `Done` から別々に作る。同じ要約を重複表示しない
+- `現在` と `次` を明示する。次のTaskがなければ、計画完了か未記録かを区別して表示する
+- `00_spec.md` と `30_plan.md` のquick linkを初期viewportに置き、成果物linkからsource drawerで正本本文を開けるようにする
+- `graph-map.md` があればMermaid flowchartを補助のConcept Mapとして読む。なければ既存sourceからfallback graphを作る
+- `30_plan.md` の各Taskは `目的`、`変更対象`、`成果物`、`検証`を持つ。欠落時はViewerが補作せず、`未記録`と表示する
+- `事実・判断・未確定`は明示見出しだけから読む。source priorityは次の通り
+  - 事実: `40_progress.md` の実測・検証結果 → `20_survey.md` の現在の事実・確認済み事実 → `00_spec.md` の現在の事実
+  - 判断: `team-journal.md` のDecisions・判断 → `30_plan.md` の採用判断・実装方針・Final implementation supersession → `00_spec.md` の採用判断
+  - 未確定: `team-journal.md` のOpen Questions → `30_plan.md` の未確定・リスク → `20_survey.md` の仮説・未確定 → `00_spec.md` の未確定
+- 同じbucketの項目はsource priority順に統合し、正規化後に完全一致する項目だけを重複排除する。分類を推測しない
 - 明示graphは型付きnodeとpredicate edgeで構成し、`node → 関係語 → node` が単独で意味を持つようにする
 - node表面は短い名詞句に限定し、要求文、ファイルパス、Markdown本文は選択後の詳細へ移す
 - Desktop / Tablet / Mobileのすべてでnodeとedgeを保持する。Mobileはselected pathのpredicateだけを優先表示し、線を消してカード一覧へ戻さない
@@ -121,7 +132,7 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 - 生成済みHTMLにsnapshotを埋め込むため、追加サーバーなしで `file://` 表示できる
 - `--serve --watch` では `roadmap-snapshot.json` をpollingし、source内容または表示対象artifact metadataが変化したときだけ自動更新する
 - 単一 task 表示では手動のMarkdown/JSON読込やJSON出力を提供しない
-- Markdown本文は第一画面へ表示しない
+- Markdown全文は第一画面へ表示しない。source-boundの要約と正本への導線は隠さない
 
 ### Plan Viewer（計画ビューア）
 - Markdownレンダリング（見出し、リスト、コードブロック）
