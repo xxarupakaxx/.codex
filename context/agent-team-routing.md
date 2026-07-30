@@ -7,6 +7,7 @@ Codex が installed plugins / skills / sub-agent roles を選ぶためのルー�
 - Phase の順序やゲートは `context/workflow-rules.md` を SSoT とする。
 - model / service_tier / agent_type の詳細は `rules/model-routing.md` を SSoT とする。
 - `/team-run` のチーム構成・Review Heat・終了判定は `context/team-run.md` を SSoT とする。
+- `/graph-engineering` の adoption boundary、contract、routing、state authority は `context/graph-engineering.md` を SSoT とする。実行 harness は `team-run` を再利用する。
 - Project 固有の routing 上書きは `.codex/context/agent-team-routing.md` を優先する。
 - `/team-run` の entrypoint shim は `skills/team-run/SKILL.md` を最初に読む。Skill 読込後の policy 適用順は `context/workflow-rules.md` → `context/agent-team-routing.md` → `context/team-run.md` → `.codex/context/agent-team-routing.md` → `.codex/context/team-run.md`。Project 側の `team-run.md` は `/team-run` 固有事項にだけ重ねる。
 
@@ -52,6 +53,7 @@ sub-agent へ委任する前に、次の条件をすべて確認する。満た�
 - **Fresh implementation context**: route と acceptance が確定した実装単位は、必要な artifact の抽出だけを持って開始する。会話全文や未決の仮説を丸ごと引き継がない。
 
 `mapping-large-projects` は route が霧に包まれた大規模 effort の decision map であり、`team-run` は route と acceptance が既知で、共有状態と独立検証が価値を生む実行協調である。
+複数の独立 loop を auditable edge、typed state、異なる権限で統治する必要がある場合だけ、その上に `graph-engineering` を置く。単一 loop を graph と呼び替えない。
 
 ## Research Ticket Gate
 
@@ -129,6 +131,7 @@ Route 選択だけでは、次の操作を許可しない。
 | User intent / signal | Primary plugin / skill route | Agent roles to combine | Notes |
 |---|---|---|---|
 | high-value multi-turn parallel execution, team-run,複数 role の協調 | `skills/team-run/SKILL.md` with `context/workflow-rules.md` and `context/team-run.md` | `implementation-planner`, `implementer`, reviewers, `go-nogo-advisor` | Use only when Goal, Team Journal, Review Heat, and sub-agent coordination are all useful. |
+| 複数loopのfan-out/fan-in、auditable routing、checkpoint、failure isolation、node別権限 | `skills/graph-engineering/SKILL.md` with `context/graph-engineering.md`; execution reuses `team-run` | contract に定義した worker、checker、judge | User-invoked. Validate the contract before spawning nodes; otherwise stay in one loop. |
 | ordered handoff chain, fixed sequence of specialist agents, orchestrate | `skills/orchestrate/SKILL.md` with `context/workflow-rules.md` | `requirement-parser`, `implementation-planner`, selected reviewers | Use when order matters more than shared team state. Prefer `team-run` when Goal, Team Journal, and Review Heat must persist across turns. |
 | skill / workflow selection, ask-matt相当, どのskillを使うべきか | `skills/ask-skill-router/SKILL.md` | none by default | Classify user-invoked vs model-invoked before starting a heavy flow. |
 | third-party Skill discovery, reputation, provenance, full catalog, install, update, retirement | `skills/skill-governance/SKILL.md`; read-only estate review may call `skill-stocktake` | none by default | Read-only inventory is model-invoked. Promotion, update, retirement, deletion, or runtime mutation is user-invoked and must pass the governance gates. |

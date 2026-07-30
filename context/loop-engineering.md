@@ -15,7 +15,7 @@
 | 重い実装の委任 | 独立した write scope がある場合だけ `implementer` / `worker` role に委任。なければ lead が逐次実行 |
 | プラグイン由来の運用規律 | Superpowers skills（計画・レビュー・完了前検証など） |
 
-> **parallel と team-run の使い分け**: 独立した読み取り・検証は `multi_tool_use.parallel` で足りる。複数ロールが状態を共有しながら継続判断する場合だけ `team-run` skill を使い、Goal、Team Journal、Review Heat で目的・担当・未解決事項・疑い方を同期する。
+> **parallel、team-run、graph-engineering の使い分け**: 独立した読み取り・検証は `multi_tool_use.parallel` で足りる。複数ロールが状態を共有しながら継続判断する場合は `team-run` skill を使う。さらに複数の loop を auditable edge、typed state、異なる authority で統治する必要がある場合だけ `graph-engineering` を重ねる。Graph は loop を置き換えず、接続と実行順を統治する。
 
 ## 現状ステータス（2026-06-17 時点）
 
@@ -233,6 +233,7 @@ Summary ──→ Slack日次サマリー投稿
 | `/loop-status` | 全ループの状態表示（スケジュールタスク/ワークフロー/コスト/改善提案） |
 | `/pr-watch [PR]` | PRのCI/レビューを監視し未対応を自動対応。`/loop` を起動できる環境では `/loop 30m /pr-watch <PR>` を開始し、できない環境では起動コマンドを提示（Esc で停止） |
 | `/team-run "<タスク>"` (`/team-run` shim) | capability を使える場合だけ協調する overlay。PR監視は別 route と必要な承認に従う |
+| `/graph-engineering "<仕事>"` (`/graph-engineering` shim) | 複数loopを検証済みcontractで接続する overlay。単一loopには使わない |
 
 > **`/pr-watch` 監視と `scheduled-tasks/pr-review` の役割差**: `/pr-watch <PR>` は `/loop` を起動できる環境では `/loop 30m /pr-watch <PR>` を開始し、**現セッション中**に特定PR1本を30分おき能動監視する（team-run成果のコンテキストを引き継げる／`Esc` で停止）。自動起動APIがない環境では、起動コマンドをユーザーに提示し、本サイクルは1回だけ実行する。2回目以降の呼び出しは state の `loop_active: true` により二重起動を防止。一方 `scheduled-tasks/pr-review` は**全 watch_repos** を毎時バッチ巡回（アプリ起動中のベストエフォート）。CI失敗の自動修正（`gh pr checks`→失敗ログ→修正→push）は `/pr-watch` のみが行う。
 

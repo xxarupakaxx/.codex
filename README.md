@@ -36,6 +36,9 @@ agents should always declare both `model` and `service_tier`.
 ## Team Run
 
 `team-run` is maintained as a Codex Skill at `skills/team-run/SKILL.md`.
+`graph-engineering` is maintained as a Codex Skill at
+`skills/graph-engineering/SKILL.md`; its contract and adoption boundary live in
+`context/graph-engineering.md`, and execution reuses `team-run`.
 Use it for high-value multi-turn work where Goal, Team Journal, reviewer
 heat, and sub-agent coordination need to move together.
 
