@@ -1,0 +1,125 @@
+notify = [ "C:\\Users\\arupa\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\fb8898c05a62885e\\bin\\node_modules\\@oai\\sky\\bin\\windows\\codex-computer-use.exe", "turn-ended" ]
+model = "gpt-5.6-sol"
+model_reasoning_effort = "medium"
+default_permissions = ":danger-full-access"
+approval_policy = "on-request"
+approvals_reviewer = "user"
+
+[marketplaces.openai-bundled]
+last_updated = "2026-08-01T04:07:50Z"
+source_type = "local"
+source = '\\?\C:\Users\arupa\.codex\.tmp\bundled-marketplaces\openai-bundled'
+
+[marketplaces.openai-primary-runtime]
+last_updated = "2026-08-01T22:05:33Z"
+source_type = "local"
+source = '\\?\C:\Users\arupa\.cache\codex-runtimes\codex-primary-runtime\plugins\openai-primary-runtime'
+
+[plugins."visualize@openai-bundled"]
+enabled = true
+
+[plugins."browser@openai-bundled"]
+enabled = true
+
+[plugins."sites@openai-bundled"]
+enabled = true
+
+[plugins."documents@openai-primary-runtime"]
+enabled = true
+
+[plugins."pdf@openai-primary-runtime"]
+enabled = true
+
+[plugins."spreadsheets@openai-primary-runtime"]
+enabled = true
+
+[plugins."presentations@openai-primary-runtime"]
+enabled = true
+
+[plugins."template-creator@openai-primary-runtime"]
+enabled = true
+
+[plugins."computer-use@openai-bundled"]
+enabled = true
+
+[plugins."chrome@openai-bundled"]
+enabled = true
+
+[features]
+js_repl = false
+multi_agent = true
+multi_agent_v2 = true
+
+[agents]
+enabled = true
+max_concurrent_threads_per_session = 10
+default_subagent_model = "gpt-5.6-luna"
+default_subagent_reasoning_effort = "max"
+
+[mcp_servers.node_repl]
+args = []
+command = 'C:\Users\arupa\AppData\Local\OpenAI\Codex\runtimes\cua_node\fb8898c05a62885e\bin\node_repl.exe'
+startup_timeout_sec = 120
+
+[mcp_servers.node_repl.env]
+NODE_REPL_NATIVE_PIPE_CONNECT_TIMEOUT_MS = "1000"
+NODE_REPL_NODE_MODULE_DIRS = 'C:\Users\arupa\AppData\Local\OpenAI\Codex\runtimes\cua_node\fb8898c05a62885e\bin\node_modules'
+NODE_REPL_NODE_PATH = 'C:\Users\arupa\AppData\Local\OpenAI\Codex\runtimes\cua_node\fb8898c05a62885e\bin\node.exe'
+NODE_REPL_TRUSTED_CODE_PATHS = 'C:\Users\arupa\.codex'
+CODEX_HOME = 'C:\Users\arupa\.codex'
+NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "8785b5437d98636c3002d3d7e64b98db79c3b66870b1bd3d18dea953a99b1562,c5e8b73f10ecc47ad1be38f14ba6b79cd3af06fcd86637f7b6b857ae209a686e"
+BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
+NODE_REPL_INSTRUCTIONS_USE_CASE_BROWSER = "Control the in-app browser in conjunction with the Browser Plugin."
+NODE_REPL_INSTRUCTIONS_USE_CASE_CHROME = "Control the Chrome browser in conjunction with the Chrome Plugin. Prefer this method of controlling Chrome over alternatives (such as Computer Use) unless the user explicitly mentions an alternative."
+BROWSER_USE_CODEX_APP_BUILD_FLAVOR = "prod"
+BROWSER_USE_CODEX_APP_VERSION = "26.727.40816"
+SKY_CUA_NATIVE_PIPE = "1"
+SKY_CUA_NATIVE_PIPE_DIRECTORY = '\\.\pipe\codex-computer-use-320cefa7-72d7-49c5-9466-5243afbf2eba'
+CODEX_CLI_PATH = 'C:\Users\arupa\AppData\Local\OpenAI\Codex\bin\d7e8094cfb76a267\codex.exe'
+
+[shell_environment_policy.set]
+BROWSER_USE_AVAILABLE_BACKENDS = "chrome,iab"
+NODE_REPL_TRUSTED_BROWSER_CLIENT_SHA256S = "8785b5437d98636c3002d3d7e64b98db79c3b66870b1bd3d18dea953a99b1562,c5e8b73f10ecc47ad1be38f14ba6b79cd3af06fcd86637f7b6b857ae209a686e"
+NODE_REPL_TRUSTED_CODE_PATHS = 'C:\Users\arupa\.codex'
+
+[desktop]
+conversationDetailMode = "STEPS_COMMANDS"
+ambient-suggestions-enabled = true
+followUpQueueMode = "queue"
+keepRemoteControlAwakeWhilePluggedIn = true
+
+[windows]
+sandbox = "elevated"
+
+[projects.'c:\users\arupa\documents\codex\2026-07-31\n']
+trust_level = "trusted"
+
+[projects.'c:\users\arupa\documents\codex\2026-07-31\n-2']
+trust_level = "trusted"
+
+[projects.'c:\users\arupa\documents\codex\2026-08-01\w']
+trust_level = "trusted"
+
+[projects.'c:\users\arupa\documents\codex\2026-08-01\window']
+trust_level = "trusted"
+
+[projects.'c:\users\arupa\documents\codex\2026-08-01\window-2']
+trust_level = "trusted"
+
+[projects.'c:\users\arupa\documents\codex\obsidian-vault']
+trust_level = "trusted"
+
+[projects.'c:\users\arupa\documents\codex\projects\tha-pr-hub']
+trust_level = "trusted"
+
+[apps.asdk_app_6a447f66b98c819188ee3a7ecfc67b7d.tools."asdk_app_6a447f66b98c819188ee3a7ecfc67b7d.suggest_places"]
+approval_mode = "approve"
+
+[apps.asdk_app_6a447f66b98c819188ee3a7ecfc67b7d.tools."asdk_app_6a447f66b98c819188ee3a7ecfc67b7d.suggest_stations"]
+approval_mode = "approve"
+
+[apps.asdk_app_6a447f66b98c819188ee3a7ecfc67b7d.tools."asdk_app_6a447f66b98c819188ee3a7ecfc67b7d.plan_journey"]
+approval_mode = "approve"
+
+[apps.connector_76869538009648d5b282a4bb21c3d157.tools."github.create_pull_request"]
+approval_mode = "approve"
