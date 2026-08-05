@@ -38,6 +38,7 @@ draft objective → evidence pass → Goal Quality Gate → goalを作る → Sp
 - Outcome Trace: Goal outcome と acceptance / evidence の対応。
 - Team Journal: 周回をまたぐ現在地・決定・失敗原因。
 - Review Heat: 変更リスクに応じた checker / judge の選択。
+- Complexity Budget: コード変更の要素別target / actual / varianceを追跡するソフト予算（詳細は `rules/complexity-budget.md`）。
 
 チーム構成、レビュー熱量、終了判定の詳細は `context/team-run.md` を読む。Phase 順序やレビュー戦略の SSoT は引き続き `context/workflow-rules.md`。
 
@@ -156,8 +157,8 @@ team-run を開始時から使う場合、この時点では Team Journal に dr
 3. **Budget route 選択**: `rules/model-routing.md` の Cost Ladder で L0 local / L1 mini / L2 role / L3 heavy を選ぶ。選択理由を Team Journal に記録する。
 4. **Engineering / Plugin route 選択**: `context/agent-team-routing.md` の Engineering Flow Shape から lane を選び、Superpowers / Product Design / Data Analytics / Sites / Slack / GitHub などの router skill を必要に応じて読む。laneの判定条件はここへ複製しない。
 5. **Superpowers 確認**: 該当する Superpowers skill を読む。曖昧な設計なら brainstorming、明確な実装なら writing-plans / dispatching-parallel-agents を使う。
-6. **global Phase 2 計画**: `context/workflow-rules.md` に従い、30_plan.md を作成する。追加調査で判断が変わり得る場合だけ `deepening-plan` を使い、独立 plan review は Delegation Gate と変更リスクに応じて選ぶ。
-7. **Team Journal 更新**: `${MEMORY_DIR}/memory/YYMMDD_<task_name>/team-journal.md` に Goal Gate、選択 lane と省略理由、Budget、leader 状態、plugin route、model route を書く。
+6. **global Phase 2 計画**: `context/workflow-rules.md` に従い、30_plan.md を作成する。コード変更では `rules/complexity-budget.md` の要素別target、信頼度、根拠、超過時の再計画条件を計画へ含める。追加調査で判断が変わり得る場合だけ `deepening-plan` を使い、独立 plan review は Delegation Gate と変更リスクに応じて選ぶ。
+7. **Team Journal 更新**: `${MEMORY_DIR}/memory/YYMMDD_<task_name>/team-journal.md` に Goal Gate、選択 lane と省略理由、Budget、Complexity Budgetのtarget、leader 状態、plugin route、model route を書く。
 8. **Live Roadmap 起動（任意だが推奨）**: Codex app の横で進捗を見たい場合、`scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/YYMMDD_<task_name> --serve --watch` を起動し、URLをTeam Journalへ記録する。既定port `0` を使い、複数セッションはメモリディレクトリを分けて衝突を避ける。
 9. **Review Heat 仮決定**: `context/team-run.md` の Heat ladder で checker / judge の初期セットを決め、Team Journal に記録する。
 10. **planner / plan-reviewer の選択**: lead の直接計画で不足し、独立した分解または検証が価値を生み、Delegation Gate を通る場合だけ起動する。planner には依存、acceptance、risk、write scope を、plan-reviewer には YAGNI、依存矛盾、実現可能性、検証可能性を渡す。
@@ -169,9 +170,9 @@ team-run を開始時から使う場合、この時点では Team Journal に dr
 
 1. **割り当て**: 依存のないタスクだけ並列化する。write scope が重なるタスクは並列化しない。
 2. **explorer**: lead の local search で不足し、Delegation Gate を通る調査だけを `explorer` / `architecture-explorer` に渡す。検索ファーストで、必要箇所だけ読む。
-3. **implementer**: 独立した write scope がある場合だけ `implementer` / `worker` に渡す。複数ファイルや複雑実装では write scope と境界を明示する。
+3. **implementer**: 独立した write scope がある場合だけ `implementer` / `worker` に渡す。複数ファイルや複雑実装では write scope、要素別Complexity Budget、境界を明示する。
 4. **mini helper**: commit文案、短い要約、定型整形だけは、metadata で利用可能な場合に default/custom + `gpt-5.4-mini` を検討する。利用不可なら role 既定または model 省略へ戻す。実装、設計、最終レビューには使わない。
-5. **共有**: 各 sub-agent の結果を Team Journal に要約し、失敗は症状ではなく原因で Attribution に残す。
+5. **共有**: 各 sub-agent の結果を Team Journal に要約し、失敗は症状ではなく原因で Attribution に残す。各要素のactualとvarianceも更新する。
 6. **Budget/Stop**: 差し戻しは最大3回、連続失敗2回で escalate。これを超える場合は `update_goal(status="blocked")` の対象。
 
 ### Overlay D: global Phase 4 内 — レビュー
@@ -183,6 +184,7 @@ team-run を開始時から使う場合、この時点では Team Journal に dr
 - CRITICAL は必ず修正する。
 - IMPORTANT は原則修正する。見送る場合は理由を Team Journal に残す。
 - test の緩和、skip、削除、検証コマンドの形骸化は不合格。
+- コード変更では、target / actual / varianceを確認し、`within target` / `justified variance` / `scope drift` を判定する。行数だけで拒否せず、必要性と削減候補を根拠付きで記録する。
 - 重要判断やリスクが高い変更では `adversarial-review` / `auditor-reviewer` を追加する。
 - Superpowers の `requesting-code-review` が適用できる場合は使う。
 
@@ -213,6 +215,7 @@ team-run を開始時から使う場合、この時点では Team Journal に dr
 - Changed Files: [...]
 - Verification: [...]
 - Review Findings: [...]
+- Complexity Budget: target / actual / variance / reason（コード変更なしは N/A）
 - Blockers: [...]
 - Live Roadmap: URL or path
 ```
@@ -231,6 +234,7 @@ team-run を開始時から使う場合、この時点では Team Journal に dr
 - Lane: ... / 省略: ...（理由）
 - Outcome Trace: 未対応 _ / holistic pending|PASS|FAIL
 - 合格基準: （機械判定: ... / 判断ベース: ...）
+- Complexity Budget: code | non-code / target ... / actual ... / variance ... / reason ...
 - Budget 残: sub-agent _/4 ・差し戻し _/3 ・連続失敗 _
 - 現在の周: N / 直近の失敗（原因）: ...
 

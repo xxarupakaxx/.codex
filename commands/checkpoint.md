@@ -12,9 +12,10 @@ description: "検証状態を保存する。合格基準の定義と現在のス
 
 1. PJ CLAUDE.mdから品質チェックコマンドを取得
 2. プロジェクトの技術スタックに合わせた合格基準を自動生成
-3. 各基準の現在の状態を実行して確認
-4. `${MEMORY_DIR}/memory/YYMMDD_<task>/checkpoint.md` に保存
-5. 結果をユーザーに報告
+3. コード変更では、`rules/complexity-budget.md` の要素別targetと、超過時に再計画する基準を受入基準へ接続（コード変更なしは `N/A (non-code)`）
+4. 各基準の現在の状態を実行して確認
+5. `${MEMORY_DIR}/memory/YYMMDD_<task>/checkpoint.md` に保存
+6. 結果をユーザーに報告
 
 ## ユーザーがカスタム基準を指定した場合
 

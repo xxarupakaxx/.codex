@@ -39,9 +39,9 @@ description: "エージェントチェーンを順次実行するオーケスト
 
 各エージェントに対して:
 
-1. **コンテキスト注入**: タスク説明 + 前のエージェントのハンドオフドキュメント
+1. **コンテキスト注入**: タスク説明 + 前のエージェントのハンドオフドキュメント。コード変更では `rules/complexity-budget.md` の要素別target、除外、超過時の再計画条件も渡す
 2. **エージェント実行**: `multi_agent_v1.spawn_agent(agent_type: "...")` で実行
-3. **ハンドオフ生成**: 結果を構造化ドキュメントとして整理
+3. **ハンドオフ生成**: 結果を構造化ドキュメントとして整理し、担当要素のactualとvarianceを記録
 4. **次のエージェントへ引き継ぎ**
 
 ## ハンドオフドキュメント形式
@@ -65,6 +65,11 @@ description: "エージェントチェーンを順次実行するオーケスト
 
 ### Recommendations
 [推奨される次のステップ]
+
+### Complexity Budget
+- Target: [production / test / config・migration]
+- Actual: [同じ区分]
+- Variance / reason: [within target / justified variance / scope drift]
 ```
 
 ## 最終レポート形式
@@ -94,6 +99,10 @@ description: "エージェントチェーンを順次実行するオーケスト
 
 ## Test Results
 [テスト結果サマリー]
+
+## Complexity Budget
+- **Target / Actual / Variance**: [コード変更なしは `N/A (non-code)`]
+- **Unplanned complexity**: [なし / 内容と対応]
 
 ## Recommendation
 [SHIP / NEEDS WORK / BLOCKED]

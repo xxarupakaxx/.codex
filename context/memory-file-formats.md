@@ -189,6 +189,13 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 - `<path/to/file>`
 - `moduleOrFunction`
 
+#### Complexity Budget（コード変更時）
+| production target | test target | config/migration target | 信頼度 | 根拠 | 超過時の再計画条件 |
+|---:|---:|---:|---|---|---|
+| 20–40 logical diff LOC | 10–20 logical diff LOC | 0 | medium | 既存の`<anchor>` | 上限25%以上 / 計画外の責務追加 |
+
+コード変更がない場合は `N/A (non-code)` と記載する。targetはハード上限ではなく、計画外の複雑さを検出するためのソフト目標である。計測方法と例外は `rules/complexity-budget.md` に従う。
+
 #### 実装根拠
 - `repo:<relative-path>#<anchor-or-Lx-Ly>`
 
