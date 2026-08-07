@@ -25,7 +25,7 @@ gh pr diff <番号> > /tmp/pr-<番号>.diff
 
 ### 2. PJルールの確認
 
-CLAUDE.mdを読み、以下を把握:
+PJ `AGENTS.md` を読み、以下を把握:
 - アーキテクチャルール
 - 命名規則
 - コーディング規約
@@ -66,8 +66,8 @@ PR diffの内容を分析し、該当するトリガーに合致するレビュ�
 **各サブエージェントに渡す情報:**
 - PR diff（`/tmp/pr-<番号>.diff`）のパス
 - 変更対象ファイルのフルパス一覧
-- PJのCLAUDE.mdのパス
-- レビュー観点と出力形式（CRITICAL/IMPORTANT/MINOR 分類。CLAUDE.md `severity` 標準）
+- PJの`AGENTS.md`のパス
+- レビュー観点と出力形式（CRITICAL/IMPORTANT/MINOR 分類。PJ `AGENTS.md` の severity 標準）
 
 **サブエージェントへのプロンプトテンプレート:**
 ```
@@ -78,7 +78,7 @@ PR diffの内容を分析し、該当するトリガーに合致するレビュ�
 - 変更ファイル: [ファイルパス一覧]
 
 ## PJルール
-[CLAUDE.mdの内容を読んで参照してください: <CLAUDE.mdパス>]
+[PJ AGENTS.mdの内容を読んで参照してください: <AGENTS.mdパス>]
 
 ## 出力形式
 問題を以下の分類で出力してください。問題がなければ「指摘なし」と出力:
@@ -195,7 +195,7 @@ MINOR指摘が0件の場合はRound 3をスキップ。
 - IMPORTANT未対応: [あり/なし]
 ```
 
-## 問題の分類（CLAUDE.md severity 標準準拠）
+## 問題の分類（PJ AGENTS.md severity 標準準拠）
 
 | 分類 | 説明 | 対応 |
 |-----|------|------|

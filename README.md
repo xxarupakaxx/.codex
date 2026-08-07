@@ -24,11 +24,34 @@ It does not store runtime state, auth files, SQLite databases, histories,
 attachments, generated images, plugin caches, or local secret values.
 Claude-only runtime/configuration references are kept under `claude-compat/`.
 
+`AGENTS.md` is intentionally a short table of contents. Detailed workflow,
+routing, security, ADR, and review rules live under `context/`, `rules/`, and
+`skills/`; keep history and task-local exceptions out of the entrypoint.
+
 ## Apply locally
 
 Use the files as references, then copy or merge into `~/.codex`.
 Create a real `~/.codex/config.toml` from `config.example.toml` and restore
 secret values from a password manager or local environment.
+
+For a new project, copy `templates/project/AGENTS.md` and
+`templates/project/CLAUDE.md`. Put project variables, verification commands,
+and project-only invariants in `AGENTS.md`; `CLAUDE.md` only imports it.
+
+## Validate the harness
+
+```bash
+python3 scripts/validate-agent-harness.py
+python3 -m unittest discover -s tests -p 'test_*.py'
+node --test tests/roadmap-viewer.test.mjs
+bash -n hooks/*.sh claude-compat/hooks/*.sh
+```
+
+To validate Phase artifacts stored in a project-specific directory:
+
+```bash
+python3 scripts/validate-agent-harness.py --artifact-dir .context
+```
 
 Codex model routing is pinned to `gpt-5.5` + `priority` by default. Custom
 agents should always declare both `model` and `service_tier`.

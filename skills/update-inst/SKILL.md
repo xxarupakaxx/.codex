@@ -1,6 +1,6 @@
 ---
 name: update-inst
-description: user-level指示の更新。Claude Codeが間違いを犯した際に、再発防止のためCLAUDE.md/context/を更新。`/update-inst <間違えた内容>` で使用。
+description: user-level指示の更新。Agentが間違いを犯した際に、再発防止のためAGENTS.md/context/rules/Skillを更新。`/update-inst <間違えた内容>` で使用。
 allowed-tools: Read, Write, Glob, Grep
 ---
 
@@ -8,12 +8,12 @@ allowed-tools: Read, Write, Glob, Grep
 
 ## 概要
 
-Claude Codeが間違いを犯した際、その原因を分析し、再発防止のためuser-level CLAUDE.mdや関連ファイルを更新する。
+Agentが間違いを犯した際、その原因を分析し、再発防止のためuser-level `AGENTS.md` や関連する正本を更新する。`CLAUDE.md` は `AGENTS.md` の import 入口として扱い、共通ルールを重複させない。
 
 ## トリガー条件
 
 - `/update-inst <間違えた内容>` が実行された場合
-- Claude Codeが指示に反した行動をした際に、ユーザーが再発防止を依頼した場合
+- Agentが指示に反した行動をした際に、ユーザーが再発防止を依頼した場合
 
 ## 実行手順
 
@@ -33,9 +33,10 @@ Claude Codeが間違いを犯した際、その原因を分析し、再発防止
 
 | ファイル | 確認観点 |
 |---------|---------|
-| `~/.claude/CLAUDE.md` | 全PJ共通の作業フロー、基本ルール |
-| `~/.claude/context/*.md` | 詳細ルール、フォーマット定義 |
-| `~/.claude/skills/*/SKILL.md` | スキル固有のルール |
+| `~/.codex/AGENTS.md` | 全PJ共通の短い不変条件と正本への入口 |
+| `~/.codex/context/*.md`, `~/.codex/rules/*.md` | 詳細ルール、フォーマット定義 |
+| `~/.codex/skills/*/SKILL.md` | スキル固有の反復手順 |
+| PJ `AGENTS.md`, `.codex/context/*.md` | PJ固有の不変条件とoverride |
 
 ### Phase 2: 修正方針の決定
 
@@ -98,9 +99,10 @@ Claude Codeが間違いを犯した際、その原因を分析し、再発防止
 
 ## 修正のベストプラクティス
 
-### 1. 60行ルールを維持
-- CLAUDE.mdは60行以下に収める
-- 詳細は`@`参照でcontext/に委譲
+### 1. 入口予算を維持
+- user-level `AGENTS.md` は harness validator の行数予算内に保つ
+- 詳細は `context/`、`rules/`、`skills/` の既存正本へ委譲する
+- PJ `CLAUDE.md` は `@AGENTS.md` import のみにする
 
 ### 2. 強調表現の適切な使用
 - **IMPORTANT**: 重要だが例外あり

@@ -8,7 +8,7 @@ description: Draft PRを作成
 
 Draft PRを作成します。
 
-引数（base-branch）が省略された場合、`$ARGUMENTS` は PJ 設定（AGENTS.md / CLAUDE.md）の `BASE_BRANCH` に従い、未定義時は develop → main → master の順で存在するブランチを使う。
+引数（base-branch）が省略された場合、`$ARGUMENTS` は PJ `AGENTS.md` の `BASE_BRANCH` に従い、未定義時は develop → main → master の順で存在するブランチを使う。
 
 ## 実行手順
 
@@ -38,7 +38,7 @@ git diff $ARGUMENTS
 `/generate-state-diagram` が生成した `91_state_diagram.md` を検出し、PR本文に埋め込む。
 
 ```bash
-# MEMORY_DIR は PJ CLAUDE.md 定義（未定義時は .local/）
+# MEMORY_DIR は PJ AGENTS.md 定義（未定義時は .local/）
 # 最新のメモリディレクトリから 91_state_diagram.md を探す
 find "${MEMORY_DIR:-.local}/memory" -maxdepth 3 -name "91_state_diagram.md" 2>/dev/null \
   | xargs -I{} stat -f "%m %N" {} 2>/dev/null \
@@ -50,7 +50,7 @@ find "${MEMORY_DIR:-.local}/memory" -maxdepth 3 -name "91_state_diagram.md" 2>/d
 - **ファイルあり** → ファイル内の ` ```mermaid ... ``` ` ブロックを全て抽出し、後述「処理フロー / 状態遷移」セクションに埋め込む（`91_state_diagram.md` は Validator 通過済みなのでそのまま貼ってよい）
 - **ファイルなし**:
   - 変更にワークフロー/状態管理/外部連携/ドメインモデル変更を含む → `AskUserQuestion` で `/generate-state-diagram` を先に実行するか確認
-  - UIのみ / テストのみ / 設定・ドキュメントのみ → スキップ（CLAUDE.md `generate-state-diagram` のスキップ条件と一致）
+  - UIのみ / テストのみ / 設定・ドキュメントのみ → スキップ（`generate-state-diagram` Skill のスキップ条件と一致）
 
 ### 4. PR本文の作成
 
@@ -96,7 +96,7 @@ find "${MEMORY_DIR:-.local}/memory" -maxdepth 3 -name "91_state_diagram.md" 2>/d
 
 注意:
 
-- PRテンプレート（`.github/PULL_REQUEST_TEMPLATE.md`）が存在する場合、テンプレートの項目を勝手に削除してはならない（CLAUDE.md 禁止事項）。状態図セクションはテンプレート末尾（チェックリスト前など適切な位置）に追記する形で挿入
+- PRテンプレート（`.github/PULL_REQUEST_TEMPLATE.md`）が存在する場合、テンプレートの項目を勝手に削除してはならない（PJ `AGENTS.md` の禁止事項）。状態図セクションはテンプレート末尾（チェックリスト前など適切な位置）に追記する形で挿入
 - GitHubはPR本文のMermaidをネイティブレンダリングするため、画像化や外部リンクは不要
 - Validator警告コメント（`<!-- ⚠️ Mermaid Validator FAILED ... -->`）が `91_state_diagram.md` に残っている場合、当該ブロックは貼らずに「※構文エラーのため省略」とだけ記載し、ユーザーに通知
 - PR本文更新は平文改行のファイルに書き出して `gh pr edit --body-file` で渡す（シェルクォート経由だとリテラル `\n` が本文に残ることがある）。テンプレ再構成時は技術的内容を保持し形式のみ変更する。DB schema/GraphQL変更を含むPRはMermaidフロー図をbodyに含める（出典: memories/rollout_summaries/2026-06-22T05-52-03-qgnt-dependency_tarball_ci_pr_and_review.md「Failures and how to do differently」、memories/rollout_summaries/2026-06-19T02-01-11-sh6E-pr_2956_description_update_cloudsql_role.md「Reusable knowledge」、memories/rollout_summaries/2026-06-26T08-53-53-tABQ-pr3049_template_pr_description_update_and_billing_cancel_not.md「Key steps / References」）

@@ -120,7 +120,7 @@ Phase 0 ─→ Phase 1 ─→ Phase 2 ─→ Phase 3 ─→ Phase 4 ─→ Phase
 
 ## Phase 0: 準備
 
-1. PJ CLAUDE.mdの`MEMORY_DIR`確認（未定義なら`.local/`）
+1. PJ `AGENTS.md`（`CLAUDE.md` は import 入口）の`MEMORY_DIR`確認（未定義なら`.local/`）
 2. システムプロンプトの`Today's date`から日付取得 → `${MEMORY_DIR}/memory/YYMMDD_<task_name>/`作成
 3. 05_log.md初期化、ユーザーの最初の指示を記録
 4. **Blueprint WUのCold-Start Briefがあれば読み込み**（blueprint.mdの該当WUセクション）
@@ -193,18 +193,7 @@ Phase 0 ─→ Phase 1 ─→ Phase 2 ─→ Phase 3 ─→ Phase 4 ─→ Phase
 
 ### 技術判断の構造化記録（ADR）
 
-`deepening-plan` 後・サブエージェント計画検証の前に、重要な技術判断が発生していたら `creating-adr` スキルで ADR 化する。30_plan.md には「決定の要約 + ADR 参照リンク」のみ残し、比較検討・却下案の根拠は ADR 側に集約する。
-
-#### ADR 化する判断（次のいずれかを満たす）
-- 複数案を比較検討した（採用案 + 却下案の根拠を残したい）
-- 既存パターンと異なる設計を導入する
-- セキュリティ・並行性・データ整合性・スケーラビリティに関わる
-- 影響範囲が複数ファイル・複数機能にまたがる
-
-#### ADR 化しない判断（30_plan.md に1行記載で十分）
-- 命名規則・フォーマット・ファイル配置等の自明判断
-- 既存パターンの踏襲
-- 1関数内で完結する設計判断
+`rules/adr-criteria.md` の3条件をすべて満たす技術判断だけを、`deepening-plan` 後・独立計画検証の前に `creating-adr` で ADR 化する。30_plan.md には「決定の要約 + ADR 参照リンク」のみ残し、比較検討・却下案の根拠は ADR 側に集約する。影響ファイル数や security 関連であることだけを ADR 発火条件にしない。
 
 #### 配置先
 - **計画段階（実装着手前）**: `${MEMORY_DIR}/memory/<task>/adr/NNNN-<title>.md` （同タスクの計画と一緒にレビュー対象になるため）
@@ -313,7 +302,7 @@ Blueprint WUの実行？ → YES → DAGオーケストレーション
 ## Phase 4: 品質確認
 
 ### 自動チェック
-PJ CLAUDE.md記載のコマンドで lint/format/typecheck/test を実行。
+PJ `AGENTS.md` 記載のコマンドで lint/format/typecheck/test を実行。
 
 ### Sprint Contract検証（Phase 2.5でcheckpoint.mdが作成されている場合）
 `/verify`を実行し、Phase 2.5で定義した合格基準に対して自動検証。全基準PASSまで修正→再検証を繰り返す。
@@ -357,7 +346,7 @@ re_review_priority: high    # 次ラウンドで検出元 reviewer を優先起�
 
 **収束判定マトリクスの Source of Truth**:
 
-完全な状態遷移マトリクス（A〜F の 6 状態）と severity 閾値・round 上限は **`~/.claude/skills/auto-reviewing-pre-pr/SKILL.md` を参照**。本ファイルでは概念のみ示し、具体的な数値は重複定義しない:
+完全な状態遷移マトリクス（A〜F の 6 状態）と severity 閾値・round 上限は **`~/.codex/skills/auto-reviewing-pre-pr/SKILL.md` を参照**。本ファイルでは概念のみ示し、具体的な数値は重複定義しない:
 
 - 合格 / 継続 / 人間判断 / 中断 の 4 系統で判定
 - 詳細条件・遷移表は **SKILL.md 側を Source of Truth** とする（重複記載による将来の不整合を防ぐため）
@@ -461,7 +450,7 @@ phases: [investigation, planning, quality-check]   # この知見が活きる Ph
 | フロントエンド・UIコンポーネント | `a11y-reviewer` + `ui-ux-reviewer` + **Playwright E2Eスモークテスト**（下記参照） |
 | 非同期処理・並行処理・ワーカー | `concurrency-reviewer` |
 | APIエンドポイントの追加・変更 | `api-contract-reviewer` |
-| ドキュメント・CLAUDE.md変更 | `docs-reviewer` |
+| ドキュメント・AGENTS.md変更 | `docs-reviewer` |
 
 ### Playwright E2Eスモークテスト（UI変更時）
 
@@ -483,7 +472,7 @@ UI/フロントエンド変更を含むPhase 4で、コードレビューに加�
 | 多言語対応・翻訳関連 | `i18n-reviewer` |
 | 個人情報・規制対応・ライセンス | `compliance-reviewer` |
 | Dockerfile・CI/CD・IaC変更 | `devops-reviewer` |
-| CLAUDE.md/rules準拠の検証 | `rule-validator` |
+| AGENTS.md/rules準拠の検証 | `rule-validator` |
 
 ### Adversarial 3-agent（重要判断時、`adversarial-review` skill 経由のみ）
 

@@ -29,7 +29,7 @@ Google eng-practices 準拠。**First Line** + 空行 + **Body** の 2 部構成
 ## ブランチ
 
 - 命名: `feature/<issue_num>-<title>` or `fix/<issue_num>-<title>`
-- ベースブランチ: PJ CLAUDE.mdの`BASE_BRANCH`（未定義時: develop → main → master）
+- ベースブランチ: PJ `AGENTS.md` の`BASE_BRANCH`（未定義時: develop → main → master）
 - 長期ブランチは定期的にベースからリベース
 
 ## PR

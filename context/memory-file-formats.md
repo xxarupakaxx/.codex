@@ -3,7 +3,7 @@
 ## .local/ 全体構成
 
 ```
-.local/                          # MEMORY_DIR（PJ CLAUDE.mdで定義、デフォルト: .local/）
+.local/                          # MEMORY_DIR（PJ AGENTS.mdで定義、デフォルト: .local/）
 ├── memory/                      # タスクごとの詳細ログ
 │   ├── YYMMDD_auth-feature/     # YYMMDDは実際の日付（例: 260112 = 2026/01/12）
 │   │   ├── 05_log.md
@@ -41,7 +41,7 @@
 ## メモリディレクトリ構成
 
 場所: `${MEMORY_DIR}/memory/YYMMDD_<task_name>/`
-- MEMORY_DIRはPJ CLAUDE.mdで定義（デフォルト: `.local/`）
+- MEMORY_DIRはPJ `AGENTS.md` で定義（デフォルト: `.local/`）
 - **YYMMDD**: システムプロンプトの`Today's date`から取得した実際の日付（年2桁+月2桁+日2桁）
 - task_nameはタスクを識別する短い名前（例: `auth-feature`, `bug-fix-123`）
 - **IMPORTANT**: 例示の日付をコピーせず、必ずシステムプロンプトの日付を使用すること
@@ -299,12 +299,12 @@ related:          # 詳細ログへの参照
 
 **`phases` フィールド（推奨 — 強く推奨。`compounding-knowledge` 生成物では必須）**:
 
-`learnings-researcher` の Phase scoring で使用される。CLAUDE.md の Phase 0-5.5 に対応:
+`learnings-researcher` の Phase scoring で使用される。`context/workflow-rules.md` の Phase 0-5.5 に対応:
 
 > 後方互換性のため未指定でも動作するが、未指定時は phase_match_bonus = 0 となり関連度が下がる。
 > `compounding-knowledge` skill で新規作成される memories/solutions では **必須**（SKILL.md L96, L139 参照）。
 
-| phases 値 | CLAUDE.md Phase | 主な参照場面 |
+| phases 値 | workflow Phase | 主な参照場面 |
 |----------|------------------|--------------|
 | `preparation` | Phase 0 | メモリ初期化、過去類似タスク確認 |
 | `investigation` | Phase 1 | 既存実装確認、技術調査 |

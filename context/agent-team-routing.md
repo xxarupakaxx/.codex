@@ -124,6 +124,8 @@ Route 選択だけでは、次の操作を許可しない。
 - `git commit` / `git push`。明示された project policy またはユーザー承認に従う。
 - prototype branch や tracker artifact の作成。decision evidence と production artifact を分ける。
 
+権限errorやcontext不一致を、別 principal / company / profile への自動切替で回避しない。読み取り診断も現在の principal を明示し、切替が必要なら停止してユーザー確認を取る。sub-agent / runner / plugin へ secret 実値、secret reference、認証済みsession情報を渡さない。
+
 実行前に対象、操作、本文または差分を確定する。sub-agent や plugin へ委任しても、この gate は緩和されない。
 
 ## Intent Routing Table
@@ -131,6 +133,7 @@ Route 選択だけでは、次の操作を許可しない。
 | User intent / signal | Primary plugin / skill route | Agent roles to combine | Notes |
 |---|---|---|---|
 | high-value multi-turn parallel execution, team-run,複数 role の協調 | `skills/team-run/SKILL.md` with `context/workflow-rules.md` and `context/team-run.md` | `implementation-planner`, `implementer`, reviewers, `go-nogo-advisor` | Use only when Goal, Team Journal, Review Heat, and sub-agent coordination are all useful. |
+| 複数実装・提案の匿名A/B比較 | local artifact + `ab-judge` | `ab-judge` | 作成者情報を隠して `Report A` / `Report B` で独立評価し、attribution は判定後の別Phaseで扱う。 |
 | 複数loopのfan-out/fan-in、auditable routing、checkpoint、failure isolation、node別権限 | `skills/graph-engineering/SKILL.md` with `context/graph-engineering.md`; execution reuses `team-run` | contract に定義した worker、checker、judge | User-invoked. Validate the contract before spawning nodes; otherwise stay in one loop. |
 | ordered handoff chain, fixed sequence of specialist agents, orchestrate | `skills/orchestrate/SKILL.md` with `context/workflow-rules.md` | `requirement-parser`, `implementation-planner`, selected reviewers | Use when order matters more than shared team state. Prefer `team-run` when Goal, Team Journal, and Review Heat must persist across turns. |
 | skill / workflow selection, ask-matt相当, どのskillを使うべきか | `skills/ask-skill-router/SKILL.md` | none by default | Classify user-invoked vs model-invoked before starting a heavy flow. |
