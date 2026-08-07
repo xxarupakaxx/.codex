@@ -14,7 +14,7 @@
   - 著者が対処する必要がない（誤指摘・想定外コンテキスト等）
   - 軽微な提案（import 順、typo、Nit）
 
-**CLAUDE.md の「修正すべき点がなくなるまでループ」への補足**: ループはあくまで CRITICAL/IMPORTANT が残る間。MINOR（純粋なスタイル・好み）まで全消ししようとして PR を停滞させるのは反パターン。
+**AGENTS.md / workflow-rules のreview loopへの補足**: ループはあくまで CRITICAL/IMPORTANT が残る間。MINOR（純粋なスタイル・好み）まで全消ししようとして PR を停滞させるのは反パターン。
 
 ## 2. Code Health の定義
 
@@ -63,6 +63,6 @@
 
 ## 関連
 
-- `~/.claude/CLAUDE.md` レビュー方法（severity 3階級・ループ条件）
-- `~/.claude/rules/common-git-workflow.md` PR/CL description の書き方
-- `~/.claude/rules/architecture-language.md` Code Health 関連語彙（Depth/Locality 等）
+- `~/.codex/AGENTS.md` と `context/workflow-rules.md` のreview方法（severity 3階級・ループ条件）
+- `~/.codex/rules/common-git-workflow.md` PR/CL description の書き方
+- `~/.codex/rules/architecture-language.md` Code Health 関連語彙（Depth/Locality 等）

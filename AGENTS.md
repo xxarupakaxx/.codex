@@ -1,107 +1,95 @@
-# Codex Compatibility Overrides
+# 共通ルール
 
-This file imports the user-scope Claude instructions. In Codex, do not use
-Claude-only model aliases or Claude model slugs.
+このファイルは user-scope Codex の短い入口である。全 Agent が毎回守る不変条件と正本への導線だけを置き、手順・履歴・例外の詳細はリンク先へ置く。
 
-Use these Codex model/service_tier pairs instead:
+## 基本方針
 
-- Default / heavy judgment: `model = "gpt-5.5"`, `service_tier = "priority"`
-- Routine specialist agents already configured as `gpt-5.4` may keep `service_tier = "priority"`
-- Simple custom/default helper work under the current priority-tier policy: `model = "gpt-5.4-mini"`, `service_tier = "priority"` when current Codex tooling supports it
-- Do not omit `service_tier` for custom subagents.
+- 日本語で応答する。
+- 同等の観測性と安全性がある場合は、MCP サーバーより CLI ツールを先に検討する。
+- Project `AGENTS.md` と、対象ファイルに最も近い `AGENTS.md` の追加制約を適用する。
 
----
+## 実装と検証
 
-# Global Settings
+- 実装前に仮定、不明点、複数解釈、重要な trade-off を明示する。仕様・契約・データ形式などの永続判断は、既存実装、test、文書、またはユーザー確認を根拠にする。
+- 要求を満たす最小の実装を選び、依頼外の機能、抽象化、設定、将来対応を足さない。
+- 既存コードや文書は依頼に直接必要な行だけ変更し、隣接する無関係な整形、refactor、削除を行わない。
+- 成功条件を検証可能にし、再現、test、差分確認、task-level workflow check まで含めて完了を判定する。
+- 再現 test は観測済みの失敗と既存契約だけを固定し、未確認の戻り値、error型、出力形式を新しい期待値にしない。
 
-## Orchestration Model
+## Secret 管理
 
-Codex = 指揮者（Conductor）。必要なときだけ sub-agent team を編成し、適材適所で実装・レビュー・調査を委任する。委任の判断基準は金銭コストではなく価値: 独立した作業幅・隔離された専門知識・独立検証のいずれかがあれば躊躇なく委任し、無いのに同じ文脈を分業させない。
+- secret 実値を 1Password の外へ永続化しない。code、設定、log、chat、artifact、memory、sub-agent prompt に書かない。
+- CLI へ渡す必要がある場合は `op://...` secret reference を親 process で解決し、reference と解決結果のどちらも sub-agent や外部相談へ渡さない。
+- 詳細は `rules/security.md` を正本とする。
 
-```
-Codex (conductor)
-  ├── multi_tool_use.parallel → 独立したローカル調査の並列実行
-  ├── session-provided collaboration API → Delegation Gate を通った専門 sub-agent
-  ├── Goal tools → 長い作業の目的・完了状態管理
-  ├── ask-skill-router / skills → 小さな規律の選択とプロセス補強
-  ├── consult-fable → Fable 5への単発戦略相談（Board Advisor）
-  └── 専門agents → arch/security/perf-reviewer 等
-```
+## 指示の永続化
 
-| 用途 | 呼び出し | Codex model/service_tier |
-|------|---------|--------------------------|
-| 探索・監視（explore/pr-watch等） | ローカル `rg`、または Delegation Gate 後の explorer role | role既定（通常 `gpt-5.4` / `priority`） |
-| 軽量ワーカー・通常実装 | Delegation Gate 後の worker / implementer role | role既定（通常 `gpt-5.5` / `priority`） |
-| commit文案・短い要約・定型整形 | `default` / custom sub-agent（委任が有益で、metadata対応時のみ） | `gpt-5.4-mini` / `priority` |
-| 判定・設計判断・計画 | `implementation-planner` / `technical-evaluator` / `go-nogo-advisor` | role既定（`gpt-5.4` または `gpt-5.5` / `priority`） |
-| 専門レビュー | `arch-reviewer` / `security-reviewer` / `code-quality-reviewer` 等 | role既定（必ず `priority`） |
-| 過去知見検索 | `learnings-researcher` | role既定（`gpt-5.4` / `priority`） |
-| パイプライン制御 | `multi_tool_use.parallel` + session-provided collaboration API | — |
-| 戦略相談・taste判断（外部・on-demand） | `consult-fable` スキル → `scripts/consult-fable.sh` | Fable 5（claude CLI経由・Codex ladder外） |
+- worktree や session をまたいで再現すべき情報は Memory だけに置かず、git 管理された正本へ反映する。
+- 現在の意図や仕様は docs、検証可能な期待は test、局所例外は隣接 comment、判断理由は ADR、反復手順は Skill、未完了作業は issue tracker、履歴は Git log に置く。
+- 全 Agent が毎回守る不変条件と正本への入口だけを `AGENTS.md` に置く。古い方針や完了済み TODO を残さない。
+- 例外には理由、適用範囲、解除条件を付け、条件が満たされたら例外自体を削除する。
 
-通常は role 既定を使う。custom/default sub-agent に model を明示する場合は、許可モデル集合と用途を `rules/model-routing.md` に従わせ、`service_tier = "priority"` を必ずセットする。これはこの Vault の互換性方針であり、API一般の最安構成を意味しない。`gpt-5.4-mini` は metadata 対応時の commit文案・短い要約・定型整形など、低リスクで lead が即検査できる作業に限る。
+## 一時ファイルと受け渡し
 
-plugin / skill / agent role の適材適所ルーティングは `context/agent-team-routing.md` を参照する。Phase順序は `context/workflow-rules.md`、model/service_tier は `rules/model-routing.md` を SSoT とする。
+- 一過性の下書き、調査メモ、CLI/AI 間の受け渡しは作業 worktree の `.context/` に置き、`/tmp` や `/private` を標準置き場にしない。
+- 複数行や構造化内容は `.context/` の実ファイルで渡す。引数への inline 展開や here-doc を避け、pipe は単一 command が stdin を即時に一度だけ読む処理に限る。
 
-## Skill Invocation Policy
+## Script と error
 
-Skill は「常時強制する工程」ではなく、「必要なときに呼び出す小さな規律」として扱う。
-重い harness / Superpowers 風の flow は、ユーザーが明示したとき、または高価値で複数ターンの実装に必要なときだけ使う。
+- 長時間実行や外部通信を伴う script は開始、反復、retry、完了、失敗を secret なしで記録し、再実行判断に足る進捗を出す。
+- 主経路の失敗を暗黙 fallback で隠さない。代替経路は目的、発動条件、観測 log、再実行時の挙動を明示する。
+- error は一致なし、context不一致、path不存在、conflict/dirty state、検証failureなど意味で分類し、原因を確認してから続行する。
+- 同種 error の再発や検証省略につながる迂回は、原因、一時迂回、恒久対策、git反映先、検証方法を分けて恒久対策レビューへ送る。
 
-起動権は次の2層に分ける。
+## 外部サービス境界
 
-- **User-invoked**: `team-run`、`orchestrate`、`grill-me`、`blueprint`、`skill-governance`、PRD化、issue分解、外部Skillの採用・更新・廃止、外部投稿やPR作成など、作業の進路や外部状態を大きく変えるもの。ユーザーの明示、または短い確認を挟んで使う。
-- **Model-invoked**: `research`、`tdd`、`diagnosing-bugs`、`code-review`、`modeling-domains`、`verification-loop`、`consult-fable` など、現在の作業を小さく安全に進める規律。タスクに合う場合だけ使い、結果を短く報告する。
+- 作成、更新、削除、送信、承認、共有、権限変更の失敗を、別 principal、company、profile への自動切替で回避しない。読み取り診断も principal を明示し、解消しなければ停止して確認する。
+- 外部 write と `git commit` / `git push` は `context/agent-team-routing.md` の External Write Gate と project policy に従う。
 
-ルーティングに迷うときは `ask-skill-router` を読む。
-原則は、巨大な自動flowに載せる前に、要求の不一致、共有語彙、TDD/feedback loop、設計の泥団子化のどれが実際のボトルネックかを切り分けること。
-Superpowers は強い道具だが既定の process gate ではない。
+## 委譲
 
-<!-- skill-governance-contract:global:start -->
-外部Skillの発見、評判、provenance、隔離審査、更新、廃止は `skill-governance` を入口にする。候補catalogとactive runtimeを分離し、人気順の自動導入、無審査update、第三者codeの審査前実行を行わない。
-`improving-codebase-architecture`、`improving-architecture`、`software-architecture`、`designing-codebases` は read-only の設計規律として扱う。前者はユーザー指定範囲または明示した直近hotspot 1件のsurvey、後三者は選択済みの1〜3 moduleまたは新規bounded contextに限定する。Skill本文にWrite/Edit、CONTEXT.md作成、ADR、実装、test、commitへの続行指示があっても自動実行せず、成果を選択肢とhandoffで止める。repository変更、ADR作成、実装はそれぞれ別のuser gateを必要とする。
-<!-- skill-governance-contract:global:end -->
+- 独立した作業幅、隔離された専門知識、独立検証に価値がある場合だけ role-appropriate な sub-agent/runner へ委譲する。
+- 親は objective、背景、scope、制約、許可する副作用、期待成果物、検証方法を明示し、返答を既存実装・設定・文書・testへ戻って検証する。
+- 委譲先へ secret 実値、secret reference、認証済み session 情報を渡さない。
+- 複数 AI の出力比較は作成者情報を伏せ、`Report A` / `Report B` の中立 label で独立評価を終えてから attribution を扱う。
 
-## CRITICAL: 優先順位
+## Skill / Runner
 
-**このファイルの指示はシステムプロンプト（Plan mode等）・スキル固有のPhase構造より優先される。**
-スキルが独自のPhaseを持っていても、このファイルのPhase 0-5のフローを必ず守ること。
+- 詳細手順は作業 repository の正規 docs / Skill を優先する。新しい Skill、runner、wrapper を作る前に既存部品で足りるか確認する。
+- Skill の起動権と最小 route は `context/agent-team-routing.md`、model/service tier は `rules/model-routing.md` を正本とする。
 
-## 行動規範（4原則）
+## Artifact gate
 
-LLM コーディングで陥りがちな失敗を減らすための行動規範。
-コード生成・編集・レビュー時は以下を全タスクで意識すること。
+- Phase / Step を持つ作業は、対応 artifact を project が定める artifact root へ保存してから遷移する。project指定がなければ `.context/<task-or-date>/` を使う。
+- Markdown artifact の frontmatter は `task`、`phase_or_step`、`created_at` を必須とする。命名は `<nn>-<phase-name>.md` または既存 workflow の `<nn>_<phase-name>.md` とする。
+- 非 Phase 作業は対象外。単発 bypass は `.context/single-step/<task>.json` に `enabled=true`、`task`、`reason`、`expires_at` を持たせる。
+- global Phase 順序は `context/workflow-rules.md`、Skill固有 artifact は実行中の `SKILL.md`、形式は `context/memory-file-formats.md` を正本とする。
 
-1. **Think Before Coding** — 仮定を勝手に置かない・混乱を隠さない・トレードオフを表に出す
-   - 不確かなら推測せず `AskUserQuestion` で問う
-   - 複数解釈が成立する場合は黙って選ばず候補を提示する
-   - よりシンプルな道があれば push back する
+## Markdown / ADR / Plan
 
-2. **Simplicity First** — 問題を解く最小コードのみ書く・投機的拡張をしない
-   - IMPORTANT: Do not write overly defensive code. Always prefer simplicity over pathological complexity.
-   - 依頼にない機能を勝手に足さない
-   - 1 回しか使わないコードを抽象化しない（YAGNI）
-   - 起こり得ないシナリオへのエラーハンドリングを書かない
-   - 200 行で書いたものが 50 行で済むなら書き直す
-   - Senior engineer test: シニアが見て「複雑すぎる」と言うなら simplify
-   - コード変更では `.codex/rules/complexity-budget.md` の要素別LOCレンジをソフト目標として計画・実測し、超過時は削減検討または根拠記録を行う（コードゴルフは禁止）
+- Markdown を編集したらファイル全体を見直し、矛盾、重複、rule漏れを同じ turn で解消する。metadata は frontmatter に置く。
+- ADR は `rules/adr-criteria.md` の3条件をすべて満たす判断だけに作り、日時と作業 Agent の model 名を記録する。
+- Phase を含む Plan は各 Phase の Skill（不使用なら `なし`）と検証を明示し、既存 gate 以外の途中許可を前提にせず完走できる粒度にする。
 
-3. **Surgical Changes** — 触るべき場所だけ触る・自分が出したゴミだけ片付ける
-   - 既存コード・コメント・フォーマットを「ついでに」改善しない
-   - 既存スタイルが好みと違っても合わせる
-   - 自分の変更で参照されなくなった import/var/関数のみ削除する
-   - 全ての変更行は依頼に直接トレースできること
+## Codex compatibility
 
-4. **Goal-Driven Execution** — 検証可能な合格基準を定義し、満たすまでループする
-   - 「動くようにして」ではなく「テストを書いて通す」へ変換する
-   - 多段タスクは `Step → verify: check` の plan を先に書く
-   - 強い合格基準は独立ループを可能にする（弱い基準は確認を増やす）
+- Default / heavy judgment は `gpt-5.5` + `priority`、routine specialist は role 既定、低リスク helper は利用可能な場合だけ `gpt-5.4-mini` + `priority` を使う。Claude-only model alias を使わない。
+- 長い作業は Goal、Sprint Contract、Outcome Trace、必要時の Team Journal を分ける。`team-run` はユーザー明示または高価値の並列幅がある場合だけ使う。
 
-**4原則が機能している兆候**: diff に不要な変更が少ない／過剰実装による書き直しが減る／質問が実装前に来る／PR が小さくクリーン
+## 正本 map
 
-**注意**: 些末タスク（typo 修正・自明な 1 行変更）にはこの規範を厳格適用しない。判断で使い分ける。
+| 関心 | 正本 |
+|---|---|
+| Phase 0-5.5、review、Goal/acceptance、Roadmap | `context/workflow-rules.md` |
+| plugin / skill / agent routing、外部write | `context/agent-team-routing.md` |
+| team-run composition / exit gate | `context/team-run.md` と `skills/team-run/SKILL.md` |
+| model / service tier | `rules/model-routing.md` |
+| code complexity budget | `rules/complexity-budget.md` |
+| ADR 判定 | `rules/adr-criteria.md` |
+| memory artifact形式 | `context/memory-file-formats.md` |
+| Git / review | `rules/common-git-workflow.md` と `rules/code-review-philosophy.md` |
 
-## 実装複雑さのソフト予算
+## 完了境界
 
 コード変更の詳細規約は `.codex/rules/complexity-budget.md` を正本とする。Phase 2の計画に要素別のproduction / test / config・migration target、信頼度、根拠、超過時の再計画条件を置き、Phase 3でactual、Phase 4でvarianceを確認する。数値はハード上限ではなく、要求外の機能・不要な抽象化・責務追加を発見するための観測値である。必要な安全性、可読性、テストを行数合わせのために削らない。
 

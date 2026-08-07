@@ -1,6 +1,6 @@
 ---
 name: create-skill
-description: 既存設定と完全に整合したスキルを自動作成。~/.claude/CLAUDE.md、context/*.md、既存スキルを自動参照し、重複・競合を避けたスキルを生成。使用タイミング: (1) 新しいスキルを作りたい場合、(2) /create-skill --user または --project 実行時。「スキルを追加して」「新しいスキルを作って」「SKILLを作成したい」等の依頼に対応。SKILL.md（YAML frontmatter付き）を生成。
+description: 既存設定と完全に整合したスキルを自動作成。~/.codex/AGENTS.md、context/*.md、既存スキルを参照し、重複・競合を避けたSKILL.mdを生成する。
 allowed-tools: Read, Write, Glob, Grep
 ---
 
@@ -29,36 +29,35 @@ allowed-tools: Read, Write, Glob, Grep
 ### Step 2: 既存設定の読み込み（必須）
 
 **常に読み込む:**
-- `~/.claude/CLAUDE.md` - user-level設定
-- `~/.claude/context/*.md` - 特に以下が重要:
-  - `claude-customization-guide.md` - Skills/Commands/CLAUDE.mdの使い分け
+- `~/.codex/AGENTS.md` - user-levelの短い入口
+- `~/.codex/context/*.md`, `~/.codex/rules/*.md` - workflow、routing、形式、判断基準
   - `workflow-rules.md` - Phase 0-5ワークフロー
   - `memory-file-formats.md` - メモリディレクトリ構造
 
 **--project時に追加で読み込む:**
-- `./CLAUDE.md` - project-level設定
-- `./context/*.md` - project-level参照ファイル
+- `./AGENTS.md` - project-level設定（`CLAUDE.md` はimport入口）
+- `./.codex/context/*.md` - project-level参照ファイル
 
 **既存スキルの確認:**
-- `~/.claude/skills/*/SKILL.md` のfrontmatter（name, description）を取得
+- `~/.codex/skills/*/SKILL.md` のfrontmatter（name, description）を取得
 - 重複・競合がないか確認
 
-### Step 3: Skill vs Command vs CLAUDE.md 判定
+### Step 3: Skill vs prompt vs AGENTS.md 判定
 
-@context/claude-customization-guide.md に従い判定:
+`context/agent-team-routing.md` と既存 Skill inventory に従い判定:
 
 | 選択 | 条件 |
 |------|------|
 | **Skill** | 自動トリガー、ドメイン知識、スクリプト同梱 |
-| **Command** | ユーザー制御、引数必須、ショートカット |
-| **CLAUDE.md追記** | 常時適用ルール、60行以下に収まる |
+| **prompt** | ユーザー制御、引数必須、短い互換entrypoint |
+| **AGENTS.md追記** | 全Agentが毎回守る短い不変条件または正本への入口 |
 
 ### Step 4: 整合性チェック
 
 1. **ワークフローとの整合**: Phase 0-5、4ステップ構造との関係
 2. **ディレクトリ構造**: MEMORY_DIR、memory/、tasks/等との整合
 3. **既存スキルとの重複**: 同じ機能を持つスキルがないか
-4. **スコープ判定**: user vs project（@context/claude-customization-guide.md参照）
+4. **スコープ判定**: user vs project（`context/agent-team-routing.md`参照）
 
 問題があればAskUserQuestionで確認。
 
@@ -101,10 +100,10 @@ description: I can review PRs.
 ### Step 6: スキル作成
 
 **配置先:**
-- `--user`: `~/.claude/skills/<skill-name>/`
-- `--project`: `./.claude/skills/<skill-name>/`
+- `--user`: `~/.codex/skills/<skill-name>/`
+- `--project`: `./.codex/skills/<skill-name>/`
 
-**Codex環境向けの場合**: `~/.codex/skills/<skill-name>/` 配下に自己完結で作成する。実行時に `~/.claude/` 側の定義を呼び出す設計にはしない（ユーザー明示の好み。出典: memories/23_evidence_summary.md「S-003」）。
+Skill は配置先で自己完結させ、実行時に `~/.claude/` 側の定義を呼び出す設計にしない。
 
 
 
@@ -166,10 +165,10 @@ description: <何をするか>。<いつ使うか>。使用タイミング: (1) 
 
 ## チェックリスト
 
-- [ ] ~/.claude/CLAUDE.md を読んだか
-- [ ] ~/.claude/context/claude-customization-guide.md を確認したか
+- [ ] ~/.codex/AGENTS.md を読んだか
+- [ ] ~/.codex/context/agent-team-routing.md を確認したか
 - [ ] 既存スキル一覧を確認したか
-- [ ] Skill/Command/CLAUDE.md追記の判定をしたか
+- [ ] Skill/prompt/AGENTS.md追記の判定をしたか
 - [ ] **スキル名がgerund形式か**（implementing-xxx, processing-xxx）
 - [ ] **descriptionは3人称か**（"I can..."は不可）
 - [ ] descriptionに「何を」「いつ」が含まれるか

@@ -27,7 +27,7 @@ context: fork
 | Code Quality | cq | 命名、一貫性、可読性、不要コード |
 | Documentation | docs | ドキュメント不足、内容の陳腐化 |
 
-## 優先度定義（CLAUDE.md 標準 3 階級に準拠）
+## 優先度定義（AGENTS.md 標準 3 階級に準拠）
 
 | 優先度 | 説明 | 対応期限 |
 |--------|------|---------|
@@ -35,7 +35,7 @@ context: fork
 | IMPORTANT | 早期対応推奨（バグ、セキュリティリスク、一貫性違反） | 次リリースまで |
 | MINOR | 改善推奨（命名・スタイル、軽微な技術的負債） | 計画的に対応 |
 
-> 旧 critical/major/minor/trivial 4 階級は廃止。CLAUDE.md の severity 体系（CRITICAL/IMPORTANT/MINOR）に統一。
+> 旧 critical/major/minor/trivial 4 階級は廃止。AGENTS.md の severity 体系（CRITICAL/IMPORTANT/MINOR）に統一。
 
 ## 実行手順
 
@@ -44,7 +44,7 @@ context: fork
 1. ディレクトリの確認・作成
 
 ```bash
-# PJ CLAUDE.mdのMEMORY_DIRを確認（未定義なら.local/）
+# PJ AGENTS.mdのMEMORY_DIRを確認（未定義なら.local/）
 # システムプロンプトのToday's dateから日付を取得（例示をコピーしない）
 mkdir -p ${MEMORY_DIR}/memory/YYMMDD_codebase-review
 mkdir -p ${MEMORY_DIR}/issues
@@ -52,7 +52,7 @@ mkdir -p ${MEMORY_DIR}/issues
 
 2. 05_log.mdを初期化
 
-3. PJのCLAUDE.mdとcontext/を確認し、アーキテクチャルールを把握
+3. PJの`AGENTS.md`とcontext/を確認し、アーキテクチャルールを把握
 
 4. **コードベース構造の把握**
 
@@ -76,7 +76,7 @@ Agent CLI を使った別モデル検証は廃止。専門サブエージェン�
 
 各サブエージェントには以下の情報を渡す:
 - メモリディレクトリのフルパス
-- PJ CLAUDE.mdの内容（アーキテクチャルール等）
+- PJ `AGENTS.md`の内容（アーキテクチャルール等）
 - 対象リポジトリのパス
 - 担当観点とレビュー基準
 - **コードベース構造情報**（Phase 0で取得）
