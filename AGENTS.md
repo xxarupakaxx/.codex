@@ -157,6 +157,13 @@ B. **Blueprint（大規模タスクのみ）**: 多セッション・多PRの設
   - SessionStartHookで過去メモリをFTS5検索→コンテキスト自動注入
   - memories/solutions/のMarkdownは自動的にSQLiteにインデックス同期
 
+## コード変更前のCodemap preflight
+
+- コードを変更するtaskでは、最初の編集前にworkspace rootの `codemap.json` / `codemap.html` / `codemap.lock` を探し、`context/codemap.md` の手順で `check` と地図読込を行う。
+- missing / stale / mismatch、または対象のcaller・impact・guarding testを地図から答えられない場合は、read-only調査で `codemap.source.json` を更新し、三点をrefreshしてfreshになるまでproduction codeを編集しない。
+- verified edgeは実在するrepo-relative path + line evidence必須。確証が取れない関係は `unknown` + reasonとし、推測でverifiedの線を引かない。
+- code変更後も三点を同じrefreshで更新してcheckする。コードを変更しないtaskは対象外。
+
 ## ライブロードマップ表示
 
 - 複数Phaseのworkflowを実行する場合は、`viewing-plans` スキルを併走させる。
