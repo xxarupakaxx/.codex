@@ -138,10 +138,10 @@ route が明確な大規模タスクで、依存DAG、Cold-Start Brief、また�
 **Fast Trackフロー**:
 1. **Phase 0**: メモリディレクトリ作成 + 05_log.md初期化（learnings-researcherはスキップ可）
 2. **Phase 1**: 対象ファイル読み取り + 影響確認（外部情報参照はスキップ可）
-3. **Phase 2**: 計画を05_log.mdに簡潔に記録（30_plan.md作成・deepening-plan・サブエージェントレビューはスキップ可）
+3. **Phase 2**: 計画を05_log.mdに簡潔に記録（コード変更なら要素別Complexity Budgetを1行以上記録。30_plan.md作成・deepening-plan・サブエージェントレビューはスキップ可）
 4. **Phase 3**: 実装 + コミット
-5. **Phase 4**: lint/format/typecheck + **コア1レビューアー**（変更内容に最も関連するもの1つ）で1ラウンド
-6. **Phase 5**: 簡潔な完了報告
+5. **Phase 4**: lint/format/typecheck + **コア1レビューアー**（変更内容に最も関連するもの1つ）で1ラウンド。target/actual/varianceを確認
+6. **Phase 5**: Complexity Budgetのtarget/actual/varianceを含む簡潔な完了報告
 
 **IMPORTANT**: Fast Track適用はユーザーへの確認後に行う。判断に迷う場合は通常フロー。
 
@@ -152,6 +152,7 @@ route が明確な大規模タスクで、依存DAG、Cold-Start Brief、また�
 3. 05_log.md初期化、ユーザーの最初の指示を記録
 4. **Blueprint WUのCold-Start Briefがあれば読み込み**（blueprint.mdの該当WUセクション）
 5. `rg` / SQLite / memory index でタスク関連の過去知見を検索（memories/ + solutions/ + issues/ を横断）し、結果を05_log.mdに記録する。結果が不十分で、独立した探索文脈の価値が Delegation Gate を上回る場合だけ `learnings-researcher` または explorer role を追加する。
+6. **コード変更時のCodemap preflight**: workspace rootの `codemap.*` を `context/codemap.md` に従ってcheckし、JSONからcaller / impact / guarding test / evidenceを読む。missing、stale、mismatch、または質問に答える関係が不足する場合は、read-only調査でmapをrefreshしてfreshになるまでproduction codeを編集しない。code変更後もrefresh/checkする。
 
 ## Phase 1: 調査
 
@@ -213,6 +214,15 @@ persistent Goal、`/team-run`、Goal tools を使う作業は、最小限の evi
 ## Phase 2: 計画
 
 各タスクを4ステップ構造で作成（調査→計画→実行→レビュー）。変更対象ファイルを明記。
+
+### 実装複雑さのソフト予算（Complexity Budget）
+
+コード変更を含む計画では、各要素（要件または振る舞いに対応する最小のまとまり）ごとに、production / test / config・migration の推定コード量レンジ、信頼度、根拠、超過時の再計画条件を記録する。詳細な定義・初期レンジ・計測方法・例外は `rules/complexity-budget.md` を正本とする。
+
+- 数値はハード上限ではなく、要求外の機能・不要な抽象化・責務追加を検出するためのソフト目標である。
+- 行数だけで要素を分割せず、コードゴルフ、テスト弱体化、必要な安全性の削除を禁止する。
+- 小規模なコード変更でも、計画表に `N/A` と理由を残す。文書のみの変更は `N/A (non-code)` とする。
+- `30_plan.md` の計画検証では、要素別targetが既存パターンと受入基準に対応しているかを直接確認する。
 
 ### 計画の深掘り（Deepen Plan）
 
@@ -318,6 +328,7 @@ Phase 2.5でのSprint Contract初回作成は、承認済み計画を検証可�
    - 小規模（1-3ファイル）: 5-10個の基準
    - 中規模（4-9ファイル）: 10-20個の基準
    - 大規模（10+ファイル）: 20-30個の基準
+4. **Complexity Budgetの接続**: コード変更では、各要素のtarget / actual / varianceを受入基準またはevidenceへ接続する。数値を守るために機能・テスト・安全性を削らないことを明記する。
 
 ### Outcome Trace
 
@@ -366,6 +377,7 @@ Goal / Team Journal / Review Heat / 共有協調が有用？ → YES → team-ru
 
 - 各タスクを「調査→計画→実行→レビュー」で実行
 - **各タスクの調査ステップ**: ローカル検索を先に行う。結果が不十分で Delegation Gate を満たす場合だけ `learnings-researcher` を追加し、類似実装・既知の落とし穴を確認する。
+- コード変更では、要素の完了時または新しい層・公開API・抽象化を追加する直前に、`rules/complexity-budget.md` の方法でactualを測る。上限の大幅超過（目安25%以上）または計画外の責務追加は一旦停止し、削減候補・根拠・再計画要否を記録する。
 - **品質チェック（format/lint/typecheck）はコミット前に必ず実行**
 - **コミットはこまめに打つ**（1機能・1修正ごと）
 - 10個以上のタスク: 3-5タスクごとにユーザーに中間報告
@@ -392,6 +404,8 @@ Tier 2レビューアー選択ガイドの「Playwright E2Eスモークテスト
 fresh な自動チェックを先に行う。
 Delegation Gate と変更リスクに応じて最小の checker を選び、ファイル数だけで reviewer 数やラウンド数を決めない。
 権限、外部書き込み、不可逆操作、セキュリティ、重要設計では独立 reviewer または人間 gate を必須にする。
+
+コード変更では、レビュー入力に計画時の要素別targetと実測actualを含める。reviewerは行数の多寡だけで拒否せず、受入基準に必要か、既存パターンで削減できるか、計画外の責務が混ざっていないかを判定し、`within target` / `justified variance` / `scope drift` を記録する。詳細は `rules/complexity-budget.md` を参照する。
 
 **Round 間の文脈伝播（issues/ frontmatter 拡張）:**
 
@@ -456,19 +470,20 @@ re_review_priority: high    # 次ラウンドで検出元 reviewer を優先起�
 2. 自律決定した事項
 3. 作成したブランチ名
 4. 残存する課題
-5. 価値ある知見があれば memories/ にインデックス作成（`context/memory-file-formats.md`をReadで参照）
-6. **ローカル検証ガイド生成**（UI変更・API変更・DB変更を含む場合は必須）
+5. コード変更がある場合は `target / actual / variance / reason` のComplexity Budget要約（コード変更なしは `N/A (non-code)`）
+6. 価値ある知見があれば memories/ にインデックス作成（`context/memory-file-formats.md`をReadで参照）
+7. **ローカル検証ガイド生成**（UI変更・API変更・DB変更を含む場合は必須）
    - `/generate-verification-guide` スキルを実行
    - 影響ページの探索 → テストケース生成 → チェックリスト出力
    - 結果をメモリディレクトリの `90_verification.md` に保存
    - **スキップ条件**: 設定ファイルのみの変更、テストのみの変更、ドキュメントのみの変更
-7. **状態図・処理フロー図生成**（ワークフロー・状態管理・外部連携を含む場合は必須）
+8. **状態図・処理フロー図生成**（ワークフロー・状態管理・外部連携を含む場合は必須）
    - `/generate-state-diagram` スキルを実行
    - lead のローカル探索で不足し、Delegation Gate を通る場合だけ `explorer` でブランチ変更を深掘り → Mermaid図生成 → 用語集・ファイルマップ付与
    - **CRITICAL品質基準**: 10年後の新人がドメイン知識ゼロでも「何が起きているか」「なぜそうなっているか」を完全に理解できる詳細さ
    - 結果をメモリディレクトリの `91_state_diagram.md` に保存
    - **スキップ条件**: UIのみ・テストのみ・設定/ドキュメントのみの変更、単一関数の修正
-8. **（オプション）HTML Viewer出力**: 計画・ログ・図をブラウザで確認したい場合、後述の「HTML Viewer Tools」セクションを参照
+9. **（オプション）HTML Viewer出力**: 計画・ログ・図をブラウザで確認したい場合、後述の「HTML Viewer Tools」セクションを参照
 
 ## Phase 5.5: Compound（知見の構造化保存）
 

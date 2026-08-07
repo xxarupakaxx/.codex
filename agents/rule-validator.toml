@@ -49,6 +49,7 @@ AGENTS.md および rules/ への準拠を検証する専門エージェント�
 - database.md: データベース規則
 - security.md: セキュリティ規則
 - testing.md: テスト規則
+- complexity-budget.md: 計画target / 実測variance / 超過時の再計画規則（数値がハード上限として誤用されていないこと）
 
 ## 検証フロー
 

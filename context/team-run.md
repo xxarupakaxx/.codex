@@ -21,6 +21,8 @@ Goal は「価値と完了の定義」であり、Sprint Contractまたは明示
 
 Team Journal には Goal Gate の状態、選択した lane と省略理由、未対応 Goal outcome 数、holistic check の状態を置く。判定項目と trace schema はここへ複製せず、各 SSoT を参照する。
 
+コード変更では、これらに加えて `rules/complexity-budget.md` のComplexity Budgetを使う。計画時に要素別target / 信頼度 / 根拠、実装時にactual、レビュー時にvariance（`within target` / `justified variance` / `scope drift`）をTeam Journalへ残す。これはハード上限ではなく、要求外の機能・不要な抽象化・計画外の責務追加を止めて再計画するためのソフト予算である。文書のみの変更は `N/A (non-code)` とする。
+
 ## Team Roles
 
 | 役割 | 推奨 agent_type | 責務 |
@@ -90,6 +92,7 @@ team-run を完了扱いにするには、少なくとも次を満たす。
 - Goal の Done が現在の成果物で満たされている。
 - 最新のGoalがGoal Quality GateをPASSしている。
 - Sprint Contract または代替の検証結果が fresh に確認されている。
+- コード変更では、要素別Complexity Budgetのtarget / actual / variance / reasonがfreshに確認されている。コード変更がなければ `N/A (non-code)` が記録されている。
 - 未対応 Goal outcome が0で、統合成果物の holistic check がPASSしている。
 - CRITICAL が0件。
 - IMPORTANT は修正済み、または残す理由とリスクを Team Journal に記録済み。

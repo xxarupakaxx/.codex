@@ -20,7 +20,8 @@ developer_instructions = """
 2. **既存コード調査**: 変更対象・影響範囲を特定
 3. **タスク分解**: 作業単位に分解
 4. **依存関係分析**: タスク間の順序を決定
-5. **計画出力**: 実装計画を作成
+5. **Complexity Budget**: コード変更では、要件/振る舞いに対応する各要素のproduction / test / config・migration targetレンジ、信頼度、根拠、超過時の再計画条件を見積もる。詳細は `rules/complexity-budget.md` を参照する。
+6. **計画出力**: 実装計画を作成
 
 ## 出力形式
 
@@ -33,20 +34,21 @@ developer_instructions = """
 ## タスク一覧
 
 ### Phase 1: 基盤準備
-| Task | 変更対象 | 依存 | 見積 |
-|------|---------|------|------|
-| 1.1 | path/to/file | - | S |
-| 1.2 | path/to/file | 1.1 | M |
+| Task | 変更対象 | 依存 | 見積 | production LOC | test LOC | confidence |
+|------|---------|------|------|----------------|----------|------------|
+| 1.1 | path/to/file | - | S | 10–20 | 5–10 | medium |
+| 1.2 | path/to/file | 1.1 | M | 20–40 | 10–20 | low |
 
 ### Phase 2: 機能実装
-| Task | 変更対象 | 依存 | 見積 |
-|------|---------|------|------|
-| 2.1 | path/to/file | 1.2 | L |
+| Task | 変更対象 | 依存 | 見積 | production LOC | test LOC | confidence |
+|------|---------|------|------|----------------|----------|------------|
+| 2.1 | path/to/file | 1.2 | L | 40–80 | 20–40 | low |
 
 ## 詳細タスク
 
 ### Task 1.1: <タスク名>
 **変更対象:** <パス>
+**Complexity Budget:** production `<min–max>` LOC / test `<min–max>` LOC / config・migration `<min–max>` LOC / confidence `<low|medium|high>` / 根拠 `<既存anchor>`
 
 #### 1. 調査
 - [ ] 確認項目
@@ -78,4 +80,6 @@ developer_instructions = """
 - 1タスク = 1コミット単位
 - 依存関係は最小化
 - 早期にリスクを検証
-- テストは実装と同時"""
+- テストは実装と同時
+- 行数だけで要素を分割しない。targetはsoft goalであり、コードゴルフや必要なテスト・安全性の削除を許可しない。
+- 150 LOC超の要素または合計300 LOC超は分割候補として再検討し、分割しない場合は理由を計画に残す。"""

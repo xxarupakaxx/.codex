@@ -1,0 +1,78 @@
+{
+  "schemaVersion": 1,
+  "kind": "codemap-lock",
+  "generatedAt": "2026-08-05T15:01:18.790671+00:00",
+  "sourceFile": "codemap.source.json",
+  "sourceSpecFingerprint": "fcc9975b7d859fd6b67aa1a2367276fdc6706420637c7009bc37d0edadf9bb8a",
+  "sourceFingerprint": "7fcc2b7fa68104d423e06aa8be26624605cf694267f11626d9b1b95f75f68c46",
+  "templateFingerprint": "9fe5b7020dbeb7edcf458fd3c7f707be2e8d892563108a2c13ed11c7aeaba0ad",
+  "mapFingerprint": "f0b5fd434bcc3b35d6aca73d98d618c445f76880b5db30e5ac5df8443dde5e87",
+  "htmlFingerprint": "20c6104b6f9c622ce8b21148dfd3dfbc058fc4627a5bb9ff56f92326d3a6acbb",
+  "sourceManifest": [
+    {
+      "path": "AGENTS.md",
+      "sha256": "e48fc5d1a60c21e6ca3df724ddf59bc11c352bf28f1cb30b3d52335ee884ab25",
+      "size": 19459
+    },
+    {
+      "path": "README.md",
+      "sha256": "63ea225cecda255d41cc706558d6c5dcd1fd7d3abe5b04dae41f1071017bf6c4",
+      "size": 3342
+    },
+    {
+      "path": "context/codemap.md",
+      "sha256": "31951143eeaf3ffa59efeedb2100448efb0e83a803b08fa88a4ae8fb97c85258",
+      "size": 5312
+    },
+    {
+      "path": "context/workflow-rules.md",
+      "sha256": "31fee826606446a2b85b53cfbcdecbdf342b7d35406c8a96e463b30434f18785",
+      "size": 53694
+    },
+    {
+      "path": "scripts/generate-codemap.py",
+      "sha256": "98283d7527122c7313c1654b86229b222be398bda468979673dcd05fa4cfa821",
+      "size": 18546
+    },
+    {
+      "path": "scripts/generate-roadmap-view.py",
+      "sha256": "4acaba927fe198f1bf3dbeb301722b848554e7d8fbe97fb2225126f70e42c92a",
+      "size": 32389
+    },
+    {
+      "path": "skills/viewing-plans/SKILL.md",
+      "sha256": "ae7d5738ac63bf2e681a115a16033cc0291b9458a1d06f7613f1cc58a7f2d7f5",
+      "size": 14710
+    },
+    {
+      "path": "tests/codemap-viewer.test.mjs",
+      "sha256": "cab8fe6c7d3782564864fe83866bd324835ac8e2e422a92ab281071eb5e3391d",
+      "size": 7167
+    },
+    {
+      "path": "tests/roadmap-viewer.test.mjs",
+      "sha256": "d5fda625a1f5e6e9bfa8f920f98f9eea7168cb31a5c21ad148a2b782db117c15",
+      "size": 62409
+    },
+    {
+      "path": "tests/test_generate_codemap.py",
+      "sha256": "fbc7970cdd02b65a1ae0bcb1fa9828644491d8f03f4f60927544ab93055eebae",
+      "size": 13993
+    },
+    {
+      "path": "tests/test_generate_roadmap_view.py",
+      "sha256": "c0a61e6f6edbd6fa8f21fa3a9deda66d8680b98bb6e808fcd3b5d0776df3025e",
+      "size": 23963
+    },
+    {
+      "path": "tests/test_roadmap_task_hub.py",
+      "sha256": "96d7a3c61a9a6c3c8f35ac60c0ee9face5a199f75e0d192d9fb436217d0ba694",
+      "size": 24463
+    },
+    {
+      "path": "tools/roadmap_viewer.html",
+      "sha256": "7fdfeb80e2b26e063a47e09c862b0e06c11353db9b153981d037538999209246",
+      "size": 307422
+    }
+  ]
+}

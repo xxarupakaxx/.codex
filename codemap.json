@@ -1,0 +1,342 @@
+{
+  "schemaVersion": 1,
+  "title": "Codex Roadmap & Codemap subsystem",
+  "description": "Evidence-backed map of the preflight policy, generators, shared viewer, and guarding tests.",
+  "scope": {
+    "include": [
+      "AGENTS.md",
+      "README.md",
+      "context/codemap.md",
+      "context/workflow-rules.md",
+      "skills/viewing-plans/SKILL.md",
+      "scripts/generate-*.py",
+      "tools/roadmap_viewer.html",
+      "tests/*codemap*",
+      "tests/*roadmap*"
+    ],
+    "exclude": []
+  },
+  "lanes": [
+    {
+      "id": "entrypoints",
+      "title": "Entrypoints & Policy",
+      "order": 0
+    },
+    {
+      "id": "generation",
+      "title": "Generation Pipeline",
+      "order": 1
+    },
+    {
+      "id": "model",
+      "title": "Snapshot & Graph Model",
+      "order": 2
+    },
+    {
+      "id": "browser",
+      "title": "Browser Surface",
+      "order": 3
+    },
+    {
+      "id": "verification",
+      "title": "Verification",
+      "order": 4
+    }
+  ],
+  "nodes": [
+    {
+      "id": "agent-preflight",
+      "title": "Codemap preflight rule",
+      "kind": "entrypoint",
+      "lane": "entrypoints",
+      "path": "AGENTS.md",
+      "summary": "Blocks production edits until the workspace map is fresh and sufficient."
+    },
+    {
+      "id": "codemap-contract",
+      "title": "Codemap contract",
+      "kind": "module",
+      "lane": "entrypoints",
+      "path": "context/codemap.md",
+      "summary": "Defines the triad, evidence schema, unknown state, and pre/post edit checks."
+    },
+    {
+      "id": "viewing-plans",
+      "title": "viewing-plans",
+      "kind": "entrypoint",
+      "lane": "entrypoints",
+      "path": "skills/viewing-plans/SKILL.md",
+      "summary": "Opens the task Roadmap and workspace Codemap as separate views."
+    },
+    {
+      "id": "codemap-cli",
+      "title": "Codemap generator",
+      "kind": "module",
+      "lane": "generation",
+      "path": "scripts/generate-codemap.py",
+      "summary": "Validates the source map, fingerprints sources, writes the triad, and checks freshness."
+    },
+    {
+      "id": "roadmap-cli",
+      "title": "Roadmap generator",
+      "kind": "module",
+      "lane": "generation",
+      "path": "scripts/generate-roadmap-view.py",
+      "summary": "Builds task snapshots and renders the shared viewer template."
+    },
+    {
+      "id": "codemap-payload",
+      "title": "codemap.json payload",
+      "kind": "module",
+      "lane": "model",
+      "path": "codemap.json",
+      "summary": "Machine-readable lanes, nodes, explicit relations, and evidence."
+    },
+    {
+      "id": "viewer-model",
+      "title": "Codemap model adapter",
+      "kind": "module",
+      "lane": "model",
+      "path": "tools/roadmap_viewer.html",
+      "summary": "Maps only explicit Codemap nodes and edges into the existing graph model."
+    },
+    {
+      "id": "viewer-ui",
+      "title": "Lane graph & inspector",
+      "kind": "ui",
+      "lane": "browser",
+      "path": "tools/roadmap_viewer.html",
+      "summary": "Shows lane columns, filters, 1-hop relations, evidence, and unknown edges."
+    },
+    {
+      "id": "host-browser",
+      "title": "Codex host browser",
+      "kind": "external",
+      "lane": "browser",
+      "summary": "External host behavior used to place the generated HTML beside Codex."
+    },
+    {
+      "id": "generator-tests",
+      "title": "Generator contract tests",
+      "kind": "test",
+      "lane": "verification",
+      "path": "tests/test_generate_codemap.py",
+      "summary": "Guards schema, fingerprints, partial failures, and lock-last ordering."
+    },
+    {
+      "id": "viewer-tests",
+      "title": "Viewer model tests",
+      "kind": "test",
+      "lane": "verification",
+      "path": "tests/codemap-viewer.test.mjs",
+      "summary": "Guards lanes, evidence, unknown relations, and Roadmap compatibility."
+    }
+  ],
+  "edges": [
+    {
+      "id": "agent-delegates-contract",
+      "from": "agent-preflight",
+      "to": "codemap-contract",
+      "relation": "delegates to",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "context/workflow-rules.md",
+          "line": 155,
+          "contains": "context/codemap.md",
+          "note": "operationalizes the AGENTS preflight through context/codemap.md"
+        }
+      ]
+    },
+    {
+      "id": "contract-invokes-cli",
+      "from": "codemap-contract",
+      "to": "codemap-cli",
+      "relation": "invokes",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "context/codemap.md",
+          "line": 44,
+          "contains": "generate-codemap.py refresh",
+          "note": "documents the refresh command"
+        }
+      ]
+    },
+    {
+      "id": "viewing-plans-runs-roadmap",
+      "from": "viewing-plans",
+      "to": "roadmap-cli",
+      "relation": "runs",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "skills/viewing-plans/SKILL.md",
+          "line": 64,
+          "contains": "generate-roadmap-view.py <memory_dir>",
+          "note": "generates roadmap.html"
+        }
+      ]
+    },
+    {
+      "id": "viewing-plans-checks-codemap",
+      "from": "viewing-plans",
+      "to": "codemap-cli",
+      "relation": "checks",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "skills/viewing-plans/SKILL.md",
+          "line": 65,
+          "contains": "generate-codemap.py check",
+          "note": "runs the Codemap check before opening"
+        }
+      ]
+    },
+    {
+      "id": "codemap-cli-generates-payload",
+      "from": "codemap-cli",
+      "to": "codemap-payload",
+      "relation": "generates",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "scripts/generate-codemap.py",
+          "line": 375,
+          "contains": "atomic_write(root / \"codemap.json\"",
+          "note": "writes codemap.json before HTML and lock"
+        },
+        {
+          "path": "scripts/generate-codemap.py",
+          "line": 377,
+          "contains": "atomic_write(root / \"codemap.lock\"",
+          "note": "writes codemap.lock last"
+        }
+      ]
+    },
+    {
+      "id": "codemap-cli-embeds-viewer",
+      "from": "codemap-cli",
+      "to": "viewer-model",
+      "relation": "embeds snapshot into",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "scripts/generate-codemap.py",
+          "line": 362,
+          "contains": "html_content = render_html(snapshot)",
+          "note": "renders the validated snapshot with the shared template"
+        }
+      ]
+    },
+    {
+      "id": "roadmap-cli-shares-viewer",
+      "from": "roadmap-cli",
+      "to": "viewer-model",
+      "relation": "shares template with",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "scripts/generate-roadmap-view.py",
+          "line": 719,
+          "contains": "def render_html",
+          "note": "renders Roadmap snapshots with the same template"
+        }
+      ]
+    },
+    {
+      "id": "payload-selects-adapter",
+      "from": "codemap-payload",
+      "to": "viewer-model",
+      "relation": "selects",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "tools/roadmap_viewer.html",
+          "line": 4129,
+          "contains": "model.snapshot.kind === 'codemap'",
+          "note": "kind=codemap routes only to the Codemap adapter"
+        }
+      ]
+    },
+    {
+      "id": "model-renders-ui",
+      "from": "viewer-model",
+      "to": "viewer-ui",
+      "relation": "renders",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "tools/roadmap_viewer.html",
+          "line": 4749,
+          "contains": "function renderExplicitGraph",
+          "note": "renders the explicit lane graph"
+        }
+      ]
+    },
+    {
+      "id": "generator-tests-guard-cli",
+      "from": "generator-tests",
+      "to": "codemap-cli",
+      "relation": "guards",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "tests/test_generate_codemap.py",
+          "line": 135,
+          "contains": "self.assertEqual(writes",
+          "note": "asserts coherent triad and lock-last ordering"
+        }
+      ]
+    },
+    {
+      "id": "viewer-tests-guard-model",
+      "from": "viewer-tests",
+      "to": "viewer-model",
+      "relation": "guards",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "tests/codemap-viewer.test.mjs",
+          "line": 67,
+          "contains": "codemap adapter keeps lane order",
+          "note": "asserts lane order and evidence-backed predicates"
+        }
+      ]
+    },
+    {
+      "id": "viewer-tests-guard-ui",
+      "from": "viewer-tests",
+      "to": "viewer-ui",
+      "relation": "guards",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "tests/codemap-viewer.test.mjs",
+          "line": 137,
+          "contains": "codemap polish keeps metrics",
+          "note": "asserts visible metrics, state labels, direction markers, and selection semantics"
+        }
+      ]
+    },
+    {
+      "id": "viewer-opens-in-host",
+      "from": "viewer-ui",
+      "to": "host-browser",
+      "relation": "opens beside Codex",
+      "status": "unknown",
+      "reason": "The repository documents shell open, but host placement behavior has no stable repository-level API evidence.",
+      "evidence": []
+    }
+  ],
+  "version": 1,
+  "kind": "codemap",
+  "generatedAt": "2026-08-05T15:01:18.790671+00:00",
+  "sourceFingerprint": "7fcc2b7fa68104d423e06aa8be26624605cf694267f11626d9b1b95f75f68c46",
+  "counts": {
+    "lanes": 5,
+    "nodes": 11,
+    "edges": 13,
+    "unknown": 1
+  }
+}

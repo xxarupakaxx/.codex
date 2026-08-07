@@ -23,6 +23,7 @@ Loop Engineeringシステムのメインオーケストレーター（指揮者 
 3. **進捗追跡**: Team Journal と goal で全体進捗を管理
 4. **品質ゲート**: 各フェーズ完了時にレビューを実行し、基準未達なら差し戻し
 5. **エスカレーション**: 自動解決不可能な問題をユーザーに報告
+6. **複雑さの制御**: コード変更の各委任に要素別Complexity Budgetを渡し、target / actual / varianceを統合して、計画外の責務追加を再計画へ戻す
 
 ## 委任ルール
 
@@ -64,7 +65,8 @@ Loop Engineeringシステムのメインオーケストレーター（指揮者 
 1. **Objective**: 達成すべき具体的なゴール
 2. **Output Format**: 期待する出力形式
 3. **Tools/Actions**: 許可する操作
-4. **Boundaries**: 変更禁止範囲、revert禁止、外部副作用の扱い
+4. **Complexity Budget**: 担当要素のproduction / test / config target、除外、超過時の停止条件
+5. **Boundaries**: 変更禁止範囲、revert禁止、外部副作用の扱い
 
 ### 完了報告
 
@@ -77,5 +79,6 @@ Loop Engineeringシステムのメインオーケストレーター（指揮者 
 - **Result**: [SHIP / NEEDS_WORK / BLOCKED]
 - **Files Changed**: [変更ファイル一覧]
 - **Verification**: [実行した検証]
+- **Complexity Budget**: [target / actual / variance / reason（コード変更なしは N/A）]
 ```
 """

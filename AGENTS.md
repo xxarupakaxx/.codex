@@ -84,6 +84,7 @@ LLM コーディングで陥りがちな失敗を減らすための行動規範�
    - 起こり得ないシナリオへのエラーハンドリングを書かない
    - 200 行で書いたものが 50 行で済むなら書き直す
    - Senior engineer test: シニアが見て「複雑すぎる」と言うなら simplify
+   - コード変更では `.codex/rules/complexity-budget.md` の要素別LOCレンジをソフト目標として計画・実測し、超過時は削減検討または根拠記録を行う（コードゴルフは禁止）
 
 3. **Surgical Changes** — 触るべき場所だけ触る・自分が出したゴミだけ片付ける
    - 既存コード・コメント・フォーマットを「ついでに」改善しない
@@ -99,6 +100,10 @@ LLM コーディングで陥りがちな失敗を減らすための行動規範�
 **4原則が機能している兆候**: diff に不要な変更が少ない／過剰実装による書き直しが減る／質問が実装前に来る／PR が小さくクリーン
 
 **注意**: 些末タスク（typo 修正・自明な 1 行変更）にはこの規範を厳格適用しない。判断で使い分ける。
+
+## 実装複雑さのソフト予算
+
+コード変更の詳細規約は `.codex/rules/complexity-budget.md` を正本とする。Phase 2の計画に要素別のproduction / test / config・migration target、信頼度、根拠、超過時の再計画条件を置き、Phase 3でactual、Phase 4でvarianceを確認する。数値はハード上限ではなく、要求外の機能・不要な抽象化・責務追加を発見するための観測値である。必要な安全性、可読性、テストを行数合わせのために削らない。
 
 ## 作業フロー
 
@@ -119,6 +124,8 @@ B. **Blueprint（大規模タスクのみ）**: 多セッション・多PRの設
 詳細: Readで `@context/workflow-rules.md` を参照すること
 
 ## レビュー方法（CRITICAL）
+
+コード変更のレビューでは、計画の要素別targetと実測actualを照合し、`within target` / `justified variance` / `scope drift` を記録する。行数だけで機械的に拒否せず、受入基準との対応と削減可能な責務を確認し、詳細は `.codex/rules/complexity-budget.md` に従う。
 
 **レビューは fresh な直接検証を先に行い、変更リスクと Delegation Gate に応じて最小の独立 checker を選ぶ。**
 - severity は **CRITICAL / IMPORTANT / MINOR** の 3 階級
@@ -150,6 +157,13 @@ B. **Blueprint（大規模タスクのみ）**: 多セッション・多PRの設
   - SessionStartHookで過去メモリをFTS5検索→コンテキスト自動注入
   - memories/solutions/のMarkdownは自動的にSQLiteにインデックス同期
 
+## コード変更前のCodemap preflight
+
+- コードを変更するtaskでは、最初の編集前にworkspace rootの `codemap.json` / `codemap.html` / `codemap.lock` を探し、`context/codemap.md` の手順で `check` と地図読込を行う。
+- missing / stale / mismatch、または対象のcaller・impact・guarding testを地図から答えられない場合は、read-only調査で `codemap.source.json` を更新し、三点をrefreshしてfreshになるまでproduction codeを編集しない。
+- verified edgeは実在するrepo-relative path + line evidence必須。確証が取れない関係は `unknown` + reasonとし、推測でverifiedの線を引かない。
+- code変更後も三点を同じrefreshで更新してcheckする。コードを変更しないtaskは対象外。
+
 ## ライブロードマップ表示
 
 - 複数Phaseのworkflowを実行する場合は、`viewing-plans` スキルを併走させる。
@@ -175,6 +189,8 @@ B. **Blueprint（大規模タスクのみ）**: 多セッション・多PRの設
 - 命名: feature/<issue_num>-<title>
 
 ## 最終ステップ
+
+コード変更の完了報告には `target / actual / variance / reason` のComplexity Budget要約を含める。コード変更がない場合は `Complexity Budget: N/A (non-code)` と明記する。
 
 **IMPORTANT**: タスク完了後は必ず以下を実行:
 1. 品質チェック（PJ CLAUDE.md参照）

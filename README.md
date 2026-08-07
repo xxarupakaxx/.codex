@@ -67,3 +67,22 @@ PRD writing, and issue splitting, and model-invoked disciplines, such as
 
 Superpowers remains available as a strong option, but it is no longer treated
 as the default route for every non-trivial task.
+
+## Codemap preflight
+
+Code-changing tasks use a workspace-side evidence map before the first edit:
+
+- `codemap.json` is the AI-readable topology.
+- `codemap.html` is the human-readable graph and inspector.
+- `codemap.lock` records source, map, template, and HTML fingerprints.
+
+Author the map in `codemap.source.json`, then generate all three outputs together:
+
+```bash
+python3 scripts/generate-codemap.py refresh --root <workspace-root> --input codemap.source.json
+python3 scripts/generate-codemap.py check --root <workspace-root>
+```
+
+Verified relations require repository path and line evidence. Unproven relations
+remain explicit `unknown` edges with a reason. See `context/codemap.md` for the
+preflight, freshness, and Roadmap/Codemap separation contracts.
