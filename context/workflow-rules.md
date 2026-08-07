@@ -143,7 +143,7 @@ route が明確な大規模タスクで、依存DAG、Cold-Start Brief、また�
 5. **Phase 4**: lint/format/typecheck + **コア1レビューアー**（変更内容に最も関連するもの1つ）で1ラウンド。target/actual/varianceを確認
 6. **Phase 5**: Complexity Budgetのtarget/actual/varianceを含む簡潔な完了報告
 
-**IMPORTANT**: Fast Track適用はユーザーへの確認後に行う。判断に迷う場合は通常フロー。
+**IMPORTANT**: Fast Track条件を満たし、User Validation Gateの確認条件に該当しない場合は、ユーザー確認なしで適用する。判断に迷う場合は通常フロー。
 
 ## Phase 0: 準備
 
@@ -299,15 +299,17 @@ Delegation Gate を通る場合だけ、変更リスクに対応する最小の 
 
 ### User Validation Gate
 
-計画の承認をユーザーに確認してからPhase 2.5に進む。
+ユーザー確認は、外部への送信・公開、不可逆な削除や上書き、権限・課金・認証の変更、依頼範囲を実質的に変える選択、または安全に発見できない重要情報がある場合だけ必要とする。
 
-Phase 2.5でのSprint Contract初回作成は、承認済み計画を検証可能に具体化する工程であり、それ自体では再承認を要求しない。承認後に spec、ticket、計画、Sprint Contract の Goal outcome、品質属性、scope、evidence obligation を追加、削除、または意味変更する場合は、実装前にこの Gate を再通過する。誤字や意味を変えない参照修正だけなら再承認は不要。
+通常のローカル変更では、ユーザーの実行依頼を計画と実装の承認として扱う。計画・Sprint Contract・レビュー結果は進捗共有であり、確認待ちの停止点ではない。ユーザーが明示的に「調査だけ」「計画だけ」「実装前に確認」と指定した場合だけ、そこで停止する。
+
+Phase 2.5でのSprint Contract初回作成は、依頼済みの計画を検証可能に具体化する工程であり、それ自体では確認を要求しない。依頼範囲を実質的に変更する追加・削除・意味変更が生じた場合だけ、実装前にこの Gate を通過する。誤字や意味を変えない参照修正だけなら確認は不要。
 
 ## Phase 2.5: Acceptance Criteria定義（Sprint Contract）
 
 **背景**: Anthropic研究 "Harness Design for Long-Running Apps" により、実装前にテスト可能な成功基準を定義することで品質が大幅に向上することが判明。
 
-計画承認後、実装開始前に以下を実施:
+計画の具体化後、実装開始前に以下を実施:
 
 1. **合格基準リストの作成**: 各タスクに対して具体的・テスト可能な完了条件を定義
    - 「〜が動作する」ではなく「〜の入力に対して〜が返される」レベルの具体性
@@ -383,7 +385,7 @@ PJ `AGENTS.md` / `context` 記載のコマンドで lint/format/typecheck/test �
 
 Goal を使う作業は、未対応 Goal outcome が0であることと、統合成果物の holistic check がPASSしていることを確認する。個別 acceptance criterion が全件PASSでも、holistic check がFAILなら完了扱いにしない。
 
-不合格時は症状が出た最下流ではなく、原因を持つ最上流の Goal、Spec、Ticket、Implementation へ戻す。Goal を material に変更する場合は変更案を Goal Quality Gate で再監査し、その後に User Validation Gate を再通過する。承認済み Phase 2 artifact を material に変更する場合も User Validation Gate を再通過する。
+不合格時は症状が出た最下流ではなく、原因を持つ最上流の Goal、Spec、Ticket、Implementation へ戻す。Goal を material に変更する場合は変更案を Goal Quality Gate で再監査し、User Validation Gate の確認条件に該当する場合だけ再通過する。Phase 2 artifact を material に変更する場合も同じ条件を適用し、通常のローカル変更は確認待ちにしない。
 
 ### Playwright E2Eスモークテスト（UI変更を含む場合）
 Tier 2レビューアー選択ガイドの「Playwright E2Eスモークテスト」セクションに従い実施。
