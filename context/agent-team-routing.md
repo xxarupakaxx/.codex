@@ -121,7 +121,8 @@ Tracker、triage label、domain doc layout が hard dependency の route で設�
 Route 選択だけでは、次の操作を許可しない。
 
 - issue / PR / comment / label、Slack 等の対人送信、Calendar、Drive、production deploy、secret store の更新。
-- `git commit` / `git push`。明示された project policy またはユーザー承認に従う。
+- `git push` と PR 作成。明示された project policy またはユーザー承認に従う。
+- `git commit` は、実装・修正依頼に対して検証が成功し、project policy に禁止がなければ標準の完了手順として行う。
 - prototype branch や tracker artifact の作成。decision evidence と production artifact を分ける。
 
 権限errorやcontext不一致を、別 principal / company / profile への自動切替で回避しない。読み取り診断も現在の principal を明示し、切替が必要なら停止してユーザー確認を取る。sub-agent / runner / plugin へ secret 実値、secret reference、認証済みsession情報を渡さない。
