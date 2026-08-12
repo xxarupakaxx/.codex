@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "kind": "codemap-lock",
-  "generatedAt": "2026-08-12T15:21:29.841703+00:00",
+  "generatedAt": "2026-08-12T15:36:02.373540+00:00",
   "sourceFile": "codemap.source.json",
   "sourceSpecFingerprint": "9cadbd96014f05297343b4393f781428c8920b3b367328901f2039042c6f63f4",
-  "sourceFingerprint": "22ffb3f608a31907b63685cbfd3cb544a8bbce3da2210657b494efed6625fdb3",
+  "sourceFingerprint": "8d5e60f53dcc49ee80932186cd55e006e05f280e432e0e3c71ca30e0e110780b",
   "templateFingerprint": "9fe5b7020dbeb7edcf458fd3c7f707be2e8d892563108a2c13ed11c7aeaba0ad",
-  "mapFingerprint": "2b00a00a548df57b2a8478ba08753a268880a5860b74afec6cef2303a8649db5",
-  "htmlFingerprint": "bfd50f31edb923548f359b2182c0abbab0bffa7921eab3b31641a27f00eb4ee5",
+  "mapFingerprint": "e896e5772106671df0b698ed01515351e9def232655755c68d0290074ac4ea08",
+  "htmlFingerprint": "cc5f25128b93d6dac1bb1138d4494bc708e6406e615aa177620a89dfd34dce16",
   "sourceManifest": [
     {
       "path": "AGENTS.md",
@@ -36,7 +36,7 @@
     },
     {
       "path": "governance/profiles/vault-wsl/estate.lock.json",
-      "sha256": "563785a48e0a79520e5c1965b19ffcf63f04cff94ee1b90b1805efc066cc8143",
+      "sha256": "7df7ec185717c7355b45dce81d08233cb05282e6dce4ef01c4d5d3e97399ed5c",
       "size": 92616
     },
     {
@@ -86,8 +86,8 @@
     },
     {
       "path": "skills/skill-governance/scripts/test_governance.py",
-      "sha256": "a8fa07469d37d35039d9d0839933bfe10636b5eb67dc318f4ef8dc711d4e641a",
-      "size": 112248
+      "sha256": "b7e640d085579d0ee831d3b893ae6f6ca48fb43412ce559eb4db38203bf5be78",
+      "size": 112938
     },
     {
       "path": "skills/viewing-plans/SKILL.md",
