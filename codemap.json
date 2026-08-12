@@ -8,6 +8,12 @@
       "README.md",
       "context/codemap.md",
       "context/workflow-rules.md",
+      "governance/profiles/vault-wsl/*",
+      "skills/diagram-design/*",
+      "skills/skill-governance/registry.toml",
+      "skills/skill-governance/scripts/governance.py",
+      "skills/skill-governance/scripts/test_governance.py",
+      "skills/visualizing-work/SKILL.md",
       "skills/viewing-plans/SKILL.md",
       "scripts/generate-*.py",
       "tools/roadmap_viewer.html",
@@ -41,6 +47,11 @@
       "id": "verification",
       "title": "Verification",
       "order": 4
+    },
+    {
+      "id": "governance",
+      "title": "Skill Governance",
+      "order": 5
     }
   ],
   "nodes": [
@@ -59,6 +70,22 @@
       "lane": "entrypoints",
       "path": "context/codemap.md",
       "summary": "Defines the triad, evidence schema, unknown state, and pre/post edit checks."
+    },
+    {
+      "id": "visualizing-work",
+      "title": "visualizing-work",
+      "kind": "entrypoint",
+      "lane": "entrypoints",
+      "path": "skills/visualizing-work/SKILL.md",
+      "summary": "Chooses a representation from the reader's question before selecting a specialized output owner."
+    },
+    {
+      "id": "diagram-design",
+      "title": "diagram-design static adapter",
+      "kind": "module",
+      "lane": "entrypoints",
+      "path": "skills/diagram-design/SKILL.md",
+      "summary": "Produces only an optional task-local static explanation after representation selection."
     },
     {
       "id": "viewing-plans",
@@ -130,9 +157,70 @@
       "lane": "verification",
       "path": "tests/codemap-viewer.test.mjs",
       "summary": "Guards lanes, evidence, unknown relations, and Roadmap compatibility."
+    },
+    {
+      "id": "governance-profile",
+      "title": "Vault WSL governance profile",
+      "kind": "module",
+      "lane": "governance",
+      "path": "governance/profiles/vault-wsl/registry.toml",
+      "summary": "Declares the WSL Codex and Claude roots, local adapter provenance, and sibling lock sidecars."
+    },
+    {
+      "id": "governance-audit",
+      "title": "Governance audit entrypoint",
+      "kind": "entrypoint",
+      "lane": "governance",
+      "path": "skills/skill-governance/scripts/governance.py",
+      "summary": "Loads the registry before audit and stops when its validation is blocking."
+    },
+    {
+      "id": "governance-validator",
+      "title": "Registry validator",
+      "kind": "module",
+      "lane": "governance",
+      "path": "skills/skill-governance/scripts/governance.py",
+      "summary": "Validates runtime roots and the exact estate hash normalization coverage."
+    },
+    {
+      "id": "governance-registry",
+      "title": "Governance registry",
+      "kind": "module",
+      "lane": "governance",
+      "path": "skills/skill-governance/registry.toml",
+      "summary": "Declares the global runtime roots and their control-file hash normalizations."
+    },
+    {
+      "id": "governance-tests",
+      "title": "Governance regression tests",
+      "kind": "test",
+      "lane": "governance",
+      "path": "skills/skill-governance/scripts/test_governance.py",
+      "summary": "Guards registry validation and its fail-closed lifecycle behavior."
     }
   ],
   "edges": [
+    {
+      "id": "visualizing-work-routes-diagram-design",
+      "from": "visualizing-work",
+      "to": "diagram-design",
+      "relation": "routes",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "skills/visualizing-work/SKILL.md",
+          "line": 87,
+          "contains": "`diagram-design` static editorial sidecar",
+          "note": "selects the adapter only when a specialized owner does not own the artifact"
+        },
+        {
+          "path": "skills/visualizing-work/SKILL.md",
+          "line": 124,
+          "contains": "never replaces another skill's canonical output",
+          "note": "keeps canonical owners authoritative"
+        }
+      ]
+    },
     {
       "id": "agent-delegates-contract",
       "from": "agent-preflight",
@@ -327,16 +415,163 @@
       "status": "unknown",
       "reason": "The repository documents shell open, but host placement behavior has no stable repository-level API evidence.",
       "evidence": []
+    },
+    {
+      "id": "governance-audit-loads-validator",
+      "from": "governance-audit",
+      "to": "governance-validator",
+      "relation": "loads through",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "skills/skill-governance/scripts/governance.py",
+          "line": 901,
+          "contains": "return data, validate_registry(data)",
+          "note": "registry loading delegates to validate_registry"
+        },
+        {
+          "path": "skills/skill-governance/scripts/governance.py",
+          "line": 3951,
+          "contains": "registry, findings = load_registry(registry_path)",
+          "note": "audit starts with the validated registry"
+        }
+      ]
+    },
+    {
+      "id": "governance-profile-configures-validator",
+      "from": "governance-profile",
+      "to": "governance-validator",
+      "relation": "configures",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "governance/profiles/vault-wsl/registry.toml",
+          "line": 33,
+          "contains": "[[estate_hash_normalizations]]",
+          "note": "the profile declares two-root normalization"
+        },
+        {
+          "path": "skills/skill-governance/scripts/governance.py",
+          "line": 1049,
+          "contains": "for entry in data.get(\"estate_hash_normalizations\"",
+          "note": "the validator reads each normalization declaration"
+        }
+      ]
+    },
+    {
+      "id": "governance-registry-configures-validator",
+      "from": "governance-registry",
+      "to": "governance-validator",
+      "relation": "configures",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "skills/skill-governance/registry.toml",
+          "line": 41,
+          "contains": "[[estate_hash_normalizations]]",
+          "note": "the registry declares control-file normalizations"
+        },
+        {
+          "path": "skills/skill-governance/scripts/governance.py",
+          "line": 1049,
+          "contains": "for entry in data.get(\"estate_hash_normalizations\"",
+          "note": "the validator reads that declaration"
+        }
+      ]
+    },
+    {
+      "id": "governance-tests-guard-audit",
+      "from": "governance-tests",
+      "to": "governance-audit",
+      "relation": "guards",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "skills/skill-governance/scripts/test_governance.py",
+          "line": 852,
+          "contains": "def test_audit_uses_registry_sibling_sidecars_by_default",
+          "note": "guards profile sidecar selection"
+        },
+        {
+          "path": "skills/skill-governance/scripts/test_governance.py",
+          "line": 904,
+          "contains": "def test_local_static_adapter_audit_binds_source_runtime_and_boundary",
+          "note": "guards the source pin, runtime hash, and static boundary"
+        }
+      ]
+    },
+    {
+      "id": "governance-tests-guard-validator",
+      "from": "governance-tests",
+      "to": "governance-validator",
+      "relation": "guards",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "skills/skill-governance/scripts/test_governance.py",
+          "line": 791,
+          "contains": "governance.load_registry(governance.DEFAULT_REGISTRY)",
+          "note": "the test fixture loads the production registry through validation"
+        },
+        {
+          "path": "skills/skill-governance/scripts/test_governance.py",
+          "line": 798,
+          "contains": "def test_estate_hash_normalization_requires_codex_claude_and_declared_vault_codex",
+          "note": "the regression test guards scoped normalization strictness"
+        }
+      ]
+    },
+    {
+      "id": "governance-profile-binds-static-adapter",
+      "from": "governance-profile",
+      "to": "diagram-design",
+      "relation": "pins and parity-checks",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "governance/profiles/vault-wsl/registry.toml",
+          "line": 215,
+          "contains": "[[local_origins]]",
+          "note": "declares the local static adapter origin"
+        },
+        {
+          "path": "governance/profiles/vault-wsl/registry.toml",
+          "line": 223,
+          "contains": "runtime_tree_sha256",
+          "note": "pins identical runtime adapter trees"
+        }
+      ]
+    },
+    {
+      "id": "governance-audit-enforces-static-adapter",
+      "from": "governance-audit",
+      "to": "diagram-design",
+      "relation": "enforces boundary",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "skills/skill-governance/scripts/governance.py",
+          "line": 1711,
+          "contains": "def audit_local_static_adapters",
+          "note": "audits the minimal static adapter tree and provenance"
+        },
+        {
+          "path": "skills/skill-governance/scripts/governance.py",
+          "line": 3966,
+          "contains": "findings.extend(audit_local_static_adapters(registry))",
+          "note": "audit fails closed when the adapter boundary drifts"
+        }
+      ]
     }
   ],
   "version": 1,
   "kind": "codemap",
-  "generatedAt": "2026-08-05T15:01:18.790671+00:00",
-  "sourceFingerprint": "7fcc2b7fa68104d423e06aa8be26624605cf694267f11626d9b1b95f75f68c46",
+  "generatedAt": "2026-08-12T15:21:29.841703+00:00",
+  "sourceFingerprint": "22ffb3f608a31907b63685cbfd3cb544a8bbce3da2210657b494efed6625fdb3",
   "counts": {
-    "lanes": 5,
-    "nodes": 11,
-    "edges": 13,
+    "lanes": 6,
+    "nodes": 18,
+    "edges": 21,
     "unknown": 1
   }
 }
