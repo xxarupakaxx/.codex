@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "kind": "codemap-lock",
-  "generatedAt": "2026-08-12T15:36:02.373540+00:00",
+  "generatedAt": "2026-08-14T00:28:34.998492+00:00",
   "sourceFile": "codemap.source.json",
-  "sourceSpecFingerprint": "9cadbd96014f05297343b4393f781428c8920b3b367328901f2039042c6f63f4",
-  "sourceFingerprint": "8d5e60f53dcc49ee80932186cd55e006e05f280e432e0e3c71ca30e0e110780b",
+  "sourceSpecFingerprint": "3fbe33cb2d5bf32864590a5a934d2b77a319f6b9af5b87741fb674402922862e",
+  "sourceFingerprint": "53871da43796466aabc438ce19dafccb993fef69666650f8fd7964a8e77fe169",
   "templateFingerprint": "9fe5b7020dbeb7edcf458fd3c7f707be2e8d892563108a2c13ed11c7aeaba0ad",
-  "mapFingerprint": "e896e5772106671df0b698ed01515351e9def232655755c68d0290074ac4ea08",
-  "htmlFingerprint": "cc5f25128b93d6dac1bb1138d4494bc708e6406e615aa177620a89dfd34dce16",
+  "mapFingerprint": "44dc8b0f5d4270a97d3aa651fab5a4a5f1eac31376863e853da4b5dbe1b26cb5",
+  "htmlFingerprint": "7a60e8e371c9c77f55bcd5d0ace3bd1cfa6a2996f66e3833bda0715bf51b4135",
   "sourceManifest": [
     {
       "path": "AGENTS.md",
@@ -31,22 +31,22 @@
     },
     {
       "path": "governance/profiles/vault-wsl/catalog.lock.json",
-      "sha256": "817a64bd53fe6bef79c8bc8d3331a305b054d7b0436ed06ed3112e77fca1eb6d",
+      "sha256": "085d587b0f3b80b20d00ad0ddaf9001e5ce24dee920815515b5a6d31892914c4",
       "size": 1381
     },
     {
       "path": "governance/profiles/vault-wsl/estate.lock.json",
-      "sha256": "7df7ec185717c7355b45dce81d08233cb05282e6dce4ef01c4d5d3e97399ed5c",
+      "sha256": "54a6f22510d22378cfd72f4356f645dd4e9fa711f7247970bf0a7505880702e2",
       "size": 92616
     },
     {
       "path": "governance/profiles/vault-wsl/registry.lock.json",
-      "sha256": "0bfeb1dbe8a9f55902fdb883c55e9d9c24f9d0335a25dbeda9b42389335bd7b6",
+      "sha256": "014db8b830b631213e56ced10c8e44b2bdc0c5732e7c487247d31fcdfa5c8970",
       "size": 229
     },
     {
       "path": "governance/profiles/vault-wsl/registry.toml",
-      "sha256": "3df0a218713bc5421ec62fef30b0a440916b2b8a3820ff2ff9a0b3576cb41e39",
+      "sha256": "32e0294ff0776b60e6303be854b3efae01ae772ab739633ecd38e49341800b4b",
       "size": 7597
     },
     {
@@ -66,13 +66,18 @@
     },
     {
       "path": "skills/diagram-design/SKILL.md",
-      "sha256": "8305b6c460fcbb82ee55b21dd471dbf9be59ca420e4c773bf1ef521d71782a41",
-      "size": 3026
+      "sha256": "62eca0a7295a000d233503f66a04446822808d9d906866efd6a8d5bf2baf6073",
+      "size": 3273
     },
     {
       "path": "skills/diagram-design/UPSTREAM.md",
       "sha256": "270c7006038603388abb3c4cbf9ae18abca9201ff5bfb5b22a180d32684ea27d",
       "size": 974
+    },
+    {
+      "path": "skills/generate-state-diagram/SKILL.md",
+      "sha256": "f52fe290f7efaf98ffe96068472533af163ab9c19455f1eeea8b33f9fbec80eb",
+      "size": 16628
     },
     {
       "path": "skills/skill-governance/registry.toml",
@@ -86,8 +91,8 @@
     },
     {
       "path": "skills/skill-governance/scripts/test_governance.py",
-      "sha256": "b7e640d085579d0ee831d3b893ae6f6ca48fb43412ce559eb4db38203bf5be78",
-      "size": 112938
+      "sha256": "37afb6d3c9e31225a0b46546a09ae0351bff9114c89df52c1e350857d71bf81e",
+      "size": 114222
     },
     {
       "path": "skills/viewing-plans/SKILL.md",
@@ -96,8 +101,8 @@
     },
     {
       "path": "skills/visualizing-work/SKILL.md",
-      "sha256": "efdaa1a6d1417d9f2ae9e6570547918a328f6ca24c082268515d156c4c69a1dd",
-      "size": 6332
+      "sha256": "03ddca4e54c1e2a22bd9e700afb0af24e9fd19d6939b4f69c68f4d2596d53349",
+      "size": 6482
     },
     {
       "path": "tests/codemap-viewer.test.mjs",

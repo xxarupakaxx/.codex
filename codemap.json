@@ -10,6 +10,7 @@
       "context/workflow-rules.md",
       "governance/profiles/vault-wsl/*",
       "skills/diagram-design/*",
+      "skills/generate-state-diagram/SKILL.md",
       "skills/skill-governance/registry.toml",
       "skills/skill-governance/scripts/governance.py",
       "skills/skill-governance/scripts/test_governance.py",
@@ -86,6 +87,14 @@
       "lane": "entrypoints",
       "path": "skills/diagram-design/SKILL.md",
       "summary": "Produces only an optional task-local static explanation after representation selection."
+    },
+    {
+      "id": "generate-state-diagram",
+      "title": "generate-state-diagram",
+      "kind": "entrypoint",
+      "lane": "entrypoints",
+      "path": "skills/generate-state-diagram/SKILL.md",
+      "summary": "Owns the canonical Mermaid state and flow artifacts for a task."
     },
     {
       "id": "viewing-plans",
@@ -210,14 +219,80 @@
         {
           "path": "skills/visualizing-work/SKILL.md",
           "line": 87,
-          "contains": "`diagram-design` static editorial sidecar",
-          "note": "selects the adapter only when a specialized owner does not own the artifact"
+          "contains": "or `generate-state-diagram` has completed `91_state_diagram.*` and a distinct reader question remains",
+          "note": "permits the specialized-owner exception only after the state-diagram canonical artifact is complete"
         },
         {
           "path": "skills/visualizing-work/SKILL.md",
           "line": 124,
-          "contains": "never replaces another skill's canonical output",
-          "note": "keeps canonical owners authoritative"
+          "contains": "the sidecar supplements its canonical output and never duplicates state or flow diagrams.",
+          "note": "keeps the state-diagram owner authoritative"
+        }
+      ]
+    },
+    {
+      "id": "visualizing-work-routes-state-diagram",
+      "from": "visualizing-work",
+      "to": "generate-state-diagram",
+      "relation": "routes",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "skills/visualizing-work/SKILL.md",
+          "line": 122,
+          "contains": "Use `generate-state-diagram` when the chosen representation",
+          "note": "routes canonical state and flow requests to the specialized owner"
+        }
+      ]
+    },
+    {
+      "id": "diagram-design-defers-state-diagram",
+      "from": "diagram-design",
+      "to": "generate-state-diagram",
+      "relation": "defers canonical output to",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "skills/diagram-design/SKILL.md",
+          "line": 51,
+          "contains": "`generate-state-diagram` owns canonical static state and flow artifacts.",
+          "note": "keeps the canonical state and flow artifact with its specialized owner"
+        }
+      ]
+    },
+    {
+      "id": "state-diagram-conditionally-invokes-editorial-companion",
+      "from": "generate-state-diagram",
+      "to": "diagram-design",
+      "relation": "conditionally invokes",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "skills/generate-state-diagram/SKILL.md",
+          "line": 208,
+          "contains": "`91_state_diagram.md` と `91_state_diagram.html` を先に完成させる。",
+          "note": "completes the canonical artifact before any companion selection"
+        },
+        {
+          "path": "skills/generate-state-diagram/SKILL.md",
+          "line": 212,
+          "contains": "`visualizing-work` を経て `diagram-design` を呼び",
+          "note": "calls the editorial adapter only through representation selection"
+        }
+      ]
+    },
+    {
+      "id": "governance-tests-guard-state-diagram-companion",
+      "from": "governance-tests",
+      "to": "generate-state-diagram",
+      "relation": "guards",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "skills/skill-governance/scripts/test_governance.py",
+          "line": 2087,
+          "contains": "def test_state_diagram_companion_contract_preserves_canonical_owner",
+          "note": "guards canonical-first ordering, distinct-reader selection, and non-duplication"
         }
       ]
     },
@@ -566,12 +641,12 @@
   ],
   "version": 1,
   "kind": "codemap",
-  "generatedAt": "2026-08-12T15:36:02.373540+00:00",
-  "sourceFingerprint": "8d5e60f53dcc49ee80932186cd55e006e05f280e432e0e3c71ca30e0e110780b",
+  "generatedAt": "2026-08-14T00:28:34.998492+00:00",
+  "sourceFingerprint": "53871da43796466aabc438ce19dafccb993fef69666650f8fd7964a8e77fe169",
   "counts": {
     "lanes": 6,
-    "nodes": 18,
-    "edges": 21,
+    "nodes": 19,
+    "edges": 25,
     "unknown": 1
   }
 }
