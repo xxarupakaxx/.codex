@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "kind": "codemap-lock",
-  "generatedAt": "2026-08-14T00:28:34.998492+00:00",
+  "generatedAt": "2026-08-14T00:41:56.372736+00:00",
   "sourceFile": "codemap.source.json",
   "sourceSpecFingerprint": "3fbe33cb2d5bf32864590a5a934d2b77a319f6b9af5b87741fb674402922862e",
-  "sourceFingerprint": "53871da43796466aabc438ce19dafccb993fef69666650f8fd7964a8e77fe169",
+  "sourceFingerprint": "a4e2d1126d35d74b99c471f805502b426c21a7eeacba98fc0272372ad86b50fa",
   "templateFingerprint": "9fe5b7020dbeb7edcf458fd3c7f707be2e8d892563108a2c13ed11c7aeaba0ad",
-  "mapFingerprint": "44dc8b0f5d4270a97d3aa651fab5a4a5f1eac31376863e853da4b5dbe1b26cb5",
-  "htmlFingerprint": "7a60e8e371c9c77f55bcd5d0ace3bd1cfa6a2996f66e3833bda0715bf51b4135",
+  "mapFingerprint": "77a1ba6cdf8a4520b4f97d81c62d4c0e95d2cc0710546ffa578b6a6682105a60",
+  "htmlFingerprint": "86c5443ecb3dd435b28b8f3852a737294bc0537abac3735edbf479be2a85198a",
   "sourceManifest": [
     {
       "path": "AGENTS.md",
@@ -31,22 +31,22 @@
     },
     {
       "path": "governance/profiles/vault-wsl/catalog.lock.json",
-      "sha256": "085d587b0f3b80b20d00ad0ddaf9001e5ce24dee920815515b5a6d31892914c4",
+      "sha256": "eab53a6d12cd38c81c2db71f39025b14ace751af9ab71879314750d166ef4a50",
       "size": 1381
     },
     {
       "path": "governance/profiles/vault-wsl/estate.lock.json",
-      "sha256": "54a6f22510d22378cfd72f4356f645dd4e9fa711f7247970bf0a7505880702e2",
+      "sha256": "1cf2312ae956befbe7d497c8306b5fed9be25ee819c4dd60af35c25fdb964d19",
       "size": 92616
     },
     {
       "path": "governance/profiles/vault-wsl/registry.lock.json",
-      "sha256": "014db8b830b631213e56ced10c8e44b2bdc0c5732e7c487247d31fcdfa5c8970",
+      "sha256": "ca8f2cfa5004c01296ef30af16477746c5c56c2d834d3508311ba391c17868e8",
       "size": 229
     },
     {
       "path": "governance/profiles/vault-wsl/registry.toml",
-      "sha256": "32e0294ff0776b60e6303be854b3efae01ae772ab739633ecd38e49341800b4b",
+      "sha256": "3fcefdfc915b6699f1097e0f62f1fe2a305aa078348b22d46dbcd240d14aa183",
       "size": 7597
     },
     {
