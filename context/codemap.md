@@ -1,10 +1,10 @@
 # Codemap preflight
 
-Codemapは、コード変更へ着手する前に読むworkspace単位の根拠付き地図である。taskの進行を示すRoadmapとは正本、鮮度、更新頻度を分ける。
+Codemapは、コード変更へ着手する前に読むtask単位の根拠付き地図である。workspaceのコードを検証対象とするが、taskの調査範囲と証跡としてtask memory directoryへ保存する。taskの進行を示すRoadmapとは正本、鮮度、更新頻度を分ける。
 
 ## 三点セット
 
-workspace rootに次の3 fileを置く。
+`${MEMORY_DIR}/memory/YYMMDD_<task_name>/` に次の3 fileを置く。workspace rootやgit管理対象には置かない。
 
 - `codemap.json`: AIが読む正本。scope、lane、node、edge、evidenceを保持する。
 - `codemap.html`: 同じJSON payloadを埋め込んだ人向けのself-contained地図。
@@ -12,17 +12,19 @@ workspace rootに次の3 fileを置く。
 
 三点は `scripts/generate-codemap.py refresh` だけで更新する。個別手編集しない。JSONとHTMLを同一filesystem上のtemporary fileからatomic replaceし、lockを最後に置く。途中失敗後はold lockとnew outputが一致せず、次のcheckが失敗する。
 
-authoring sourceは `codemap.source.json` とする。これは三点セットに含めず、lockへbytes fingerprintを記録する。source定義を変えたままrefreshしなければstaleである。
+authoring sourceは同じtask memory directoryの `codemap.source.json` とする。これは三点セットに含めず、lockへbytes fingerprintを記録する。source定義を変えたままrefreshしなければstaleである。
 
 ## 着手前preflight
 
 コードを変更するtaskでは、最初の編集前に次を順番に行う。
 
-1. 対象fileのGit/workspace rootを確定し、rootの `codemap.lock` と `codemap.json` を探す。
+1. 対象fileのGit/workspace rootと現在taskのmemory directoryを確定し、task memory directoryの `codemap.lock` と `codemap.json` を探す。
 2. 三点があれば次を実行する。
 
    ```bash
-   python3 ~/.codex/scripts/generate-codemap.py check --root <workspace-root>
+   python3 ~/.codex/scripts/generate-codemap.py check \
+     --root <workspace-root> \
+     --artifact-dir <task-memory-directory>
    ```
 
 3. freshなら `codemap.json` を読み、対象nodeのincoming caller、outgoing impact、`guards` / `tests` relation、各edgeのevidenceを確認する。
@@ -43,14 +45,18 @@ authoring sourceは `codemap.source.json` とする。これは三点セット�
 # codemap.source.jsonを検証し、三点を同期生成
 python3 ~/.codex/scripts/generate-codemap.py refresh \
   --root <workspace-root> \
-  --input codemap.source.json
+  --artifact-dir <task-memory-directory> \
+  --input <task-memory-directory>/codemap.source.json
 
 # 三点、authoring source、template、現在sourceを再照合
 python3 ~/.codex/scripts/generate-codemap.py check \
-  --root <workspace-root>
+  --root <workspace-root> \
+  --artifact-dir <task-memory-directory>
 ```
 
 exit code 0だけをfreshとする。check失敗をwarningへ格下げしない。
+
+`--artifact-dir` はworkspace root配下の論理pathを指定する。worktreeの`.local/memory`がメインworktreeへsymlinkされる構成は許可し、検証対象のrepo-relative pathは引き続き`--root`から解決する。task memory directory外のsource specや、workspace外を直接指定するartifact pathは拒否する。
 
 ## Schema v1
 
@@ -89,6 +95,6 @@ Codemap UIは同じRoadmap Viewer templateの `kind: codemap` adapterを使う�
 ## Roadmapとの境界
 
 - `roadmap.html`: 現在taskの仕様、計画、進捗、review、成果物。
-- `codemap.html`: workspaceのcaller、impact、test、dependency、evidence。
+- `codemap.html`: 現在taskが扱うworkspace範囲のcaller、impact、test、dependency、evidence。
 
 `viewing-plans` は両方を開けるが、Roadmap snapshotへCodemap topologyを混ぜない。task logの更新でCodemapをfresh扱いせず、code/source変更をRoadmapの時刻freshnessで代用しない。

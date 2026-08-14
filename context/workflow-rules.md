@@ -152,7 +152,7 @@ route が明確な大規模タスクで、依存DAG、Cold-Start Brief、また�
 3. 05_log.md初期化、ユーザーの最初の指示を記録
 4. **Blueprint WUのCold-Start Briefがあれば読み込み**（blueprint.mdの該当WUセクション）
 5. `rg` / SQLite / memory index でタスク関連の過去知見を検索（memories/ + solutions/ + issues/ を横断）し、結果を05_log.mdに記録する。結果が不十分で、独立した探索文脈の価値が Delegation Gate を上回る場合だけ `learnings-researcher` または explorer role を追加する。
-6. **コード変更時のCodemap preflight**: workspace rootの `codemap.*` を `context/codemap.md` に従ってcheckし、JSONからcaller / impact / guarding test / evidenceを読む。missing、stale、mismatch、または質問に答える関係が不足する場合は、read-only調査でmapをrefreshしてfreshになるまでproduction codeを編集しない。code変更後もrefresh/checkする。
+6. **コード変更時のCodemap preflight**: task memory directoryの `codemap.*` を `context/codemap.md` に従い、workspace rootを検証対象、task memory directoryをartifact出力先としてcheckする。JSONからcaller / impact / guarding test / evidenceを読み、missing、stale、mismatch、または質問に答える関係が不足する場合は、read-only調査で同directoryのmapをrefreshしてfreshになるまでproduction codeを編集しない。code変更後もrefresh/checkする。workspace rootやgit管理対象へcodemap一式を置かない。
 
 ## Phase 1: 調査
 

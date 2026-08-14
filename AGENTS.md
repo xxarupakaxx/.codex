@@ -51,7 +51,7 @@
 
 - すべてのtaskを`context/workflow-rules.md`のPhase 0から順に実行し、各Phaseの内容を`05_log.md`へ作業中に記録する。Fast Trackも同正本の条件に従う。
 - Phase / Stepを持つ作業は、遷移前に所定artifactを保存する。配置とfrontmatterは`context/memory-file-formats.md`に従う。
-- code変更は編集前後にworkspace rootのCodemapを検証する。詳細と例外は`context/codemap.md`に従う。non-code taskは対象外。
+- code変更は編集前後にtask memory directoryのCodemapを検証する。workspace rootは検証対象、task memory directoryはartifact出力先とし、詳細と例外は`context/codemap.md`に従う。non-code taskは対象外。
 - 複数Phaseのworkflowでは`viewing-plans`を併走し、生成したviewerは案内前に実際に開く。
 - `/clear`後やcontextが空の場合は`${MEMORY_DIR:-.local}/HANDOVER.md`と同root配下の直近taskの`05_log.md`を読み、session状態を復元する。
 - freshな直接検証を先に行い、変更リスクに合う最小の独立checkerを選ぶ。CRITICALは必ず、正しさに関わるIMPORTANT / MINORは原則修正する。

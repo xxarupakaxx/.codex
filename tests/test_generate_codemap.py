@@ -145,6 +145,65 @@ class CodemapGeneratorContractTest(unittest.TestCase):
             json.loads(map_bytes),
         )
 
+    def test_refresh_writes_triad_to_task_artifact_directory(self) -> None:
+        artifact_dir = self.root / ".local" / "memory" / "task"
+        artifact_dir.mkdir(parents=True)
+        task_source = artifact_dir / "codemap.source.json"
+        task_source.write_bytes(self.source.read_bytes())
+
+        lock = codemap.refresh(
+            self.root,
+            task_source,
+            artifact_dir=artifact_dir,
+        )
+
+        self.assertFalse((self.root / "codemap.json").exists())
+        self.assertEqual(
+            codemap.check(self.root, artifact_dir=artifact_dir)["status"],
+            "fresh",
+        )
+        self.assertEqual(
+            lock,
+            json.loads((artifact_dir / "codemap.lock").read_text()),
+        )
+
+    def test_refresh_supports_symlinked_task_memory_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as main_memory:
+            local_dir = self.root / ".local"
+            local_dir.mkdir()
+            try:
+                (local_dir / "memory").symlink_to(
+                    main_memory,
+                    target_is_directory=True,
+                )
+            except OSError as error:
+                self.skipTest(f"symlinks are unavailable: {error}")
+
+            artifact_dir = local_dir / "memory" / "task"
+            artifact_dir.mkdir()
+            task_source = artifact_dir / "codemap.source.json"
+            task_source.write_bytes(self.source.read_bytes())
+
+            codemap.refresh(
+                self.root,
+                task_source,
+                artifact_dir=artifact_dir,
+            )
+
+            self.assertEqual(
+                codemap.check(self.root, artifact_dir=artifact_dir)["status"],
+                "fresh",
+            )
+            self.assertTrue((Path(main_memory) / "task" / "codemap.html").is_file())
+
+    def test_artifact_directory_must_be_lexically_inside_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as outside:
+            with self.assertRaisesRegex(
+                codemap.CodemapValidationError,
+                "artifact directory must be inside the repo",
+            ):
+                codemap.refresh(self.root, artifact_dir=Path(outside))
+
     def test_partial_refresh_never_passes_check(self) -> None:
         for fail_on in ("codemap.html", "codemap.lock"):
             with self.subTest(fail_on=fail_on):

@@ -14,7 +14,7 @@ Markdown全文、手動ファイル読込、JSON操作、KPIカードは第一�
 `--serve --watch` で起動すると、Codex app の横に置いたブラウザが自動更新される。
 Plan Viewer / Log Viewer は、明示的に文書本文を確認するときだけ使う。
 
-workspace Codemapがある場合は、task Roadmapと別の地図として扱う。`roadmap.html` は現在task、`codemap.html` はcode topologyの正本であり、snapshotやfreshnessを統合しない。コード変更taskでは `context/codemap.md` のpreflightが先に成立していることを確認し、RoadmapとCodemapを並べて開く。
+task memory directoryにCodemapがある場合は、task Roadmapと別の地図として扱う。`roadmap.html` は現在task、`codemap.html` は対象code topologyの正本であり、snapshotやfreshnessを統合しない。コード変更taskでは `context/codemap.md` のpreflightが先に成立していることを確認し、RoadmapとCodemapを並べて開く。
 
 複数 task を横断して見る場合は Roadmap Task Hub を使う:
 
@@ -36,7 +36,7 @@ Hubの主表示は計画書ではなくLive Sessionとする。Codex app-server�
 2. **横で見たい場合**: `scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --watch` を起動し、表示URLを案内
 3. **Phase 3/4の節目**: `40_progress.md` / `80_review.md` / `05_log.md` 更新後、watch中ならブラウザが自動更新
 4. **Phase 5完了時**: Roadmap Viewerで最終状態を表示し、必要に応じて05_log.mdをlog_viewerで表示
-5. **コード変更task**: workspace Codemapをcheckし、freshなら `codemap.html` も開く。stale / insufficientならコード編集より先にrefreshする
+5. **コード変更task**: task memory directoryのCodemapをcheckし、freshなら `codemap.html` も開く。stale / insufficientならコード編集より先にrefreshする
 
 ## 手動トリガー
 
@@ -62,7 +62,7 @@ Hubの主表示は計画書ではなくLive Sessionとする。Codex app-server�
 
 1. 対象メモリディレクトリを特定
 2. `scripts/generate-roadmap-view.py <memory_dir>` を実行して `roadmap.html` を生成
-3. コード変更taskでは `scripts/generate-codemap.py check --root <workspace-root>` を実行し、`codemap.json` からcaller / impact / guarding test / evidenceを確認
+3. コード変更taskでは `scripts/generate-codemap.py check --root <workspace-root> --artifact-dir ${MEMORY_DIR}/memory/<task>` を実行し、同task directoryの`codemap.json`からcaller / impact / guarding test / evidenceを確認
 4. 必要に応じて Read ツールで個別Markdownコンテンツを取得
 
 ### 2. Roadmap Viewer生成
@@ -83,11 +83,13 @@ ${MEMORY_DIR}/memory/<task>/roadmap.html
 コード変更taskでCodemapがfreshなら、次も実際にopenする。
 
 ```bash
-python3 scripts/generate-codemap.py check --root <workspace-root>
-open <workspace-root>/codemap.html
+python3 scripts/generate-codemap.py check \
+  --root <workspace-root> \
+  --artifact-dir ${MEMORY_DIR}/memory/<task>
+open ${MEMORY_DIR}/memory/<task>/codemap.html
 ```
 
-Codemapがmissing / stale / mismatch / insufficientなら、`context/codemap.md` に従って `codemap.source.json` を更新し、refresh → checkを終えてから開く。パスだけを案内して完了しない。
+Codemapがmissing / stale / mismatch / insufficientなら、`context/codemap.md` に従って同task memory directoryの`codemap.source.json`を更新し、refresh → checkを終えてから開く。パスだけを案内して完了しない。
 
 ライブ更新:
 
