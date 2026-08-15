@@ -62,22 +62,35 @@
 | roadmap.html | ブラウザ用ロードマップビュー | Phase 2完了後・実装中に再生成 |
 | roadmap-snapshot.json | live更新用snapshot | `--serve --watch` 利用時に自動更新 |
 
-### task-meta.json（任意）
+### task-meta.json（必須・machine-owned）
 
-Roadmap Task Hub と Codex task を確実に対応付ける場合は、タスクディレクトリ直下に `task-meta.json` を置く。
+Roadmap generatorはタスクディレクトリ直下の`task-meta.json`を作成・更新する。人がPhaseやCodemap状態を複製して管理しない。
 
 ```json
-{"thread_id":"019f...","project_path":"/absolute/path","task_title":"Roadmap Viewer UX","task_state":"running","approval_state":"waiting","updated_at":"2026-07-12T12:00:00+09:00"}
+{"schema_version":1,"task_id":"260816_roadmap-viewer","task_title":"Roadmap Viewer UX","thread_id":"019f...","session_id":"session-...","project_path":"/absolute/path","worktree_path":"/absolute/path","task_state":"active","code_change":true,"created_at":"2026-08-16T12:00:00+09:00","updated_at":"2026-08-16T12:00:00+09:00"}
 ```
 
+- `schema_version`: manifest schema。現在は`1`。
+- `task_id`: task directoryと対応する安定ID。
 - `thread_id`: Codex app-server が返す thread ID。完全一致した場合だけ自動確定する。
+- `session_id`: hook runtimeが返すsession ID。handover復元は完全一致を優先する。
 - `project_path`: task の作業ディレクトリの絶対パス。
+- `worktree_path`: Codemap evidenceを照合するworktree root。
 - `task_title`: Task Hub に表示する明示タイトル。
-- `task_state`: `running`、`waiting`、`completed` のいずれか。
+- `task_state`: `active`、`waiting`、`verifying`、`completed`、`archived` のいずれか。
+- `code_change`: Codemap preflightが必要なtaskか。
 - `approval_state`: 承認待ちなど、明示的に `waiting` と扱う状態。
 - `updated_at`: timezone を含む ISO 8601 の更新日時。
 
-current thread ID を取得できた場合は、その ID を `task-meta.json` の `thread_id` に保存する。`thread_id` の完全一致だけを確定済み対応として扱う。`thread_id` がない場合、path・title・更新時刻による一致は候補表示にだけ使い、自動確定しない。候補を採用するかどうかの承認は Codex 会話を正本とし、承認後に `thread_id` を保存する。JSON が壊れている場合もタスク自体は一覧から消さず、詳細の `metadataError` に読み取りエラーを表示する。
+current thread / session IDを取得できた場合はgeneratorの`--thread-id` / `--session-id`で保存する。完全一致だけを確定済み対応として扱う。IDがない場合、path・title・更新時刻による一致は候補表示にだけ使い、自動確定しない。JSONが壊れている場合もtask自体は一覧から消さず、詳細の`metadataError`に読み取りエラーを表示する。PhaseはMarkdown、Codemap freshnessは`codemap.lock`から導出し、manifestへ重複保存しない。
+
+### Session handover / runtime
+
+- session handover: `${MEMORY_DIR}/handovers/<session-id>.md`
+- compatibility pointer: `${MEMORY_DIR}/HANDOVER.md`
+- writer lock等の一時状態: `${MEMORY_DIR}/runtime/locks/`
+
+復元はsession ID、次にthread IDの完全一致を使う。一致しない場合、active / waiting / verifying taskが1件だけならfallbackできる。複数候補から更新時刻やdirectory名だけで自動選択しない。worktree間では`memory/`と長期知識を共有するが、`handovers/`と`runtime/`は共有しない。
 
 複数 task を一覧する Roadmap Task Hub は次で起動する:
 
@@ -91,7 +104,7 @@ Live Activityはmemory fileへ複製しない。Codex app-serverが返すsession
 
 ### Live Roadmap Viewer
 
-`roadmap.html` は `scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task>` で生成する。Codex app の横で開きっぱなしにして進捗を見たい場合は次を使う:
+`roadmap.html` は `scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task>` で生成する。Plan / ProgressとfreshなCode Mapを切り替えるTask Workspaceである。Codex app の横で開きっぱなしにして進捗を見たい場合は次を使う:
 
 ```bash
 python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --watch
@@ -490,7 +503,9 @@ Git worktree使用時、知見ディレクトリはメインworktreeの`.local/`
 ### ローカル維持
 | ファイル | 理由 |
 |---|---|
-| `HANDOVER.md` | セッション固有の復元情報 |
+| `handovers/` | session ID別の復元情報 |
+| `HANDOVER.md` | 互換用の直近handover pointer |
+| `runtime/` | worktree-localな一時lock・state |
 | `plans/` | worktree固有の計画 |
 
 ### 仕組み

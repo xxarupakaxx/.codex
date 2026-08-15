@@ -1499,7 +1499,7 @@ test('the tree-first roadmap information architecture remains in the HTML', () =
   assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.graph-edges\s*\{\s*display:\s*none/);
   assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.outcome-cluster-grid\s*\{\s*grid-template-columns:\s*1fr/);
   assert.match(html, /const visible = new Set\(allOutcomes\)/);
-  assert.match(html, /document\.title = taskTitle/);
+  assert.match(html, /document\.title = workspaceTitle/);
   assert.match(html, /--ease-out:\s*cubic-bezier/);
   assert.match(html, /@media \(hover: hover\) and \(pointer: fine\)/);
   assert.doesNotMatch(html, /transition:\s*all/);

@@ -95,6 +95,18 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
         self.assertTrue(args.watch)
         self.assertFalse(args.hub)
 
+    def test_task_identity_flags_are_available_for_machine_owned_metadata(self) -> None:
+        args = roadmap.parse_args([
+            str(self.task_dir),
+            "--thread-id", "thread-1",
+            "--session-id", "session-1",
+            "--task-state", "waiting",
+        ])
+
+        self.assertEqual(args.thread_id, "thread-1")
+        self.assertEqual(args.session_id, "session-1")
+        self.assertEqual(args.task_state, "waiting")
+
     def test_hub_mode_rejects_task_dir(self) -> None:
         with self.assertRaises(SystemExit):
             roadmap.parse_args([str(self.task_dir), "--hub"])
@@ -129,6 +141,82 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
         self.assertEqual(snapshot["files"]["team-journal.md"], "# Team Journal\n")
         self.assertEqual(snapshot["files"]["90_verification.md"], "# Verification\n")
         self.assertEqual(snapshot["files"]["graph-map.md"], "# Graph\n")
+
+    def test_snapshot_embeds_fresh_codemap_as_workspace_view(self) -> None:
+        codemap_snapshot = {
+            "schemaVersion": 1,
+            "version": 1,
+            "kind": "codemap",
+            "title": "Task code map",
+            "generatedAt": "2026-08-16T00:00:00+00:00",
+            "sourceFingerprint": "abc123",
+            "scope": {"include": ["src/*.py"], "exclude": []},
+            "lanes": [{"id": "runtime", "title": "Runtime", "order": 0}],
+            "nodes": [{"id": "entry", "title": "Entry", "kind": "module", "lane": "runtime"}],
+            "edges": [],
+            "counts": {"lanes": 1, "nodes": 1, "edges": 0, "unknown": 0},
+        }
+        with mock.patch.object(
+            roadmap,
+            "load_codemap_state",
+            return_value={"status": "fresh", "snapshot": codemap_snapshot},
+        ):
+            snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+
+        self.assertEqual(snapshot["codemapStatus"], "fresh")
+        self.assertEqual(snapshot["codemap"]["kind"], "codemap")
+        self.assertEqual(snapshot["codemap"]["nodes"][0]["id"], "entry")
+
+    def test_snapshot_keeps_codemap_failure_visible_without_topology(self) -> None:
+        with mock.patch.object(
+            roadmap,
+            "load_codemap_state",
+            return_value={"status": "stale", "message": "source fingerprint mismatch"},
+        ):
+            snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+
+        self.assertEqual(snapshot["codemapStatus"], "stale")
+        self.assertNotIn("codemap", snapshot)
+        self.assertEqual(snapshot["codemapMessage"], "source fingerprint mismatch")
+
+    def test_code_change_without_codemap_is_blocking_missing(self) -> None:
+        (self.task_dir / "task-meta.json").write_text(
+            json.dumps({"code_change": True})
+        )
+
+        state = roadmap.load_codemap_state(self.task_dir, self.root)
+
+        self.assertEqual(state["status"], "missing")
+        self.assertIn("required", state["message"])
+
+    def test_codemap_mismatch_is_not_collapsed_into_stale(self) -> None:
+        for name in ("codemap.source.json", "codemap.json", "codemap.lock"):
+            (self.task_dir / name).write_text("{}")
+        checker = mock.Mock()
+        checker.check.side_effect = RuntimeError("map fingerprint mismatch")
+        module_spec = mock.Mock(loader=mock.Mock())
+        with mock.patch.object(roadmap.importlib.util, "spec_from_file_location", return_value=module_spec), mock.patch.object(
+            roadmap.importlib.util, "module_from_spec", return_value=checker
+        ):
+            state = roadmap.load_codemap_state(self.task_dir, self.root)
+
+        self.assertEqual(state["status"], "mismatch")
+
+    def test_codemap_unknown_relationships_are_insufficient(self) -> None:
+        for name in ("codemap.source.json", "codemap.json", "codemap.lock"):
+            (self.task_dir / name).write_text("{}")
+        (self.task_dir / "codemap.json").write_text(
+            json.dumps({"counts": {"unknown": 1}})
+        )
+        checker = mock.Mock()
+        checker.check.return_value = {"status": "fresh"}
+        module_spec = mock.Mock(loader=mock.Mock())
+        with mock.patch.object(roadmap.importlib.util, "spec_from_file_location", return_value=module_spec), mock.patch.object(
+            roadmap.importlib.util, "module_from_spec", return_value=checker
+        ):
+            state = roadmap.load_codemap_state(self.task_dir, self.root)
+
+        self.assertEqual(state["status"], "insufficient")
 
     def test_snapshot_title_uses_task_directory_name_without_date_prefix(self) -> None:
         task_dir = self.root / "260719_emilkowalski_skills_roadmap_ui"
@@ -238,6 +326,53 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
                 json_output: (json_output.stat().st_ino, json_output.stat().st_mtime_ns),
             },
         )
+
+    def test_write_outputs_creates_stable_task_metadata(self) -> None:
+        output = self.task_dir / "roadmap.html"
+        roadmap.write_outputs(
+            self.task_dir,
+            output,
+            write_json=False,
+            source_root=self.root,
+            thread_id="thread-1",
+            session_id="session-1",
+            task_state="active",
+        )
+        meta_path = self.task_dir / "task-meta.json"
+        first = json.loads(meta_path.read_text())
+        before = meta_path.stat().st_mtime_ns
+
+        roadmap.write_outputs(
+            self.task_dir,
+            output,
+            write_json=False,
+            source_root=self.root,
+            thread_id="thread-1",
+            session_id="session-1",
+            task_state="active",
+        )
+        second = json.loads(meta_path.read_text())
+
+        self.assertEqual(first, second)
+        self.assertEqual(before, meta_path.stat().st_mtime_ns)
+        self.assertEqual(second["task_id"], "task")
+        self.assertEqual(second["thread_id"], "thread-1")
+        self.assertEqual(second["session_id"], "session-1")
+        self.assertTrue(second["project_path"].endswith(self.root.name))
+
+    def test_write_outputs_preserves_invalid_task_metadata_for_diagnosis(self) -> None:
+        meta_path = self.task_dir / "task-meta.json"
+        meta_path.write_text("{broken")
+
+        with self.assertRaisesRegex(ValueError, "invalid task-meta.json"):
+            roadmap.write_outputs(
+                self.task_dir,
+                self.task_dir / "roadmap.html",
+                write_json=False,
+                source_root=self.root,
+            )
+
+        self.assertEqual(meta_path.read_text(), "{broken")
 
     def test_artifact_only_change_rewrites_outputs_and_snapshot_fingerprint(self) -> None:
         artifact = self.task_dir / "artifact.txt"

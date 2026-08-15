@@ -152,7 +152,7 @@ route が明確な大規模タスクで、依存DAG、Cold-Start Brief、また�
 3. 05_log.md初期化、ユーザーの最初の指示を記録
 4. **Blueprint WUのCold-Start Briefがあれば読み込み**（blueprint.mdの該当WUセクション）
 5. `rg` / SQLite / memory index でタスク関連の過去知見を検索（memories/ + solutions/ + issues/ を横断）し、結果を05_log.mdに記録する。結果が不十分で、独立した探索文脈の価値が Delegation Gate を上回る場合だけ `learnings-researcher` または explorer role を追加する。
-6. **コード変更時のCodemap preflight**: workspace rootの `codemap.*` を `context/codemap.md` に従ってcheckし、JSONからcaller / impact / guarding test / evidenceを読む。missing、stale、mismatch、または質問に答える関係が不足する場合は、read-only調査でmapをrefreshしてfreshになるまでproduction codeを編集しない。code変更後もrefresh/checkする。
+6. **コード変更時のCodemap preflight**: task memory directoryの `codemap.*` を `context/codemap.md` に従い、workspace rootを検証対象、task memory directoryをartifact出力先としてcheckする。JSONからcaller / impact / guarding test / evidenceを読み、missing、stale、mismatch、または質問に答える関係が不足する場合は、read-only調査で同directoryのmapをrefreshしてfreshになるまでproduction codeを編集しない。code変更後もrefresh/checkする。workspace rootやgit管理対象へcodemap一式を置かない。
 
 ## Phase 1: 調査
 
@@ -616,7 +616,7 @@ Phase直結でないユーティリティスキル。**状況が発生したら*
 ## HTML Viewer Tools
 
 計画ファイル・ログ・レビュー結果をブラウザでインタラクティブに閲覧するためのHTMLビューア。
-Roadmap Viewer は `roadmap.html` を生成し、「現在地」「稼働中の作業」「成果物」「計画」「更新鮮度」を同じ画面で確認できるようにする。`--serve --watch` で起動すると、Codex app の横で開いたブラウザが `roadmap-snapshot.json` をpollingし、source内容または表示対象artifact metadataが変化したときだけ自動更新される。Plan Viewer / Log Viewer は個別ファイルの詳細確認に使う。
+Task Workspaceは`roadmap.html`を唯一の人向け入口として生成し、Plan / ProgressとfreshなCode Mapを同じ画面で切り替える。「現在地」「稼働中の作業」「成果物」「計画」「更新鮮度」「caller / impact / guarding test」を確認できる。`--serve --watch`で起動すると、Codex appの横で開いたブラウザが`roadmap-snapshot.json`をpollingし、Roadmap source、artifact metadata、または検証済みCodemap payloadが変化したときだけ自動更新される。Plan Viewer / Log Viewerは個別ファイルの詳細確認に使う。
 
 複数 task を横断して確認する場合は Roadmap Task Hub を起動する:
 
@@ -624,7 +624,7 @@ Roadmap Viewer は `roadmap.html` を生成し、「現在地」「稼働中の�
 python3 scripts/generate-roadmap-view.py --hub --memory-root "$MEMORY_DIR/memory" --open
 ```
 
-`--memory-root` は複数回指定できる。current thread ID を取得できた場合は task directory の `task-meta.json` に保存し、完全一致だけを確定済み対応として扱う。path・title・更新時刻による一致は候補表示に留めて自動確定せず、承認は Codex 会話を正本とする。Hub は loopback 限定の session key 付き API を使い、provider を定期再取得し、ブラウザ heartbeat が途絶えると終了する。provider の一時障害中は直近の成功結果を保持して degraded 状態を表示する。
+`--memory-root`は複数回指定できる。generatorは`task-meta.json`をmachine-owned manifestとして作成し、current thread / session IDを取得できた場合は`--thread-id` / `--session-id`で保存する。完全一致だけを確定済み対応として扱う。path・title・更新時刻による一致は候補表示に留めて自動確定せず、承認はCodex会話を正本とする。Hubはloopback限定のsession key付きAPIを使い、providerを定期再取得し、ブラウザheartbeatが途絶えると終了する。providerの一時障害中は直近の成功結果を保持してdegraded状態を表示する。
 
 Task Hubは各sessionの計画全文よりLive Activityを優先する。session JSONLの末尾最大1MBから直近24時間・最大100イベントだけを正規化し、turn実行中、user待ち、未完了tool、sub-agent観測数、最終イベント、経過時間、明示blockerを表示する。command arguments、tool output本文、24時間より古い会話contextは収集しない。選択sessionの下位層で設計Plan、承認、実装計画、成果物、検証結果を表示する。
 
@@ -632,7 +632,7 @@ Task Hubは各sessionの計画全文よりLive Activityを優先する。session
 
 | ツール名 | MCPツール | 対象ファイル | 主な機能 |
 |---------|----------|------------|---------|
-| Roadmap Viewer | ローカルHTML (`tools/roadmap_viewer.html`) + `scripts/generate-roadmap-view.py` | 00_spec.md / 30_plan.md / 40_progress.md / 80_review.md / 05_log.md、任意の team-journal.md / 90_verification.md | 「いま」、計画キャンバス、実行パルス、成果物シェルフ、更新鮮度、live polling |
+| Task Workspace | ローカルHTML (`tools/roadmap_viewer.html`) + Roadmap / Codemap generator | task Markdown、`codemap.json` / `codemap.lock` | Plan / Progress、Code Map、preflight状態、live polling |
 | Plan Viewer | `mcp__workflow-html-app__view-plan` | 30_plan.md | Markdownレンダリング、コメント機能、Codexへのフィードバック送信 |
 | Log Viewer | `mcp__workflow-html-app__view-plan` | 05_log.md | Phase検出、タイムライン可視化（予定） |
 
@@ -640,7 +640,7 @@ Task Hubは各sessionの計画全文よりLive Activityを優先する。session
 
 以下のタイミングで`viewing-plans`スキルが**自動的に**発動：
 
-1. **Phase 2完了時**: 30_plan.md作成後、`scripts/generate-roadmap-view.py <memory_dir>` で `roadmap.html` を生成
+1. **Phase 2完了時**: 30_plan.md作成後、code変更taskはCodemap checkを通し、`scripts/generate-roadmap-view.py <memory_dir>`でTask Workspaceを生成
 2. **横で見たい場合**: `scripts/generate-roadmap-view.py <memory_dir> --serve --watch` を起動し、表示URLを案内
 3. **Phase 3/4更新時**: `40_progress.md` / `80_review.md` / `05_log.md` / `team-journal.md` / `90_verification.md` または成果物metadataの変更後、watch中なら `roadmap-snapshot.json` が更新され、ブラウザが自動再描画
 4. **Phase 5完了時**: 最終 `roadmap.html` を生成し、必要に応じて個別Plan/Log Viewerも表示

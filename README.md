@@ -93,17 +93,24 @@ as the default route for every non-trivial task.
 
 ## Codemap preflight
 
-Code-changing tasks use a workspace-side evidence map before the first edit:
+Code-changing tasks use a task-local evidence map before the first edit. The
+map validates files in the workspace, but its artifacts stay in the current
+task memory directory and out of Git:
 
 - `codemap.json` is the AI-readable topology.
-- `codemap.html` is the human-readable graph and inspector.
+- `roadmap.html` is the single Task Workspace for plan/progress and the evidence-backed Code Map.
 - `codemap.lock` records source, map, template, and HTML fingerprints.
 
-Author the map in `codemap.source.json`, then generate all three outputs together:
+Author the map beside the task artifacts, then generate all three outputs together:
 
 ```bash
-python3 scripts/generate-codemap.py refresh --root <workspace-root> --input codemap.source.json
-python3 scripts/generate-codemap.py check --root <workspace-root>
+python3 scripts/generate-codemap.py refresh \
+  --root <workspace-root> \
+  --artifact-dir <task-memory-directory> \
+  --input <task-memory-directory>/codemap.source.json
+python3 scripts/generate-codemap.py check \
+  --root <workspace-root> \
+  --artifact-dir <task-memory-directory>
 ```
 
 Verified relations require repository path and line evidence. Unproven relations

@@ -58,6 +58,16 @@
 | 90_pr.md | PR内容 | PR作成時 |
 | 99_history.md | 意思決定ログ | 随時 |
 
+### task-meta.json / session handover
+
+Roadmap generatorはtask directoryの`task-meta.json`をmachine-owned manifestとして作成する。identity、thread / session、project / worktree path、lifecycle stateだけを保持し、PhaseはMarkdown、Codemap freshnessは`codemap.lock`から導出する。
+
+- session handover: `${MEMORY_DIR}/handovers/<session-id>.md`
+- compatibility pointer: `${MEMORY_DIR}/HANDOVER.md`
+- writer lock等の一時状態: `${MEMORY_DIR}/runtime/locks/`
+
+復元はsession IDの完全一致を優先する。一致がなくactive候補が複数ある場合は、directory名や更新時刻で自動選択しない。
+
 ## 05_log.md（重要）
 
 ユーザーからの指示とそれに対するレスポンス・実施内容を逐一記録:
@@ -399,7 +409,9 @@ Git worktree使用時、知見ディレクトリはメインworktreeの`.local/`
 ### ローカル維持
 | ファイル | 理由 |
 |---|---|
-| `HANDOVER.md` | セッション固有の復元情報 |
+| `handovers/` | session ID別の復元情報 |
+| `HANDOVER.md` | 互換用の直近handover pointer |
+| `runtime/` | worktree-localな一時lock・state |
 | `plans/` | worktree固有の計画 |
 
 ### 仕組み

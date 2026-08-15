@@ -34,18 +34,7 @@ class CodemapGeneratorContractTest(unittest.TestCase):
         self.source = self.root / "codemap.source.json"
         self.write_source()
 
-        self.template = self.root / "roadmap_viewer.html"
-        self.template.write_text(
-            '<script id="embedded-snapshot" type="application/json">'
-            f"{codemap.PLACEHOLDER}"
-            "</script>",
-            encoding="utf-8",
-        )
-        self.previous_template = codemap.TEMPLATE
-        codemap.TEMPLATE = self.template
-
     def tearDown(self) -> None:
-        codemap.TEMPLATE = self.previous_template
         self.temp_dir.cleanup()
 
     def write_source(self, **overrides: object) -> None:
@@ -121,7 +110,7 @@ class CodemapGeneratorContractTest(unittest.TestCase):
     def refresh(self) -> dict[str, object]:
         return codemap.refresh(self.root, self.source)
 
-    def test_refresh_writes_coherent_triad_and_lock_last(self) -> None:
+    def test_refresh_writes_coherent_map_and_lock_last(self) -> None:
         writes: list[str] = []
         original = codemap.atomic_write
 
@@ -132,21 +121,77 @@ class CodemapGeneratorContractTest(unittest.TestCase):
         with mock.patch.object(codemap, "atomic_write", side_effect=record):
             lock = self.refresh()
 
-        self.assertEqual(writes, ["codemap.json", "codemap.html", "codemap.lock"])
+        self.assertEqual(writes, ["codemap.json", "codemap.lock"])
         self.assertEqual(codemap.check(self.root)["status"], "fresh")
         self.assertEqual(lock, json.loads((self.root / "codemap.lock").read_text()))
 
         map_bytes = (self.root / "codemap.json").read_bytes()
-        html_bytes = (self.root / "codemap.html").read_bytes()
         self.assertEqual(lock["mapFingerprint"], codemap.sha256_bytes(map_bytes))
-        self.assertEqual(lock["htmlFingerprint"], codemap.sha256_bytes(html_bytes))
-        self.assertEqual(
-            codemap.extract_embedded_snapshot((self.root / "codemap.html").read_text()),
-            json.loads(map_bytes),
+        self.assertFalse((self.root / "codemap.html").exists())
+        self.assertNotIn("htmlFingerprint", lock)
+        self.assertNotIn("templateFingerprint", lock)
+
+    def test_refresh_writes_triad_to_task_artifact_directory(self) -> None:
+        artifact_dir = self.root / ".local" / "memory" / "task"
+        artifact_dir.mkdir(parents=True)
+        task_source = artifact_dir / "codemap.source.json"
+        task_source.write_bytes(self.source.read_bytes())
+
+        lock = codemap.refresh(
+            self.root,
+            task_source,
+            artifact_dir=artifact_dir,
         )
 
+        self.assertFalse((self.root / "codemap.json").exists())
+        self.assertEqual(
+            codemap.check(self.root, artifact_dir=artifact_dir)["status"],
+            "fresh",
+        )
+        self.assertEqual(
+            lock,
+            json.loads((artifact_dir / "codemap.lock").read_text()),
+        )
+
+    def test_refresh_supports_symlinked_task_memory_directory(self) -> None:
+        with tempfile.TemporaryDirectory() as main_memory:
+            local_dir = self.root / ".local"
+            local_dir.mkdir()
+            try:
+                (local_dir / "memory").symlink_to(
+                    main_memory,
+                    target_is_directory=True,
+                )
+            except OSError as error:
+                self.skipTest(f"symlinks are unavailable: {error}")
+
+            artifact_dir = local_dir / "memory" / "task"
+            artifact_dir.mkdir()
+            task_source = artifact_dir / "codemap.source.json"
+            task_source.write_bytes(self.source.read_bytes())
+
+            codemap.refresh(
+                self.root,
+                task_source,
+                artifact_dir=artifact_dir,
+            )
+
+            self.assertEqual(
+                codemap.check(self.root, artifact_dir=artifact_dir)["status"],
+                "fresh",
+            )
+            self.assertTrue((Path(main_memory) / "task" / "codemap.json").is_file())
+
+    def test_artifact_directory_must_be_lexically_inside_workspace(self) -> None:
+        with tempfile.TemporaryDirectory() as outside:
+            with self.assertRaisesRegex(
+                codemap.CodemapValidationError,
+                "artifact directory must be inside the repo",
+            ):
+                codemap.refresh(self.root, artifact_dir=Path(outside))
+
     def test_partial_refresh_never_passes_check(self) -> None:
-        for fail_on in ("codemap.html", "codemap.lock"):
+        for fail_on in ("codemap.json", "codemap.lock"):
             with self.subTest(fail_on=fail_on):
                 self.refresh()
                 source = json.loads(self.source.read_text())
@@ -251,17 +296,11 @@ class CodemapGeneratorContractTest(unittest.TestCase):
             ):
                 self.refresh()
 
-    def test_check_rejects_tampered_map_html_or_missing_lock(self) -> None:
+    def test_check_rejects_tampered_map_or_missing_lock(self) -> None:
         self.refresh()
         map_path = self.root / "codemap.json"
         map_path.write_text(map_path.read_text() + " ")
         with self.assertRaisesRegex(codemap.CodemapStateError, "map fingerprint"):
-            codemap.check(self.root)
-
-        self.refresh()
-        html_path = self.root / "codemap.html"
-        html_path.write_text(html_path.read_text() + "<!-- changed -->")
-        with self.assertRaisesRegex(codemap.CodemapStateError, "html fingerprint"):
             codemap.check(self.root)
 
         self.refresh()
@@ -276,12 +315,9 @@ class CodemapGeneratorContractTest(unittest.TestCase):
                 snapshot = json.loads((self.root / "codemap.json").read_text())
                 snapshot.pop(field)
                 map_content = codemap.json_text(snapshot)
-                html_content = codemap.render_html(snapshot)
                 lock = json.loads((self.root / "codemap.lock").read_text())
                 lock["mapFingerprint"] = codemap.sha256_bytes(map_content.encode())
-                lock["htmlFingerprint"] = codemap.sha256_bytes(html_content.encode())
                 (self.root / "codemap.json").write_text(map_content)
-                (self.root / "codemap.html").write_text(html_content)
                 (self.root / "codemap.lock").write_text(codemap.json_text(lock))
 
                 with self.assertRaisesRegex(
@@ -289,31 +325,13 @@ class CodemapGeneratorContractTest(unittest.TestCase):
                 ):
                     codemap.check(self.root)
 
-    def test_check_rejects_changed_source_spec_or_template(self) -> None:
+    def test_check_rejects_changed_source_spec(self) -> None:
         self.refresh()
         source = json.loads(self.source.read_text())
         source["description"] = "Changed draft"
         self.source.write_text(json.dumps(source))
         with self.assertRaisesRegex(codemap.CodemapStateError, "source spec"):
             codemap.check(self.root)
-
-        self.write_source()
-        self.refresh()
-        self.template.write_text(self.template.read_text() + "\n")
-        with self.assertRaisesRegex(codemap.CodemapStateError, "template"):
-            codemap.check(self.root)
-
-    def test_template_fingerprint_ignores_platform_line_endings(self) -> None:
-        content = (
-            '<script id="embedded-snapshot" type="application/json">\n'
-            f"{codemap.PLACEHOLDER}\n"
-            "</script>\n"
-        )
-        self.template.write_text(content)
-        self.refresh()
-        self.template.write_bytes(content.replace("\n", "\r\n").encode())
-
-        self.assertEqual(codemap.check(self.root)["status"], "fresh")
 
     def test_schema_rejects_duplicate_ids_unknown_lanes_and_escaping_paths(self) -> None:
         source = json.loads(self.source.read_text())
