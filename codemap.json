@@ -219,14 +219,14 @@
         {
           "path": "skills/visualizing-work/SKILL.md",
           "line": 87,
-          "contains": "or `generate-state-diagram` has completed `91_state_diagram.*` and a distinct reader question remains",
-          "note": "permits the specialized-owner exception only after the state-diagram canonical artifact is complete"
+          "contains": "diagram-design` static editorial sidecar",
+          "note": "selects the static editorial adapter only after representation choice"
         },
         {
           "path": "skills/visualizing-work/SKILL.md",
-          "line": 124,
-          "contains": "the sidecar supplements its canonical output and never duplicates state or flow diagrams.",
-          "note": "keeps the state-diagram owner authoritative"
+          "line": 140,
+          "contains": "next available numbered visual explanation path",
+          "note": "keeps distinct companions from overwriting each other"
         }
       ]
     },
@@ -239,7 +239,7 @@
       "evidence": [
         {
           "path": "skills/visualizing-work/SKILL.md",
-          "line": 122,
+          "line": 125,
           "contains": "Use `generate-state-diagram` when the chosen representation",
           "note": "routes canonical state and flow requests to the specialized owner"
         }
@@ -254,9 +254,30 @@
       "evidence": [
         {
           "path": "skills/diagram-design/SKILL.md",
-          "line": 51,
+          "line": 54,
           "contains": "`generate-state-diagram` owns canonical static state and flow artifacts.",
           "note": "keeps the canonical state and flow artifact with its specialized owner"
+        }
+      ]
+    },
+    {
+      "id": "diagram-design-defers-roadmap",
+      "from": "diagram-design",
+      "to": "viewing-plans",
+      "relation": "defers Roadmap output to",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "skills/diagram-design/SKILL.md",
+          "line": 20,
+          "contains": "The output is not a workflow Roadmap",
+          "note": "keeps the Roadmap itself with its specialized owner"
+        },
+        {
+          "path": "skills/viewing-plans/SKILL.md",
+          "line": 68,
+          "contains": "generate-roadmap-view.py <memory_dir>",
+          "note": "generates the canonical roadmap.html"
         }
       ]
     },
@@ -269,13 +290,34 @@
       "evidence": [
         {
           "path": "skills/generate-state-diagram/SKILL.md",
-          "line": 208,
+          "line": 210,
           "contains": "`91_state_diagram.md` と `91_state_diagram.html` を先に完成させる。",
           "note": "completes the canonical artifact before any companion selection"
         },
         {
           "path": "skills/generate-state-diagram/SKILL.md",
-          "line": 212,
+          "line": 214,
+          "contains": "`visualizing-work` を経て `diagram-design` を呼び",
+          "note": "calls the editorial adapter only through representation selection"
+        }
+      ]
+    },
+    {
+      "id": "viewing-plans-conditionally-invokes-editorial-companion",
+      "from": "viewing-plans",
+      "to": "diagram-design",
+      "relation": "conditionally invokes",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "skills/viewing-plans/SKILL.md",
+          "line": 107,
+          "contains": "`roadmap.html` を先に完成させる。",
+          "note": "completes the canonical Roadmap before any companion selection"
+        },
+        {
+          "path": "skills/viewing-plans/SKILL.md",
+          "line": 111,
           "contains": "`visualizing-work` を経て `diagram-design` を呼び",
           "note": "calls the editorial adapter only through representation selection"
         }
@@ -291,8 +333,23 @@
         {
           "path": "skills/skill-governance/scripts/test_governance.py",
           "line": 2087,
-          "contains": "def test_state_diagram_companion_contract_preserves_canonical_owner",
-          "note": "guards canonical-first ordering, distinct-reader selection, and non-duplication"
+          "contains": "def test_editorial_companion_contracts_preserve_canonical_owners",
+          "note": "guards canonical-first ordering, distinct-reader selection, non-duplication, and shared submodule contracts"
+        }
+      ]
+    },
+    {
+      "id": "governance-tests-guard-roadmap-companion",
+      "from": "governance-tests",
+      "to": "viewing-plans",
+      "relation": "guards",
+      "status": "verified",
+      "evidence": [
+        {
+          "path": "skills/skill-governance/scripts/test_governance.py",
+          "line": 2087,
+          "contains": "def test_editorial_companion_contracts_preserve_canonical_owners",
+          "note": "guards Roadmap canonical-first ordering, distinct-reader selection, non-duplication, and shared submodule contracts"
         }
       ]
     },
@@ -335,7 +392,7 @@
       "evidence": [
         {
           "path": "skills/viewing-plans/SKILL.md",
-          "line": 64,
+          "line": 68,
           "contains": "generate-roadmap-view.py <memory_dir>",
           "note": "generates roadmap.html"
         }
@@ -350,9 +407,15 @@
       "evidence": [
         {
           "path": "skills/viewing-plans/SKILL.md",
-          "line": 65,
+          "line": 69,
           "contains": "generate-codemap.py check",
           "note": "runs the Codemap check before opening"
+        },
+        {
+          "path": "skills/viewing-plans/SKILL.md",
+          "line": 20,
+          "contains": "freshなら `codemap.html` を実際に開く。",
+          "note": "requires opening the fresh Codemap instead of only reporting its path"
         }
       ]
     },
@@ -641,12 +704,12 @@
   ],
   "version": 1,
   "kind": "codemap",
-  "generatedAt": "2026-08-14T00:41:56.372736+00:00",
-  "sourceFingerprint": "a4e2d1126d35d74b99c471f805502b426c21a7eeacba98fc0272372ad86b50fa",
+  "generatedAt": "2026-08-15T08:42:37.490053+00:00",
+  "sourceFingerprint": "fdb18c0269c83dba83f2e3348d401e2cc458a34e1f13fa3340986d4ba149fde4",
   "counts": {
     "lanes": 6,
     "nodes": 19,
-    "edges": 25,
+    "edges": 28,
     "unknown": 1
   }
 }
