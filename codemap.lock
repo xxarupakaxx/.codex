@@ -1,13 +1,13 @@
 {
   "schemaVersion": 1,
   "kind": "codemap-lock",
-  "generatedAt": "2026-08-15T08:26:34.033709+00:00",
+  "generatedAt": "2026-08-15T08:42:37.490053+00:00",
   "sourceFile": "codemap.source.json",
-  "sourceSpecFingerprint": "1524e35ee05fd3d6ec6a51142c6e35c189d238ce598e328594b45ff629d22e4e",
-  "sourceFingerprint": "a2b90d743ada8000b333b785daaf5f592eb01a363fbe501551d35e281efe04fc",
+  "sourceSpecFingerprint": "4202f4e620b927207a8b46791d442342c687672d7f0bf39f589c890d91c0bd47",
+  "sourceFingerprint": "fdb18c0269c83dba83f2e3348d401e2cc458a34e1f13fa3340986d4ba149fde4",
   "templateFingerprint": "9fe5b7020dbeb7edcf458fd3c7f707be2e8d892563108a2c13ed11c7aeaba0ad",
-  "mapFingerprint": "d59c0abec0d9c0c4e4d2f3bde32a17960b7b1a7711d0a963f5f7636a8934a012",
-  "htmlFingerprint": "ab51d5137da69827e7ba6a707c329d6fa057adeea4f5a28336ccdd08fa81db6f",
+  "mapFingerprint": "3e46fb7a89a9938802db8952a19ec6a8f39974c74d8ac2480cf06f9ec4f0167c",
+  "htmlFingerprint": "0d2db840246ae40a1132a118b1c9a43ef9d8d07a4f33e67155fb95b569a7d252",
   "sourceManifest": [
     {
       "path": "AGENTS.md",
@@ -36,7 +36,7 @@
     },
     {
       "path": "governance/profiles/vault-wsl/estate.lock.json",
-      "sha256": "3847a72eb9f65f6d76dd304296cac69f40b2797ff77a39f87c7e4e9047d068d6",
+      "sha256": "01a35a68275547048c2945bb4aebc0139d64a2bd4d5fbb6b9c872c421921f8b3",
       "size": 93365
     },
     {
@@ -76,8 +76,8 @@
     },
     {
       "path": "skills/generate-state-diagram/SKILL.md",
-      "sha256": "45930ea2fda2cd18fceeb387572410be9e219a6770359cf1fe0e80556306e953",
-      "size": 16848
+      "sha256": "8c4e989e7ffb358259fe56234156bbb10dbc08ed1b6bde8967fb7412b6952139",
+      "size": 16938
     },
     {
       "path": "skills/skill-governance/registry.toml",
@@ -91,13 +91,13 @@
     },
     {
       "path": "skills/skill-governance/scripts/test_governance.py",
-      "sha256": "b268efd8c5c4aacd531af230ac49d280852268ccc8ec2572246180490f09ba80",
-      "size": 115271
+      "sha256": "a141aa8a5d6099e8f703565a4862d8d521893cb2d47323a77e6dbb2e202ac0bd",
+      "size": 115670
     },
     {
       "path": "skills/viewing-plans/SKILL.md",
-      "sha256": "d1c3b709c33d369de771280cff9b806e71f34eeca2e3b069945ee7c59defa04c",
-      "size": 15581
+      "sha256": "390ff074ed0dd745eeebc6d74caf1486dcdb31a6141f1fbabe7637cf505bee0c",
+      "size": 15953
     },
     {
       "path": "skills/visualizing-work/SKILL.md",

@@ -224,7 +224,7 @@
       "status": "verified",
       "evidence": [
         { "path": "skills/diagram-design/SKILL.md", "line": 20, "contains": "The output is not a workflow Roadmap", "note": "keeps the Roadmap itself with its specialized owner" },
-        { "path": "skills/viewing-plans/SKILL.md", "line": 64, "contains": "generate-roadmap-view.py <memory_dir>", "note": "generates the canonical roadmap.html" }
+        { "path": "skills/viewing-plans/SKILL.md", "line": 68, "contains": "generate-roadmap-view.py <memory_dir>", "note": "generates the canonical roadmap.html" }
       ]
     },
     {
@@ -234,8 +234,8 @@
       "relation": "conditionally invokes",
       "status": "verified",
       "evidence": [
-        { "path": "skills/generate-state-diagram/SKILL.md", "line": 208, "contains": "`91_state_diagram.md` と `91_state_diagram.html` を先に完成させる。", "note": "completes the canonical artifact before any companion selection" },
-        { "path": "skills/generate-state-diagram/SKILL.md", "line": 212, "contains": "`visualizing-work` を経て `diagram-design` を呼び", "note": "calls the editorial adapter only through representation selection" }
+        { "path": "skills/generate-state-diagram/SKILL.md", "line": 210, "contains": "`91_state_diagram.md` と `91_state_diagram.html` を先に完成させる。", "note": "completes the canonical artifact before any companion selection" },
+        { "path": "skills/generate-state-diagram/SKILL.md", "line": 214, "contains": "`visualizing-work` を経て `diagram-design` を呼び", "note": "calls the editorial adapter only through representation selection" }
       ]
     },
     {
@@ -245,8 +245,8 @@
       "relation": "conditionally invokes",
       "status": "verified",
       "evidence": [
-        { "path": "skills/viewing-plans/SKILL.md", "line": 103, "contains": "`roadmap.html` を先に完成させる。", "note": "completes the canonical Roadmap before any companion selection" },
-        { "path": "skills/viewing-plans/SKILL.md", "line": 107, "contains": "`visualizing-work` を経て `diagram-design` を呼び", "note": "calls the editorial adapter only through representation selection" }
+        { "path": "skills/viewing-plans/SKILL.md", "line": 107, "contains": "`roadmap.html` を先に完成させる。", "note": "completes the canonical Roadmap before any companion selection" },
+        { "path": "skills/viewing-plans/SKILL.md", "line": 111, "contains": "`visualizing-work` を経て `diagram-design` を呼び", "note": "calls the editorial adapter only through representation selection" }
       ]
     },
     {
@@ -256,7 +256,7 @@
       "relation": "guards",
       "status": "verified",
       "evidence": [
-        { "path": "skills/skill-governance/scripts/test_governance.py", "line": 2087, "contains": "def test_editorial_companion_contracts_preserve_canonical_owners", "note": "guards canonical-first ordering, distinct-reader selection, and non-duplication" }
+        { "path": "skills/skill-governance/scripts/test_governance.py", "line": 2087, "contains": "def test_editorial_companion_contracts_preserve_canonical_owners", "note": "guards canonical-first ordering, distinct-reader selection, non-duplication, and shared submodule contracts" }
       ]
     },
     {
@@ -266,7 +266,7 @@
       "relation": "guards",
       "status": "verified",
       "evidence": [
-        { "path": "skills/skill-governance/scripts/test_governance.py", "line": 2087, "contains": "def test_editorial_companion_contracts_preserve_canonical_owners", "note": "guards Roadmap canonical-first ordering, distinct-reader selection, and non-duplication" }
+        { "path": "skills/skill-governance/scripts/test_governance.py", "line": 2087, "contains": "def test_editorial_companion_contracts_preserve_canonical_owners", "note": "guards Roadmap canonical-first ordering, distinct-reader selection, non-duplication, and shared submodule contracts" }
       ]
     },
     {
@@ -296,7 +296,7 @@
       "relation": "runs",
       "status": "verified",
       "evidence": [
-        { "path": "skills/viewing-plans/SKILL.md", "line": 64, "contains": "generate-roadmap-view.py <memory_dir>", "note": "generates roadmap.html" }
+        { "path": "skills/viewing-plans/SKILL.md", "line": 68, "contains": "generate-roadmap-view.py <memory_dir>", "note": "generates roadmap.html" }
       ]
     },
     {
@@ -306,7 +306,8 @@
       "relation": "checks",
       "status": "verified",
       "evidence": [
-        { "path": "skills/viewing-plans/SKILL.md", "line": 65, "contains": "generate-codemap.py check", "note": "runs the Codemap check before opening" }
+        { "path": "skills/viewing-plans/SKILL.md", "line": 69, "contains": "generate-codemap.py check", "note": "runs the Codemap check before opening" },
+        { "path": "skills/viewing-plans/SKILL.md", "line": 20, "contains": "freshなら `codemap.html` を実際に開く。", "note": "requires opening the fresh Codemap instead of only reporting its path" }
       ]
     },
     {

@@ -14,7 +14,11 @@ Markdown全文、手動ファイル読込、JSON操作、KPIカードは第一�
 `--serve --watch` で起動すると、Codex app の横に置いたブラウザが自動更新される。
 Plan Viewer / Log Viewer は、明示的に文書本文を確認するときだけ使う。
 
+<!-- viewer-codemap-preflight:start -->
 workspace Codemapがある場合は、task Roadmapと別の地図として扱う。`roadmap.html` は現在task、`codemap.html` はcode topologyの正本であり、snapshotやfreshnessを統合しない。コード変更taskでは `context/codemap.md` のpreflightが先に成立していることを確認し、RoadmapとCodemapを並べて開く。
+
+コード変更taskでは編集前に `scripts/generate-codemap.py check --root <workspace-root>` を実行する。freshなら `codemap.html` を実際に開く。freshでなければ `context/codemap.md` に従って `codemap.source.json` を更新し、refresh → check の後に開く。
+<!-- viewer-codemap-preflight:end -->
 
 複数 task を横断して見る場合は Roadmap Task Hub を使う:
 
