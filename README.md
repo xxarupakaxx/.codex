@@ -98,7 +98,7 @@ map validates files in the workspace, but its artifacts stay in the current
 task memory directory and out of Git:
 
 - `codemap.json` is the AI-readable topology.
-- `codemap.html` is the human-readable graph and inspector.
+- `roadmap.html` is the single Task Workspace for plan/progress and the evidence-backed Code Map.
 - `codemap.lock` records source, map, template, and HTML fingerprints.
 
 Author the map beside the task artifacts, then generate all three outputs together:

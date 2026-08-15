@@ -14,6 +14,9 @@ fi
 CWD=$(echo "$INPUT" | jq -r '.cwd // ""')
 TRANSCRIPT=$(echo "$INPUT" | jq -r '.transcript_path // ""')
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "unknown"')
+THREAD_ID=$(echo "$INPUT" | jq -r '.thread_id // "unknown"')
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+. "$SCRIPT_DIR/lib-task-memory.sh"
 
 if [ -z "$CWD" ]; then
   exit 0
@@ -33,7 +36,7 @@ if [ -z "$MEMORY_BASE" ]; then
   exit 0
 fi
 
-LATEST_DIR=$(find "$MEMORY_BASE" -maxdepth 1 -type d -name "[0-9]*" 2>/dev/null | sort -r | head -1)
+LATEST_DIR=$(select_task_directory "$MEMORY_BASE" "$SESSION_ID" "$THREAD_ID" || true)
 
 # 05_log.mdが存在しない場合はスキップ（タスク非活性）
 if [ -z "$LATEST_DIR" ] || [ ! -f "$LATEST_DIR/05_log.md" ]; then
@@ -41,9 +44,10 @@ if [ -z "$LATEST_DIR" ] || [ ! -f "$LATEST_DIR/05_log.md" ]; then
 fi
 
 # HANDOVER.md を保存
-HANDOVER_DIR="$CWD/.local"
+HANDOVER_DIR="$CWD/.local/handovers"
 mkdir -p "$HANDOVER_DIR"
-HANDOVER_FILE="$HANDOVER_DIR/HANDOVER.md"
+HANDOVER_FILE=$(session_handover_path "$CWD/.local" "$SESSION_ID")
+HANDOVER_TMP="${HANDOVER_FILE}.tmp.$$"
 
 {
   echo "# Session Handover"
@@ -105,6 +109,10 @@ HANDOVER_FILE="$HANDOVER_DIR/HANDOVER.md"
   echo "- Check the memory directory for detailed task files"
   echo "- Continue from the phase indicated in the task log above"
 
-} > "$HANDOVER_FILE"
+} > "$HANDOVER_TMP"
+mv "$HANDOVER_TMP" "$HANDOVER_FILE"
+COMPAT_TMP="$CWD/.local/.HANDOVER.md.tmp.$$"
+cp "$HANDOVER_FILE" "$COMPAT_TMP"
+mv "$COMPAT_TMP" "$CWD/.local/HANDOVER.md"
 
 exit 0

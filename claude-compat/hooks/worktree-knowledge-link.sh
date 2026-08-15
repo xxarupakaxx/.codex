@@ -2,7 +2,7 @@
 # worktree-knowledge-link.sh
 # Worktree内の知見ディレクトリをメインworktreeの.local/にシンボリックリンク
 # 共有: memories/, solutions/, issues/, memory/, memory.db
-# ローカル維持: HANDOVER.md, plans/
+# ローカル維持: HANDOVER.md, handovers/, runtime/, plans/
 #
 # 対象:
 #   1. リポジトリルートの .local/
@@ -37,7 +37,7 @@ link_local() {
   mkdir -p "$main_local/memories" "$main_local/solutions" "$main_local/issues" "$main_local/memory"
 
   # ワークツリーの.localディレクトリを確保
-  mkdir -p "$wt_local"
+  mkdir -p "$wt_local/handovers" "$wt_local/runtime/locks"
 
   # 共有すべきディレクトリをシンボリックリンク
   for dir in memories solutions issues memory; do

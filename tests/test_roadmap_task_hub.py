@@ -222,8 +222,11 @@ class TaskStateTest(unittest.TestCase):
         cases = [
             ("active", "running", 15, "running"),
             ("active", "running", 16, "waiting"),
+            ("active", "active", 15, "running"),
+            ("active", "verifying", 15, "running"),
             ("idle", "waiting", 1, "waiting"),
             ("idle", "completed", 60, "recent_completed"),
+            ("idle", "archived", 1, None),
             ("systemError", None, 1, "waiting"),
         ]
 

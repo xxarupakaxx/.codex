@@ -15,13 +15,7 @@ from typing import Any
 
 
 ROOT = Path(__file__).resolve().parents[1]
-TEMPLATE = ROOT / "tools" / "roadmap_viewer.html"
-PLACEHOLDER = '{"__ROADMAP_SNAPSHOT_JSON__": true}'
 OUTPUT_NAMES = {"codemap.json", "codemap.html", "codemap.lock"}
-EMBEDDED_SNAPSHOT_RE = re.compile(
-    r'<script\b(?=[^>]*\bid=["\']embedded-snapshot["\'])[^>]*>(.*?)</script\s*>',
-    re.IGNORECASE | re.DOTALL,
-)
 
 
 class CodemapValidationError(ValueError):
@@ -230,9 +224,7 @@ def validate_lock(document: object) -> dict[str, Any]:
     for name in (
         "sourceSpecFingerprint",
         "sourceFingerprint",
-        "templateFingerprint",
         "mapFingerprint",
-        "htmlFingerprint",
     ):
         fingerprint = require_text(data.get(name), f"lock {name}")
         if not re.fullmatch(r"[0-9a-f]{64}", fingerprint):
@@ -301,28 +293,6 @@ def manifest_fingerprint(manifest: list[dict[str, object]]) -> str:
     return sha256_bytes(json_text(manifest, compact=True).encode("utf-8"))
 
 
-def template_fingerprint() -> str:
-    return sha256_bytes(TEMPLATE.read_text(encoding="utf-8").encode("utf-8"))
-
-
-def render_html(snapshot: dict[str, Any]) -> str:
-    template = TEMPLATE.read_text(encoding="utf-8")
-    if PLACEHOLDER not in template:
-        raise CodemapValidationError(f"placeholder not found in {TEMPLATE}")
-    payload = json.dumps(snapshot, ensure_ascii=False).replace("</", "<\\/")
-    return template.replace(PLACEHOLDER, payload, 1)
-
-
-def extract_embedded_snapshot(html: str) -> dict[str, Any]:
-    match = EMBEDDED_SNAPSHOT_RE.search(html)
-    if not match:
-        raise CodemapStateError("codemap.html has no embedded snapshot")
-    try:
-        return require_object(json.loads(match.group(1)), "embedded snapshot")
-    except (json.JSONDecodeError, CodemapValidationError) as error:
-        raise CodemapStateError("codemap.html has an invalid embedded snapshot") from error
-
-
 def source_relative(directory: Path, source: Path) -> str:
     try:
         return Path(os.path.abspath(source)).relative_to(
@@ -381,7 +351,6 @@ def refresh(
         },
     }
     map_content = json_text(snapshot)
-    html_content = render_html(snapshot)
     lock = {
         "schemaVersion": 1,
         "kind": "codemap-lock",
@@ -389,13 +358,10 @@ def refresh(
         "sourceFile": source_name,
         "sourceSpecFingerprint": sha256_bytes(source_bytes),
         "sourceFingerprint": source_fingerprint,
-        "templateFingerprint": template_fingerprint(),
         "mapFingerprint": sha256_bytes(map_content.encode("utf-8")),
-        "htmlFingerprint": sha256_bytes(html_content.encode("utf-8")),
         "sourceManifest": manifest,
     }
     atomic_write(output_dir / "codemap.json", map_content)
-    atomic_write(output_dir / "codemap.html", html_content)
     atomic_write(output_dir / "codemap.lock", json_text(lock))
     return lock
 
@@ -419,13 +385,8 @@ def check(
     except (json.JSONDecodeError, CodemapValidationError) as error:
         raise CodemapStateError("invalid codemap.lock") from error
     map_bytes = read_required(output_dir / "codemap.json")
-    html_bytes = read_required(output_dir / "codemap.html")
     if sha256_bytes(map_bytes) != lock.get("mapFingerprint"):
         raise CodemapStateError("map fingerprint mismatch")
-    if sha256_bytes(html_bytes) != lock.get("htmlFingerprint"):
-        raise CodemapStateError("html fingerprint mismatch")
-    if template_fingerprint() != lock.get("templateFingerprint"):
-        raise CodemapStateError("template fingerprint mismatch")
 
     source_name = relative_path(lock.get("sourceFile"), "lock sourceFile")
     source_path = path_in_root(output_dir, source_name, "lock sourceFile")
@@ -436,9 +397,6 @@ def check(
         snapshot = validate_generated_snapshot(json.loads(map_bytes), root)
     except (json.JSONDecodeError, CodemapValidationError) as error:
         raise CodemapStateError(f"invalid codemap.json: {error}") from error
-    embedded = extract_embedded_snapshot(html_bytes.decode("utf-8"))
-    if embedded != snapshot:
-        raise CodemapStateError("HTML embedded map does not match codemap.json")
     if snapshot.get("generatedAt") != lock.get("generatedAt"):
         raise CodemapStateError("generated time mismatch")
     manifest = build_manifest(root, snapshot["scope"], require_matches=False)
@@ -457,7 +415,7 @@ def check(
 
 
 def parse_args(argv: list[str] | None = None) -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate and verify Codemap triads")
+    parser = argparse.ArgumentParser(description="Generate and verify Codemap map/lock artifacts")
     subparsers = parser.add_subparsers(dest="command", required=True)
     refresh_parser = subparsers.add_parser("refresh")
     refresh_parser.add_argument("--root", type=Path, default=Path.cwd())

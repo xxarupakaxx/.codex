@@ -180,6 +180,62 @@ def write_text_if_changed(path: Path, text: str) -> bool:
     return True
 
 
+def ensure_task_meta(
+    task_dir: Path,
+    source_root: Path,
+    *,
+    thread_id: str | None = None,
+    session_id: str | None = None,
+    task_state: str | None = None,
+) -> dict[str, object]:
+    path = task_dir / "task-meta.json"
+    existing: dict[str, object] = {}
+    if path.is_symlink():
+        raise ValueError("task-meta.json must not be a symlink")
+    if path.is_file():
+        try:
+            loaded = json.loads(path.read_text(encoding="utf-8"))
+        except (OSError, json.JSONDecodeError) as error:
+            raise ValueError(f"invalid task-meta.json: {error}") from error
+        if not isinstance(loaded, dict):
+            raise ValueError("invalid task-meta.json: root must be an object")
+        existing = loaded
+
+    now = datetime.now(timezone.utc).isoformat()
+    files, _ = read_files(task_dir)
+    desired = {
+        **existing,
+        "schema_version": 1,
+        "task_id": str(existing.get("task_id") or task_dir.name),
+        "task_title": str(
+            existing.get("task_title") or infer_title(files, task_dir)
+        ),
+        "project_path": str(source_root),
+        "worktree_path": str(source_root),
+        "task_state": str(task_state or existing.get("task_state") or "active"),
+        "code_change": bool(
+            existing.get("code_change") or (task_dir / "codemap.source.json").is_file()
+        ),
+        "created_at": str(existing.get("created_at") or now),
+    }
+    if thread_id:
+        desired["thread_id"] = thread_id
+    if session_id:
+        desired["session_id"] = session_id
+    comparable_existing = {key: value for key, value in existing.items() if key != "updated_at"}
+    comparable_desired = {key: value for key, value in desired.items() if key != "updated_at"}
+    desired["updated_at"] = (
+        str(existing.get("updated_at"))
+        if comparable_existing == comparable_desired and existing.get("updated_at")
+        else now
+    )
+    write_text_if_changed(
+        path,
+        json.dumps(desired, ensure_ascii=False, indent=2, sort_keys=True) + "\n",
+    )
+    return desired
+
+
 def read_files(task_dir: Path) -> tuple[dict[str, str], list[dict[str, object]]]:
     files: dict[str, str] = {}
     sources: list[dict[str, object]] = []
@@ -207,7 +263,7 @@ def read_files(task_dir: Path) -> tuple[dict[str, str], list[dict[str, object]]]
 
 
 def infer_source_root(task_dir: Path) -> Path | None:
-    resolved = task_dir.resolve(strict=False)
+    resolved = Path(os.path.abspath(task_dir))
     if (
         resolved.parent.name == "memory"
         and resolved.parent.parent.name == ".local"
@@ -655,11 +711,13 @@ def build_fingerprint(
     files: dict[str, str],
     artifacts: list[dict[str, object]],
     source_previews: list[dict[str, object]] | None = None,
+    codemap_state: dict[str, object] | None = None,
 ) -> str:
     payload = {
         "files": files,
         "artifacts": artifacts,
         "sourcePreviews": source_previews or [],
+        "codemap": codemap_state or {},
     }
     canonical = json.dumps(
         payload,
@@ -686,6 +744,63 @@ def infer_title(files: dict[str, str], task_dir: Path) -> str:
     return "Roadmap"
 
 
+def load_task_meta(task_dir: Path) -> dict[str, object]:
+    path = task_dir / "task-meta.json"
+    if not path.is_file() or path.is_symlink():
+        return {}
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {}
+    return value if isinstance(value, dict) else {}
+
+
+def load_codemap_state(task_dir: Path, source_root: Path) -> dict[str, object]:
+    source = task_dir / "codemap.source.json"
+    map_path = task_dir / "codemap.json"
+    lock_path = task_dir / "codemap.lock"
+    code_change = load_task_meta(task_dir).get("code_change") is True
+    if not source.is_file() and not map_path.is_file() and not lock_path.is_file():
+        if code_change:
+            return {
+                "status": "missing",
+                "message": "Codemap is required for this code-change task. Run refresh, then check.",
+            }
+        return {"status": "not-applicable"}
+    if not source.is_file() or not map_path.is_file() or not lock_path.is_file():
+        return {"status": "missing", "message": "Codemap artifact is incomplete."}
+
+    module_path = Path(__file__).with_name("generate-codemap.py")
+    spec = importlib.util.spec_from_file_location("task_codemap_checker", module_path)
+    if spec is None or spec.loader is None:
+        return {"status": "error", "message": "Codemap checker could not be loaded."}
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    try:
+        result = module.check(source_root, artifact_dir=task_dir)
+        snapshot = json.loads(map_path.read_text(encoding="utf-8"))
+    except (OSError, ValueError, RuntimeError) as error:
+        message = str(error)
+        if "missing" in message.lower():
+            status = "missing"
+        elif "mismatch" in message.lower():
+            status = "mismatch"
+        else:
+            status = "stale"
+        return {"status": status, "message": message}
+    counts = snapshot.get("counts")
+    if isinstance(counts, dict) and int(counts.get("unknown", 0) or 0) > 0:
+        return {
+            "status": "insufficient",
+            "message": "Codemap still contains unknown relationships.",
+            "snapshot": snapshot,
+        }
+    return {
+        "status": str(result.get("status", "fresh")),
+        "snapshot": snapshot,
+    }
+
+
 def build_snapshot(
     task_dir: Path,
     output: Path | None = None,
@@ -697,23 +812,34 @@ def build_snapshot(
     if not files:
         raise ValueError(f"no roadmap source files found in {task_dir}")
     artifacts = collect_artifacts(task_dir, output)
-    effective_source_root = source_root or infer_source_root(task_dir)
+    effective_source_root = source_root or infer_source_root(task_dir) or task_dir.parent
     source_previews = collect_source_previews(
         files.get("30_plan.md", ""),
         source_root=effective_source_root,
         source_allow_prefixes=source_allow_prefixes,
     )
-    return {
+    codemap_state = load_codemap_state(task_dir, effective_source_root)
+    snapshot: dict[str, object] = {
         "version": 1,
         "title": infer_title(files, task_dir),
         "taskDir": str(task_dir),
         "generatedAt": datetime.now(timezone.utc).isoformat(),
-        "fingerprint": build_fingerprint(files, artifacts, source_previews),
+        "fingerprint": build_fingerprint(
+            files, artifacts, source_previews, codemap_state
+        ),
         "files": files,
         "sources": sources,
         "artifacts": artifacts,
         "sourcePreviews": source_previews,
+        "codemapStatus": codemap_state["status"],
     }
+    codemap_snapshot = codemap_state.get("snapshot")
+    if isinstance(codemap_snapshot, dict):
+        snapshot["codemap"] = codemap_snapshot
+    codemap_message = codemap_state.get("message")
+    if isinstance(codemap_message, str) and codemap_message:
+        snapshot["codemapMessage"] = codemap_message
+    return snapshot
 
 
 def render_html(snapshot: dict[str, object]) -> str:
@@ -766,8 +892,19 @@ def write_outputs(
     *,
     source_root: Path | None = None,
     source_allow_prefixes: list[str] | None = None,
+    thread_id: str | None = None,
+    session_id: str | None = None,
+    task_state: str | None = None,
 ) -> dict[str, object]:
     json_path = output.with_name("roadmap-snapshot.json")
+    effective_source_root = source_root or infer_source_root(task_dir) or task_dir.parent
+    ensure_task_meta(
+        task_dir,
+        effective_source_root,
+        thread_id=thread_id,
+        session_id=session_id,
+        task_state=task_state,
+    )
     snapshot = build_snapshot(
         task_dir,
         output=output,
@@ -905,6 +1042,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "May be repeated."
         ),
     )
+    parser.add_argument("--thread-id", help="Bind task-meta.json to a Codex thread ID.")
+    parser.add_argument("--session-id", help="Bind task-meta.json to a runtime session ID.")
+    parser.add_argument(
+        "--task-state",
+        choices=("active", "waiting", "verifying", "completed", "archived"),
+        help="Update the machine-owned task lifecycle state.",
+    )
     parser.add_argument(
         "--open",
         action="store_true",
@@ -968,6 +1112,9 @@ def main(argv: list[str]) -> int:
         write_json=write_json,
         source_root=source_root,
         source_allow_prefixes=args.source_allow_prefix,
+        thread_id=args.thread_id,
+        session_id=args.session_id,
+        task_state=args.task_state,
     )
 
     print(output)

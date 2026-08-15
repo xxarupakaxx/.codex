@@ -7,15 +7,19 @@ INPUT=$(cat)
 TRANSCRIPT=$(echo "$INPUT" | jq -r '.transcript_path // ""')
 CWD=$(echo "$INPUT" | jq -r '.cwd // ""')
 SESSION_ID=$(echo "$INPUT" | jq -r '.session_id // "unknown"')
+THREAD_ID=$(echo "$INPUT" | jq -r '.thread_id // "unknown"')
+SCRIPT_DIR=$(cd "$(dirname "$0")" && pwd)
+. "$SCRIPT_DIR/lib-task-memory.sh"
 
 if [ -z "$CWD" ]; then
   exit 0
 fi
 
-# HANDOVER.md の保存先
-HANDOVER_DIR="$CWD/.local"
+# session固有handoverの保存先
+HANDOVER_DIR="$CWD/.local/handovers"
 mkdir -p "$HANDOVER_DIR"
-HANDOVER_FILE="$HANDOVER_DIR/HANDOVER.md"
+HANDOVER_FILE=$(session_handover_path "$CWD/.local" "$SESSION_ID")
+HANDOVER_TMP="${HANDOVER_FILE}.tmp.$$"
 
 # 最新のメモリディレクトリを探す
 MEMORY_BASE=""
@@ -28,7 +32,7 @@ done
 
 LATEST_DIR=""
 if [ -n "$MEMORY_BASE" ]; then
-  LATEST_DIR=$(find "$MEMORY_BASE" -maxdepth 1 -type d -name "[0-9]*" 2>/dev/null | sort -r | head -1)
+  LATEST_DIR=$(select_task_directory "$MEMORY_BASE" "$SESSION_ID" "$THREAD_ID" || true)
 fi
 
 # 現在のPhaseを推定
@@ -142,6 +146,10 @@ fi
   echo "3. Resume from **Phase $CURRENT_PHASE** (see Next Action above)"
   echo "4. If checkpoint.md exists, use \`/verify\` to check acceptance criteria status"
 
-} > "$HANDOVER_FILE"
+} > "$HANDOVER_TMP"
+mv "$HANDOVER_TMP" "$HANDOVER_FILE"
+COMPAT_TMP="$CWD/.local/.HANDOVER.md.tmp.$$"
+cp "$HANDOVER_FILE" "$COMPAT_TMP"
+mv "$COMPAT_TMP" "$CWD/.local/HANDOVER.md"
 
 exit 0

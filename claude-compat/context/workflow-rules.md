@@ -524,6 +524,8 @@ Phase直結でないユーティリティスキル。**状況が発生したら*
 
 ## HTML Viewer Tools
 
+Task Workspaceは`roadmap.html`を唯一の人向け入口とし、Plan / ProgressとfreshなCode Mapを同じ画面で切り替える。Codemap freshnessは`codemap.lock`を正本とし、Roadmapの更新時刻で代用しない。
+
 計画ファイル・ログをMCP Apps経由でインタラクティブに閲覧するためのHTMLビューア。
 **自動発動**によりユーザー操作不要で表示される。
 

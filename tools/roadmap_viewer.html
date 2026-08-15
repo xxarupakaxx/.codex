@@ -4,6 +4,7 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <meta name="color-scheme" content="light dark">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232f6f5e'/%3E%3Cpath d='M10 24 22 8' stroke='white' stroke-width='4'/%3E%3C/svg%3E">
   <title>Roadmap</title>
   <style>
     :root {
@@ -2471,6 +2472,13 @@
     @media (prefers-reduced-motion: reduce) {
       body.codemap-mode .explicit-node-layer .graph-node { transition: none; }
     }
+    .workspace-view-switch { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
+    .workspace-view-switch .btn { min-height: 30px; padding: 5px 9px; border: 0; box-shadow: none; }
+    .workspace-view-switch .btn[aria-pressed="true"] { background: var(--surface); color: var(--accent-strong); box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 12%, transparent); }
+    .workspace-view-switch .btn:disabled { cursor: not-allowed; opacity: .55; }
+    .codemap-gate { max-width: 260px; overflow: hidden; color: var(--muted); font-size: 11px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
+    .codemap-gate[data-status="fresh"] { color: var(--success); }
+    .codemap-gate[data-status="missing"], .codemap-gate[data-status="mismatch"], .codemap-gate[data-status="stale"], .codemap-gate[data-status="insufficient"] { color: var(--danger); }
   </style>
 </head>
 <body>
@@ -2488,6 +2496,11 @@
         </div>
       </div>
       <div class="toolbar" role="group" aria-label="Viewer操作">
+        <span class="workspace-view-switch" role="group" aria-label="Task Workspace表示">
+          <button class="btn" type="button" id="workspace-view-plan" aria-pressed="true">Plan</button>
+          <button class="btn" type="button" id="workspace-view-code" aria-pressed="false">Code Map</button>
+        </span>
+        <span class="codemap-gate" id="codemap-gate" role="status" aria-live="polite">Codemap: —</span>
         <span class="live-badge" id="live-status">
           <img class="icon" id="live-status-icon" alt="">
           <span id="live-status-text">Static</span>
@@ -3009,6 +3022,9 @@
       const codemapItems = name => (Array.isArray(snapshot[name]) ? snapshot[name] : [])
         .filter(item => item && typeof item === 'object')
         .map(item => ({ ...item }));
+      const embeddedCodemap = snapshot.codemap && typeof snapshot.codemap === 'object'
+        ? normalizeSnapshot({ ...snapshot.codemap, codemap: null })
+        : null;
       return {
         version: Number(snapshot.version) || 1,
         schemaVersion: Number(snapshot.schemaVersion) || 0,
@@ -3018,6 +3034,9 @@
         generatedAt: asText(snapshot.generatedAt || snapshot.generated_at),
         fingerprint: asText(snapshot.fingerprint),
         sourceFingerprint: asText(snapshot.sourceFingerprint),
+        codemapStatus: asText(snapshot.codemapStatus || snapshot.codemap_status) || (embeddedCodemap ? 'fresh' : 'not-applicable'),
+        codemapMessage: asText(snapshot.codemapMessage || snapshot.codemap_message),
+        codemap: embeddedCodemap,
         files: normalizedFiles,
         sources: sources.length ? sources : Object.keys(normalizedFiles).map(name => ({ name, size: normalizedFiles[name].length })),
         artifacts,
@@ -3040,6 +3059,9 @@
         files: Object.keys(snapshot.files).sort().map(name => [name, snapshot.files[name]]),
         artifacts: stableArtifactValue(snapshot.artifacts),
         sourcePreviews: snapshot.sourcePreviews,
+        codemapStatus: snapshot.codemapStatus,
+        codemapMessage: snapshot.codemapMessage,
+        codemap: snapshot.codemap,
         lanes: snapshot.lanes,
         nodes: snapshot.nodes,
         edges: snapshot.edges
@@ -4403,6 +4425,14 @@
     const ROADMAP_MODEL = globalThis.__ROADMAP_MODEL__;
     const KNOWN_FILES = ROADMAP_MODEL.MODEL_KNOWN_FILES;
     let currentSnapshot = ROADMAP_MODEL.normalizeSnapshot({ title: 'Roadmap', files: {} });
+    let workspaceRootSnapshot = currentSnapshot;
+    let workspaceView = new URLSearchParams(location.search).get('view') === 'code' ? 'code' : 'plan';
+    function updateWorkspaceUrl() {
+      const url = new URL(location.href);
+      if (workspaceView === 'code') url.searchParams.set('view', 'code');
+      else url.searchParams.delete('view');
+      history.replaceState(null, '', url);
+    }
     let currentModel = null;
     let lastSnapshotSignature = '';
     let selectedImplementationTaskNumber = '';
@@ -4592,8 +4622,13 @@
     function render(snapshotInput, options = {}) {
       const previousModel = currentModel;
       const focusKey = captureFocusKey();
-      currentSnapshot = ROADMAP_MODEL.normalizeSnapshot(snapshotInput);
-      lastSnapshotSignature = ROADMAP_MODEL.snapshotSignature(currentSnapshot);
+      const normalizedRoot = ROADMAP_MODEL.normalizeSnapshot(snapshotInput);
+      if (normalizedRoot.kind !== 'codemap') workspaceRootSnapshot = normalizedRoot;
+      if (workspaceView === 'code' && !workspaceRootSnapshot.codemap) workspaceView = 'plan';
+      currentSnapshot = workspaceView === 'code' && workspaceRootSnapshot.codemap
+        ? workspaceRootSnapshot.codemap
+        : normalizedRoot;
+      lastSnapshotSignature = ROADMAP_MODEL.snapshotSignature(normalizedRoot);
       currentModel = ROADMAP_MODEL.buildModel(currentSnapshot);
       const isCodemap = currentSnapshot.kind === 'codemap';
       document.body.classList.toggle('codemap-mode', isCodemap);
@@ -4608,6 +4643,17 @@
       }
       byId('codemap-toolbar').hidden = !isCodemap;
       byId('codemap-mobile-context').hidden = !isCodemap;
+      byId('workspace-view-plan').setAttribute('aria-pressed', String(workspaceView === 'plan'));
+      byId('workspace-view-code').setAttribute('aria-pressed', String(workspaceView === 'code'));
+      byId('workspace-view-code').disabled = !workspaceRootSnapshot.codemap;
+      const codemapStatus = workspaceRootSnapshot.codemapStatus || 'not-applicable';
+      byId('workspace-view-code').textContent = codemapStatus === 'fresh' ? 'Code Map' : `Code Map · ${codemapStatus}`;
+      const codemapMessage = workspaceRootSnapshot.codemapMessage || `Codemap: ${codemapStatus}`;
+      const codemapGate = byId('codemap-gate');
+      codemapGate.dataset.status = codemapStatus;
+      codemapGate.textContent = `Codemap: ${codemapStatus}`;
+      codemapGate.title = codemapMessage;
+      byId('workspace-view-code').title = `${codemapMessage} Refresh: python3 scripts/generate-codemap.py refresh … && python3 scripts/generate-codemap.py check …`;
       byId('graph-shell').setAttribute('aria-label', isCodemap ? '根拠付きコード関係図' : '成果までの構造グラフ');
       const activeNumber = currentModel.activeTask?.number;
       if (!taskExpansionInitialized) {
@@ -5100,8 +5146,9 @@
     function renderHeader(model) {
       const taskTitle = String(model.snapshot.title || '').trim() || 'Roadmap';
       const isCodemap = model.snapshot.kind === 'codemap';
-      byId('task-title').textContent = isCodemap ? 'Workspace Codemap' : taskTitle;
-      document.title = taskTitle;
+      const workspaceTitle = String(workspaceRootSnapshot?.title || taskTitle).trim() || 'Task Workspace';
+      byId('task-title').textContent = isCodemap ? `${workspaceTitle} · Code Map` : workspaceTitle;
+      document.title = workspaceTitle;
       const updated = model.snapshot.generatedAt;
       byId('header-updated').textContent = updated ? `最終更新: ${formatRelative(updated)}` : '最終更新: —';
       byId('header-updated').title = updated ? formatAbsolute(updated) : '';
@@ -5687,6 +5734,17 @@
         viewerNavScrollFrame = requestAnimationFrame(updateViewerNavFromScroll);
       }, { passive: true });
       byId('open-files').addEventListener('click', () => fileInput.click());
+      byId('workspace-view-plan').addEventListener('click', () => {
+        workspaceView = 'plan';
+        updateWorkspaceUrl();
+        render(workspaceRootSnapshot, { announce: false });
+      });
+      byId('workspace-view-code').addEventListener('click', () => {
+        if (!workspaceRootSnapshot.codemap) return;
+        workspaceView = 'code';
+        updateWorkspaceUrl();
+        render(workspaceRootSnapshot, { announce: false });
+      });
       fileInput.addEventListener('change', async () => {
         try { await loadFiles(fileInput.files); }
         catch { showToast('ファイルを読み込めませんでした'); }

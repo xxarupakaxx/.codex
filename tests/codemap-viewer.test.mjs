@@ -127,10 +127,32 @@ test('ordinary roadmap snapshots still route graph-map through the legacy adapte
   assert.equal(tree.edges[0].predicate, 'supports');
 });
 
+test('roadmap snapshots preserve an embedded codemap workspace view', () => {
+  const roadmap = modelApi.normalizeSnapshot({
+    title: 'Unified workspace',
+    files: { '00_spec.md': '# Spec' },
+    codemapStatus: 'fresh',
+    codemap: codemapSnapshot
+  });
+  assert.equal(roadmap.codemapStatus, 'fresh');
+  assert.equal(roadmap.codemap.kind, 'codemap');
+  assert.equal(roadmap.codemap.nodes.length, 4);
+  assert.notEqual(modelApi.snapshotSignature(roadmap), modelApi.snapshotSignature({
+    ...roadmap,
+    codemapStatus: 'stale',
+    codemap: null
+  }));
+});
+
 test('codemap markup keeps semantic lanes, path copy, and mode restoration hooks', () => {
   assert.match(html, /class="codemap-lane-group"[^>]*role="group"/);
   assert.match(html, /id="copy-codemap-path"/);
   assert.match(html, /conceptMapOpenBeforeCodemap/);
+  assert.match(html, /id="workspace-view-plan"/);
+  assert.match(html, /id="workspace-view-code"/);
+  assert.match(html, /id="codemap-gate"/);
+  assert.match(html, /updateWorkspaceUrl/);
+  assert.match(html, /searchParams\.set\('view', 'code'\)/);
   assert.match(html, /body\.codemap-mode \.explicit-node-layer \.node-meta[^}]*11px/);
 });
 
@@ -141,7 +163,7 @@ test('codemap polish keeps metrics lanes states direction and evidence visually 
   assert.match(html, /class="relation-status status-/);
   assert.match(html, /id="graph-arrow-active"/);
   assert.match(html, /marker-end="url\(#graph-arrow-/);
-  assert.match(html, /isCodemap \? 'Workspace Codemap'/);
+  assert.match(html, /workspaceTitle} · Code Map/);
   assert.match(html, /body\.codemap-mode \.explicit-node-layer \.graph-node\[aria-current="true"\][^}]*var\(--accent\)/);
   assert.match(html, /body\.codemap-mode \.explicit-node-layer \.graph-node\[aria-current="true"\] \.node-glyph[^}]*var\(--accent\)/);
   assert.match(html, /id="codemap-mobile-context"/);

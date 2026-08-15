@@ -19,13 +19,6 @@
 - 再現 test は観測済みの失敗と既存契約だけを固定し、未確認の出力形式やerror型を新しい期待値にしない。
 - Markdown を変更したら全文を再読し、矛盾、重複、rule漏れを同じturnで解消する。
 
-## Secret と外部境界
-
-- secret 実値を 1Password の外へ永続化しない。code、設定、log、chat、artifact、memory、sub-agent prompt に書かない。
-- CLI で必要な場合は親processで `op://...` を解決し、referenceと解決結果を委譲先や外部相談へ渡さない。
-- 外部 write と `git commit` / `git push` は External Write Gate とproject policyに従う。
-- 外部操作の失敗を別principal、company、profileへの自動切替で回避しない。読み取り診断でもprincipalを明示し、解消しなければ停止する。
-
 ## 指示と知識の配置
 
 - sessionをまたぐ情報はMemoryだけに置かず、git管理された正本へ反映する。
@@ -51,9 +44,8 @@
 
 - すべてのtaskを`context/workflow-rules.md`のPhase 0から順に実行し、各Phaseの内容を`05_log.md`へ作業中に記録する。Fast Trackも同正本の条件に従う。
 - Phase / Stepを持つ作業は、遷移前に所定artifactを保存する。配置とfrontmatterは`context/memory-file-formats.md`に従う。
-- code変更は編集前後にtask memory directoryのCodemapを検証する。workspace rootは検証対象、task memory directoryはartifact出力先とし、詳細と例外は`context/codemap.md`に従う。non-code taskは対象外。
-- 複数Phaseのworkflowでは`viewing-plans`を併走し、生成したviewerは案内前に実際に開く。
-- `/clear`後やcontextが空の場合は`${MEMORY_DIR:-.local}/HANDOVER.md`と同root配下の直近taskの`05_log.md`を読み、session状態を復元する。
+- code変更はTask WorkspaceのCodemap gateを編集前後に通す。複数Phaseでは同Workspaceをlive表示し、案内前に実際に開く。詳細は`context/codemap.md`と`skills/viewing-plans/SKILL.md`に従う。
+- `/clear`後やcontextが空の場合は`${MEMORY_DIR:-.local}/handovers/`のsession一致handoverを優先し、互換の`HANDOVER.md`と対応taskの`05_log.md`から状態を復元する。
 - freshな直接検証を先に行い、変更リスクに合う最小の独立checkerを選ぶ。CRITICALは必ず、正しさに関わるIMPORTANT / MINORは原則修正する。
 - code変更では計画時target、実装時actual、レビュー時varianceを記録する。必要な安全性、可読性、testを行数合わせで削らない。
 
@@ -64,8 +56,7 @@
 | Phase 0-5.5、Fast Track、review、Goal / acceptance、Roadmap | `context/workflow-rules.md` |
 | plugin / Skill / agent routing、委譲、外部write | `context/agent-team-routing.md` |
 | artifact / memory形式、session復元 | `context/memory-file-formats.md` |
-| Codemap preflight / refresh | `context/codemap.md` |
-| live Roadmap / Plan Viewer | `skills/viewing-plans/SKILL.md` |
+| Task Workspace、Codemap preflight、live Roadmap | `context/codemap.md` と `skills/viewing-plans/SKILL.md` |
 | team-run composition / exit gate | `context/team-run.md` と `skills/team-run/SKILL.md` |
 | model / service tier | `rules/model-routing.md` |
 | code complexity budget | `rules/complexity-budget.md` |
