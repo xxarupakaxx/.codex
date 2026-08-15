@@ -32,7 +32,7 @@
 - 現在の仕様はdocs、検証可能な期待はtest、局所例外は隣接comment、判断理由はADR、反復手順はSkill、未完了作業はissue、履歴はGit logに置く。
 - `AGENTS.md`には全Agentが毎回守る不変条件と正本への入口だけを置く。完了済みTODOや手順の複製を残さない。
 - 例外には理由、適用範囲、解除条件を付け、条件が満たされたら削除する。
-- 一過性の下書き、調査メモ、CLI/AI間の受け渡しはworktreeの`.context/`に置く。複数行や構造化内容は実ファイルで渡す。
+- 一過性の下書きや受け渡しはworktreeの`.context/`に置き、`/tmp`や`/private`を標準置き場にしない。複数行や構造化内容は実ファイルで渡し、inline展開、here-doc、反復読込するpipeを避ける。
 
 ## Script とerror
 
@@ -51,8 +51,9 @@
 
 - すべてのtaskを`context/workflow-rules.md`のPhase 0から順に実行し、各Phaseの内容を`05_log.md`へ作業中に記録する。Fast Trackも同正本の条件に従う。
 - Phase / Stepを持つ作業は、遷移前に所定artifactを保存する。配置とfrontmatterは`context/memory-file-formats.md`に従う。
-- code変更は編集前後にtask-local Codemapを検証する。詳細と例外は`context/codemap.md`に従う。non-code taskは対象外。
+- code変更は編集前後にworkspace rootのCodemapを検証する。詳細と例外は`context/codemap.md`に従う。non-code taskは対象外。
 - 複数Phaseのworkflowでは`viewing-plans`を併走し、生成したviewerは案内前に実際に開く。
+- `/clear`後やcontextが空の場合は`.local/HANDOVER.md`と直近taskの`05_log.md`を読み、session状態を復元する。
 - freshな直接検証を先に行い、変更リスクに合う最小の独立checkerを選ぶ。CRITICALは必ず、正しさに関わるIMPORTANT / MINORは原則修正する。
 - code変更では計画時target、実装時actual、レビュー時varianceを記録する。必要な安全性、可読性、testを行数合わせで削らない。
 
@@ -69,7 +70,7 @@
 | model / service tier | `rules/model-routing.md` |
 | code complexity budget | `rules/complexity-budget.md` |
 | ADR判定 | `rules/adr-criteria.md` |
-| secret管理 | `rules/security.md` |
+| secret管理の詳細（対象path） | `rules/security.md` |
 | Git / PR | `rules/common-git-workflow.md` と `rules/code-review-philosophy.md` |
 
 ## 完了境界
