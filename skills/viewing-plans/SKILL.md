@@ -1,6 +1,6 @@
 ---
 name: viewing-plans
-description: 計画・ログ・ロードマップをHTMLビューアで自動表示するスキル。Phase 2完了後（30_plan.md作成後）はRoadmap Viewerを優先表示し、実装中は更新されたroadmap.htmlで現在地を見せ、Phase 5完了後は05_log.mdをlog_viewerで確認する。「計画を見せて」「HTMLで確認」等の依頼にも対応。
+description: 計画・ログ・ロードマップをHTMLビューアで表示するスキル。Roadmap適格性ゲートを通過したタスクでは、Phase 2完了後（30_plan.md作成後）にRoadmap Viewerを優先表示する。短い保守作業は05_log.mdだけで追跡する。「計画を見せて」「HTMLで確認」等の依頼にも対応。
 allowed-tools: Read, mcp__workflow-html-app__view-plan
 ---
 
@@ -16,8 +16,24 @@ Plan Viewer / Log Viewer は、明示的に文書本文を確認するときだ�
 
 task memory directoryにCodemapがある場合は、`roadmap.html`のTask WorkspaceへCode Map viewとして統合する。Roadmap generatorはCodemap checkerがfreshと判定したpayloadだけを埋め込む。表示入口は一つだが、コード変更taskでは`context/codemap.md`のpreflightを先に成立させ、Roadmapの更新時刻をCodemap freshnessとして扱わない。
 
+## Roadmap適格性ゲート
+
+Phase 0で、Roadmapを生成する前に表を上から順に評価し、最初に一致した結果へ分類する。判定結果は`05_log.md`へ`roadmap_route: <結果>：<理由>`を一行で記録する。
+
+| 結果 | 条件 | 表示 |
+|---|---|---|
+| `explicit-roadmap` | ユーザーがRoadmapまたは計画書Viewを明示した | Roadmapを生成する |
+| `roadmap` | 設計判断、複数案の比較、依存する複数Task、継続的な進捗共有、引き継ぎのいずれかが必要 | `30_plan.md`を作成してRoadmapを生成する |
+| `log-only` | 手順と完了条件が既知で、一つの実行と検証で閉じ、設計判断と複数案比較がない | `05_log.md`だけで追跡し、`30_plan.md`と`roadmap.html`を作らない |
+
+競合解消、失敗コマンドの単発再実行、形式修正、誤字修正、既知手順による設定同期は、`log-only`を既定とする。ファイル数だけを理由にRoadmapへ昇格させない。
+
+ただし、競合が仕様や振る舞いの選択を含む場合、複数の解消案を比較する場合、解消後の作業が依存する複数Taskへ分かれる場合は`roadmap`へ昇格する。作業中にこの条件が判明した場合も、判定を`05_log.md`へ追記してから`30_plan.md`とRoadmapを作る。
+
+このゲートは表示の要否だけを決める。Phase記録、検証、安全条件、承認、コード変更時のCodemap preflightは省略しない。
+
 <!-- viewer-codemap-preflight:start -->
-コード変更taskでは編集前に `scripts/generate-codemap.py check --root <workspace-root> --artifact-dir ${MEMORY_DIR}/memory/<task>` を実行する。freshならTask Workspaceを再生成して同じ`roadmap.html`を実際に開く。freshでなければ `context/codemap.md` に従ってtask-localな`codemap.source.json`を更新し、refresh → check の後に開く。
+コード変更taskでは編集前に `scripts/generate-codemap.py check --root <workspace-root> --artifact-dir ${MEMORY_DIR}/memory/<task>` を実行する。freshでなければ `context/codemap.md` に従ってtask-localな`codemap.source.json`を更新し、refresh → checkを行う。`explicit-roadmap`または`roadmap`ならTask Workspaceを再生成して同じ`roadmap.html`を実際に開く。`log-only`ならCodemapのfreshness確認だけを行い、Roadmapは生成しない。
 <!-- viewer-codemap-preflight:end -->
 
 複数 task を横断して見る場合は Roadmap Task Hub を使う:
@@ -34,7 +50,7 @@ Hubの主表示は計画書ではなくLive Sessionとする。Codex app-server�
 
 ## 自動発動条件
 
-以下のタイミングで**自動的に**発動（ユーザー確認不要）：
+Roadmap適格性ゲートが`explicit-roadmap`または`roadmap`を返した場合だけ、以下のタイミングで**自動的に**発動する（ユーザー確認不要）：
 
 1. **Phase 2完了時**: `${MEMORY_DIR}/memory/<task>/roadmap.html` を生成し、Roadmap Viewerで表示
 2. **横で見たい場合**: `scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --watch` を起動し、表示URLを案内
@@ -50,6 +66,8 @@ Hubの主表示は計画書ではなくLive Sessionとする。Codex app-server�
 - `/viewing-plans` 実行時
 
 ## ワークフロー
+
+最初にRoadmap適格性ゲートを実行する。`log-only`なら`05_log.md`へ判定を記録し、このスキルのRoadmap生成手順を終了する。
 
 ### 1. ファイル読み込み
 
@@ -208,10 +226,11 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 
 ```
 # 自動発動（Phase 2完了後）
-1. Claude Codeが30_plan.mdの作成を完了
-2. `scripts/generate-roadmap-view.py <memory_dir>` を実行
-3. `roadmap.html` のパスをユーザーに提示
-4. 必要に応じて mcp__workflow-html-app__view-plan に30_plan.md content を渡す
+1. Roadmap適格性ゲートが`explicit-roadmap`または`roadmap`を返す
+2. Claude Codeが30_plan.mdの作成を完了
+3. `scripts/generate-roadmap-view.py <memory_dir>` を実行
+4. `roadmap.html` のパスをユーザーに提示
+5. 必要に応じて mcp__workflow-html-app__view-plan に30_plan.md content を渡す
 ```
 
 ```

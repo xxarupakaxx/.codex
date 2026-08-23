@@ -1549,6 +1549,21 @@ test('viewing-plansのauthoring contractは設計summaryとTask実行契約を�
   assert.match(viewingPlansSkill, /実装図.*関係を推測しない/s);
 });
 
+test('viewing-plansは短い保守作業をRoadmapから除外し必要時だけ昇格すべき', () => {
+  for (const route of ['explicit-roadmap', 'roadmap', 'log-only']) {
+    assert.ok(viewingPlansSkill.includes(`\`${route}\``));
+  }
+  for (const maintenance of ['競合解消', '単発再実行', '形式修正', '誤字修正', '設定同期']) {
+    assert.match(viewingPlansSkill, new RegExp(maintenance));
+  }
+  assert.match(viewingPlansSkill, /ファイル数だけを理由にRoadmapへ昇格させない/);
+  assert.match(viewingPlansSkill, /表を上から順に評価し、最初に一致した結果/);
+  assert.match(viewingPlansSkill, /仕様や振る舞いの選択.*複数の解消案.*依存する複数Task.*roadmap.*昇格/s);
+  assert.match(viewingPlansSkill, /roadmap_route: <結果>：<理由>/);
+  assert.match(viewingPlansSkill, /log-only.*30_plan\.md.*roadmap\.html.*作らない/s);
+  assert.match(viewingPlansSkill, /Codemap preflightは省略しない/);
+});
+
 test('the tree-first roadmap information architecture remains in the HTML', () => {
   for (const id of [
     'task-title',
