@@ -291,6 +291,58 @@ test("first screen exposes the plan purpose roadmap design and selected task det
   });
 });
 
+test("motion system keeps transitions brief, stateful, and reduced-motion aware", async (t) => {
+  const template = readFileSync(templatePath, "utf8");
+  assert.match(template, /--duration-press:\s*120ms/);
+  assert.match(template, /--duration-medium:\s*220ms/);
+  assert.match(template, /@media \(prefers-reduced-motion: reduce\)[\s\S]*--motion-distance:\s*2px/);
+  assert.match(template, /departing = previous\.cloneNode\(true\)/);
+  assert.match(template, /typeof Element\.prototype\.animate === 'function'/);
+  assert.match(template, /Keep the DOM update synchronous/);
+
+  await withPage(t, { width: 1440, height: 1000 }, async (page) => {
+    const initial = await page.evaluate(() => ({
+      distance: getComputedStyle(document.documentElement).getPropertyValue("--motion-distance").trim(),
+      canAnimate: typeof document.querySelector("#implementation-detail").animate === "function",
+      entryName: (() => {
+        document.body.classList.add("motion-entering");
+        const name = getComputedStyle(document.querySelector("#execution-brief")).animationName;
+        document.body.classList.remove("motion-entering");
+        return name;
+      })(),
+    }));
+    assert.equal(initial.distance, "8px");
+    assert.equal(initial.canAnimate, true);
+    assert.equal(initial.entryName, "motion-surface-enter");
+
+    await page.emulateMedia({ reducedMotion: "reduce" });
+    assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--motion-distance").trim()), "2px");
+    const changed = await page.evaluate(() => {
+      document.querySelector('[data-implementation-task="2"]').click();
+      return {
+        title: document.querySelector("#implementation-task-title")?.textContent,
+        departing: document.querySelectorAll("body > [aria-hidden='true'][inert]").length,
+      };
+    });
+    assert.equal(changed.title, "brief UIを実装する");
+    assert.equal(changed.departing, 1);
+    assert.equal(await page.locator('[data-implementation-task="2"]').getAttribute("aria-selected"), "true");
+    await page.waitForFunction(() => document.querySelectorAll("body > [aria-hidden='true'][inert]").length === 0);
+
+    const fallbackTitle = await page.evaluate(() => {
+      const animate = Element.prototype.animate;
+      Element.prototype.animate = undefined;
+      try {
+        document.querySelector('[data-implementation-task="1"]').click();
+        return document.querySelector("#implementation-task-title")?.textContent;
+      } finally {
+        Element.prototype.animate = animate;
+      }
+    });
+    assert.equal(fallbackTitle, "contractを固定する");
+  });
+});
+
 test("concept map interaction does not overwrite the primary brief", async (t) => {
   await withPage(t, { width: 1280, height: 900 }, async (page) => {
     const before = await page.locator("#execution-brief-title").textContent();

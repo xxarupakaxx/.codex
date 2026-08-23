@@ -33,6 +33,10 @@
       --decision-shadow: none;
       --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
       --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+      --duration-press: 120ms;
+      --duration-fast: 160ms;
+      --duration-medium: 220ms;
+      --motion-distance: 8px;
       --header-height: 64px;
       --sidebar-width: 236px;
       color-scheme: light;
@@ -83,6 +87,7 @@
       outline-offset: 2px;
     }
     button, summary, [data-source], [data-task-toggle] { -webkit-tap-highlight-color: transparent; }
+    button, summary { touch-action: manipulation; }
     .skip-link {
       position: fixed;
       z-index: 100;
@@ -181,6 +186,11 @@
       justify-content: center;
       gap: 7px;
       font-weight: 650;
+      transition:
+        transform var(--duration-press) var(--ease-out),
+        border-color var(--duration-fast) var(--ease-out),
+        background-color var(--duration-fast) var(--ease-out),
+        color var(--duration-fast) var(--ease-out);
     }
     .btn.primary { border-color: var(--accent-button); background: var(--accent-button); color: #fff; }
     .btn.primary .icon { filter: brightness(0) invert(1); }
@@ -189,6 +199,23 @@
       .btn:hover { border-color: var(--accent); background: var(--surface-accent); }
       .btn.primary:hover { border-color: var(--accent-button-hover); background: var(--accent-button-hover); }
     }
+    .btn:active { transform: scale(.97); }
+    .viewer-nav-button,
+    .source-button,
+    .preview-mode,
+    .brief-source-link,
+    .brief-artifact-card {
+      transition:
+        transform var(--duration-press) var(--ease-out),
+        border-color var(--duration-fast) var(--ease-out),
+        background-color var(--duration-fast) var(--ease-out),
+        color var(--duration-fast) var(--ease-out);
+    }
+    .viewer-nav-button:active,
+    .source-button:active,
+    .preview-mode:active,
+    .brief-source-link:active,
+    .brief-artifact-card:active { transform: scale(.985); }
     .file-input { display: none; }
     .icon { width: 18px; height: 18px; flex: 0 0 auto; object-fit: contain; }
     .viewer-layout {
@@ -424,7 +451,13 @@
       background: var(--surface);
       text-align: left;
       cursor: pointer;
+      transition:
+        transform var(--duration-press) var(--ease-out),
+        border-color var(--duration-fast) var(--ease-out),
+        background-color var(--duration-fast) var(--ease-out),
+        box-shadow var(--duration-fast) var(--ease-out);
     }
+    .brief-flow-item:active { transform: scale(.985); }
     .brief-flow-item.current:not([aria-selected="true"]) {
       border-color: var(--line-strong);
       background: var(--surface);
@@ -758,6 +791,7 @@
     .concept-map-disclosure > summary small { color: var(--muted); font-size: 11px; }
     .concept-map-disclosure[open] > summary { border-bottom: 1px solid var(--line); }
     .concept-map-disclosure[open] .summary-chevron { transform: rotate(180deg); }
+    .summary-chevron { transition: transform var(--duration-fast) var(--ease-out); }
     .concept-map-disclosure .wayfinder { margin: 0; border: 0; border-radius: 0 0 var(--radius) var(--radius); box-shadow: none; }
     @media (max-width: 900px) {
       .brief-header { grid-template-columns: 1fr; align-items: start; }
@@ -788,6 +822,7 @@
       .brief-flow-section,
       .brief-claims-section,
       .brief-artifact-section { padding: 18px 16px; }
+      .brief-step-source { display: none; }
       .brief-section-heading { align-items: start; flex-direction: column; gap: 4px; }
       .design-summary-grid,
       .claim-grid { grid-template-columns: 1fr; }
@@ -1338,7 +1373,13 @@
       color: var(--ink);
       text-align: left;
       cursor: pointer;
+      transition:
+        transform var(--duration-press) var(--ease-out),
+        border-color var(--duration-fast) var(--ease-out),
+        background-color var(--duration-fast) var(--ease-out),
+        outline-color var(--duration-fast) var(--ease-out);
     }
+    .graph-node:active { transform: scale(.985); }
     .graph-node[aria-current="true"] {
       border-color: var(--focus);
       background: var(--surface-accent);
@@ -1814,7 +1855,12 @@
       background: var(--surface);
       text-align: left;
       cursor: pointer;
+      transition:
+        transform var(--duration-press) var(--ease-out),
+        border-color var(--duration-fast) var(--ease-out),
+        background-color var(--duration-fast) var(--ease-out);
     }
+    .artifact-card:active { transform: scale(.985); }
     @media (hover: hover) and (pointer: fine) {
       .artifact-card:hover { border-color: var(--accent); background: var(--surface-accent); }
     }
@@ -1864,6 +1910,11 @@
     .utility-links { color: var(--muted); }
     .summary-chevron { margin-left: auto; }
     .utility-disclosure[open] .summary-chevron { transform: rotate(90deg); }
+    .concept-map-disclosure[open] > .wayfinder,
+    .utility-disclosure[open] > .utility-content,
+    .hub-section[open] > :not(summary) {
+      animation: motion-surface-enter var(--duration-fast) var(--ease-out) both;
+    }
     .utility-content {
       padding: 14px 16px 16px;
       display: grid;
@@ -2035,11 +2086,44 @@
       box-shadow: var(--shadow);
       opacity: 0;
       pointer-events: none;
-      transform: translateY(18px);
-      transition: opacity 160ms var(--ease-out), transform 160ms var(--ease-out);
+      transform: translateY(var(--motion-distance));
+      transition: opacity var(--duration-fast) var(--ease-out), transform var(--duration-fast) var(--ease-out);
     }
     .toast.show { opacity: 1; transform: translateY(0); }
-    .flash { outline: 3px solid color-mix(in srgb, var(--accent) 32%, transparent); outline-offset: 3px; }
+    .flash {
+      outline: 3px solid color-mix(in srgb, var(--accent) 32%, transparent);
+      outline-offset: 3px;
+      animation: motion-flash 720ms var(--ease-out) both;
+    }
+    @keyframes motion-surface-enter {
+      from { opacity: 0; transform: translateY(var(--motion-distance)); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes motion-view-enter {
+      from { opacity: 0; transform: translateY(var(--motion-distance)) scale(.99); }
+      to { opacity: 1; transform: translateY(0) scale(1); }
+    }
+    @keyframes motion-view-exit {
+      from { opacity: 1; transform: translateY(0) scale(1); }
+      to { opacity: 0; transform: translateY(calc(var(--motion-distance) * -0.5)) scale(.99); }
+    }
+    @keyframes motion-flash {
+      from { outline-color: color-mix(in srgb, var(--accent) 48%, transparent); }
+      to { outline-color: transparent; }
+    }
+    body.motion-entering .app-header,
+    body.motion-entering .app-sidebar,
+    body.motion-entering .execution-brief,
+    body.motion-entering .concept-map-disclosure,
+    body.motion-entering .implementation-strip,
+    body.motion-entering .evidence-shortcuts {
+      animation: motion-surface-enter var(--duration-medium) var(--ease-out) both;
+    }
+    body.motion-entering .app-sidebar { animation-delay: 30ms; }
+    body.motion-entering .execution-brief { animation-delay: 60ms; }
+    body.motion-entering .concept-map-disclosure { animation-delay: 90ms; }
+    body.motion-entering .implementation-strip { animation-delay: 120ms; }
+    body.motion-entering .evidence-shortcuts { animation-delay: 150ms; }
     @media (max-width: 1180px) {
       .wayfinder { order: 1; }
       .implementation-strip { order: 2; }
@@ -2224,8 +2308,18 @@
       .utility-card:last-child { grid-column: auto; }
     }
     @media (prefers-reduced-motion: reduce) {
+      :root {
+        --duration-fast: 120ms;
+        --duration-medium: 140ms;
+        --motion-distance: 2px;
+      }
       html { scroll-behavior: auto !important; }
-      .toast { transform: none; transition: opacity 160ms var(--ease-out); }
+      body.motion-entering .app-sidebar,
+      body.motion-entering .execution-brief,
+      body.motion-entering .concept-map-disclosure,
+      body.motion-entering .implementation-strip,
+      body.motion-entering .evidence-shortcuts { animation-delay: 0ms; }
+      .toast { transform: none; }
       .trace-chevron,
       .task-toggle .icon,
       .summary-chevron { transform: none !important; }
@@ -2239,7 +2333,8 @@
     .provider-status.stopped { border-color: var(--danger); color: var(--danger); }
     .hub-section { margin: 16px 0; }
     .hub-section h2 { font-size: 13px; margin: 0 0 6px; color: var(--muted); }
-    .hub-task { display: block; width: 100%; text-align: left; padding: 10px; margin: 4px 0; color: inherit; background: transparent; border: 1px solid transparent; border-radius: 6px; }
+    .hub-task { display: block; width: 100%; text-align: left; padding: 10px; margin: 4px 0; color: inherit; background: transparent; border: 1px solid transparent; border-radius: 6px; transition: transform var(--duration-press) var(--ease-out), border-color var(--duration-fast) var(--ease-out), background-color var(--duration-fast) var(--ease-out); }
+    .hub-task:active { transform: scale(.985); }
     .hub-task:hover, .hub-task[aria-current="true"] { background: var(--surface-soft); border-color: var(--line); }
     .hub-task small, .hub-task span { display: block; color: var(--muted); margin-top: 3px; }
     .hub-task .hub-live-action { color: var(--text); font-weight: 600; line-height: 1.35; }
@@ -4667,6 +4762,44 @@
       if (/plan|task/i.test(path)) return '計画';
       return '成果物';
     }
+    function updateWithMotion(update, selector = '#implementation-detail') {
+      const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+      const canAnimate = typeof Element !== 'undefined' && typeof Element.prototype.animate === 'function';
+      if (!canAnimate) {
+        update();
+        return;
+      }
+      const previous = document.querySelector(selector);
+      let departing = null;
+      if (previous) {
+        const rect = previous.getBoundingClientRect();
+        departing = previous.cloneNode(true);
+        departing.removeAttribute('id');
+        departing.querySelectorAll('[id]').forEach(element => element.removeAttribute('id'));
+        departing.setAttribute('aria-hidden', 'true');
+        departing.inert = true;
+        Object.assign(departing.style, {
+          position: 'fixed', zIndex: '55', pointerEvents: 'none', contain: 'paint',
+          left: `${rect.left}px`, top: `${rect.top}px`, width: `${rect.width}px`, height: `${rect.height}px`,
+          margin: '0', overflow: 'hidden'
+        });
+        document.body.append(departing);
+      }
+      // Keep the DOM update synchronous; keyboard and focus contracts depend on it.
+      update();
+      const distance = reduced ? 2 : 8;
+      const enterDuration = reduced ? 140 : 220;
+      const exitDuration = reduced ? 120 : 160;
+      departing?.animate([
+        { opacity: 1, transform: 'translateY(0) scale(1)' },
+        { opacity: 0, transform: `translateY(${-distance / 2}px) scale(.99)` }
+      ], { duration: exitDuration, easing: 'cubic-bezier(0.77, 0, 0.175, 1)', fill: 'forwards' })
+        .finished.catch(() => {}).finally(() => departing.remove());
+      document.querySelector(selector)?.animate([
+        { opacity: 0, transform: `translateY(${distance}px) scale(.99)` },
+        { opacity: 1, transform: 'translateY(0) scale(1)' }
+      ], { duration: enterDuration, easing: 'cubic-bezier(0.23, 1, 0.32, 1)' });
+    }
     function captureFocusKey() {
       const element = document.activeElement;
       if (!element || element === document.body) return null;
@@ -5052,12 +5185,14 @@
     }
     function selectImplementationTask(number, { focus = false } = {}) {
       if (!currentModel || !currentModel.tasks.some(task => task.number === String(number))) return;
-      selectedImplementationTaskNumber = String(number);
-      renderExecutionBrief(currentModel);
-      if (focus) {
-        document.querySelector(`[data-implementation-task="${CSS.escape(String(number))}"]`)?.focus({ preventScroll: true });
-      }
-      byId('state-announcer').textContent = `Task ${number}の実装プレビューを表示しました。`;
+      updateWithMotion(() => {
+        selectedImplementationTaskNumber = String(number);
+        renderExecutionBrief(currentModel);
+        if (focus) {
+          document.querySelector(`[data-implementation-task="${CSS.escape(String(number))}"]`)?.focus({ preventScroll: true });
+        }
+        byId('state-announcer').textContent = `Task ${number}の実装プレビューを表示しました。`;
+      });
     }
     function syncImplementationTabOrientation() {
       byId('brief-flow').setAttribute(
@@ -5907,15 +6042,19 @@
       }, { passive: true });
       byId('open-files').addEventListener('click', () => fileInput.click());
       byId('workspace-view-plan').addEventListener('click', () => {
-        workspaceView = 'plan';
-        updateWorkspaceUrl();
-        render(workspaceRootSnapshot, { announce: false });
+        updateWithMotion(() => {
+          workspaceView = 'plan';
+          updateWorkspaceUrl();
+          render(workspaceRootSnapshot, { announce: false });
+        }, '#concept-map-disclosure');
       });
       byId('workspace-view-code').addEventListener('click', () => {
         if (!workspaceRootSnapshot.codemap) return;
-        workspaceView = 'code';
-        updateWorkspaceUrl();
-        render(workspaceRootSnapshot, { announce: false });
+        updateWithMotion(() => {
+          workspaceView = 'code';
+          updateWorkspaceUrl();
+          render(workspaceRootSnapshot, { announce: false });
+        }, '#concept-map-disclosure');
       });
       fileInput.addEventListener('change', async () => {
         try { await loadFiles(fileInput.files); }
@@ -6138,8 +6277,10 @@
       `;
       byId('task-hub').classList.add('show-detail');
       byId('hub-back').addEventListener('click', () => {
-        byId('task-hub').classList.remove('show-detail');
-        document.querySelector(`[data-hub-task="${CSS.escape(task.id)}"]`)?.focus();
+        updateWithMotion(() => {
+          byId('task-hub').classList.remove('show-detail');
+          document.querySelector(`[data-hub-task="${CSS.escape(task.id)}"]`)?.focus();
+        }, '#task-detail');
       });
       byId('hub-open-codex').addEventListener('click', () => openHubTask(task));
       if (focusHeading) byId('hub-detail-heading').focus({ preventScroll: true });
@@ -6186,7 +6327,7 @@
         if (!button) return;
         selectedId = button.dataset.hubTask;
         document.querySelectorAll('[data-hub-task]').forEach(item => item.setAttribute('aria-current', String(item === button)));
-        renderHubDetail(tasks.get(selectedId));
+        updateWithMotion(() => renderHubDetail(tasks.get(selectedId)), '#task-detail');
       });
       byId('task-sections').addEventListener('toggle', event => {
         if (!event.target.matches('.hub-section')) return;
@@ -6224,6 +6365,10 @@
       applyIcons();
       setupInteractions();
       render(parseEmbeddedSnapshot() || { title: 'Roadmap', files: {} }, { announce: false });
+      requestAnimationFrame(() => {
+        document.body.classList.add('motion-entering');
+        window.setTimeout(() => document.body.classList.remove('motion-entering'), 420);
+      });
       if (currentSnapshot.kind === 'codemap') {
         setLiveStatus('live', 'LOCKED');
       } else {
