@@ -548,6 +548,58 @@ test('具体的な計画があるとき first-screen brief は現在と次のTas
   assert.deepEqual(Array.from(brief.flow, task => task.number), ['1', '2']);
 });
 
+test('roadmap routeはTask順序と現在・次・選択中を別の状態として保持すべき', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: executionBriefFiles
+  }), { nowMs });
+  const brief = model.buildExecutionBrief(result, '2');
+  const route = model.buildRoadmapRoute(brief);
+
+  assert.deepEqual(
+    Array.from(route.tasks, task => [task.number, task.status, task.isCurrent, task.isNext, task.isSelected]),
+    [
+      ['1', 'in-progress', true, false, false],
+      ['2', 'planned', false, true, true]
+    ]
+  );
+  assert.match(route.summary, /現在: Task 1/);
+  assert.match(route.summary, /次: Task 2/);
+  assert.match(route.summary, /選択中: Task 2/);
+  assert.match(route.summary, /Task 1 進行中/);
+  assert.match(route.summary, /Task 2 未着手/);
+  assert.doesNotMatch(route.visibleSummary, /全体:/);
+});
+
+test('roadmap routeはblockedを未着手へ丸めず文字でも区別すべき', () => {
+  const route = model.buildRoadmapRoute({
+    currentTask: null,
+    nextTask: null,
+    selectedTask: { number: '1', title: '停止中' },
+    flow: [{ number: '1', title: '停止中', status: 'blocked' }]
+  });
+
+  assert.match(route.summary, /Task 1 ブロック/);
+  assert.match(html, /task\.status === 'blocked' \? 'ブロック'/);
+});
+
+test('first-screen roadmap routeはアクセシブルなinline SVGとテキスト代替を持つべき', () => {
+  for (const id of ['brief-route', 'brief-route-map', 'brief-route-summary']) {
+    assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
+  }
+  assert.match(html, /function renderRoadmapRoute\(route\)/);
+  assert.match(html, /class="brief-route-svg"/);
+  assert.match(html, /role="img" aria-labelledby="brief-route-svg-title brief-route-svg-desc"/);
+  assert.match(html, /<title id="brief-route-svg-title">計画の現在地<\/title>/);
+  assert.match(html, /<desc id="brief-route-svg-desc">\$\{escapeHtml\(route\.summary\)\}<\/desc>/);
+  assert.match(html, /route-node blocked/);
+  assert.match(html, /route-node current/);
+  assert.match(html, /route-node\.next/);
+  assert.match(html, /route-selection/);
+  assert.match(html, /\.route-edge\.complete/);
+  assert.match(html, /\.route-edge\.planned/);
+});
+
 test('Taskに目的・変更対象・成果物・検証があるとき flowは実行契約を保持すべき', () => {
   const result = model.buildModel(model.normalizeSnapshot({
     generatedAt,

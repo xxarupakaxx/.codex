@@ -340,6 +340,34 @@
     .brief-metrics div + div { border-left: 1px solid var(--line); }
     .brief-metrics dt { margin-bottom: 4px; color: var(--faint); font-size: 11px; font-weight: 750; }
     .brief-metrics dd { margin: 0; max-width: 260px; color: var(--ink); font-size: 13px; font-weight: 730; overflow-wrap: anywhere; }
+    .brief-route {
+      padding: 14px 18px 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .brief-route-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+    .brief-route-head h3 { margin: 2px 0 0; font-size: 15px; letter-spacing: -.01em; }
+    .brief-route-legend { color: var(--muted); font-size: 10px; white-space: nowrap; }
+    .brief-route-map { margin-top: 8px; overflow-x: auto; overscroll-behavior-x: contain; }
+    .brief-route-svg { width: 100%; height: 118px; display: block; }
+    .brief-route-svg text { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP", sans-serif; }
+    .route-edge { stroke-width: 2; }
+    .route-edge.complete { stroke: var(--accent); }
+    .route-edge.planned { stroke: var(--line-strong); stroke-dasharray: 5 5; }
+    .route-node { stroke-width: 2; }
+    .route-node.complete { fill: var(--accent); stroke: var(--accent); }
+    .route-node.current { fill: var(--surface-accent); stroke: var(--accent); }
+    .route-node.next { stroke: var(--accent-blue); stroke-width: 2.5; }
+    .route-node.blocked { fill: var(--surface); stroke: var(--danger); stroke-dasharray: 4 3; }
+    .route-node.planned { fill: var(--surface); stroke: var(--line-strong); }
+    .route-selection { fill: none; stroke: var(--accent-blue); stroke-width: 2; }
+    .route-symbol { fill: var(--ink); font-size: 11px; font-weight: 850; text-anchor: middle; }
+    .route-symbol.complete { fill: var(--surface); }
+    .route-task-number { fill: var(--accent-strong); font-size: 10px; font-weight: 800; text-anchor: middle; }
+    .route-task-title { fill: var(--ink); font-size: 11px; font-weight: 680; text-anchor: middle; }
+    .route-tag { fill: var(--muted); font-size: 9px; font-weight: 760; text-anchor: middle; }
+    .route-next-tag { fill: var(--accent-blue); font-size: 9px; font-weight: 820; text-anchor: middle; }
+    .brief-route-summary { margin: 6px 0 0; color: var(--muted); font-size: 11px; }
     .brief-flow-section,
     .brief-claims-section,
     .brief-artifact-section { padding: 22px 28px; border-bottom: 1px solid var(--line); }
@@ -741,6 +769,7 @@
     }
     @media (max-width: 720px) {
       .brief-header,
+      .brief-route,
       .brief-flow-section,
       .brief-detail-grid,
       .brief-claims-section,
@@ -749,6 +778,7 @@
       .brief-detail-grid,
       .claim-grid { grid-template-columns: 1fr; }
       .brief-flow { grid-auto-columns: minmax(240px, 82vw); }
+      .route-task-title { display: none; }
       .implementation-diagram-flow {
         grid-auto-flow: row;
         grid-auto-columns: unset;
@@ -2562,6 +2592,15 @@
         </dl>
       </header>
 
+      <section class="brief-route" id="brief-route" aria-labelledby="brief-route-title">
+        <div class="brief-route-head">
+          <div><p class="brief-kicker">ROADMAP</p><h3 id="brief-route-title">計画の現在地</h3></div>
+          <span class="brief-route-legend" id="brief-route-legend">左から実行順 · 外周は選択中</span>
+        </div>
+        <div class="brief-route-map" id="brief-route-map"></div>
+        <p class="brief-route-summary" id="brief-route-summary">現在地を確認中</p>
+      </section>
+
       <section class="brief-flow-section" aria-labelledby="brief-flow-title">
         <div class="brief-section-heading">
           <div><p class="brief-kicker">IMPLEMENTATION MAP</p><h3 id="brief-flow-title">全体像と実装プレビュー</h3></div>
@@ -3895,6 +3934,31 @@
         artifacts: preferredArtifacts
       };
     }
+    function buildRoadmapRoute(brief) {
+      const currentNumber = brief.currentTask?.number || '';
+      const nextNumber = brief.nextTask?.number || '';
+      const selectedNumber = brief.selectedTask?.number || '';
+      const tasks = brief.flow.map(task => ({
+        number: task.number,
+        title: task.title,
+        status: task.status,
+        isCurrent: task.number === currentNumber,
+        isNext: task.number === nextNumber,
+        isSelected: task.number === selectedNumber
+      }));
+      const label = (prefix, task) => task ? `${prefix}: Task ${task.number}「${task.title}」` : `${prefix}: なし`;
+      const statusText = status => ({ complete: '完了', 'in-progress': '進行中', blocked: 'ブロック', planned: '未着手' })[status] || '未着手';
+      const visibleSummary = [
+        label('現在', brief.currentTask),
+        label('次', brief.nextTask),
+        label('選択中', brief.selectedTask)
+      ].join(' / ');
+      return {
+        tasks,
+        visibleSummary,
+        summary: `全体: ${tasks.map(task => `Task ${task.number} ${statusText(task.status)}`).join('、')} / ${visibleSummary}`
+      };
+    }
     function artifactStateFor(artifact, model) {
       const path = artifact.path;
       const phaseComplete = number => model.phases.some(phase => phase.number === number && phase.status === 'complete');
@@ -4371,7 +4435,7 @@
       renderInlineMarkdown, renderWorkflowMarkdown, groupTaskSections,
       extractPlanSections, taskHubSettings, extractExplicitOutcomeTrace,
       extractRevisionLog, buildOutcomeTrace, stateLabel, parseSvgDiagramSpec,
-      codemapEvidenceLabel, buildCodemapViewModel, buildTreeViewModel, buildExecutionBrief, highlightSourceCode
+      codemapEvidenceLabel, buildCodemapViewModel, buildTreeViewModel, buildExecutionBrief, buildRoadmapRoute, highlightSourceCode
     };
     /* ROADMAP_MODEL_END */
 
@@ -5011,6 +5075,50 @@
       relations.hidden = false;
       message.textContent = '';
     }
+    function renderRoadmapRoute(route) {
+      const host = byId('brief-route-map');
+      byId('brief-route-summary').textContent = route.visibleSummary;
+      if (!route.tasks.length) {
+        host.innerHTML = '<p class="brief-empty">30_plan.mdにTaskが未記録です。</p>';
+        return;
+      }
+      const compact = window.matchMedia('(max-width: 720px)').matches;
+      const step = compact ? 110 : 150;
+      const start = compact ? 48 : 62;
+      const y = 42;
+      const width = Math.max(compact ? 300 : 360, start * 2 + step * (route.tasks.length - 1));
+      byId('brief-route-legend').textContent = `全${route.tasks.length}Task · 左から実行順 · 外周は選択中`;
+      const edges = route.tasks.slice(1).map((task, index) => {
+        const previous = route.tasks[index];
+        const tone = previous.status === 'complete' ? 'complete' : 'planned';
+        return `<line class="route-edge ${tone}" x1="${start + index * step + 18}" y1="${y}" x2="${start + (index + 1) * step - 18}" y2="${y}"/>`;
+      }).join('');
+      const nodes = route.tasks.map((task, index) => {
+        const x = start + index * step;
+        const state = task.status === 'complete' ? 'complete' : task.status === 'blocked' ? 'blocked' : task.isCurrent ? 'current' : 'planned';
+        const shape = state === 'current'
+          ? `<polygon class="route-node current" points="${x},23 ${x + 19},42 ${x},61 ${x - 19},42"/>`
+          : state === 'blocked'
+            ? `<rect class="route-node blocked" x="${x - 17}" y="25" width="34" height="34" rx="5"/>`
+            : `<circle class="route-node ${state}${task.isNext ? ' next' : ''}" cx="${x}" cy="${y}" r="17"/>`;
+        const symbol = state === 'complete' ? '✓' : state === 'blocked' ? '!' : task.isCurrent ? '▶' : task.number;
+        const tag = task.isCurrent ? '現在' : task.isNext ? '次' : task.status === 'complete' ? '完了' : task.status === 'blocked' ? 'ブロック' : '未着手';
+        const selected = task.isSelected ? `<circle class="route-selection" cx="${x}" cy="${y}" r="24"/><text class="route-tag" x="${x}" y="12">選択中</text>` : '';
+        const nextTag = task.isNext && !task.isSelected ? `<text class="route-next-tag" x="${x}" y="12">次</text>` : '';
+        const title = task.title.length > 11 ? `${task.title.slice(0, 10)}…` : task.title;
+        return `<g>${selected}${nextTag}${shape}<text class="route-symbol ${state}" x="${x}" y="46">${escapeHtml(symbol)}</text><text class="route-task-number" x="${x}" y="78">Task ${escapeHtml(task.number)}</text><text class="route-task-title" x="${x}" y="94">${escapeHtml(title)}</text><text class="route-tag" x="${x}" y="109">${escapeHtml(tag)}</text></g>`;
+      }).join('');
+      host.innerHTML = `<svg class="brief-route-svg" style="min-width:${width}px" width="${width}" height="118" viewBox="0 0 ${width} 118" role="img" aria-labelledby="brief-route-svg-title brief-route-svg-desc"><title id="brief-route-svg-title">計画の現在地</title><desc id="brief-route-svg-desc">${escapeHtml(route.summary)}</desc>${edges}${nodes}</svg>`;
+      const focusIndex = Math.max(0, route.tasks.findIndex(task => task.isCurrent || task.isSelected));
+      host.dataset.focusX = String(start + focusIndex * step);
+      requestAnimationFrame(centerRoadmapRoute);
+    }
+    function centerRoadmapRoute() {
+      const host = byId('brief-route-map');
+      const focusX = Number(host.dataset.focusX);
+      if (!Number.isFinite(focusX)) return;
+      host.scrollLeft = Math.max(0, focusX - host.clientWidth / 2);
+    }
     function renderExecutionBrief(model) {
       const hadCodeFocus = document.activeElement?.id === 'implementation-code';
       const brief = ROADMAP_MODEL.buildExecutionBrief(model, selectedImplementationTaskNumber);
@@ -5041,6 +5149,7 @@
         current ? `現在: Task ${current.number}「${current.title}」` : model.waiting.reason,
         next ? `次: Task ${next.number}「${next.title}」` : progress.total > 0 && progress.done === progress.total ? '次: なし' : '次: 未記録'
       ].join(' / ');
+      renderRoadmapRoute(ROADMAP_MODEL.buildRoadmapRoute(brief));
       syncImplementationTabOrientation();
       byId('brief-flow').innerHTML = brief.flow.length
         ? brief.flow.map(task => {
@@ -5828,6 +5937,7 @@
           if (!currentModel) return;
           const focusKey = captureFocusKey();
           syncImplementationTabOrientation();
+          centerRoadmapRoute();
           renderGraph(currentModel);
           requestAnimationFrame(() => restoreFocusKey(focusKey, 'graph-shell'));
         }, 120);
