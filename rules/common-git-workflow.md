@@ -58,7 +58,6 @@ Google eng-practices 準拠。**「自己完結した 1 つの変更」**が単�
 
 ## 禁止事項
 
-- main/masterへの直接push
 - `--force` push（`--force-with-lease`は許容）
 - `--no-verify`でフックをスキップ
 - 機密情報（.env, credentials）のコミット
