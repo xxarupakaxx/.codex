@@ -144,7 +144,8 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 
 ### Task Workspace（Roadmap / Code Map）
 - `00_spec.md` / `30_plan.md` / `40_progress.md` / `80_review.md` を第一画面の正本とし、task、spec、approach、flow、claims、artifactsをbriefへ割り当てる
-- 上段は `Phase / 進捗 / 選択中Task` のcompact status barとし、Task選択に同期させる。固定の全体目的をheroとして重複表示せず、全体仕様は仕様cardと `00_spec.md` quick linkから読む
+- 第一画面の主見出しは計画全体の目的とし、その直下で主要要件、設計判断、境界、完了条件をsource-boundな設計サマリーとして示す。選択中Taskは計画全体を実現する分解として後段に置く
+- 上段は固定の全体目的と `Phase / 進捗 / 選択中Task` のcompact status barとする。Task選択時は選択中指標と後段のTask detailだけを同期し、全体目的と設計サマリーは変えない
 - 第一画面はTask順序と状態を自己完結inline SVGの進捗ルートでも示す。完了、現在、次、ブロック、未着手、選択中を形、記号、線種、文字で区別し、同じ状況をテキストでも読めるようにする
 - `現在` と `次` を明示する。次のTaskがなければ、計画完了か未記録かを区別して表示する
 - `00_spec.md` と `30_plan.md` のquick linkを初期viewportに置き、成果物linkからsource drawerで正本本文を開けるようにする

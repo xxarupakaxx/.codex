@@ -129,6 +129,10 @@ const executionBriefFiles = {
 
 具体的な実行計画を第一画面で理解できるようにする。
 
+## 背景・目的
+
+選択中Taskから読むと、計画全体の意図を見失う。
+
 ## 必須要件
 
 - [ ] Taskと仕様を同時に読める。
@@ -137,6 +141,10 @@ const executionBriefFiles = {
 ## 制約事項
 
 - snapshot schema version 1を維持する。
+
+## 完了条件
+
+- 初見の読者が目的と実装順序を説明できる。
 
 ## 現在の事実
 
@@ -625,6 +633,54 @@ test('目的・要件・制約が明示されているとき first-screen brief 
   assert.match(brief.spec.summary, /制約:/);
   assert.notEqual(brief.purpose.summary, brief.spec.summary);
   assert.equal(brief.spec.source, '00_spec.md');
+});
+
+test('設計書summaryは要求・判断・境界・完了条件を明示sourceから構成すべき', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: executionBriefFiles
+  }), { nowMs });
+  const design = model.buildExecutionBrief(result).design;
+
+  assert.match(design.goal.text, /具体的な実行計画/);
+  assert.equal(design.goal.source, '00_spec.md');
+  assert.match(design.context.text, /計画全体の意図/);
+  assert.deepEqual(Array.from(design.requirements, item => item.text), [
+    'Taskと仕様を同時に読める。',
+    '成果物へ直接移動できる。'
+  ]);
+  assert.equal(design.requirements[0].section, '必須要件');
+  assert.match(design.approach.text, /buildExecutionBrief/);
+  assert.deepEqual(Array.from(design.decisions, item => item.text), [
+    '第一画面をbrief-firstにする。'
+  ]);
+  assert.equal(design.decisions[0].section, '採用判断');
+  assert.deepEqual(Array.from(design.boundaries, item => item.text), [
+    'snapshot schema version 1を維持する。'
+  ]);
+  assert.deepEqual(Array.from(design.done, item => item.text), [
+    '初見の読者が目的と実装順序を説明できる。'
+  ]);
+});
+
+test('設計書summaryは欠落した設計情報をTask本文から補作しないべき', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: {
+      '00_spec.md': '## 目的\n\n小さな計画。',
+      '30_plan.md': '## Task 1: 実装する\n\n### 実装\n\n- [ ] 推測してはいけない。'
+    }
+  }), { nowMs });
+  const design = model.buildExecutionBrief(result).design;
+
+  assert.equal(design.goal.text, '小さな計画。');
+  assert.equal(design.context.text, '');
+  assert.deepEqual(Array.from(design.requirements), []);
+  assert.equal(design.approach.text, '');
+  assert.deepEqual(Array.from(design.decisions), []);
+  assert.deepEqual(Array.from(design.boundaries), []);
+  assert.deepEqual(Array.from(design.done), []);
+  assert.doesNotMatch(JSON.stringify(design), /推測してはいけない/);
 });
 
 test('実装方針が明示されているとき first-screen brief はcode anchorを返すべき', () => {
@@ -1236,7 +1292,7 @@ test('renders workflow markdown safely without an external parser', () => {
 <img src=x onerror=alert(1)>
 [危険](javascript:alert(1))`);
 
-  assert.match(rendered, /<h4 class="md-heading-1">見出し<\/h4>/);
+  assert.match(rendered, /<h4 class="md-heading-1" data-md-heading="見出し" tabindex="-1">見出し<\/h4>/);
   assert.match(rendered, /type="checkbox" disabled checked/);
   assert.match(rendered, /<table>/);
   assert.match(rendered, /<blockquote>補足<\/blockquote>/);
@@ -1279,9 +1335,11 @@ test('task hub shell exposes list detail status settings and responsive behavior
 test('single-task HTMLは具体的な実行briefをConcept Mapより先に配置すべき', () => {
   const ids = [
     'execution-brief',
+    'brief-design-summary',
     'brief-flow',
     'brief-spec',
     'brief-approach',
+    'brief-boundary',
     'brief-claims',
     'brief-artifacts',
     'implementation-task-purpose',
@@ -1294,6 +1352,8 @@ test('single-task HTMLは具体的な実行briefをConcept Mapより先に配置
   }
   assert.doesNotMatch(html, /id=["']brief-summary["']/);
   assert.doesNotMatch(html, /id=["']source-line["']/);
+  assert.ok(html.indexOf('id="brief-route"') < html.indexOf('id="brief-design-summary"'));
+  assert.ok(html.indexOf('id="brief-design-summary"') < html.indexOf('id="brief-flow"'));
   assert.ok(html.indexOf('id="execution-brief"') < html.indexOf('id="concept-map-disclosure"'));
 });
 
@@ -1315,10 +1375,24 @@ test('Concept Mapのinspectorはprimary briefを上書きせずprovenanceがあ�
 test('brief-first layoutはdesktopの情報階層とmobileの一列順序を維持すべき', () => {
   assert.match(html, /\.execution-brief\s*\{[^}]*order:\s*1/);
   assert.match(html, /\.concept-map-disclosure\s*\{[^}]*order:\s*2/);
-  assert.match(html, /\.brief-detail-grid\s*\{[^}]*grid-template-columns:\s*repeat\(2,/);
+  assert.match(html, /\.design-summary-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3,/);
   assert.match(html, /\.claim-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3,/);
-  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.brief-detail-grid,[\s\S]*\.claim-grid\s*\{[^}]*grid-template-columns:\s*1fr/);
+  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.design-summary-grid,[\s\S]*\.claim-grid\s*\{[^}]*grid-template-columns:\s*1fr/);
   assert.match(html, /id="brief-quick-links"[\s\S]*data-artifact="00_spec\.md"[\s\S]*data-artifact="30_plan\.md"/);
+});
+
+test('設計書の主見出しは選択Taskではなく計画全体の目的を表示すべき', () => {
+  const renderSource = html.match(/function renderExecutionBrief\(model\) \{([\s\S]*?)\n    \}\n    function renderHeader/)?.[1] || '';
+
+  assert.match(renderSource, /execution-brief-title'\)\.textContent = brief\.design\.goal\.text/);
+  assert.match(renderSource, /brief-design-context'\)\.textContent = brief\.design\.context\.text/);
+  assert.doesNotMatch(renderSource, /execution-brief-title'\)\.textContent = selectedTask/);
+  assert.match(html, /function renderDesignSummary\(design\)/);
+  assert.match(html, /設計の骨格/);
+  assert.match(html, /境界と完了/);
+  assert.match(html, /data-artifact-section=/);
+  assert.match(html, /data-md-heading=/);
+  assert.match(html, /function openArtifact\(name, section = ''\)/);
 });
 
 test('implementation workspaceはTask indexと選択detailを持つsplit viewであるべき', () => {
@@ -1459,11 +1533,11 @@ test('implementation workspaceは選択Taskの実装図と同値な関係一覧�
   assert.match(renderDiagramSource, /escapeHtml\(edge\.predicate\)/);
 });
 
-test('viewing-plansのauthoring contractはbrief-firstの6項目とTask実行契約を要求すべき', () => {
+test('viewing-plansのauthoring contractは設計summaryとTask実行契約を要求すべき', () => {
   for (const label of ['実施Task', '仕様', '実装根拠', '実行順序', '事実・判断・未確定', '成果物']) {
     assert.match(viewingPlansSkill, new RegExp(label));
   }
-  for (const contract of ['compact status bar', '固定の全体目的をheroとして重複表示せず', '`現在` と `次`', 'quick link', 'source drawer']) {
+  for (const contract of ['compact status bar', '主見出しは計画全体の目的', '主要要件、設計判断、境界、完了条件', '`現在` と `次`', 'quick link', 'source drawer']) {
     assert.match(viewingPlansSkill, new RegExp(contract));
   }
   for (const heading of ['#### 目的', '#### 変更対象', '#### 実装根拠', '#### 実装', '#### 実装図', '#### 成果物', '#### 検証']) {
