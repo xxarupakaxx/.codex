@@ -41,6 +41,7 @@
 - 委譲先へsecret、secret reference、認証済みsession情報を渡さない。
 - 詳細手順はrepoの正規docs / Skillを優先し、新しいSkill、runner、wrapperを作る前に既存部品を確認する。
 - 現在の作業で生成した成果物の整形、校正、品質確認では `skills/sanitizing-artifacts/SKILL.md` を読む。
+- 日本語のドキュメントをまとめる、書き出す、または推敲するときは `skills/natural-japanese/SKILL.md` を読み、その設計、執筆、検査の規則に従う。
 
 ## Workflow gate
 
