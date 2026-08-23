@@ -217,13 +217,8 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 - [ ] 手順2
 
 #### 実装図
-```mermaid
-flowchart LR
-A["入力"]
-B["処理"]
-C["成果物"]
-A -->|"変換する"| B
-B -->|"生成する"| C
+```diagram-json
+{"direction":"LR","nodes":[{"id":"A","label":"入力"},{"id":"B","label":"処理"},{"id":"C","label":"成果物"}],"edges":[{"from":"A","to":"B","label":"変換する"},{"from":"B","to":"C","label":"生成する"}]}
 ```
 
 #### 成果物
@@ -243,7 +238,7 @@ B -->|"生成する"| C
 
 Roadmap Viewerは各Taskの `目的`、`変更対象`、`実装根拠`、`実装`、任意の`実装図`、`成果物`、`検証`をsource-boundで表示する。記載がないfieldをViewer側で推測して埋めない。
 
-`実装図` は任意fieldであり、最初のMermaid `flowchart TB` / `TD` / `LR`を選択Taskの実装フローへ使う。矩形・判断nodeと明示edge・edge labelの限定構文だけを扱う。Viewerは実装手順、変更対象、実コードからnodeやedgeを補作しない。図と同じ関係をテキスト一覧でも表示する。
+`実装図` は任意fieldであり、最初の `diagram-json` ブロックを選択Taskの実装フローへ使う。`direction`、`nodes`、`edges`の明示値だけを読み、Roadmap HTMLでは自己完結したinline SVGとして描画する。対応する形は矩形と判断node、関係は有向edgeとedge labelに限定する。Viewerは実装手順、変更対象、実コードからnodeやedgeを補作しない。図と同じ関係をテキスト一覧でも表示する。
 
 `実装根拠` は任意fieldであり、最初のinline code参照1件だけを実ソース抜粋へ使う。書式は `repo:<source-rootからの相対path>#<anchor>` または `repo:<source-rootからの相対path>#L<開始行>-L<終了行>` とする。bare path、absolute path、`..` を含むpathは解決しない。
 

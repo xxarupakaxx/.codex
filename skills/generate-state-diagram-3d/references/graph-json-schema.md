@@ -1,6 +1,6 @@
 # Graph JSON Schema for workflow-html-app 2.5D Diagrams
 
-Use this schema for `91_state_diagram_graph.json`.
+Use this schema for `91_state_diagram_3d.json`.
 
 ## Shape
 
@@ -99,7 +99,7 @@ Use `edges[].id` when timeline steps need to reference a specific transition.
 
 Timeline design rules:
 
-- Keep Mermaid as the static overview. Do not force temporal detail into Mermaid if it makes the chart unreadable.
+- Keep SVG as the static overview. Do not force temporal detail into one SVG if it makes the chart unreadable.
 - Use timeline steps for meaningful phase changes, failures, fixes, reviews, retries, commits, or user-visible transitions.
 - Do not turn every commit or log line into a step unless each one changes the reader's understanding.
 - Make `summary` useful when read alone; it is the fallback when animation is disabled.

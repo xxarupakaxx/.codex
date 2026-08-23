@@ -112,12 +112,12 @@ test('codemap adapter exposes callers impact and guarding tests from explicit ed
   );
 });
 
-test('ordinary roadmap snapshots still route graph-map through the legacy adapter', () => {
+test('ordinary roadmap snapshots still route graph-map through the SVG diagram adapter', () => {
   const roadmap = {
     title: 'Normal roadmap',
     generatedAt: '2026-08-05T12:00:00Z',
     files: {
-      'graph-map.md': `\`\`\`mermaid\nflowchart LR\n  A["Fact"]\n  B["Decision"]\n  A -->|"supports"| B\n\`\`\``
+      'graph-map.md': `\`\`\`diagram-json\n{"direction":"LR","nodes":[{"id":"A","label":"Fact"},{"id":"B","label":"Decision"}],"edges":[{"from":"A","to":"B","label":"supports"}]}\n\`\`\``
     }
   };
   const tree = modelApi.buildTreeViewModel(modelApi.buildModel(roadmap));

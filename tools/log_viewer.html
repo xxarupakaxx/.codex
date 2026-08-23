@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Log Viewer</title>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
   <style>
     :root {
       --bg-primary: #0d1117;
@@ -467,20 +466,6 @@
       font-size: 0.7rem;
     }
 
-    /* Mermaid */
-    .mermaid-container {
-      background: var(--bg-card);
-      border-radius: 8px;
-      padding: 20px;
-      margin: 12px 0;
-      overflow-x: auto;
-    }
-
-    .mermaid {
-      display: flex;
-      justify-content: center;
-    }
-
     /* Comments Panel */
     .comment-panel {
       margin-top: 12px;
@@ -700,9 +685,6 @@
       document.querySelector('.theme-toggle').innerHTML = isDark ? '&#x2600;&#xFE0F;' : '&#x1F319;';
       localStorage.setItem('logViewerTheme', isDark ? 'light' : 'dark');
 
-      if (document.querySelector('.mermaid svg')) {
-        reinitializeMermaid();
-      }
     }
 
     function loadTheme() {
@@ -980,9 +962,6 @@
         </div>
       `;
 
-      // Initialize Mermaid
-      reinitializeMermaid();
-
       // Setup comment panels
       setupCommentPanels();
     }
@@ -996,12 +975,6 @@
       if (phase.sections.length > 0) {
         contentHtml = phase.sections.map(section => {
           let html = section.content;
-
-          // Process mermaid blocks
-          html = html.replace(
-            /```mermaid\n([\s\S]*?)```/g,
-            '<div class="mermaid-container"><div class="mermaid">$1</div></div>'
-          );
 
           // Process task lists
           html = html.replace(
@@ -1197,28 +1170,6 @@
 
     function toggleSidebar() {
       document.getElementById('sidebar').classList.toggle('expanded');
-    }
-
-    // ========== Mermaid ==========
-    function reinitializeMermaid() {
-      const theme = document.body.getAttribute('data-theme') === 'light' ? 'default' : 'dark';
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: theme,
-        securityLevel: 'loose'
-      });
-
-      document.querySelectorAll('.mermaid').forEach((el, i) => {
-        const code = el.textContent || el.getAttribute('data-code');
-        if (code && !el.querySelector('svg')) {
-          el.setAttribute('data-code', code);
-          mermaid.render(`mermaid-log-${i}-${Date.now()}`, code).then(result => {
-            el.innerHTML = result.svg;
-          }).catch(err => {
-            console.error('Mermaid error:', err);
-          });
-        }
-      });
     }
 
     // ========== Utilities ==========

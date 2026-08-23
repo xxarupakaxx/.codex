@@ -94,26 +94,31 @@ const generatedAt = '2026-07-12T02:59:30.000Z';
 const nowMs = Date.parse('2026-07-12T03:00:00.000Z');
 const graphMap = `# View Plan Graph
 
-\`\`\`mermaid
-flowchart TB
-    G["判断を見落とさず決定"]
-    F1["Slackの現状"]
-    F2["GitHubの現状"]
-    D{"判断通知の設計"}
-    R{"安全と失敗の境界"}
-    A1["通知ポリシー"]
-    A2["Knowledgeノート"]
-    A3["Daily導線"]
-    V["pilotと独立レビュー"]
-
-    G -->|"必要とする"| D
-    F1 -->|"判断材料にする"| D
-    F2 -->|"判断材料にする"| D
-    R -->|"制約する"| D
-    D -->|"記録する"| A1
-    A1 -->|"反映する"| A2
-    A2 -->|"導線を作る"| A3
-    V -->|"検証する"| A1
+\`\`\`diagram-json
+{
+  "direction": "TB",
+  "nodes": [
+    {"id":"G","label":"判断を見落とさず決定"},
+    {"id":"F1","label":"Slackの現状"},
+    {"id":"F2","label":"GitHubの現状"},
+    {"id":"D","label":"判断通知の設計","shape":"decision"},
+    {"id":"R","label":"安全と失敗の境界","shape":"decision"},
+    {"id":"A1","label":"通知ポリシー"},
+    {"id":"A2","label":"Knowledgeノート"},
+    {"id":"A3","label":"Daily導線"},
+    {"id":"V","label":"pilotと独立レビュー"}
+  ],
+  "edges": [
+    {"from":"G","to":"D","label":"必要とする"},
+    {"from":"F1","to":"D","label":"判断材料にする"},
+    {"from":"F2","to":"D","label":"判断材料にする"},
+    {"from":"R","to":"D","label":"制約する"},
+    {"from":"D","to":"A1","label":"記録する"},
+    {"from":"A1","to":"A2","label":"反映する"},
+    {"from":"A2","to":"A3","label":"導線を作る"},
+    {"from":"V","to":"A1","label":"検証する"}
+  ]
+}
 \`\`\`
 `;
 
@@ -1089,8 +1094,8 @@ test('orders graph ranks by explicit relations instead of raw file order', () =>
   );
 });
 
-test('parses graph-map mermaid into explicit node-link graph contract', () => {
-  const parsed = model.parseMermaidGraphMap(graphMap);
+test('parses graph-map diagram JSON into explicit SVG node-link contract', () => {
+  const parsed = model.parseSvgDiagramSpec(graphMap);
 
   assert.equal(parsed.explicitGraphMap, true);
   assert.equal(parsed.nodes.length, 9);
@@ -1120,7 +1125,7 @@ test('parses graph-map mermaid into explicit node-link graph contract', () => {
 });
 
 test('concept map nodeに実artifact provenanceがないとき artifact導線を付けるべきではない', () => {
-  const parsed = model.parseMermaidGraphMap(graphMap);
+  const parsed = model.parseSvgDiagramSpec(graphMap);
 
   assert.ok(parsed.nodes.every(node => node.artifact === ''));
 });
@@ -1350,7 +1355,7 @@ test('source highlighterは主要なplan実装言語へ最低1つの意味token�
   assert.equal(model.highlightSourceCode('<raw>', 'unknown'), '&lt;raw&gt;');
 });
 
-test('Task別実装図は明示Mermaidだけを選択Taskへ結び付け、未記録Taskを補完しないべき', () => {
+test('Task別実装図は明示diagram JSONだけを選択Taskへ結び付け、未記録Taskを補完しないべき', () => {
   const result = model.buildModel(model.normalizeSnapshot({
     generatedAt,
     files: {
@@ -1362,13 +1367,8 @@ test('Task別実装図は明示Mermaidだけを選択Taskへ結び付け、未�
 
 ### 実装図
 
-\`\`\`mermaid
-flowchart LR
-S["source"]
-P["parser"]
-V["viewer"]
-S -->|"解析する"| P
-P -->|"描画する"| V
+\`\`\`diagram-json
+{"direction":"LR","nodes":[{"id":"S","label":"source"},{"id":"P","label":"parser"},{"id":"V","label":"viewer"}],"edges":[{"from":"S","to":"P","label":"解析する"},{"from":"P","to":"V","label":"描画する"}]}
 \`\`\`
 
 ## Task 2: 図なし
@@ -1399,10 +1399,10 @@ test('implementation workspaceは選択Taskの実装図と同値な関係一覧�
   }
   assert.match(html, /function renderImplementationDiagram\(diagram\)/);
   assert.match(html, /aria-label="実装図の関係"/);
-  assert.match(html, /\.implementation-diagram-flow\s*\{[^}]*display:\s*grid/);
-  assert.match(html, /@media \(max-width:\s*720px\)[\s\S]*\.implementation-diagram-flow/);
-  assert.match(html, /\.implementation-diagram-node\.decision\s*\{[^}]*var\(--warn\)/);
-  assert.match(html, /@media \(max-width:\s*720px\)[\s\S]*\.implementation-diagram-bridge span\s*\{[^}]*font-size:\s*10px/);
+  assert.match(html, /class="implementation-diagram-svg"/);
+  assert.match(html, /<svg class="implementation-diagram-svg"/);
+  assert.match(html, /<polygon class="diagram-node decision"/);
+  assert.match(html, /<path class="diagram-edge"/);
   assert.match(renderDiagramSource, /escapeHtml\(node\.title\)/);
   assert.match(renderDiagramSource, /escapeHtml\(edge\.predicate\)/);
 });
@@ -1470,8 +1470,8 @@ test('the tree-first roadmap information architecture remains in the HTML', () =
   assert.match(html, /function fallbackFocusTarget\(key, fallbackId = ''\)/);
   assert.match(html, /function selectedPathEdges\(tree, selectedId\)/);
   assert.match(html, /function buildTreeViewModel\(model\)/);
-  assert.match(html, /function parseMermaidGraphMap\(markdown\)/);
-  assert.match(html, /firstMermaidFlowchart/);
+  assert.match(html, /function parseSvgDiagramSpec\(markdown\)/);
+  assert.match(html, /firstDiagramJson/);
   assert.match(html, /graph-map\.md/);
   assert.match(html, /if \(tree\.explicitGraphMap\) \{\s*renderExplicitGraph\(tree\);\s*return;\s*\}/);
   assert.match(html, /className = 'explicit-node-layer'/);

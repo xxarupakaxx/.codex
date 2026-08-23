@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Diagram Viewer - Mermaid Annotation Tool</title>
+  <title>SVG Diagram Viewer</title>
   <style>
     :root {
       --bg-primary: #ffffff;
@@ -183,7 +183,7 @@
       position: relative;
     }
 
-    .diagram-wrapper .mermaid {
+    .diagram-wrapper .svg-diagram {
       display: block;
     }
 
@@ -650,17 +650,17 @@
       <div class="diagram-container" id="diagramContainer">
         <div class="drop-zone" id="dropZone">
           <div class="drop-zone-icon">📄</div>
-          <div class="drop-zone-text">Drop a .mmd or .md file here<br>or click to browse</div>
+          <div class="drop-zone-text">Drop an .svg or .md file here<br>or click to browse</div>
           <button class="btn btn-primary" id="browseBtn">Browse Files</button>
-          <input type="file" id="fileInput" accept=".mmd,.md,.txt" style="display: none;">
+          <input type="file" id="fileInput" accept=".svg,.md,.txt" style="display: none;">
         </div>
         <div class="diagram-wrapper" id="diagramWrapper" style="display: none;">
-          <div class="mermaid" id="mermaidDiagram"></div>
+          <div class="svg-diagram" id="svgDiagram"></div>
         </div>
       </div>
 
       <div class="source-editor" id="sourceEditor">
-        <textarea class="source-textarea" id="sourceTextarea" placeholder="Enter Mermaid diagram code here..."></textarea>
+        <textarea class="source-textarea" id="sourceTextarea" placeholder="Enter a self-contained SVG here..."></textarea>
       </div>
     </div>
 
@@ -748,18 +748,7 @@
     </div>
   </div>
 
-  <script src="https://cdn.jsdelivr.net/npm/mermaid@10/dist/mermaid.min.js"></script>
   <script>
-    // Initialize Mermaid
-    mermaid.initialize({
-      startOnLoad: false,
-      theme: 'default',
-      securityLevel: 'loose',
-      flowchart: { useMaxWidth: false },
-      sequence: { useMaxWidth: false },
-      stateDiagram: { useMaxWidth: false }
-    });
-
     // IndexedDB Setup
     const DB_NAME = 'DiagramViewerDB';
     const DB_VERSION = 1;
@@ -844,7 +833,7 @@
     const browseBtn = document.getElementById('browseBtn');
     const diagramContainer = document.getElementById('diagramContainer');
     const diagramWrapper = document.getElementById('diagramWrapper');
-    const mermaidDiagram = document.getElementById('mermaidDiagram');
+    const svgDiagram = document.getElementById('svgDiagram');
     const sourceEditor = document.getElementById('sourceEditor');
     const sourceTextarea = document.getElementById('sourceTextarea');
     const viewDiagram = document.getElementById('viewDiagram');
@@ -887,33 +876,36 @@
       currentFile = file.name;
       document.getElementById('fileName').textContent = file.name;
 
-      // Extract Mermaid code
-      let mermaidCode = text;
+      const svgMatch = text.match(/<svg\b[\s\S]*?<\/svg>/i);
+      const svgCode = svgMatch ? svgMatch[0].trim() : text.trim();
+      currentSource = svgCode;
+      sourceTextarea.value = svgCode;
 
-      // If markdown, extract mermaid blocks
-      const mermaidMatch = text.match(/```mermaid\s*([\s\S]*?)```/);
-      if (mermaidMatch) {
-        mermaidCode = mermaidMatch[1].trim();
-      }
-
-      currentSource = mermaidCode;
-      sourceTextarea.value = mermaidCode;
-
-      await renderDiagram(mermaidCode);
+      await renderDiagram(svgCode);
       await loadAndDisplayAnnotations();
     }
 
     async function renderDiagram(code) {
       try {
         // Clear previous
-        mermaidDiagram.innerHTML = '';
+        svgDiagram.innerHTML = '';
 
         // Remove markers
         document.querySelectorAll('.annotation-marker').forEach(m => m.remove());
 
-        // Render
-        const { svg } = await mermaid.render('mermaid-svg', code);
-        mermaidDiagram.innerHTML = svg;
+        const parsed = new DOMParser().parseFromString(code, 'image/svg+xml');
+        const svg = parsed.documentElement;
+        if (parsed.querySelector('parsererror') || svg.localName !== 'svg') throw new Error('Valid SVG root is required.');
+        if (svg.querySelector('script, foreignObject, iframe, object, embed')) throw new Error('Unsafe SVG element detected.');
+        for (const element of [svg, ...svg.querySelectorAll('*')]) {
+          for (const attribute of [...element.attributes]) {
+            if (/^on/i.test(attribute.name)) throw new Error('Event handler attributes are not allowed.');
+            if (/(?:^|:)href$/i.test(attribute.name) && attribute.value && !attribute.value.startsWith('#')) {
+              throw new Error('External SVG resources are not allowed.');
+            }
+          }
+        }
+        svgDiagram.appendChild(document.importNode(svg, true));
 
         // Show diagram
         dropZone.style.display = 'none';
@@ -925,8 +917,8 @@
         // Reposition markers
         repositionMarkers();
       } catch (error) {
-        console.error('Mermaid render error:', error);
-        mermaidDiagram.innerHTML = `<div style="color: var(--danger-color); padding: 16px;">
+        console.error('SVG render error:', error);
+        svgDiagram.innerHTML = `<div style="color: var(--danger-color); padding: 16px;">
           Error rendering diagram:<br><pre>${error.message}</pre>
         </div>`;
         dropZone.style.display = 'none';
@@ -935,15 +927,10 @@
     }
 
     function updateDiagramInfo(code) {
-      // Detect diagram type
-      const typeMatch = code.match(/^\s*(flowchart|graph|sequenceDiagram|stateDiagram|classDiagram|erDiagram|gantt|pie|gitGraph)/m);
-      const diagramType = typeMatch ? typeMatch[1] : 'unknown';
-      document.getElementById('diagramType').textContent = diagramType;
-
-      // Count nodes (rough estimate)
-      const nodeMatches = code.match(/\[.*?\]|{.*?}|\(.*?\)|>.*?\]/g);
-      const nodeCount = nodeMatches ? nodeMatches.length : '-';
-      document.getElementById('nodeCount').textContent = nodeCount;
+      const svg = svgDiagram.querySelector('svg');
+      document.getElementById('diagramType').textContent = svg?.dataset.diagramType || 'SVG';
+      const nodes = svg?.querySelectorAll('[data-node], [data-diagram-node], .diagram-node, .node');
+      document.getElementById('nodeCount').textContent = nodes?.length || '-';
     }
 
     async function loadAndDisplayAnnotations() {
@@ -1161,12 +1148,6 @@
       document.body.dataset.theme = saved;
       themeToggle.textContent = saved === 'dark' ? '☀️' : '🌙';
 
-      // Update Mermaid theme
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: saved === 'dark' ? 'dark' : 'default',
-        securityLevel: 'loose'
-      });
     }
 
     themeToggle.addEventListener('click', async () => {
@@ -1175,13 +1156,6 @@
       document.body.dataset.theme = next;
       localStorage.setItem('diagramViewerTheme', next);
       themeToggle.textContent = next === 'dark' ? '☀️' : '🌙';
-
-      // Re-render with new theme
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: next === 'dark' ? 'dark' : 'default',
-        securityLevel: 'loose'
-      });
 
       if (currentSource) {
         await renderDiagram(currentSource);
@@ -1207,7 +1181,7 @@
     });
 
     document.getElementById('exportSvg').addEventListener('click', () => {
-      const svg = mermaidDiagram.querySelector('svg');
+      const svg = svgDiagram.querySelector('svg');
       if (!svg) return;
 
       const svgData = new XMLSerializer().serializeToString(svg);
@@ -1217,7 +1191,7 @@
     });
 
     document.getElementById('exportPng').addEventListener('click', async () => {
-      const svg = mermaidDiagram.querySelector('svg');
+      const svg = svgDiagram.querySelector('svg');
       if (!svg) return;
 
       const canvas = document.createElement('canvas');

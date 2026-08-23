@@ -5,7 +5,6 @@
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Plan Viewer</title>
   <script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js"></script>
   <style>
     :root {
       --bg-primary: #1a1a2e;
@@ -529,24 +528,6 @@
       opacity: 1;
     }
 
-    /* Mermaid Diagram */
-    .mermaid-container {
-      background: var(--bg-card);
-      border-radius: 8px;
-      padding: 20px;
-      margin: 15px 0;
-      overflow-x: auto;
-    }
-
-    .mermaid {
-      display: flex;
-      justify-content: center;
-    }
-
-    [data-theme="light"] .mermaid-container {
-      background: #f8f8f8;
-    }
-
     /* Status Badge */
     .status-badge {
       display: inline-flex;
@@ -684,10 +665,6 @@
       document.querySelector('.theme-toggle').textContent = isDark ? '☀️' : '🌙';
       localStorage.setItem('theme', isDark ? 'light' : 'dark');
 
-      // Re-initialize mermaid with new theme
-      if (document.querySelector('.mermaid svg')) {
-        reinitializeMermaid();
-      }
     }
 
     function loadTheme() {
@@ -856,13 +833,7 @@
 
     // ========== Markdown Processing ==========
     function processMarkdown(markdown) {
-      // Handle mermaid code blocks
-      const processed = markdown.replace(
-        /```mermaid\n([\s\S]*?)```/g,
-        '<div class="mermaid-container"><div class="mermaid">$1</div></div>'
-      );
-
-      renderMarkdown(processed);
+      renderMarkdown(markdown);
       buildTOC();
       renderCommentList();
     }
@@ -933,29 +904,6 @@
         section.onclick = () => selectSection(section);
       });
 
-      // Initialize Mermaid
-      reinitializeMermaid();
-    }
-
-    function reinitializeMermaid() {
-      const theme = document.body.getAttribute('data-theme') === 'light' ? 'default' : 'dark';
-      mermaid.initialize({
-        startOnLoad: false,
-        theme: theme,
-        securityLevel: 'loose'
-      });
-
-      document.querySelectorAll('.mermaid').forEach((el, i) => {
-        const code = el.textContent || el.getAttribute('data-code');
-        if (code && !el.querySelector('svg')) {
-          el.setAttribute('data-code', code);
-          mermaid.render(`mermaid-${i}-${Date.now()}`, code).then(result => {
-            el.innerHTML = result.svg;
-          }).catch(err => {
-            console.error('Mermaid error:', err);
-          });
-        }
-      });
     }
 
     // ========== TOC ==========

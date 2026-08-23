@@ -35,19 +35,19 @@ git diff $ARGUMENTS
 
 ### 3.5. 状態図の取り込み
 
-`/generate-state-diagram` が生成した `91_state_diagram.md` を検出し、PR本文に埋め込む。
+`/generate-state-diagram` が生成した `91_state_diagram.svg` と `91_state_diagram.md` を検出する。
 
 ```bash
 # MEMORY_DIR は PJ AGENTS.md 定義（未定義時は .local/）
-# 最新のメモリディレクトリから 91_state_diagram.md を探す
-find "${MEMORY_DIR:-.local}/memory" -maxdepth 3 -name "91_state_diagram.md" 2>/dev/null \
+# 最新のメモリディレクトリから 91_state_diagram.svg を探す
+find "${MEMORY_DIR:-.local}/memory" -maxdepth 3 -name "91_state_diagram.svg" 2>/dev/null \
   | xargs -I{} stat -f "%m %N" {} 2>/dev/null \
   | sort -rn | head -1 | awk '{print $2}'
 ```
 
 判定:
 
-- **ファイルあり** → ファイル内の ` ```mermaid ... ``` ` ブロックを全て抽出し、後述「処理フロー / 状態遷移」セクションに埋め込む（`91_state_diagram.md` は Validator 通過済みなのでそのまま貼ってよい）
+- **ファイルあり** → XMLとしてparseでき、外部resourceとevent handlerを含まないことを確認する。PR本文では `91_state_diagram.md` の関係要約を使う。SVGがrepository内のcommit済みpathにある場合だけMarkdown imageとして埋め込む。task memory内だけにあるSVGを、表示できない相対linkとして貼らない
 - **ファイルなし**:
   - 変更にワークフロー/状態管理/外部連携/ドメインモデル変更を含む → `AskUserQuestion` で `/generate-state-diagram` を先に実行するか確認
   - UIのみ / テストのみ / 設定・ドキュメントのみ → スキップ（`generate-state-diagram` Skill のスキップ条件と一致）
@@ -76,16 +76,10 @@ find "${MEMORY_DIR:-.local}/memory" -maxdepth 3 -name "91_state_diagram.md" 2>/d
 <!-- 91_state_diagram.md が存在する場合のみ以下を追加 -->
 ## 処理フロー / 状態遷移
 
-> 自動生成: `/generate-state-diagram` 出力（Mermaid Validator通過済み）
+> 自動生成: `/generate-state-diagram` のSVG出力
 > 詳細・用語集・ファイル構成マップは `91_state_diagram.md` を参照
 
-​```mermaid
-<block_1 をそのまま貼り付け>
-​```
-
-​```mermaid
-<block_2 をそのまま貼り付け>
-​```
+[SVGがcommit済みの場合は `![処理フロー](<repo-relative-svg-path>)`。それ以外は `91_state_diagram.md` の関係要約を記載]
 <!-- ここまで状態図セクション -->
 
 ## チェックリスト
@@ -97,9 +91,9 @@ find "${MEMORY_DIR:-.local}/memory" -maxdepth 3 -name "91_state_diagram.md" 2>/d
 注意:
 
 - PRテンプレート（`.github/PULL_REQUEST_TEMPLATE.md`）が存在する場合、テンプレートの項目を勝手に削除してはならない（PJ `AGENTS.md` の禁止事項）。状態図セクションはテンプレート末尾（チェックリスト前など適切な位置）に追記する形で挿入
-- GitHubはPR本文のMermaidをネイティブレンダリングするため、画像化や外部リンクは不要
-- Validator警告コメント（`<!-- ⚠️ Mermaid Validator FAILED ... -->`）が `91_state_diagram.md` に残っている場合、当該ブロックは貼らずに「※構文エラーのため省略」とだけ記載し、ユーザーに通知
-- PR本文更新は平文改行のファイルに書き出して `gh pr edit --body-file` で渡す（シェルクォート経由だとリテラル `\n` が本文に残ることがある）。テンプレ再構成時は技術的内容を保持し形式のみ変更する。DB schema/GraphQL変更を含むPRはMermaidフロー図をbodyに含める（出典: memories/rollout_summaries/2026-06-22T05-52-03-qgnt-dependency_tarball_ci_pr_and_review.md「Failures and how to do differently」、memories/rollout_summaries/2026-06-19T02-01-11-sh6E-pr_2956_description_update_cloudsql_role.md「Reusable knowledge」、memories/rollout_summaries/2026-06-26T08-53-53-tABQ-pr3049_template_pr_description_update_and_billing_cancel_not.md「Key steps / References」）
+- SVGはGitHubから取得できるcommit済みpathだけを埋め込む。local memory pathやdata URLは貼らない
+- SVG検証に失敗した場合は図を貼らず、「※SVG検証失敗のため省略」と記載してユーザーに通知する
+- PR本文更新は平文改行のファイルに書き出して `gh pr edit --body-file` で渡す（シェルクォート経由だとリテラル `\n` が本文に残ることがある）。テンプレ再構成時は技術的内容を保持し形式のみ変更する。DB schemaまたはGraphQL変更を含むPRでは、SVG flow図または同値な関係要約をbodyに含める
 - PR本文の再整形・更新時は、既に解消済みの古い注意書き（stale caveat）を現状と照合して削除する（旧schema制限に関する記述が解消後も残存していた実例。出典: memories/rollout_summaries/2026-06-26T08-53-53-tABQ-pr3049_template_pr_description_update_and_billing_cancel_not.md「Task 2 Failures」）
 - PR本文の事実一覧（影響範囲表等）は外部由来情報の転記でなく、リポジトリ内の実データ（例: `terraform/env/*/main.tf` の `gcp_project_id`）で裏取りして記載する（出典: memories/rollout_summaries/2026-06-19T02-01-11-sh6E-pr_2956_description_update_cloudsql_role.md「Reusable knowledge」）
 

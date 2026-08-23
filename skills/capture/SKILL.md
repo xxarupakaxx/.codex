@@ -26,7 +26,7 @@ OCRや手入力フォームを使わず、**話した/打ったテキストを�
 - reading は `templates/reading.md`、note は `templates/note.md` を元に `Inbox/`（読書/知見は `Inbox/knowledge/`）へ新規作成。`<% %>` は実値置換、`tp.file.cursor()` 削除。ファイル名は内容ベースで一意に。
 - テンプレートにある `summary`（1行要約・`"..."` 囲み）と `related`（`"[[ノート名]]"` の配列）を必ず埋める。知見ノートは `templates/knowledge.md`（`type: knowledge`、`depth` は通常 `overview`）を使う。定義は CLAUDE.md「セカンドブレイン拡張フィールド」。
 - **本人が言ったことだけを本人の層**（要点・感想）に書く。言っていないことを足さない。書名/著者が不明で必要なら1問だけ聞く。
-- **図の活用（Mermaid）**：技術的なURLや記事で処理フロー・比較・アーキテクチャを説明する場合は、テキストだけより Mermaid で図示した方が分かりやすいときに使う（` ```mermaid ` コードブロック、ObsidianはMermaidをネイティブでレンダリングする）。
+- **図の活用（SVG）**：技術的なURLや記事で処理フロー、比較、architectureを図示した方が分かりやすい場合は、自己完結したSVGを `attachments/` に保存し、本文から埋め込む。Mermaidは新規生成しない。
 
 ## 3. 外部補完 & 基盤化（reading/知見のとき）
 - [[07_reading-enrich]] を適用: `## 🌐 外部コンテキスト（AI補完/要検証）` を `WebSearch`/`WebFetch` で出典付き補完（著者背景・関連概念・対立見解・原典）→ キー概念を概念ノート化し双方向リンク＋[[Concepts-MOC]]追記 → `## 🧠 統合メモ` で自分の言葉×外部×既存ノートを突き合わせFB。

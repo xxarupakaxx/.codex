@@ -75,14 +75,14 @@ related: ["[[関連ノートやMOC]]"]
 本文の構成は `references/note-structure.md` を参照。
 フィールド定義は CLAUDE.md「セカンドブレイン拡張フィールド」に従う。AI/エージェント系のノートは [[AI-Agent-MOC]] の該当クラスタに1行追記して双方向にする。
 
-**図の活用（Mermaid）**：技術的な仕組み・処理フロー・アーキテクチャ・比較は、テキストだけより図にした方が理解しやすい場合に積極的にMermaidで図示する。ObsidianはMermaidをネイティブでレンダリングする（` ```mermaid ` コードブロックで埋め込む）。
+**図の活用（SVG）**：技術的な仕組み、処理flow、architecture、比較は、図にした方が理解しやすい場合に自己完結したSVGで図示する。SVGは `attachments/` に保存し、Obsidianの本文から埋め込む。Mermaidは新規生成しない。
 
-| 用途 | Mermaid種別 |
+| 用途 | SVG表現 |
 |------|-----------|
-| 処理フロー・パイプライン | `flowchart LR` / `flowchart TD` |
-| コンポーネント間のやり取り | `sequenceDiagram` |
-| 状態遷移 | `stateDiagram-v2` |
-| アーキテクチャ・構成要素の関係 | `graph LR` |
+| 処理flow、pipeline | label付きnodeと有向edge |
+| component間のやり取り | 左から右へ進むsequence |
+| 状態遷移 | 状態node、開始と終了、条件付きedge |
+| architecture、構成要素の関係 | system groupと関係edge |
 
 ### Step 5: デイリーへのリンク追記
 
@@ -115,7 +115,7 @@ Knowledgeノートの保存、Dailyリンク、Step 6の検証が完了した後
 - [ ] 他技術と何が違うかを書いているか
 - [ ] 既知の制限・落とし穴を書いているか
 - [ ] LLMっぽい空虚な表現（「重要なのは」「掘り下げる」）を使っていないか（japanese-tech-writing規範）
-- [ ] フロー・アーキテクチャ・比較など図にした方が分かりやすい箇所にMermaidを使っているか
+- [ ] flow、architecture、比較など図にした方が分かりやすい箇所にSVGを使っているか
 - [ ] 作成したKnowledgeノートごとにconcept sketchが1件あり、source noteとDailyから辿れるか
 - [ ] Exact Boardだけで主題、中心主張、仕組み、次の判断、望ましい終点、重要な制限を説明できるか
 - [ ] 埋め込んだ画像wikilinkが実在するPNGへ解決するか
