@@ -463,11 +463,9 @@ re_review_priority: high    # 次ラウンドで検出元 reviewer を優先起�
 4. 残存する課題
 5. コード変更がある場合は `target / actual / variance / reason` のComplexity Budget要約（コード変更なしは `N/A (non-code)`）
 6. 価値ある知見があれば memories/ にインデックス作成（`context/memory-file-formats.md`をReadで参照）
-7. **ローカル検証ガイド生成**（UI変更・API変更・DB変更を含む場合は必須）
-   - `/generate-verification-guide` スキルを実行
-   - 影響ページの探索 → テストケース生成 → チェックリスト出力
-   - 結果をメモリディレクトリの `90_verification.md` に保存
-   - **スキップ条件**: 設定ファイルのみの変更、テストのみの変更、ドキュメントのみの変更
+7. **ローカル検証ガイド生成**（ユーザーが明示的に依頼した場合のみ）
+   - 通常の完了処理では生成しない。UI・API・DB変更を含むことだけを理由に起動しない
+   - 明示依頼時は `/generate-verification-guide` スキルを実行し、結果をメモリディレクトリの `90_verification.md` に保存
 8. **状態図・処理フロー図生成**（ワークフロー・状態管理・外部連携を含む場合は必須）
    - `/generate-state-diagram` スキルを実行
    - lead のローカル探索で不足し、Delegation Gate を通る場合だけ `explorer` でブランチ変更を深掘り → SVG図生成 → 用語集・ファイルマップ付与
@@ -591,8 +589,8 @@ Phase直結でないユーティリティスキル。**状況が発生したら*
 | 状況 | スキル | やること |
 |------|--------|---------|
 | Phase 4で合格基準を定義→自動ループ | `/checkpoint` → `/verify` | 基準定義→全PASS まで検証→修正→再検証を自動繰り返し |
-| 手動確認チェックリストが必要 | `/generate-verification-guide` | UI/API/DB変更のローカル検証手順を生成 |
-| 両方使う場合 | `/verify` → `/generate-verification-guide` | 自動チェック後、残りを手動チェックリストで |
+| ユーザーが手動確認チェックリストを明示依頼 | `/generate-verification-guide` | UI/API/DB変更のローカル検証手順を生成 |
+| ユーザーが自動検証と手動ガイドの両方を明示依頼 | `/verify` → `/generate-verification-guide` | 自動チェック後、残りを手動チェックリストで |
 
 ### コスト・効率を最適化したいとき
 

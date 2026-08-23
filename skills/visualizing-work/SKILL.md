@@ -126,7 +126,7 @@ If a viewer, browser, or image generator was required but unavailable, save the 
 - Use `generate-state-diagram-3d` when the chosen representation is a layered technical map or timeline replay.
 - After `generate-state-diagram` completes `91_state_diagram.*`, use `diagram-design` only for a distinct reader question; the sidecar supplements its canonical output and never duplicates state or flow diagrams.
 - After `viewing-plans` completes `roadmap.html`, use `diagram-design` only for a distinct reader question; the sidecar supplements its canonical output and never duplicates Roadmap task order, progress, or Concept Map.
-- Use `generate-verification-guide` when the artifact is a checkable manual verification path.
+- Use `generate-verification-guide` only when the user explicitly requests a checkable manual verification path.
 - Use `research` or deep-research style investigation when the visual explanation depends on external facts, unfamiliar domains, or design precedents.
 
 ## Outputs
