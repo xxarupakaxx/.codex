@@ -39,6 +39,7 @@
 - 委譲時はobjective、背景、scope、制約、許可する副作用、成果物、検証方法を明示し、親が既存実装、設定、文書、testへ戻って検証する。
 - 委譲先へsecret、secret reference、認証済みsession情報を渡さない。
 - 詳細手順はrepoの正規docs / Skillを優先し、新しいSkill、runner、wrapperを作る前に既存部品を確認する。
+- 現在の作業で生成した成果物の整形、校正、品質確認では `skills/sanitizing-artifacts/SKILL.md` を読む。
 
 ## Workflow gate
 
