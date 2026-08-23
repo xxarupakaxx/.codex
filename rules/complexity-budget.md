@@ -92,7 +92,7 @@
 
 ## 最終報告
 
-コード変更を含む完了報告には、少なくとも `target / actual / variance / reason` の要約を含める。完全な表は `30_plan.md`、`40_progress.md`、Team Journal、`80_review.md` のいずれかへ残す。コード変更がない場合は `Complexity Budget: N/A (non-code)` と明記する。
+コード変更を含む完了報告では、内部用語の Complexity Budget を利用者向けに「変更量」として示す。計画内なら「変更量：想定内」と簡潔に書く。計画超過時だけ計画値、実績、差分、理由を日本語で説明する。完全な `target / actual / variance / reason` は `30_plan.md`、`40_progress.md`、Team Journal、`80_review.md` のいずれかへ残す。コード変更がない場合、完了報告には変更量を記載しない。
 
 ## 参考
 
