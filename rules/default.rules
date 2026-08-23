@@ -14,3 +14,6 @@ prefix_rule(pattern=["git", "ls-remote", "--heads", "origin", "feature/0000-team
 prefix_rule(pattern=["git", "fetch"], decision="allow")
 prefix_rule(pattern=["git", "push", "origin"], decision="allow")
 prefix_rule(pattern=["git", "ls-remote", "--heads", "origin", "main", "feature/0000-team-run-pr-watch-conflict"], decision="allow")
+prefix_rule(pattern=["rm", "-rf", "/Users/yoshiki/ghq/github.com/THA-inc/sunshot/.playwright-cli"], decision="allow")
+prefix_rule(pattern=["rm", "-rf", "/Users/yoshiki/ghq/github.com/THA-inc/sunshot/.next"], decision="allow")
+prefix_rule(pattern=["rm", "-rf", "/Users/yoshiki/ghq/github.com/THA-inc/ai-president-dashboard/.next"], decision="allow")
