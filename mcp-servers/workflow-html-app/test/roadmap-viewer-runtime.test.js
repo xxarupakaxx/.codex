@@ -32,9 +32,13 @@ function buildSnapshot() {
     files: {
       "00_spec.md": `# 機能要求
 
-## 目的
+## 概要
 
 実行Task、仕様、実装根拠、順序、事実、成果物を第一画面で理解できるようにする。
+
+## 背景・目的
+
+進捗だけでなく設計意図まで第一画面で理解できる必要がある。
 
 ## 必須要件
 
@@ -253,17 +257,19 @@ async function withLivePage(t, viewport, callback, snapshotInput = buildSnapshot
   }
 }
 
-test("first screen exposes concrete task spec code claims and artifacts", async (t) => {
+test("first screen exposes the plan purpose roadmap design and selected task detail", async (t) => {
   await withPage(t, { width: 1440, height: 1000 }, async (page) => {
     const state = await page.evaluate(() => ({
       executionVisible: document.querySelector("#execution-brief")?.getBoundingClientRect().height > 0,
       firstTask: document.querySelector("#brief-flow .brief-flow-item strong")?.textContent,
-      selectedTitle: document.querySelector("#execution-brief-title")?.textContent,
+      planTitle: document.querySelector("#execution-brief-title")?.textContent,
+      selectedTitle: document.querySelector("#implementation-task-title")?.textContent,
       selectedPurpose: document.querySelector("#implementation-task-purpose")?.textContent,
-      hasStaticSummary: Boolean(document.querySelector("#brief-summary")),
-      spec: document.querySelector("#brief-spec-summary")?.textContent,
+      context: document.querySelector("#brief-design-context")?.textContent,
+      requirements: document.querySelector("#brief-requirements")?.textContent,
+      decisions: document.querySelector("#brief-design-decisions")?.textContent,
+      boundaries: document.querySelector("#brief-boundaries")?.textContent,
       selectedMetric: document.querySelector("#brief-current-status")?.textContent,
-      anchors: [...document.querySelectorAll("#brief-code-anchors code")].map((node) => node.textContent),
       claimHeadings: [...document.querySelectorAll("#brief-claims h4")].map((node) => node.textContent),
       artifacts: [...document.querySelectorAll("#brief-artifact-grid [data-artifact]")].map((node) => node.dataset.artifact),
       graphOpen: document.querySelector("#concept-map-disclosure")?.open,
@@ -271,13 +277,14 @@ test("first screen exposes concrete task spec code claims and artifacts", async 
 
     assert.equal(state.executionVisible, true);
     assert.equal(state.firstTask, "contractを固定する");
-    assert.match(state.selectedTitle, /Task 1.*contractを固定する/);
+    assert.match(state.planTitle, /実行Task、仕様、実装根拠/);
+    assert.equal(state.selectedTitle, "contractを固定する");
     assert.match(state.selectedPurpose, /第一画面の読解要件/);
-    assert.equal(state.hasStaticSummary, false);
-    assert.match(state.spec, /要件:/);
-    assert.match(state.spec, /制約:/);
+    assert.match(state.context, /設計意図まで第一画面で理解/);
+    assert.match(state.requirements, /Taskと仕様を同時に読める/);
+    assert.match(state.decisions, /第一画面をbrief-firstにする/);
+    assert.match(state.boundaries, /schema version 1を維持/);
     assert.match(state.selectedMetric, /1 \/ 2/);
-    assert.ok(state.anchors.includes("buildExecutionBrief()"));
     assert.deepEqual(state.claimHeadings, ["事実", "判断", "未確定"]);
     assert.deepEqual(state.artifacts, ["00_spec.md", "30_plan.md", "40_progress.md", "80_review.md"]);
     assert.equal(state.graphOpen, false);
@@ -351,7 +358,7 @@ test("keyboard opens a source artifact and the concept disclosure on mobile", as
   });
 });
 
-test("missing code anchors and claim classifications stay explicit", async (t) => {
+test("missing design decisions and done conditions stay explicit", async (t) => {
   const snapshot = buildSnapshot();
   snapshot.files["30_plan.md"] = `## Task 1: 古いTask
 
@@ -374,11 +381,8 @@ test("missing code anchors and claim classifications stay explicit", async (t) =
   delete snapshot.files["team-journal.md"];
 
   await withPage(t, { width: 1280, height: 900 }, async (page) => {
-    assert.equal(await page.locator("#brief-code-anchors").textContent(), "実装根拠が未記録");
-    assert.deepEqual(
-      await page.locator("#brief-claims .brief-missing").allTextContents(),
-      ["明示分類なし", "明示分類なし", "明示分類なし"],
-    );
+    assert.match(await page.locator("#brief-design-decisions").textContent(), /設計判断が未記録/);
+    assert.match(await page.locator("#brief-done").textContent(), /完了条件が未記録/);
   }, snapshot);
 });
 
@@ -412,7 +416,7 @@ test("live polling refreshes freshness and a changed snapshot updates the curren
     setSnapshot(changed);
     await page.evaluate(() => pollSnapshot(pollGeneration));
     assert.match(await page.locator("#brief-current-task").textContent(), /Task 2/);
-    assert.match(await page.locator("#execution-brief-title").textContent(), /Task 2/);
+    assert.match(await page.locator("#implementation-task-meta").textContent(), /TASK 2/);
     assert.equal(await page.locator("#brief-progress").textContent(), "1 / 2 Task");
   });
 });
@@ -457,7 +461,7 @@ test("implementation workspace keeps every task visible and binds selection to p
       await page.locator("#implementation-source-path").textContent(),
       ".codex/tools/roadmap_viewer.html",
     );
-    assert.match(await page.locator("#execution-brief-title").textContent(), /Task 2.*brief UIを実装する/);
+    assert.equal(await page.locator("#implementation-task-title").textContent(), "brief UIを実装する");
 
     await page.keyboard.press("ArrowUp");
     assert.equal(await tasks.nth(0).getAttribute("aria-selected"), "true");

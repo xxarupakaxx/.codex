@@ -321,6 +321,8 @@
       letter-spacing: -.02em;
       line-height: 1.2;
     }
+    .brief-design-context { max-width: 880px; margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .brief-header-kicker { margin-bottom: 5px; text-align: left; }
     .brief-quick-links {
       margin-top: 8px;
       display: flex;
@@ -340,6 +342,34 @@
     .brief-metrics div + div { border-left: 1px solid var(--line); }
     .brief-metrics dt { margin-bottom: 4px; color: var(--faint); font-size: 11px; font-weight: 750; }
     .brief-metrics dd { margin: 0; max-width: 260px; color: var(--ink); font-size: 13px; font-weight: 730; overflow-wrap: anywhere; }
+    .brief-route {
+      padding: 14px 18px 12px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .brief-route-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
+    .brief-route-head h3 { margin: 2px 0 0; font-size: 15px; letter-spacing: -.01em; }
+    .brief-route-legend { color: var(--muted); font-size: 10px; white-space: nowrap; }
+    .brief-route-map { margin-top: 8px; overflow-x: auto; overscroll-behavior-x: contain; }
+    .brief-route-svg { width: 100%; height: 118px; display: block; }
+    .brief-route-svg text { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP", sans-serif; }
+    .route-edge { stroke-width: 2; }
+    .route-edge.complete { stroke: var(--accent); }
+    .route-edge.planned { stroke: var(--line-strong); stroke-dasharray: 5 5; }
+    .route-node { stroke-width: 2; }
+    .route-node.complete { fill: var(--accent); stroke: var(--accent); }
+    .route-node.current { fill: var(--surface-accent); stroke: var(--accent); }
+    .route-node.next { stroke: var(--accent-blue); stroke-width: 2.5; }
+    .route-node.blocked { fill: var(--surface); stroke: var(--danger); stroke-dasharray: 4 3; }
+    .route-node.planned { fill: var(--surface); stroke: var(--line-strong); }
+    .route-selection { fill: none; stroke: var(--accent-blue); stroke-width: 2; }
+    .route-symbol { fill: var(--ink); font-size: 11px; font-weight: 850; text-anchor: middle; }
+    .route-symbol.complete { fill: var(--surface); }
+    .route-task-number { fill: var(--accent-strong); font-size: 10px; font-weight: 800; text-anchor: middle; }
+    .route-task-title { fill: var(--ink); font-size: 11px; font-weight: 680; text-anchor: middle; }
+    .route-tag { fill: var(--muted); font-size: 9px; font-weight: 760; text-anchor: middle; }
+    .route-next-tag { fill: var(--accent-blue); font-size: 9px; font-weight: 820; text-anchor: middle; }
+    .brief-route-summary { margin: 6px 0 0; color: var(--muted); font-size: 11px; }
     .brief-flow-section,
     .brief-claims-section,
     .brief-artifact-section { padding: 22px 28px; border-bottom: 1px solid var(--line); }
@@ -351,8 +381,7 @@
       justify-content: space-between;
       gap: 18px;
     }
-    .brief-section-heading h3,
-    .brief-card h3 { margin: 2px 0 0; font-size: 17px; letter-spacing: -.01em; }
+    .brief-section-heading h3 { margin: 2px 0 0; font-size: 17px; letter-spacing: -.01em; }
     .brief-section-heading > p { margin: 0; color: var(--muted); font-size: 12px; }
     .brief-kicker {
       margin: 0;
@@ -612,21 +641,43 @@
     .brief-task-contract div { display: contents; }
     .brief-task-contract dt { color: var(--faint); font-weight: 720; }
     .brief-task-contract dd { margin: 0; color: var(--muted); overflow-wrap: anywhere; }
-    .brief-detail-grid {
-      padding: 22px 28px;
-      display: grid;
-      grid-template-columns: repeat(2, minmax(0, 1fr));
-      gap: 12px;
+    .design-summary {
+      padding: 18px 28px 20px;
       border-bottom: 1px solid var(--line);
+      background: color-mix(in srgb, var(--surface-accent) 42%, var(--surface));
     }
-    .brief-card {
-      min-width: 0;
-      padding: 17px;
+    .design-summary .brief-section-heading { margin-bottom: 12px; }
+    .design-summary-grid {
+      display: grid;
+      grid-template-columns: repeat(3, minmax(0, 1fr));
       border: 1px solid var(--line);
       border-radius: var(--radius);
-      background: var(--surface-soft);
+      background: var(--surface);
+      overflow: hidden;
     }
-    .brief-card > p:not(.brief-kicker) { min-height: 46px; margin: 10px 0 13px; color: var(--muted); font-size: 13px; line-height: 1.6; }
+    .design-summary-card {
+      min-width: 0;
+      padding: 16px;
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .design-summary-card + .design-summary-card { border-left: 1px solid var(--line); }
+    .design-summary-card h4 { margin: -21px 0 2px 32px; color: var(--ink); font-size: 15px; letter-spacing: -.01em; }
+    .design-summary-number { margin: 0; color: var(--accent); font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 11px; font-weight: 800; }
+    .design-summary-lead { margin: 0; color: var(--muted); font-size: 12px; font-weight: 720; line-height: 1.5; }
+    .design-summary-list { min-height: 44px; }
+    .design-summary-list ul { margin: 0; padding: 0; display: grid; gap: 7px; list-style: none; }
+    .design-summary-list li { position: relative; padding-left: 13px; display: grid; gap: 2px; color: var(--ink); font-size: 12px; line-height: 1.45; }
+    .design-summary-list li::before { content: ''; position: absolute; top: .58em; left: 0; width: 5px; height: 5px; border-radius: 50%; background: var(--accent); }
+    .design-source-link { width: fit-content; min-height: 20px; padding: 0; border: 0; color: var(--faint); background: transparent; cursor: pointer; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 9px; text-align: left; }
+    .design-source-link:hover { color: var(--accent-strong); text-decoration: underline; }
+    .design-source-link:focus-visible { border-radius: 2px; outline: 2px solid var(--focus); outline-offset: 2px; }
+    .design-summary-list .brief-missing { line-height: 1.45; }
+    .design-summary-pair { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+    .design-summary-pair > div + div { padding-left: 12px; border-left: 1px solid var(--line); }
+    .design-summary-pair .design-summary-list { margin-top: 6px; }
+    .design-summary-card .brief-source-link { width: fit-content; margin-top: auto; }
     .brief-source-link {
       min-height: 34px;
       padding: 5px 9px;
@@ -637,16 +688,6 @@
       cursor: pointer;
       font-size: 12px;
       font-weight: 700;
-    }
-    .code-anchor-list { margin: 0 0 12px; display: flex; flex-wrap: wrap; gap: 5px; }
-    .code-anchor-list code {
-      padding: 4px 7px;
-      border: 1px solid var(--line);
-      border-radius: 4px;
-      background: var(--surface);
-      color: var(--ink);
-      font-size: 11px;
-      overflow-wrap: anywhere;
     }
     .claim-grid {
       display: grid;
@@ -735,20 +776,23 @@
         grid-auto-flow: column;
         grid-auto-columns: minmax(220px, 42vw);
       }
-      .brief-detail-grid { grid-template-columns: 1fr; }
+      .design-summary-grid { grid-template-columns: 1fr; }
+      .design-summary-card + .design-summary-card { border-top: 1px solid var(--line); border-left: 0; }
       .claim-grid { grid-template-columns: 1fr; }
       .brief-artifact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
     }
     @media (max-width: 720px) {
       .brief-header,
+      .design-summary,
+      .brief-route,
       .brief-flow-section,
-      .brief-detail-grid,
       .brief-claims-section,
       .brief-artifact-section { padding: 18px 16px; }
       .brief-section-heading { align-items: start; flex-direction: column; gap: 4px; }
-      .brief-detail-grid,
+      .design-summary-grid,
       .claim-grid { grid-template-columns: 1fr; }
       .brief-flow { grid-auto-columns: minmax(240px, 82vw); }
+      .route-task-title { display: none; }
       .implementation-diagram-flow {
         grid-auto-flow: row;
         grid-auto-columns: unset;
@@ -2549,8 +2593,10 @@
     <section class="panel execution-brief" id="execution-brief" tabindex="-1" aria-labelledby="execution-brief-title">
       <header class="brief-header">
         <div>
+          <p class="brief-kicker brief-header-kicker">PLAN BRIEF</p>
           <p class="brief-eyebrow"><span id="brief-phase">Phase —</span><span id="brief-status">状態確認待ち</span></p>
-          <h2 class="brief-title" id="execution-brief-title">選択中のTaskを読み込み中です。</h2>
+          <h2 class="brief-title" id="execution-brief-title">計画全体を読み込み中です。</h2>
+          <p class="brief-design-context" id="brief-design-context"></p>
           <div class="brief-quick-links" id="brief-quick-links" aria-label="計画の正本">
             <button class="brief-source-link" type="button" data-artifact="00_spec.md">仕様を開く</button>
             <button class="brief-source-link" type="button" data-artifact="30_plan.md">実装計画を開く</button>
@@ -2561,6 +2607,47 @@
           <div><dt>選択中</dt><dd id="brief-current-status">確認中</dd></div>
         </dl>
       </header>
+
+      <section class="brief-route" id="brief-route" aria-labelledby="brief-route-title">
+        <div class="brief-route-head">
+          <div><p class="brief-kicker">ROADMAP</p><h3 id="brief-route-title">計画の現在地</h3></div>
+          <span class="brief-route-legend" id="brief-route-legend">左から実行順 · 外周は選択中</span>
+        </div>
+        <div class="brief-route-map" id="brief-route-map"></div>
+        <p class="brief-route-summary" id="brief-route-summary">現在地を確認中</p>
+      </section>
+
+      <section class="design-summary" id="brief-design-summary" aria-labelledby="brief-design-summary-title">
+        <div class="brief-section-heading">
+          <div><p class="brief-kicker">DESIGN SUMMARY</p><h3 id="brief-design-summary-title">計画を支える設計</h3></div>
+          <p>正本に明示された内容だけを表示</p>
+        </div>
+        <div class="design-summary-grid">
+          <article class="design-summary-card" id="brief-spec" aria-labelledby="brief-spec-title">
+            <p class="design-summary-number" aria-hidden="true">01</p>
+            <h4 id="brief-spec-title">実現すること</h4>
+            <p class="design-summary-lead">主要要件</p>
+            <div class="design-summary-list" id="brief-requirements"></div>
+            <button class="brief-source-link" type="button" data-artifact="00_spec.md">要求の正本を開く</button>
+          </article>
+          <article class="design-summary-card" id="brief-approach" aria-labelledby="brief-approach-title">
+            <p class="design-summary-number" aria-hidden="true">02</p>
+            <h4 id="brief-approach-title">設計の骨格</h4>
+            <p class="design-summary-lead" id="brief-approach-summary">実装方針を読み込み中です。</p>
+            <div class="design-summary-list" id="brief-design-decisions"></div>
+            <button class="brief-source-link" type="button" data-artifact="30_plan.md">設計の正本を開く</button>
+          </article>
+          <article class="design-summary-card" id="brief-boundary" aria-labelledby="brief-boundary-title">
+            <p class="design-summary-number" aria-hidden="true">03</p>
+            <h4 id="brief-boundary-title">境界と完了</h4>
+            <div class="design-summary-pair">
+              <div><p class="design-summary-lead">境界</p><div class="design-summary-list" id="brief-boundaries"></div></div>
+              <div><p class="design-summary-lead">完了条件</p><div class="design-summary-list" id="brief-done"></div></div>
+            </div>
+            <button class="brief-source-link" type="button" data-artifact="00_spec.md">完了条件の正本を開く</button>
+          </article>
+        </div>
+      </section>
 
       <section class="brief-flow-section" aria-labelledby="brief-flow-title">
         <div class="brief-section-heading">
@@ -2614,22 +2701,6 @@
           </div>
         </div>
       </section>
-
-      <div class="brief-detail-grid">
-        <section class="brief-card" id="brief-spec" aria-labelledby="brief-spec-title">
-          <p class="brief-kicker">SPECIFICATION</p>
-          <h3 id="brief-spec-title">仕様と完了条件</h3>
-          <p id="brief-spec-summary">仕様を読み込み中です。</p>
-          <button class="brief-source-link" type="button" data-artifact="00_spec.md">00_spec.md を開く</button>
-        </section>
-        <section class="brief-card" id="brief-approach" aria-labelledby="brief-approach-title">
-          <p class="brief-kicker">CODE-BASED APPROACH</p>
-          <h3 id="brief-approach-title">実コードに基づく進め方</h3>
-          <p id="brief-approach-summary">実装方針を読み込み中です。</p>
-          <div class="code-anchor-list" id="brief-code-anchors"></div>
-          <button class="brief-source-link" type="button" data-artifact="30_plan.md">30_plan.md を開く</button>
-        </section>
-      </div>
 
       <section class="brief-claims-section" id="brief-claims" aria-labelledby="brief-claims-title">
         <div class="brief-section-heading">
@@ -3226,7 +3297,8 @@
         if (heading) {
           const sourceLevel = heading[1].length;
           const level = Math.min(6, sourceLevel + 3);
-          output.push(`<h${level} class="md-heading-${sourceLevel}">${renderInlineMarkdown(heading[2])}</h${level}>`);
+          const headingText = stripMarkdown(heading[2]).trim();
+          output.push(`<h${level} class="md-heading-${sourceLevel}" data-md-heading="${escapeMarkdownHtml(headingText)}" tabindex="-1">${renderInlineMarkdown(heading[2])}</h${level}>`);
           index += 1;
           continue;
         }
@@ -3794,6 +3866,37 @@
       else if (done) parts.push(`Done: ${briefSnippet(done)}`);
       return parts.join(' / ');
     }
+    function designStatements(markdown, heading, source) {
+      const matchedHeading = asText(markdown).split('\n').map(line => line.match(/^#{1,6}\s+(.+)$/))
+        .find(match => match && heading.test(stripMarkdown(match[1]).trim()));
+      const section = matchedHeading ? stripMarkdown(matchedHeading[1]).trim() : '';
+      return sectionStatements(markdown, heading, source).map(item => ({ ...item, section }));
+    }
+    function buildDesignSummary(files, purposeSection, approachSection) {
+      const specSource = files['00_spec.md'];
+      const goalText = summarize(purposeSection);
+      const contextText = summarize(markdownSection(specSource, /^(背景・目的|背景|Why|Context)$/i));
+      const fromSpec = heading => designStatements(specSource, heading, '00_spec.md');
+      const decisions = [
+        ...designStatements(files['30_plan.md'], /^(採用判断|判断|決定)$/i, '30_plan.md'),
+        ...designStatements(specSource, /^(採用判断|判断|決定)$/i, '00_spec.md')
+      ];
+      const seenDecisions = new Set();
+      return {
+        goal: { text: goalText, source: '00_spec.md' },
+        context: { text: contextText, source: '00_spec.md' },
+        requirements: fromSpec(/^(必須要件|主要要件|Requirements?)$/i),
+        approach: { text: summarize(approachSection), source: '30_plan.md' },
+        decisions: decisions.filter(item => {
+          const key = item.text.replace(/\s+/g, ' ').trim().toLowerCase();
+          if (!key || seenDecisions.has(key)) return false;
+          seenDecisions.add(key);
+          return true;
+        }),
+        boundaries: fromSpec(/^(制約事項|制約|調査境界|範囲|Constraints?|Scope)$/i),
+        done: fromSpec(/^(Done|完了条件|成功条件|合格基準|Acceptance Criteria)$/i)
+      };
+    }
     function unavailableSourcePreview(taskNumber, message = '実コード参照が未記録です。') {
       return {
         taskNumber: taskNumber || '',
@@ -3861,6 +3964,7 @@
         selectedImplementationDiagram: selectedTask?.implementationDiagram || null,
         selectedSourcePreview,
         flow: model.tasks.slice(),
+        design: buildDesignSummary(model.snapshot.files, purposeSection, approachSection),
         purpose: {
           summary: purposeSummary,
           source: '00_spec.md'
@@ -3893,6 +3997,31 @@
           ])
         },
         artifacts: preferredArtifacts
+      };
+    }
+    function buildRoadmapRoute(brief) {
+      const currentNumber = brief.currentTask?.number || '';
+      const nextNumber = brief.nextTask?.number || '';
+      const selectedNumber = brief.selectedTask?.number || '';
+      const tasks = brief.flow.map(task => ({
+        number: task.number,
+        title: task.title,
+        status: task.status,
+        isCurrent: task.number === currentNumber,
+        isNext: task.number === nextNumber,
+        isSelected: task.number === selectedNumber
+      }));
+      const label = (prefix, task) => task ? `${prefix}: Task ${task.number}「${task.title}」` : `${prefix}: なし`;
+      const statusText = status => ({ complete: '完了', 'in-progress': '進行中', blocked: 'ブロック', planned: '未着手' })[status] || '未着手';
+      const visibleSummary = [
+        label('現在', brief.currentTask),
+        label('次', brief.nextTask),
+        label('選択中', brief.selectedTask)
+      ].join(' / ');
+      return {
+        tasks,
+        visibleSummary,
+        summary: `全体: ${tasks.map(task => `Task ${task.number} ${statusText(task.status)}`).join('、')} / ${visibleSummary}`
       };
     }
     function artifactStateFor(artifact, model) {
@@ -4371,7 +4500,7 @@
       renderInlineMarkdown, renderWorkflowMarkdown, groupTaskSections,
       extractPlanSections, taskHubSettings, extractExplicitOutcomeTrace,
       extractRevisionLog, buildOutcomeTrace, stateLabel, parseSvgDiagramSpec,
-      codemapEvidenceLabel, buildCodemapViewModel, buildTreeViewModel, buildExecutionBrief, highlightSourceCode
+      codemapEvidenceLabel, buildCodemapViewModel, buildTreeViewModel, buildExecutionBrief, buildDesignSummary, buildRoadmapRoute, highlightSourceCode
     };
     /* ROADMAP_MODEL_END */
 
@@ -5011,6 +5140,61 @@
       relations.hidden = false;
       message.textContent = '';
     }
+    function renderRoadmapRoute(route) {
+      const host = byId('brief-route-map');
+      byId('brief-route-summary').textContent = route.visibleSummary;
+      if (!route.tasks.length) {
+        host.innerHTML = '<p class="brief-empty">30_plan.mdにTaskが未記録です。</p>';
+        return;
+      }
+      const compact = window.matchMedia('(max-width: 720px)').matches;
+      const step = compact ? 110 : 150;
+      const start = compact ? 48 : 62;
+      const y = 42;
+      const width = Math.max(compact ? 300 : 360, start * 2 + step * (route.tasks.length - 1));
+      byId('brief-route-legend').textContent = `全${route.tasks.length}Task · 左から実行順 · 外周は選択中`;
+      const edges = route.tasks.slice(1).map((task, index) => {
+        const previous = route.tasks[index];
+        const tone = previous.status === 'complete' ? 'complete' : 'planned';
+        return `<line class="route-edge ${tone}" x1="${start + index * step + 18}" y1="${y}" x2="${start + (index + 1) * step - 18}" y2="${y}"/>`;
+      }).join('');
+      const nodes = route.tasks.map((task, index) => {
+        const x = start + index * step;
+        const state = task.status === 'complete' ? 'complete' : task.status === 'blocked' ? 'blocked' : task.isCurrent ? 'current' : 'planned';
+        const shape = state === 'current'
+          ? `<polygon class="route-node current" points="${x},23 ${x + 19},42 ${x},61 ${x - 19},42"/>`
+          : state === 'blocked'
+            ? `<rect class="route-node blocked" x="${x - 17}" y="25" width="34" height="34" rx="5"/>`
+            : `<circle class="route-node ${state}${task.isNext ? ' next' : ''}" cx="${x}" cy="${y}" r="17"/>`;
+        const symbol = state === 'complete' ? '✓' : state === 'blocked' ? '!' : task.isCurrent ? '▶' : task.number;
+        const tag = task.isCurrent ? '現在' : task.isNext ? '次' : task.status === 'complete' ? '完了' : task.status === 'blocked' ? 'ブロック' : '未着手';
+        const selected = task.isSelected ? `<circle class="route-selection" cx="${x}" cy="${y}" r="24"/><text class="route-tag" x="${x}" y="12">選択中</text>` : '';
+        const nextTag = task.isNext && !task.isSelected ? `<text class="route-next-tag" x="${x}" y="12">次</text>` : '';
+        const title = task.title.length > 11 ? `${task.title.slice(0, 10)}…` : task.title;
+        return `<g>${selected}${nextTag}${shape}<text class="route-symbol ${state}" x="${x}" y="46">${escapeHtml(symbol)}</text><text class="route-task-number" x="${x}" y="78">Task ${escapeHtml(task.number)}</text><text class="route-task-title" x="${x}" y="94">${escapeHtml(title)}</text><text class="route-tag" x="${x}" y="109">${escapeHtml(tag)}</text></g>`;
+      }).join('');
+      host.innerHTML = `<svg class="brief-route-svg" style="min-width:${width}px" width="${width}" height="118" viewBox="0 0 ${width} 118" role="img" aria-labelledby="brief-route-svg-title brief-route-svg-desc"><title id="brief-route-svg-title">計画の現在地</title><desc id="brief-route-svg-desc">${escapeHtml(route.summary)}</desc>${edges}${nodes}</svg>`;
+      const focusIndex = Math.max(0, route.tasks.findIndex(task => task.isCurrent || task.isSelected));
+      host.dataset.focusX = String(start + focusIndex * step);
+      requestAnimationFrame(centerRoadmapRoute);
+    }
+    function centerRoadmapRoute() {
+      const host = byId('brief-route-map');
+      const focusX = Number(host.dataset.focusX);
+      if (!Number.isFinite(focusX)) return;
+      host.scrollLeft = Math.max(0, focusX - host.clientWidth / 2);
+    }
+    function renderDesignSummary(design) {
+      const list = (items, missing) => items.length
+        ? `<ul>${items.slice(0, 3).map(item => `<li><span>${escapeHtml(item.text)}</span><button class="design-source-link" type="button" data-artifact="${escapeHtml(item.source)}" data-artifact-section="${escapeHtml(item.section)}">${escapeHtml(item.source)}${item.section ? `#${escapeHtml(item.section)}` : ''}</button></li>`).join('')}</ul>`
+        : `<p class="brief-missing">${escapeHtml(missing)}</p>`;
+      byId('brief-requirements').innerHTML = list(design.requirements, '主要要件が未記録です。');
+      byId('brief-approach-summary').textContent = design.approach.text;
+      byId('brief-approach-summary').hidden = !design.approach.text;
+      byId('brief-design-decisions').innerHTML = list(design.decisions, '設計判断が未記録です。');
+      byId('brief-boundaries').innerHTML = list(design.boundaries, '境界が未記録です。');
+      byId('brief-done').innerHTML = list(design.done, '完了条件が未記録です。');
+    }
     function renderExecutionBrief(model) {
       const hadCodeFocus = document.activeElement?.id === 'implementation-code';
       const brief = ROADMAP_MODEL.buildExecutionBrief(model, selectedImplementationTaskNumber);
@@ -5030,9 +5214,9 @@
           : current
             ? `Task ${current.number} ${statusLabel(current.status)}`
             : 'Task未記録';
-      byId('execution-brief-title').textContent = selectedTask
-        ? `Task ${selectedTask.number}: ${selectedTask.title}`
-        : 'Taskを選択してください';
+      byId('execution-brief-title').textContent = brief.design.goal.text || '計画全体の目的が未記録です。';
+      byId('brief-design-context').textContent = brief.design.context.text;
+      byId('brief-design-context').hidden = !brief.design.context.text;
       byId('brief-progress').textContent = `${progress.done} / ${progress.total} Task`;
       byId('brief-current-status').textContent = selectedTask
         ? `${selectedIndex + 1} / ${brief.flow.length} · ${statusLabel(selectedTask.status)}`
@@ -5041,6 +5225,8 @@
         current ? `現在: Task ${current.number}「${current.title}」` : model.waiting.reason,
         next ? `次: Task ${next.number}「${next.title}」` : progress.total > 0 && progress.done === progress.total ? '次: なし' : '次: 未記録'
       ].join(' / ');
+      renderDesignSummary(brief.design);
+      renderRoadmapRoute(ROADMAP_MODEL.buildRoadmapRoute(brief));
       syncImplementationTabOrientation();
       byId('brief-flow').innerHTML = brief.flow.length
         ? brief.flow.map(task => {
@@ -5108,11 +5294,6 @@
         <div><dt>変更対象</dt><dd>${escapeHtml(selectedTask?.target || '未記録')}</dd></div>
         <div><dt>成果物</dt><dd>${escapeHtml(output)}</dd></div>
         <div><dt>検証</dt><dd>${escapeHtml(verification)}</dd></div>`;
-      byId('brief-spec-summary').textContent = brief.spec.summary;
-      byId('brief-approach-summary').textContent = brief.approach.summary;
-      byId('brief-code-anchors').innerHTML = brief.approach.anchors.length
-        ? brief.approach.anchors.slice(0, 8).map(anchor => `<code title="${escapeHtml(anchor.source)}">${escapeHtml(anchor.label)}</code>`).join('')
-        : '<span class="brief-missing">実装根拠が未記録</span>';
       const claimList = items => items.length
         ? `<ul>${items.slice(0, 4).map(item => `<li><span>${escapeHtml(item.text)}</span><button type="button" data-artifact="${escapeHtml(item.source)}">${escapeHtml(item.source)}</button></li>`).join('')}</ul>`
         : '<p class="brief-missing">明示分類なし</p>';
@@ -5420,13 +5601,21 @@
       const target = section ? byId(section) : details.querySelector('summary');
       requestAnimationFrame(() => target?.focus({ preventScroll: true }));
     }
-    function openArtifact(name) {
+    function openArtifact(name, section = '') {
       selectedSource = name;
       openUtility('source-preview');
       const preview = currentSnapshot.files[name] || `成果物: ${name}\n本文はmetadataのみ収集しています。`;
       renderSourcePreview(preview, name);
       document.querySelectorAll('[data-source]').forEach(button => button.setAttribute('aria-pressed', String(button.dataset.source === name)));
-      byId('state-announcer').textContent = `${name}を表示しました。`;
+      if (section && previewMode === 'rendered') {
+        requestAnimationFrame(() => {
+          const heading = Array.from(byId('source-preview').querySelectorAll('[data-md-heading]'))
+            .find(element => element.dataset.mdHeading === section);
+          heading?.scrollIntoView({ block: 'start', behavior: 'auto' });
+          heading?.focus({ preventScroll: true });
+        });
+      }
+      byId('state-announcer').textContent = `${name}${section ? `の「${section}」` : ''}を表示しました。`;
     }
     function viewerNavIsMobile() {
       return window.matchMedia('(max-width: 1023px)').matches;
@@ -5818,7 +6007,7 @@
         const artifact = event.target.closest('[data-artifact]');
         if (artifact) {
           const name = artifact.dataset.artifact;
-          openArtifact(name);
+          openArtifact(name, artifact.dataset.artifactSection || '');
         }
       });
       let resizeTimer = null;
@@ -5828,6 +6017,7 @@
           if (!currentModel) return;
           const focusKey = captureFocusKey();
           syncImplementationTabOrientation();
+          centerRoadmapRoute();
           renderGraph(currentModel);
           requestAnimationFrame(() => restoreFocusKey(focusKey, 'graph-shell'));
         }, 120);
