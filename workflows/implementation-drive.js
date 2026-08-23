@@ -1,7 +1,7 @@
 export const meta = {
   name: 'implementation-drive',
   description: 'Jiraチケット分析 → 実装方針決定 → 実装・テスト・レビュー',
-  whenToUse: 'Jiraチケットの実装を自動化したいとき。args: {ticketKey, useTournament?}',
+  whenToUse: 'Jiraチケットの実装を自動化したいとき。LFG runtimeが解決したroutingDecisionが必須。args: {ticketKey, routingDecision, useTournament?, allowExternalWrite?, approvalEvidence?}',
   phases: [
     { title: 'Analyze', detail: 'チケット分析 + コードベース調査' },
     { title: 'Spec', detail: '仕様書ドラフト生成' },
@@ -43,6 +43,23 @@ if (!ticketKey) {
   log('ticketKey が指定されていません')
   return { success: false, reason: 'ticketKey required in args' }
 }
+const routingDecision = args?.routingDecision
+const activeRunId = args?.activeRunId ?? ''
+if (
+  routingDecision?.status !== 'READY'
+  || !['Fast', 'Standard', 'Heavy', 'Judgment'].includes(routingDecision?.capability_class)
+  || typeof routingDecision?.model !== 'string'
+  || typeof routingDecision?.reasoning_effort !== 'string'
+) {
+  return { success: false, reason: 'ROUTING_BLOCKED: canonical routingDecision is required' }
+}
+if (!activeRunId) {
+  return { success: false, reason: 'activeRunId is required before implementation writes' }
+}
+const validApprovalEvidence = (items) => Array.isArray(items)
+  && items.length > 0
+  && items.every((item) => typeof item === 'string'
+    && /^(human-approved|user-validation):[A-Za-z0-9._/-]+#[a-f0-9]{8,64}$/.test(item))
 const forceTournament = args?.useTournament ?? false
 
 // --- Phase 1: Analyze ---
@@ -71,7 +88,9 @@ ${forceTournament ? '\n**注意: ユーザーがトーナメント使用を明�
 `, {
   label: 'analyze',
   phase: 'Analyze',
-  model: "gpt-5.5", service_tier: "priority",
+  model: routingDecision.model,
+  reasoning_effort: routingDecision.reasoning_effort,
+  service_tier: 'priority',
   schema: TASK_ANALYSIS_SCHEMA,
 })
 
@@ -84,28 +103,131 @@ log(`分析完了: ${analysis.complexity} (${analysis.estimatedFiles}ファイ�
 // --- Phase 2: Spec ---
 phase('Spec')
 
-const spec = await agent(`
-Jiraチケット ${ticketKey} の仕様書ドラフトを生成してください。
+const PRD_SCHEMA = {
+  type: 'object',
+  properties: {
+    artifact_id: { type: 'string' }, source_hash: { type: 'string' }, objective: { type: 'string' },
+    scope: { type: 'array', items: { type: 'string' } },
+    out_of_scope: { type: 'array', items: { type: 'string' } },
+    acceptance_ids: { type: 'array', items: { type: 'string' } },
+    review_status: { type: 'string', enum: ['draft', 'pass', 'revise', 'block'] },
+  },
+  required: ['artifact_id', 'source_hash', 'objective', 'scope', 'out_of_scope', 'acceptance_ids', 'review_status'],
+}
+
+const prdDraft = await agent(`
+Jiraチケット ${ticketKey} のApproved PRDドラフトを生成してください。
 
 ## チケット分析結果
 ${JSON.stringify(analysis)}
 
-## 仕様書テンプレート
-- 概要: 何を、なぜ変更するか
-- 要件: 機能要件 + 非機能要件
-- 技術設計: 変更対象ファイル、API変更、DB変更
-- テスト計画: ユニット/統合/E2E
-- リスク・注意点
-- サブタスク一覧
-
-仕様書をMarkdown形式で作成し、${ticketKey}のコメントとしてJiraに追加してください。
-追加できない場合はMarkdownテキストをそのまま返してください。
+外部へ書き込まず、PRD_SCHEMAに従うJSONだけを返してください。review_statusはdraftにしてください。
 `, {
-  label: 'spec',
+  label: 'prd-draft',
   phase: 'Spec',
-  model: "gpt-5.5", service_tier: "priority",
-  agentType: 'jira-spec-writer',
+  agentType: 'requirement-parser',
+  schema: PRD_SCHEMA,
 })
+
+const prdReview = await agent(`
+次のPRDドラフトを、元のチケット分析とコード調査事実に照らしてread-onlyでレビューしてください。
+Git、Jira、GitHub、artifactへの書き込みは禁止です。pass / revise / blockのいずれかを返し、passの場合だけ同じartifact_idのreview_statusをpassにしたPRDを返してください。
+
+## 分析
+${JSON.stringify(analysis)}
+
+## PRDドラフト
+${JSON.stringify(prdDraft)}
+`, {
+  label: 'prd-review', phase: 'Spec', agentType: 'prd-reviewer', schema: PRD_SCHEMA,
+})
+
+if (!prdReview || prdReview.review_status !== 'pass') {
+  return { success: false, reason: `PRD_${String(prdReview?.review_status ?? 'REVIEW_FAILED').toUpperCase()}`, prd: prdReview }
+}
+
+const WORK_PACKET_PLAN_SCHEMA = {
+  type: 'object',
+  properties: {
+    packets: {
+      type: 'array', minItems: 1,
+      items: {
+        type: 'object',
+        properties: {
+          artifact_id: { type: 'string' }, source_hash: { type: 'string' }, objective: { type: 'string' },
+          scope: { type: 'array', items: { type: 'string' } },
+          acceptance_ids: { type: 'array', items: { type: 'string' } },
+          constraints: { type: 'array', items: { type: 'string' } },
+          capability_class: { type: 'string', enum: ['Fast', 'Standard', 'Heavy', 'Judgment'] },
+          safety_decision_id: { type: 'string' },
+          side_effects_requested: { type: 'array', items: { type: 'string' } },
+          external_write_targets: { type: 'array', items: { type: 'string' } },
+          approval_required: { type: 'boolean' },
+          approval_evidence: { type: 'array', items: { type: 'string' } },
+          dry_run_required: { type: 'boolean' },
+        },
+        required: [
+          'artifact_id', 'source_hash', 'objective', 'scope', 'acceptance_ids', 'constraints',
+          'capability_class', 'safety_decision_id', 'side_effects_requested',
+          'external_write_targets', 'approval_required', 'approval_evidence', 'dry_run_required',
+        ],
+      },
+    },
+    complexity_budget: { type: 'string' },
+  },
+  required: ['packets', 'complexity_budget'],
+}
+const workPlan = await agent(`
+Approved PRDから、実装者へ渡すWork Packetを作成してください。各packetにartifact_id、source_hash、objective、scope、acceptance_ids、constraints、capability_class、safety_decision_id、side_effects_requested、external_write_targets、approval_required、approval_evidence、dry_run_requiredを含めてください。
+
+## Approved PRD
+${JSON.stringify(prdReview)}
+
+## canonical routing decision
+${JSON.stringify(routingDecision)}
+`, {
+  label: 'work-packet-plan', phase: 'Spec', agentType: 'implementation-planner', schema: WORK_PACKET_PLAN_SCHEMA,
+})
+
+if (!workPlan?.packets?.length) {
+  return { success: false, reason: 'WORK_PACKET_MISSING' }
+}
+const approvalGatedEffects = new Set([
+  'external_write', 'permission_change', 'billing_change', 'authentication_change',
+  'destructive_action', 'runtime_policy_change', 'go_nogo_decision',
+])
+const invalidPacket = workPlan.packets.find((packet) => {
+  const hasContractShape = packet
+    && typeof packet.artifact_id === 'string'
+    && typeof packet.source_hash === 'string'
+    && typeof packet.objective === 'string'
+    && Array.isArray(packet.scope)
+    && Array.isArray(packet.acceptance_ids)
+    && Array.isArray(packet.constraints)
+    && typeof packet.safety_decision_id === 'string'
+    && Array.isArray(packet.side_effects_requested)
+    && Array.isArray(packet.external_write_targets)
+    && typeof packet.approval_required === 'boolean'
+    && Array.isArray(packet.approval_evidence)
+    && typeof packet.dry_run_required === 'boolean'
+  if (!hasContractShape) return true
+  const requiresApproval = packet.external_write_targets.length > 0
+    || packet.side_effects_requested.some((effect) => approvalGatedEffects.has(effect))
+  return packet.capability_class !== routingDecision.capability_class
+    || (requiresApproval && (
+      packet.approval_required !== true || !validApprovalEvidence(packet.approval_evidence)
+    ))
+})
+if (invalidPacket) {
+  return { success: false, reason: 'WORK_PACKET_INVALID', artifact_id: invalidPacket.artifact_id }
+}
+if (workPlan.packets.some((packet) => packet.approval_required)) {
+  return {
+    success: false,
+    reason: 'WORK_PACKET_REQUIRES_TRUSTED_APPROVAL_RESOLUTION',
+    workPackets: workPlan.packets,
+  }
+}
 
 // --- Phase 3: Implement ---
 phase('Implement')
@@ -116,7 +238,7 @@ if (analysis.useTournament) {
   log('A/Bトーナメントモードで実装')
   implResult = await workflow('tournament-ab', {
     task: `${ticketKey}: ${analysis.title}`,
-    spec: typeof spec === 'string' ? spec : JSON.stringify(spec),
+    spec: JSON.stringify({ approved_prd: prdReview, work_packets: workPlan.packets }),
   })
   // セキュリティ下限割れ等で勝者なしなら、下流に流さず失敗扱い
   if (implResult && implResult.winner === null) {
@@ -131,7 +253,7 @@ if (analysis.useTournament) {
 ## チケット: ${ticketKey} — ${analysis.title}
 
 ## 仕様
-${typeof spec === 'string' ? spec : JSON.stringify(spec)}
+${JSON.stringify({ approved_prd: prdReview, work_packets: workPlan.packets })}
 
 ## サブタスク
 ${analysis.subtasks.map((s, i) => `${i + 1}. ${s.title}: ${s.description ?? ''}`).join('\n')}
@@ -140,8 +262,11 @@ ${analysis.subtasks.map((s, i) => `${i + 1}. ${s.title}: ${s.description ?? ''}`
 - テストも一緒に書く
 - 既存パターンに合わせる
 - YAGNI: 依頼にない機能は追加しない
-- こまめにgit commit
-`, { label: 'implement-simple', phase: 'Implement' })
+- commit / push / external commentはこのworkflow内では行わない
+`, {
+    label: 'implement-simple', phase: 'Implement', agentType: 'implementer',
+    model: routingDecision.model, reasoning_effort: routingDecision.reasoning_effort, service_tier: 'priority',
+  })
 } else {
   log('パイプライン実装モード')
   implResult = await pipeline(
@@ -154,83 +279,51 @@ ${analysis.subtasks.map((s, i) => `${i + 1}. ${s.title}: ${s.description ?? ''}`
 ${subtask.description ? `## 説明\n${subtask.description}` : ''}
 
 ## 仕様コンテキスト
-${typeof spec === 'string' ? spec : JSON.stringify(spec)}
+${JSON.stringify({ approved_prd: prdReview, work_packet: workPlan.packets[idx] ?? workPlan.packets[0] })}
 
 ## ルール
 - このサブタスクの範囲のみ実装
 - 直前のサブタスクの変更の上に積み増す（同一ブランチ/作業ツリー）
 - テストも書く
-- git commit する
-`, {
+- commit / push / external commentはこのworkflow内では行わない
+    `, {
       label: `impl-${idx}`,
       phase: 'Implement',
+      agentType: 'implementer',
+      model: routingDecision.model,
+      reasoning_effort: routingDecision.reasoning_effort,
+      service_tier: 'priority',
       // 逐次サブタスクは互いの変更を前提に積み増すため worktree 隔離しない
       // （隔離すると後続サブタスクが前の成果を見られず、かつメイン未統合になる）
     }),
   )
 }
 
-// --- Phase 4: Verify（review→fix→re-review 自律ループ）---
+// --- Phase 4: Verify（共通review→fix→re-review LOOP）---
 phase('Verify')
 log('検証＋自動修正ループ実行中（CRITICAL/IMPORTANTが0になるまで最大3ラウンド）')
+const verifyResult = await workflow('pr-review-loop', {
+  baseBranch: args?.baseBranch ?? '',
+  maxRounds: 3,
+  autoFix: true,
+  reviewDimensions: args?.reviewDimensions,
+  safetyTriggers: args?.safetyTriggers ?? [],
+  changedPaths: args?.changedPaths ?? [],
+  externalEvidence: [],
+})
 
-const VERIFY_SCHEMA = {
-  type: 'object',
-  properties: {
-    passed: { type: 'boolean' },
-    rounds: { type: 'number' },
-    remaining: {
-      type: 'array',
-      items: {
-        type: 'object',
-        properties: { severity: { type: 'string' }, title: { type: 'string' } },
-        required: ['severity', 'title'],
-      },
-    },
-    summary: { type: 'string' },
-  },
-  required: ['passed', 'summary'],
+if (verifyResult?.result !== 'SHIP') {
+  return { success: false, reason: `VERIFY_${String(verifyResult?.result ?? 'FAILED')}`, verifyResult }
 }
-
-const verifyResult = await agent(`
-実装結果を検証し、CRITICAL/IMPORTANT指摘が無くなるまで「レビュー→修正→再レビュー」を最大3ラウンド繰り返してください（信頼タスク全自律: 確認不要で修正してよい）。
-
-## 実装結果
-${typeof implResult === 'string' ? implResult : JSON.stringify(implResult)}
-
-## 各ラウンドの手順
-1. テスト実行（プロジェクトのテストコマンドを探して実行） / lint・format / TypeScriptなら型チェック
-2. 変更ファイルをコードレビュー（セキュリティ・パフォーマンス・可読性・テスト網羅）。指摘を severity (CRITICAL/IMPORTANT/MINOR) で分類
-3. CRITICAL/IMPORTANT が残っていれば surgical に修正して git commit → 次ラウンドで再検証
-4. CRITICAL/IMPORTANT が 0 になったら合格として終了（MINORは残してよい）
-
-## 出力
-- passed: 最終的に CRITICAL/IMPORTANT が 0 なら true
-- rounds: 実施ラウンド数
-- remaining: 3ラウンドでも残った CRITICAL/IMPORTANT のリスト
-- summary: テスト結果と対応内容の要約
-`, { label: 'verify', phase: 'Verify', schema: VERIFY_SCHEMA })
 
 // --- Phase 5: Report ---
 phase('Report')
 
-await agent(`
-実装完了をJiraチケット ${ticketKey} に記録してください。
-
-## 分析結果
-${JSON.stringify({ complexity: analysis.complexity, files: analysis.estimatedFiles, tournament: analysis.useTournament })}
-
-## 検証結果
-${typeof verifyResult === 'string' ? verifyResult : JSON.stringify(verifyResult)}
-
-以下をJiraコメントとして追加してください:
-1. 実装完了の報告
-2. 変更ファイル一覧
-3. テスト結果サマリー
-4. レビュー指摘事項（あれば）
-
-追加できない場合はテキストをそのまま返してください。
-`, { label: 'report', phase: 'Report' })
+const reportWrite = {
+  status: 'pending_trusted_approval_resolution',
+  writes_performed: [],
+  summary: { complexity: analysis.complexity, verifyResult },
+}
 
 log(`${ticketKey} の実装フローが完了`)
 
@@ -238,6 +331,10 @@ return {
   success: true,
   ticketKey,
   complexity: analysis.complexity,
+  approvedPrd: prdReview,
+  workPackets: workPlan.packets,
+  routingDecision,
+  reportWrite,
   tournament: analysis.useTournament,
   subtasks: analysis.subtasks.length,
 }

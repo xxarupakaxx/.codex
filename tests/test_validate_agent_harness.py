@@ -128,6 +128,31 @@ class ValidateAgentHarnessTest(unittest.TestCase):
         errors = MODULE.validate_artifact_dir(self.root / "artifacts")
         self.assertTrue(any("invalid created_at" in error for error in errors))
 
+    def test_lfg_shims_delegate_without_phase_body(self) -> None:
+        self.write(
+            "skills/lfg/SKILL.md",
+            "\n".join(
+                (
+                    "context/workflow-rules.md",
+                    "context/memory-file-formats.md",
+                    "context/agent-team-routing.md",
+                    "rules/model-routing.md",
+                    "scripts/agent_delivery_lifecycle.py",
+                )
+            ),
+        )
+        for relative in MODULE.LFG_SHIMS:
+            target = "../lfg/SKILL.md" if relative.startswith("skills/") else "skills/lfg/SKILL.md"
+            self.write(relative, f"Compatibility shim: {target}\n")
+        self.assertEqual(MODULE.validate_lfg_contract(self.root), [])
+
+        self.write("commands/lfg.md", "skills/lfg/SKILL.md\n| 0: 準備\n")
+        errors = MODULE.validate_lfg_contract(self.root)
+        self.assertTrue(any("duplicates phase body" in error for error in errors))
+
+    def test_full_replay_contract_passes(self) -> None:
+        self.assertEqual(MODULE.validate_full_replay(), [])
+
 
 if __name__ == "__main__":
     unittest.main()

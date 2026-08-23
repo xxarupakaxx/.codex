@@ -1,15 +1,19 @@
 ---
 name: auto-reviewing-pre-pr
-description: Runs automated parallel subagent review before PR creation. Launches all specialist reviewers (arch, security, perf + context-dependent reviewers) in parallel with scale-based rounds (small 1, medium 2, large 3), keeping main context clean. Use when user says "自動レビューして", "サブエージェントでレビュー", "並列レビュー", "PR前の自動チェック", or for standard/large-scale changes. Preferred over interrogating-pre-pr for typical PR workflows.
+description: Runs risk-based parallel subagent review before delivery, then targets re-review to affected dimensions. Use when user says "自動レビューして", "サブエージェントでレビュー", "並列レビュー", or "PR前の自動チェック".
 context: current
 ---
 
 # Pre-PR Auto Review（サブエージェント並列自動レビュー）
 
+review結果はEvidence Bundleの`findings / tests / residual_risks`へ記録する。
+
+makerの自己申告だけでBundleを完成扱いにせず、独立checkerがfreshなdiffとtestを直接確認する。
+
 ## 概要
 
-実装完了後、PR作成前に全専門サブエージェントを並列起動して自動レビューを実施。
-**規模別ラウンド**（小: 1、中: 2、大: 3）のレビュー修正サイクルを、メインコンテキストを圧迫せずに実行する。
+実装完了後、delivery前にリスクから選んだ専門サブエージェントを並列起動して自動レビューを実施する。
+修正後は影響した観点だけを再レビューし、メインコンテキストを圧迫せずに収束させる。
 
 ## 研究的根拠
 
@@ -39,8 +43,8 @@ git diff $BASE_BRANCH --name-only
 
 1. 変更ファイル・行数を把握
 2. 変更内容に基づきレビューアーを選定（`@context/workflow-rules.md`のレビューアー選択ガイド参照）:
-   - **常時起動**: `arch-reviewer`, `security-reviewer`, `perf-reviewer`
-   - **変更内容に応じて追加**: Tier 2, Tier 3から該当するレビューアーを全て選定
+   - **risk-based selection**: 未解決findingと変更内容に該当する最小reviewerを選定
+   - **必須昇格**: security、権限、外部write、課金、認証、不可逆操作は`security-reviewer`を含める
 
 ### Phase 1.5: 過去の類似指摘を取得
 
@@ -53,15 +57,11 @@ git diff $BASE_BRANCH --name-only
 
 ### Phase 2: 規模別ラウンド並列レビュー
 
-**規模別ラウンド数**（変更ファイル数で判定）:
+**収束ラウンド**:
 
-| 規模 | ファイル数 | 最低ラウンド |
-|------|-----------|------------|
-| 小 | 1-3 | 1 |
-| 中 | 4-9 | 2 |
-| 大 | 10+ | 3 |
+初回review後は、pendingなCRITICAL / IMPORTANTを検出したreviewerと、修正pathが新たに該当したreviewerだけを再起動する。
 
-**注**: 指摘が残っている場合のみ追加ラウンドを実行。Round 1で指摘0件なら小規模は完了。
+指摘が残っている場合だけ追加ラウンドを実行し、最大3回で`WAITING_HUMAN`へ停止する。
 
 各ラウンドで`multi_agent_v1.spawn_agent`により専門サブエージェントを並列起動する。
 

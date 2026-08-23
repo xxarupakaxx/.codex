@@ -48,7 +48,10 @@ BANNED_MODEL_RE = re.compile(
     rf"(?<!{MODEL_BOUNDARY}){CLAUDE_MODEL_TOKEN}(?!{MODEL_BOUNDARY})",
     re.IGNORECASE,
 )
-EXPLICIT_CODEX_MODEL_RE = re.compile(r"\bmodel\s*[:=]\s*[\"'`]gpt-5\.[45][\"'`]")
+EXPLICIT_CODEX_MODEL_RE = re.compile(
+    r"\bmodel\s*[:=]\s*[\"'`]gpt-5(?:\.[0-9]+)?(?:-[a-z0-9.-]+)?[\"'`]",
+    re.IGNORECASE,
+)
 SERVICE_TIER_RE = re.compile(r"\bservice_tier\s*[:=]\s*[\"'`]priority[\"'`]")
 
 

@@ -19,7 +19,7 @@ description: "エージェントチェーンを順次実行するオーケスト
 ## ワークフロー種別
 
 ### `feature` — 新機能開発
-チェーン: `requirement-parser` → `implementation-planner` → 実装 → `test-reviewer` → `security-reviewer`
+チェーン: `requirement-parser` → `prd-reviewer` → Approved PRD gate → `implementation-planner` → Work Packet配車 → 実装 → Evidence Bundle → `test-reviewer` + risk-based reviewer
 
 ### `bugfix` — バグ修正
 チェーン: `data-flow-tracer`（原因調査） → 修正実装 → `test-reviewer`
@@ -43,6 +43,10 @@ description: "エージェントチェーンを順次実行するオーケスト
 2. **エージェント実行**: `multi_agent_v1.spawn_agent(agent_type: "...")` で実行
 3. **ハンドオフ生成**: 結果を構造化ドキュメントとして整理し、担当要素のactualとvarianceを記録
 4. **次のエージェントへ引き継ぎ**
+
+feature chainは`prd-reviewer`が`pass`を返すまで実装へ進めない。
+
+Work Packetのmodelは`rules/model-routing.md`のsix-axis routerで解決し、必要modelがなければ`ROUTING_BLOCKED`で停止する。
 
 ## ハンドオフドキュメント形式
 

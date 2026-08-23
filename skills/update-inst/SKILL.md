@@ -6,6 +6,10 @@ allowed-tools: Read, Write, Glob, Grep
 
 # 指示更新スキル
 
+Escaped Defect Recordから呼ばれた場合も、replayで元の失敗を防げること、既存ruleと重複しないこと、owner、review date、rollbackがあることを先に確認する。
+
+L0からL4のlevelに関係なく、AGENTS、context、rules、Skill、hook、CI、runtime policyの変更は提案とapplyを分け、人間承認後だけ適用する。
+
 ## 概要
 
 Agentが間違いを犯した際、その原因を分析し、再発防止のためuser-level `AGENTS.md` や関連する正本を更新する。`CLAUDE.md` は `AGENTS.md` の import 入口として扱い、共通ルールを重複させない。

@@ -1,4 +1,5 @@
 ---
+name: pr
 allowed-tools: Bash(git:*), Bash(gh:*)
 argument-hint: [base-branch]
 description: Draft PRを作成
@@ -53,6 +54,10 @@ find "${MEMORY_DIR:-.local}/memory" -maxdepth 3 -name "91_state_diagram.svg" 2>/
   - UIのみ / テストのみ / 設定・ドキュメントのみ → スキップ（`generate-state-diagram` Skill のスキップ条件と一致）
 
 ### 4. PR本文の作成
+
+PRを作る場合は、Evidence Bundleのrequirement、acceptance evidence、tests、findings、residual risks、writes performedを本文へ投影する。
+
+Evidence Bundleが不完全、CRITICAL / IMPORTANTが未解決、またはexternal writeのapproval evidenceがない場合はPR作成を停止する。
 
 テンプレートがあれば使用、なければ以下（状態図セクションはファイル検出時のみ含める）:
 

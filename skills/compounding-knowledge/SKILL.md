@@ -173,6 +173,14 @@ confidence: "verified|experimental|theoretical"
 
 ### Step 4: 提案 & ユーザー承認（IMPORTANT）
 
+Escaped Defect Recordからの入力は、replayで元の失敗を防げた場合だけpromotion候補にする。
+
+L0はrecordのみ、L1は回帰test、L2はlocal docs提案、L3はruntime policy候補、L4はshared policy候補とする。
+
+runtime policy、Skill、hook、CI、AGENTS、context、rulesへ影響する変更はlevelに関係なく人間承認を必要とする。
+
+重複、false positive、owner、review date、rollbackが未記録ならpromotionしない。
+
 **Edit禁止ポリシー**: knowledge管理ファイルへの直接書き込みは禁止。
 
 1. **生成したドキュメントを提案として表示**

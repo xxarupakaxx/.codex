@@ -42,6 +42,8 @@ and project-only invariants in `AGENTS.md`; `CLAUDE.md` only imports it.
 
 ```bash
 python3 scripts/validate-agent-harness.py
+python3 scripts/validate-agent-harness.py --contracts
+python3 scripts/validate-agent-harness.py --full-replay
 python3 -m unittest discover -s tests -p 'test_*.py'
 node --test tests/roadmap-viewer.test.mjs
 bash -n hooks/*.sh claude-compat/hooks/*.sh
@@ -53,8 +55,14 @@ To validate Phase artifacts stored in a project-specific directory:
 python3 scripts/validate-agent-harness.py --artifact-dir .context
 ```
 
-Codex model routing is pinned to `gpt-5.5` + `priority` by default. Custom
-agents should always declare both `model` and `service_tier`.
+Codex delivery routing uses the Local / Fast / Standard / Heavy / Judgment
+capability classes in `rules/model-routing.md`. The current runtime resolves
+them to Luna, Terra, and Sol and fails closed when a required model is absent.
+
+`lfg` is maintained at `skills/lfg/SKILL.md`. Its command, prompt, and
+source-command surfaces are compatibility shims. Phase order and gates remain
+in `context/workflow-rules.md`; artifact schemas remain in
+`context/memory-file-formats.md`.
 
 ## Team Run
 

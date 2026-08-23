@@ -171,8 +171,8 @@ team-run を開始時から使う場合、この時点では Team Journal に dr
 1. **割り当て**: 依存のないタスクだけ並列化する。write scope が重なるタスクは並列化しない。
 2. **explorer**: lead の local search で不足し、Delegation Gate を通る調査だけを `explorer` / `architecture-explorer` に渡す。検索ファーストで、必要箇所だけ読む。
 3. **implementer**: 独立した write scope がある場合だけ `implementer` / `worker` に渡す。複数ファイルや複雑実装では write scope、要素別Complexity Budget、境界を明示する。
-4. **mini helper**: commit文案、短い要約、定型整形だけは、metadata で利用可能な場合に default/custom + `gpt-5.4-mini` を検討する。利用不可なら role 既定または model 省略へ戻す。実装、設計、最終レビューには使わない。
-5. **共有**: 各 sub-agent の結果を Team Journal に要約し、失敗は症状ではなく原因で Attribution に残す。各要素のactualとvarianceも更新する。
+4. **Fast helper**: commit文案、短い要約、定型整形だけは、metadata で利用可能な場合に`rules/model-routing.md`のFast classを検討する。利用不可なら弱いmodelへfallbackせずleadへ戻す。実装、設計、最終レビューには使わない。
+5. **共有**: 各 sub-agent の結果を同じEvidence Bundle IDとTeam Journalへ要約し、失敗は症状ではなく原因でAttributionに残す。各要素のactualとvarianceも更新する。
 6. **Budget/Stop**: 差し戻しは最大3回、連続失敗2回で escalate。これを超える場合は `update_goal(status="blocked")` の対象。
 
 ### Overlay D: global Phase 4 内 — レビュー

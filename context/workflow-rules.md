@@ -134,6 +134,8 @@ route が明確な大規模タスクで、依存DAG、Cold-Start Brief、また�
 - 変更行数が100行以下
 - 既存パターンの踏襲（新規アーキテクチャ判断なし）
 - セキュリティ・認証に関わらない
+- `safety_trigger == false`
+- 外部write、権限、課金、認証、不可逆操作、runtime policy変更を含まない
 
 **Fast Trackフロー**:
 1. **Phase 0**: メモリディレクトリ作成 + 05_log.md初期化（learnings-researcherはスキップ可）
@@ -144,6 +146,40 @@ route が明確な大規模タスクで、依存DAG、Cold-Start Brief、また�
 6. **Phase 5**: コード変更時だけ、Complexity Budgetを利用者向けの「変更量」として簡潔に報告
 
 **IMPORTANT**: Fast Track条件を満たし、User Validation Gateの確認条件に該当しない場合は、ユーザー確認なしで適用する。判断に迷う場合は通常フロー。
+
+## Delivery lifecycleと自律LOOP
+
+Phase 0-5.5の順序を、自律実行時のstate machineとして次の契約へ射影する。
+
+| state | 必要条件 | 次action | 失敗時 |
+|---|---|---|---|
+| `RECEIVED` | taskと`05_log.md` | `SURVEY` | 調査不能なら`WAITING_HUMAN` |
+| `SURVEYED` | route decision | PRDまたはWork Packet作成 | model未解決なら`ROUTING_BLOCKED` |
+| `IMPLEMENTED` | Work Packet | `REVIEW` | 実装失敗はbounded retry |
+| `REVIEWED` | CRITICAL / IMPORTANTが0 | Evidence Bundle作成とdelivery | findingがあれば`FIX`へ戻る |
+| `DELIVERED` | delivery evidence | 完了またはEscaped Defect記録 | 新しい漏れは学習LOOPへ入る |
+| `DEFECT_RECORDED` | 検証済みrecord | `REPLAY` | 再現不能ならL0のまま停止 |
+| `REPLAYED` | replay PASS | `COMPLETE` | 防止不能なら`WAITING_HUMAN` |
+
+`scripts/agent_delivery_lifecycle.py`は、この表、artifact必須field、model routingを決定的に検査する実行adapterである。
+
+同scriptをPhase本文の第二の正本にせず、本文とtestの不一致は`--contracts`検証で失敗させる。
+
+一回のturnで全工程が終わらなくても、task state、artifact ID、source hash、retry countから次actionを再計算して再開する。
+
+retryは最大3回とし、上限到達時は`WAITING_HUMAN`で停止する。
+
+外部write、権限、課金、認証、不可逆操作、runtime policy昇格は承認証跡がない限り`WAITING_HUMAN`で停止する。
+
+必要なcapability classのmodelをruntime rosterから解決できない場合は、弱いmodelへfallbackせず`ROUTING_BLOCKED`で停止する。
+
+### Workflow route
+
+- `fast-track`: 独立PRD reviewを省略できるが、Work PacketとEvidence Bundleは省略しない。
+- `prd-flow`: Approved PRD、Work Packet、Evidence Bundleを必須にする。
+- `multi-packet-flow`: Approved PRDを複数Work Packetへ分け、packetごとにmaker/checker evidenceを残す。
+
+Workflow routeは工程を表し、`Local / Fast / Standard / Heavy / Judgment`のcapability classとは別軸である。
 
 ## Phase 0: 準備
 

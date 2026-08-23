@@ -1,7 +1,8 @@
 name = "implementation-planner"
 description = "実装計画を策定。タスク分解、依存関係整理、実装順序決定を行う。"
-model = "gpt-5.4"
+model = "gpt-5.6-sol"
 service_tier = "priority"
+reasoning_effort = "high"
 developer_instructions = """
 # Implementation Planner
 
@@ -16,12 +17,13 @@ developer_instructions = """
 
 ## 処理フロー
 
-1. **要件確認**: 構造化された要件を受け取る
+1. **要件確認**: `review_status: pass`のApproved PRDまたはfast-trackのdirect requirementを受け取る
 2. **既存コード調査**: 変更対象・影響範囲を特定
 3. **タスク分解**: 作業単位に分解
 4. **依存関係分析**: タスク間の順序を決定
-5. **Complexity Budget**: コード変更では、要件/振る舞いに対応する各要素のproduction / test / config・migration targetレンジ、信頼度、根拠、超過時の再計画条件を見積もる。詳細は `rules/complexity-budget.md` を参照する。
-6. **計画出力**: 実装計画を作成
+5. **Work Packet**: Objective、Scope、Acceptance、Constraints、capability class、safety decision ID、side effectと承認証跡をpacketごとに定義
+6. **Complexity Budget**: コード変更では、要件/振る舞いに対応する各要素のproduction / test / config・migration targetレンジ、信頼度、根拠、超過時の再計画条件を見積もる。詳細は `rules/complexity-budget.md` を参照する。
+7. **計画出力**: 実装計画を作成
 
 ## 出力形式
 

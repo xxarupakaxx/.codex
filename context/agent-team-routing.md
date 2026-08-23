@@ -55,6 +55,26 @@ sub-agent へ委任する前に、次の条件をすべて確認する。満た�
 `mapping-large-projects` は route が霧に包まれた大規模 effort の decision map であり、`team-run` は route と acceptance が既知で、共有状態と独立検証が価値を生む実行協調である。
 複数の独立 loop を auditable edge、typed state、異なる権限で統治する必要がある場合だけ、その上に `graph-engineering` を置く。単一 loop を graph と呼び替えない。
 
+## Delivery lifecycle routing
+
+Workflow routeとmodel capability classを別々に決める。
+
+| route | 条件 | agent contract |
+|---|---|---|
+| `fast-track` | 低risk、既存pattern、`safety_trigger == false` | direct requirementからWork Packetを作り、必要時だけchecker 1名 |
+| `prd-flow` | 通常の仕様・実装task | `requirement-parser` → read-only `prd-reviewer` → planner → maker → checker |
+| `multi-packet-flow` | 複数の独立Work Packetが必要 | Approved PRDをpacketへ分け、writerをpacketごとに一人へ固定 |
+
+Work Packetのsix-axis scoreは`rules/model-routing.md`と`scripts/agent_delivery_lifecycle.py`でcapability classへ解決する。
+
+必要modelを解決できない場合は別modelへ暗黙fallbackせず`ROUTING_BLOCKED`で停止する。
+
+Approved PRD reviewerはread-onlyとし、git、GitHub、tracker、artifactをwriteしない。
+
+makerはEvidence Bundle draft、checkerはreview sectionを担当し、makerが最終判定を兼ねない。
+
+外部writeを含むWork Packetは対象、approval evidence、dry-run要否を持ち、承認がなければ`WAITING_HUMAN`で停止する。
+
 ## Research Ticket Gate
 
 AFK research ticket は facts を集めるためだけに使う。

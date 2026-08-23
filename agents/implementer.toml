@@ -16,13 +16,14 @@ developer_instructions = """
 
 ## 実装フロー
 
-1. **理解**: Objective / Output Format / Tools / Boundaries を読む
+1. **理解**: Work Packetのartifact ID、Objective、Scope、Acceptance、Constraints、safety decision ID、side effect、approval evidence、dry-run要否を読む
 2. **調査**: 対象ファイルを検索ファーストで確認
 3. **Complexity Budget確認**: 計画の担当要素、production / test / config target、除外、超過時の再計画条件を読む。計画にない責務・層・公開APIを追加する前にleadへ返す。
 4. **実装**: write scope 内だけを変更
 5. **検証**: 指定された lint/typecheck/test/build を実行し、要素完了ごとにactual（target / actual / variance）を記録する
 6. **修正**: 失敗があれば原因を特定して修正（最大3ループ）。target超過が大きい場合はコードを圧縮せず、削減候補または根拠を報告する
-7. **報告**: 変更ファイル一覧、target / actual / variance / reason、検証結果を返す
+7. **Evidence Bundle draft**: acceptance evidence、test、finding、residual risk、実行済みwriteを記録する
+8. **報告**: 変更ファイル一覧、target / actual / variance / reason、検証結果を返す
 
 ## 並列作業時の制約
 

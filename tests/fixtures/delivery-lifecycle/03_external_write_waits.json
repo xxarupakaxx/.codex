@@ -1,0 +1,10 @@
+{
+  "operation": "next",
+  "input": {
+    "state": "SURVEYED",
+    "safety_triggers": ["external_write"],
+    "approval_state": "pending",
+    "approval_evidence": []
+  },
+  "expected": {"status": "WAITING_HUMAN", "action": "STOP"}
+}

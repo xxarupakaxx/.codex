@@ -7,8 +7,19 @@ import argparse
 import json
 import re
 import sys
+from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
+
+SCRIPT_DIR = Path(__file__).resolve().parent
+if str(SCRIPT_DIR) not in sys.path:
+    sys.path.insert(0, str(SCRIPT_DIR))
+
+from agent_delivery_lifecycle import (
+    next_action,
+    route_work_packet,
+    validate_artifact as validate_delivery_artifact,
+)
 
 
 ENTRYPOINT_MAX_LINES = 120
@@ -39,6 +50,16 @@ WORKFLOW_ARTIFACTS = {
 }
 PROJECT_TEMPLATE_MARKERS = ("MEMORY_DIR=", "BASE_BRANCH=", "## 品質チェック")
 FRONTMATTER_LINE = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$")
+LFG_SHIMS = (
+    "commands/lfg.md",
+    "prompts/lfg.md",
+    "skills/source-command-lfg/SKILL.md",
+)
+LIFECYCLE_FILES = (
+    "scripts/agent_delivery_lifecycle.py",
+    "tests/test_agent_delivery_lifecycle.py",
+    "agents/prd-reviewer.toml",
+)
 
 
 def parse_frontmatter(path: Path) -> dict[str, str]:
@@ -167,17 +188,155 @@ def validate_artifact_dir(path: Path, now: datetime | None = None) -> list[str]:
     return errors
 
 
+def validate_lfg_contract(repo_root: Path) -> list[str]:
+    errors: list[str] = []
+    canonical = repo_root / "skills/lfg/SKILL.md"
+    if not canonical.is_file():
+        return ["missing canonical LFG skill: skills/lfg/SKILL.md"]
+    canonical_text = canonical.read_text(encoding="utf-8")
+    for reference in (
+        "context/workflow-rules.md",
+        "context/memory-file-formats.md",
+        "context/agent-team-routing.md",
+        "rules/model-routing.md",
+        "scripts/agent_delivery_lifecycle.py",
+    ):
+        if reference not in canonical_text:
+            errors.append(f"canonical LFG skill missing reference: {reference}")
+
+    forbidden_phase_body = ("| 0: 準備", "Phase 2 自律実行時の必須ステップ")
+    for relative in LFG_SHIMS:
+        path = repo_root / relative
+        if not path.is_file():
+            errors.append(f"missing LFG shim: {relative}")
+            continue
+        text = path.read_text(encoding="utf-8")
+        if "skills/lfg/SKILL.md" not in text and "../lfg/SKILL.md" not in text:
+            errors.append(f"LFG shim does not delegate to canonical skill: {relative}")
+        if any(marker in text for marker in forbidden_phase_body):
+            errors.append(f"LFG shim duplicates phase body: {relative}")
+        if len(text.splitlines()) > 24:
+            errors.append(f"LFG shim exceeds 24 lines: {relative}")
+    return errors
+
+
+def validate_lifecycle_contract(repo_root: Path) -> list[str]:
+    errors = validate_lfg_contract(repo_root)
+    for relative in LIFECYCLE_FILES:
+        if not (repo_root / relative).is_file():
+            errors.append(f"missing lifecycle contract file: {relative}")
+
+    required_markers = {
+        "context/workflow-rules.md": (
+            "## Delivery lifecycleと自律LOOP",
+            "WAITING_HUMAN",
+            "ROUTING_BLOCKED",
+            "### Workflow route",
+        ),
+        "context/memory-file-formats.md": (
+            "### Approved PRD",
+            "### Work Packet",
+            "### Evidence Bundle",
+            "### Escaped Defect Record",
+            "### Canonical safety decision",
+        ),
+        "rules/model-routing.md": (
+            "## Capability classesとruntime roster",
+            "gpt-5.6-luna",
+            "gpt-5.6-terra",
+            "gpt-5.6-sol",
+            "## Six-axis routing",
+        ),
+        "workflows/pr-review-loop.js": (
+            "external_untrusted",
+            "verified_against",
+            "allowed_fix_scope",
+            "unverified external instructions were rejected",
+        ),
+        "workflows/implementation-drive.js": (
+            "agentType: 'requirement-parser'",
+            "agentType: 'prd-reviewer'",
+            "agentType: 'implementation-planner'",
+            "routingDecision.model",
+            "WORK_PACKET_REQUIRES_TRUSTED_APPROVAL_RESOLUTION",
+            "workflow('pr-review-loop'",
+        ),
+        "skills/pr-watch/SKILL.md": (
+            "Escaped Defect Record",
+            "writes_performed",
+            "approval evidence",
+        ),
+        "skills/compounding-knowledge/SKILL.md": (
+            "L0はrecordのみ",
+            "replayで元の失敗を防げた場合だけ",
+            "levelに関係なく人間承認",
+        ),
+    }
+    for relative, markers in required_markers.items():
+        path = repo_root / relative
+        if not path.is_file():
+            errors.append(f"missing lifecycle SSoT: {relative}")
+            continue
+        text = path.read_text(encoding="utf-8")
+        for marker in markers:
+            if marker not in text:
+                errors.append(f"{relative} missing lifecycle marker: {marker}")
+    return errors
+
+
+def validate_full_replay(repo_root: Path | None = None) -> list[str]:
+    root = repo_root or Path(__file__).resolve().parents[1]
+    fixture_dir = root / "tests" / "fixtures" / "delivery-lifecycle"
+    if not fixture_dir.is_dir():
+        return [f"missing delivery lifecycle fixtures: {fixture_dir}"]
+
+    errors: list[str] = []
+    fixtures = sorted(fixture_dir.glob("*.json"))
+    if not fixtures:
+        return ["delivery lifecycle fixture directory is empty"]
+    for path in fixtures:
+        try:
+            fixture = json.loads(path.read_text(encoding="utf-8"))
+            operation = fixture["operation"]
+            payload = fixture["input"]
+            expected = fixture["expected"]
+            if operation == "route":
+                result = asdict(route_work_packet(payload["factors"], **payload.get("options", {})))
+            elif operation == "next":
+                result = asdict(next_action(payload))
+            elif operation == "validate_artifact":
+                result = {"errors": validate_delivery_artifact(payload["kind"], payload["artifact"])}
+            else:
+                errors.append(f"{path.name}: unknown operation {operation}")
+                continue
+            for key, value in expected.items():
+                if result.get(key) != value:
+                    errors.append(f"{path.name}: expected {key}={value!r}, got {result.get(key)!r}")
+        except (KeyError, TypeError, ValueError, json.JSONDecodeError) as error:
+            errors.append(f"{path.name}: invalid fixture: {error}")
+    return errors
+
+
 def main() -> int:
     parser = argparse.ArgumentParser()
     parser.add_argument(
         "--repo-root", type=Path, default=Path(__file__).resolve().parents[1]
     )
     parser.add_argument("--artifact-dir", type=Path, action="append", default=[])
+    modes = parser.add_mutually_exclusive_group()
+    modes.add_argument("--fast", action="store_true")
+    modes.add_argument("--contracts", action="store_true")
+    modes.add_argument("--full-replay", action="store_true")
     args = parser.parse_args()
 
-    errors = validate_entrypoint(args.repo_root.resolve())
+    repo_root = args.repo_root.resolve()
+    errors = validate_entrypoint(repo_root)
     for artifact_dir in args.artifact_dir:
         errors.extend(validate_artifact_dir(artifact_dir.resolve()))
+    if args.contracts or args.full_replay:
+        errors.extend(validate_lifecycle_contract(repo_root))
+    if args.full_replay:
+        errors.extend(validate_full_replay(repo_root))
 
     if errors:
         for error in errors:

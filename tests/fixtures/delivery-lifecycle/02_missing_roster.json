@@ -1,0 +1,14 @@
+{
+  "operation": "route",
+  "input": {
+    "factors": {
+      "ambiguity": 1,
+      "blast_radius": 0,
+      "dependency_coupling": 0,
+      "verification_difficulty": 0,
+      "failure_risk": 0,
+      "context_volume": 0
+    }
+  },
+  "expected": {"status": "ROUTING_BLOCKED"}
+}

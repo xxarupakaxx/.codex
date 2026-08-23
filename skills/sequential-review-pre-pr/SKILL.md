@@ -1,6 +1,6 @@
 ---
 name: sequential-review-pre-pr
-description: 2段階レビュー。軽量Stage 1（必須3観点）で問題なければStage 2をスキップしてコスト削減。Stage 1で重大指摘が出たら全観点レビューに昇格。小〜中規模変更で auto-reviewing-pre-pr のコスト削減版として使用。「2段階レビューして」「Stage1から」等の依頼に対応。
+description: 2段階レビュー。risk-basedな軽量Stage 1で問題なければStage 2を省略し、重大指摘が出た場合だけ全観点へ昇格する。「2段階レビューして」「Stage1から」等の依頼に対応。
 context: current
 ---
 
@@ -8,9 +8,13 @@ context: current
 
 ## 概要
 
-実装完了後、PR 作成前に **段階的に** レビューを実施し、コストとカバレッジのバランスを取る。
+実装完了後、delivery前に **段階的に** レビューを実施し、コストとカバレッジのバランスを取る。
 
-- Stage 1: 必須3観点（prd / rule-validator / arch）のみ並列起動（spec compliance 先行）
+PRD reviewは実装前の`prd-reviewer`が所有する。
+
+このSkillのspec complianceはApproved PRDとEvidence Bundleの整合性を確認し、PRD自体を承認しない。
+
+- Stage 1: risk-basedな最小reviewerでApproved PRD、rule、architectureのspec complianceを先に確認
 - Stage 1 PASS → Phase 4 へ（コスト約 1/5）
 - Stage 1 FAIL → Stage 2（全観点レビュー）に昇格
 
@@ -52,8 +56,8 @@ git diff $BASE_BRANCH --stat
 
 Task ツールで以下を **並列起動**（spec compliance 先行）:
 
-- `rule-validator` (CLAUDE.md/rules/ への準拠)
-- `arch-reviewer` (アーキテクチャ整合性)
+- `rule-validator` (AGENTS.md/rules/ への準拠)
+- `arch-reviewer` (アーキテクチャ整合性が変更riskに含まれる場合)
 
 > **設計意図（obra/superpowers パターン）**: spec/rule/arch 違反があるなら、quality reviewer を全部走らせるのは無駄。Stage 1 で根本問題を潰してから Stage 2 へ進む。
 

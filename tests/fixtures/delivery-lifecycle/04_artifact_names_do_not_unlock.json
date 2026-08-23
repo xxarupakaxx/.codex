@@ -1,0 +1,9 @@
+{
+  "operation": "next",
+  "input": {
+    "state": "SURVEYED",
+    "route_id": "prd-flow",
+    "artifacts": ["approved_prd", "work_packet"]
+  },
+  "expected": {"status": "RUNNING", "action": "DRAFT_PRD"}
+}

@@ -17,6 +17,24 @@
 
 > **parallel、team-run、graph-engineering の使い分け**: 独立した読み取り・検証は `multi_tool_use.parallel` で足りる。複数ロールが状態を共有しながら継続判断する場合は `team-run` skill を使う。さらに複数の loop を auditable edge、typed state、異なる authority で統治する必要がある場合だけ `graph-engineering` を重ねる。Graph は loop を置き換えず、接続と実行順を統治する。
 
+## Delivery lifecycle LOOP
+
+現在の実行契約は、scheduled taskを増やすことではなく、`context/workflow-rules.md`のdelivery lifecycle stateを再開可能にすることで成立する。
+
+`lfg`は現在stateを読み、`scripts/agent_delivery_lifecycle.py`または同じ契約で次actionを一つだけ選ぶ。
+
+各周回はApproved PRD、Work Packet、Evidence Bundle、Escaped Defect RecordのIDとsource hashを引き継ぎ、会話全文を複製しない。
+
+review findingは`FIX`へ、delivery後の新しい漏れは`RECORD_ESCAPED_DEFECT`と`REPLAY`へ戻る。
+
+bounded retry、active run lock、idempotency keyにより同じwriteと同じcommentを重複実行しない。
+
+外部write、権限、課金、認証、不可逆操作、runtime policy昇格は`WAITING_HUMAN`、必要model不在は`ROUTING_BLOCKED`で停止する。
+
+停止は失敗の握りつぶしではなく、task stateと再開条件を保存した正常なLOOP結果である。
+
+現時点ではLFGと`implementation-drive`がこの契約へ接続済みである。scheduled taskを含む全入口の自動再開と常駐実行はpilot後の拡張対象であり、human stopを除去する意味ではない。
+
 ## 現状ステータス（2026-06-17 時点）
 
 - **配線済み・自律稼働**: `hour-calendar`(毎時) / `morning-kickoff`(09:00) / `jira-spec-poll`(毎時) / `evening-review`(18:00) / `pr-review`(毎時, pr-review-loop経由) / `security-audit`(毎朝) / `slack-to-jira`(毎時) / `generate-diagram-pr`(毎時) / `daily-news`(09:10)
@@ -352,7 +370,7 @@ grep "stop-harness-improve" ~/.codex/hooks.json
 | ok | $0-5 | 通常運用 |
 | info | $5-15 | 日報に記載 |
 | warning | $15-30 | モデルダウングレード検討 |
-| critical | $30+ | 即時対応、`gpt-5.5` 対象を重要判断に絞り routine は `gpt-5.4` role へ寄せる |
+| critical | $30+ | 即時対応、Judgment / Heavy classを重要判断に絞りroutineはLocal / Fast / Standardへ再配車する |
 
 ### コスト追跡データ
 - 日次ログ: `~/.codex/.local/cost-track/YYYYMMDD.log`
