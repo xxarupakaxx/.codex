@@ -70,5 +70,5 @@
 
 - project固有の品質check、必須review、commit / push policyを満たす。
 - 完了報告には変更、検証、review、残課題を含め、設定済みと実行済み、構文成功とuser outcome達成を区別する。
-- code変更ではComplexity Budgetの`target / actual / variance / reason`を報告し、non-code taskでは`N/A (non-code)`とする。
+- code変更の完了報告では、Complexity Budgetを「変更量」として日本語で示す。計画内なら「変更量：想定内」と簡潔に書き、計画超過時だけ計画値、実績、差分、理由を説明する。code変更がないtaskでは記載しない。
 - GitHub CLIを使う場合は`gh auth status`でprincipalを確認する。既定accountは`xxarupakaxx`とし、切替が必要なら自動で行わない。

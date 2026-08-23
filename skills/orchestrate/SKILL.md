@@ -100,13 +100,13 @@ description: "エージェントチェーンを順次実行するオーケスト
 ## Test Results
 [テスト結果サマリー]
 
-## Complexity Budget
-- **Target / Actual / Variance**: [コード変更なしは `N/A (non-code)`]
-- **Unplanned complexity**: [なし / 内容と対応]
+変更量：[想定内 / 計画超過（計画値、実績、差分、理由）]
 
 ## Recommendation
 [SHIP / NEEDS WORK / BLOCKED]
 ```
+
+計画内なら `変更量：想定内` の一行だけを書く。計画超過時だけ括弧内に計画値、実績、差分、理由を書く。コード変更がない場合は変更量を記載しない。
 
 ## オーケストレーション機構の使い分け（正典）
 

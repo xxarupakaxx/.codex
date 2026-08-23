@@ -141,7 +141,7 @@ route が明確な大規模タスクで、依存DAG、Cold-Start Brief、また�
 3. **Phase 2**: 計画を05_log.mdに簡潔に記録（コード変更なら要素別Complexity Budgetを1行以上記録。30_plan.md作成・deepening-plan・サブエージェントレビューはスキップ可）
 4. **Phase 3**: 実装 + コミット
 5. **Phase 4**: lint/format/typecheck + **コア1レビューアー**（変更内容に最も関連するもの1つ）で1ラウンド。target/actual/varianceを確認
-6. **Phase 5**: Complexity Budgetのtarget/actual/varianceを含む簡潔な完了報告
+6. **Phase 5**: コード変更時だけ、Complexity Budgetを利用者向けの「変更量」として簡潔に報告
 
 **IMPORTANT**: Fast Track条件を満たし、User Validation Gateの確認条件に該当しない場合は、ユーザー確認なしで適用する。判断に迷う場合は通常フロー。
 
@@ -461,7 +461,7 @@ re_review_priority: high    # 次ラウンドで検出元 reviewer を優先起�
 2. 自律決定した事項
 3. 作成したブランチ名
 4. 残存する課題
-5. コード変更がある場合は `target / actual / variance / reason` のComplexity Budget要約（コード変更なしは `N/A (non-code)`）
+5. コード変更がある場合は、Complexity Budgetを利用者向けの「変更量」として日本語で要約する。計画内なら「変更量：想定内」とし、計画超過時だけ計画値、実績、差分、理由を説明する。コード変更がない場合は記載しない。
 6. 価値ある知見があれば memories/ にインデックス作成（`context/memory-file-formats.md`をReadで参照）
 7. **ローカル検証ガイド生成**（ユーザーが明示的に依頼した場合のみ）
    - 通常の完了処理では生成しない。UI・API・DB変更を含むことだけを理由に起動しない
