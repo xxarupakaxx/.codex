@@ -132,4 +132,3 @@ SHIP／DO NOT SHIP／REVIEW BLOCKED
 ### 出荷前の必須対応
 判定を変えるために必要な最小action。なければ「なし」。
 ```
-
