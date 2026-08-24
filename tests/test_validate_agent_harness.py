@@ -47,6 +47,15 @@ class ValidateAgentHarnessTest(unittest.TestCase):
             "claude-compat/templates/project/CLAUDE.md",
         ):
             self.write(relative, "@AGENTS.md\n")
+        for relative in MODULE.REQUIRED_ROLE_FILES:
+            self.write(
+                relative,
+                'name = "role"\ndescription = "test"\nmodel_reasoning_effort = "high"\n',
+            )
+        self.write(
+            "config.toml",
+            "[skills]\ninclude_instructions = false\n",
+        )
 
     def test_valid_entrypoint_passes(self) -> None:
         self.make_valid_repo()
@@ -58,6 +67,69 @@ class ValidateAgentHarnessTest(unittest.TestCase):
         errors = MODULE.validate_entrypoint(self.root)
         self.assertTrue(any("exceeds 120 lines" in error for error in errors))
         self.assertTrue(any("missing SSoT reference" in error for error in errors))
+
+    def test_runtime_config_rejects_legacy_role_effort_and_skill_catalog(self) -> None:
+        self.make_valid_repo()
+        self.write(
+            "agents/prd-reviewer.toml",
+            'name = "reviewer"\ndescription = "test"\nreasoning_effort = "max"\n',
+        )
+        self.write("config.toml", 'notify = ["host-only"]\n')
+        errors = MODULE.validate_runtime_config(self.root)
+        self.assertTrue(any("unsupported role field" in error for error in errors))
+        self.assertTrue(any("host-specific notify" in error for error in errors))
+        self.assertTrue(any("skills.include_instructions" in error for error in errors))
+
+    def test_user_scope_runtime_allows_host_notify(self) -> None:
+        self.make_valid_repo()
+        self.write(
+            "config.toml",
+            'notify = ["host-command"]\n[skills]\ninclude_instructions = false\n',
+        )
+        self.assertEqual(
+            MODULE.validate_runtime_config(self.root, allow_host_notify=True), []
+        )
+
+    def test_instruction_chain_uses_override_and_nested_order(self) -> None:
+        global_home = self.root / "home"
+        project = self.root / "project"
+        nested = project / "src" / "feature"
+        self.write("home/AGENTS.md", "global fallback")
+        global_override = self.write("home/AGENTS.override.md", "global override")
+        project_agents = self.write("project/AGENTS.md", "project root")
+        nested_agents = self.write("project/src/AGENTS.md", "nested")
+        nested.mkdir(parents=True, exist_ok=True)
+
+        chain = MODULE.discover_instruction_chain(global_home, project, nested)
+        self.assertEqual(
+            chain,
+            [global_override.resolve(), project_agents.resolve(), nested_agents.resolve()],
+        )
+        self.assertEqual(
+            MODULE.validate_instruction_chain(global_home, project, nested), []
+        )
+
+    def test_instruction_chain_rejects_cumulative_budget(self) -> None:
+        global_home = self.root / "home"
+        project = self.root / "project"
+        nested = project / "nested"
+        global_home.mkdir(parents=True)
+        nested.mkdir(parents=True)
+        self.write("project/AGENTS.md", "a" * 16000)
+        self.write("project/nested/AGENTS.md", "b" * 9000)
+        errors = MODULE.validate_instruction_chain(global_home, project, nested)
+        self.assertTrue(any("instruction chain exceeds" in error for error in errors))
+
+    def test_global_mirror_detects_role_drift(self) -> None:
+        repo = self.root / "repo"
+        home = self.root / "home"
+        for relative in MODULE.REQUIRED_GLOBAL_MIRRORS:
+            self.write(f"repo/{relative}", "same\n")
+            self.write(f"home/{relative}", "same\n")
+        self.assertEqual(MODULE.validate_global_mirror(repo, home), [])
+        self.write("home/agents/prd-reviewer.toml", "drift\n")
+        errors = MODULE.validate_global_mirror(repo, home)
+        self.assertEqual(errors, ["global mirror drift: agents/prd-reviewer.toml"])
 
     def test_project_agents_template_requires_bootstrap_contract(self) -> None:
         self.make_valid_repo()
@@ -138,6 +210,7 @@ class ValidateAgentHarnessTest(unittest.TestCase):
                     "context/agent-team-routing.md",
                     "rules/model-routing.md",
                     "scripts/agent_delivery_lifecycle.py",
+                    "scripts/sync-roadmap.py",
                 )
             ),
         )

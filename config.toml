@@ -1,4 +1,3 @@
-notify = [ "C:\\Users\\arupa\\AppData\\Local\\OpenAI\\Codex\\runtimes\\cua_node\\fb8898c05a62885e\\bin\\node_modules\\@oai\\sky\\bin\\windows\\codex-computer-use.exe", "turn-ended" ]
 model = "gpt-5.6-sol"
 model_reasoning_effort = "medium"
 default_permissions = ":danger-full-access"
@@ -44,6 +43,9 @@ enabled = true
 
 [plugins."chrome@openai-bundled"]
 enabled = true
+
+[skills]
+include_instructions = false
 
 [features]
 js_repl = false

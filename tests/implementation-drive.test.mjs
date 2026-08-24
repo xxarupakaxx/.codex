@@ -92,3 +92,45 @@ test('analysis uses the canonical routing model instead of a legacy literal', as
   assert.equal(calls[0].model, 'gpt-5.6-terra');
   assert.equal(calls[0].reasoning_effort, 'high');
 });
+
+test('implementation drive requires the canonical Roadmap sync before Phase 3', () => {
+  assert.match(source, /workflow\('roadmap-sync'/);
+  assert.match(source, /ROADMAP_TASK_DIR_REQUIRED/);
+  assert.match(source, /ROADMAP_SYNC_FAILED/);
+});
+
+test('implementation drive stops when deterministic Roadmap evidence is missing', async () => {
+  const validPacket = {
+    packets: [{
+      artifact_id: 'wp-roadmap', source_hash: 'abc', objective: 'edit', scope: ['src/a.js'],
+      acceptance_ids: ['A1'], constraints: [], capability_class: 'Standard',
+      safety_decision_id: 'safe-roadmap', side_effects_requested: [], external_write_targets: [],
+      approval_required: false, approval_evidence: [], dry_run_required: false,
+    }],
+    complexity_budget: 'small',
+  };
+  const execute = new AsyncFunction(
+    'args', 'phase', 'log', 'agent', 'workflow', 'pipeline',
+    source,
+  );
+  const responses = [analysis, prdDraft, approvedPrd, validPacket];
+  const workflowCalls = [];
+  const result = await execute(
+    {
+      ticketKey: 'AI-1', activeRunId: 'run-1', routingDecision,
+      workspaceRoot: '/workspace',
+      taskMemoryDir: '/workspace/.local/memory/task-1',
+    },
+    () => {}, () => {},
+    async () => responses.shift(),
+    async (name, payload) => {
+      workflowCalls.push({ name, payload });
+      return { success: false, reason: 'ROADMAP_SYNC_EVIDENCE_MISSING' };
+    },
+    async () => { throw new Error('pipeline must not run before Roadmap evidence'); },
+  );
+  assert.equal(result.reason, 'ROADMAP_SYNC_EVIDENCE_MISSING');
+  assert.equal(workflowCalls[0].name, 'roadmap-sync');
+  assert.equal(workflowCalls[0].payload.workspaceRoot, '/workspace');
+  assert.equal('adapterResult' in workflowCalls[0].payload, false);
+});

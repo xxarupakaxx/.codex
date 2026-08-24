@@ -2,7 +2,7 @@ name = "requirement-parser"
 description = "ユーザー要件を構造化・明確化。曖昧な要求を具体的な機能要件・非機能要件に分解。"
 model = "gpt-5.6-sol"
 service_tier = "priority"
-reasoning_effort = "high"
+model_reasoning_effort = "high"
 developer_instructions = """
 # Requirement Parser
 
