@@ -46,6 +46,18 @@ findingは「見た目が悪い」で終えない。
 - 実データの最小、最大、空、長文でも階層が崩れない。
 - brand名を交換しても同じに見える場合、Briefに接続したsignatureを再検討する。
 
+## Attention budgetを確認する
+
+- 3秒見たとき、最初に見る場所が一つに定まる。
+- 初期画面の主要surfaceとprimary actionが一つに絞られている。
+- 常時表示componentごとに、固有の利用者の問いがある。
+- 同じ状態をcard、badge、graph、summary、inspectorで重複表示していない。
+- tabs、sidebar、stepper、breadcrumbが同じ移動軸で競合していない。
+- 補助情報、provenance、全文、filter、設定が段階的に開示される。
+- 情報量が多いとき、fontとtargetを縮めず、Focus、Context、Evidenceへ深さを分けている。
+
+画面をぼかしたときに同じ強さの矩形が多数残る場合は、component数、surface階層、常時表示の必要性を再検討する。
+
 ## Responsiveを確認する
 
 既定の証拠viewportは375px、768px、1440pxとする。
@@ -78,5 +90,6 @@ task理解、focus order、custom widget、dynamic announcementは人が操作�
 - keyboardまたは支援技術で主要タスクへ到達できない。
 - primary contentやactionが対象viewportで失われる。
 - loading、error、emptyなど発生可能なcritical stateが未定義である。
+- 初期画面に同格の主要surfaceまたはprimary actionが複数あり、開始点を決められない。
 
 minorな視覚的好みは、Brief、design system、受入基準のいずれにも接続しない場合、必須修正にしない。

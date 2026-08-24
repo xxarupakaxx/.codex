@@ -16,6 +16,21 @@
 
 見た目が似ていても、意味とinteractionが異なるものを一つのcomponentへ押し込まない。
 
+## Component budgetを先に決める
+
+component libraryの部品を使えることと、その画面に必要なことは別である。
+初期画面の既定予算は、compactなorientation一つ、主要surface一つ、primary action一つとする。
+二つ目以降のpanel、navigation、summary、status表現には、異なる利用者の問いが必要になる。
+
+各componentを次のいずれかへ分類する。
+
+- **always**：現在地、判断対象、primary actionに必要。
+- **selection**：利用者が対象を選んだ後に必要。
+- **on-demand**：根拠、全文、履歴、設定など、確認を求めたときだけ必要。
+
+alwaysが増えたら、文字や余白を縮める前にselectionまたはon-demandへ移す。
+同じ状態を複数のcomponentで表している場合は、正本となる一つを残して統合する。
+
 ## Native-firstでcontrolを選ぶ
 
 button、link、input、select、textarea、details、dialog、tableなど、必要な意味と挙動を持つnative elementを優先する。

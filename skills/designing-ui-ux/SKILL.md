@@ -103,6 +103,32 @@ happy pathだけでなく、empty、loading、partial、error、permission、off
 ラベルは利用者の語彙で書く。
 CTAは動作と結果を表し、曖昧な「続ける」「OK」を避ける。
 
+#### 情報量とcomponent数を制限する
+
+情報を整理するためにcomponentを増やし続けない。
+初期画面では、利用者が最初に答える問いを一つに決め、その問いへ関係しない情報を閉じる。
+
+既定の構成は次の範囲に収める。
+
+- 常時表示する主要surfaceは一つ。
+- orientationは一つのcompact barへまとめる。
+- primary actionは一つ。secondary actionは二つまで。
+- 補助情報、provenance、filter、全文、設定は選択時のdrawer、popover、detailsへ送る。
+- 同じ状態をcard、badge、graph、summaryで重複表示しない。
+- 同じ軸のnavigationに、tabs、sidebar、stepper、breadcrumbを重ねない。
+
+componentを追加する前に「このcomponentだけが答える利用者の問い」を一文で書く。
+既存componentと同じ問いへ答えるなら、追加せず統合する。
+
+情報量が多い画面は、重要情報を小さくするのではなく、表示の深さを分ける。
+
+1. **Focus**：今判断する対象とprimary action。
+2. **Context**：判断に必要な差、制約、状態。
+3. **Evidence**：根拠、履歴、全文。要求されたときだけ開く。
+
+熟練者向け画面でも、情報密度と同時表示量を混同しない。
+高密度とは、必要な情報へ短く到達できることであり、すべてを常時表示することではない。
+
 ### 5. Visual directionを比較して収束させる
 
 既存design systemが方向性を決めていない場合だけ、briefを満たす異なる2案を作る。
@@ -161,6 +187,8 @@ motion差分がある場合だけ `review-animations` を追加する。
 - animationで遅さや状態不明を隠す
 - screenshotの美しさをtask successの代替にする
 - brand名を交換しても成立する画面を、署名のあるデザインとみなす
+- 情報を失いたくないという理由で、card、panel、badge、tabを初期画面へ足し続ける
+- 同じ事実をsummary、route、status card、inspectorで重複表示する
 
 ## デザインメモリ
 

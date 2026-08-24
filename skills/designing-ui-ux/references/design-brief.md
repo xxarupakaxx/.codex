@@ -25,6 +25,15 @@ Briefは見た目の注文書ではない。
 - Can be deferred:
 - Data extremes:
 
+## Attention budget
+- First question:
+- Primary surface:
+- Primary action:
+- Always visible:
+- On selection:
+- On demand:
+- Duplicate representations to remove:
+
 ## Experience
 - Desired qualities:
 - Existing constraints:
@@ -74,6 +83,25 @@ flow stateには、first use、empty、partial data、permission denied、offlin
 
 metadataと補助説明は、これらを妨げない位置へ置く。
 cardやtabは情報構造を解決する道具であり、分類そのものではない。
+
+## Attention budgetを決める
+
+情報優先度を決めた後、初期画面で同時に見せる量を制限する。
+
+- 最初に答える問いを一つにする。
+- 主要surfaceを一つにする。
+- primary actionを一つにする。
+- Orientation、Decision、Actionのうち、現在のstepに不要な層を閉じる。
+- 同じ状態を複数のcomponentで再掲しない。
+
+component inventoryを次の表で確認する。
+
+| Component | User question | Visibility | Remove or merge condition |
+|---|---|---|---|
+|  |  | always / selection / on-demand |  |
+
+`User question`を書けないcomponentは、装飾か重複である可能性が高い。
+別componentと同じ問いへ答える場合は統合を優先する。
 
 ## 方向性は同じBriefから比較する
 
