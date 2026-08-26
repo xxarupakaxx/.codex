@@ -75,6 +75,14 @@ makerはEvidence Bundle draft、checkerはreview sectionを担当し、makerが�
 
 外部writeを含むWork Packetは対象、approval evidence、dry-run要否を持ち、承認がなければ`WAITING_HUMAN`で停止する。
 
+### Delivery drafting ownership
+
+commit messageとPR本文の要約は、委譲価値がある場合だけFast workerへ渡せる。Fast workerは文案だけを担当し、Git/GitHub tool、approval decision、commit、push、PR作成を持たない。
+
+local collectorがGit snapshotとEvidence参照を`Delivery Draft Input`へ固定し、Fast workerはtoolなしの`Delivery Draft Output`を返す。起動は`scripts/draft_delivery_message.py`に限定し、ephemeral session、read-only sandbox、user config無効、shell/browser/apps/multi-agent等のtool feature無効を機械的に指定する。親のGit/GitHub tool contextを継承させない。親はtrusted snapshotのhashとclaimを検証する。commitはtrusted local executor、pushとPR作成はverified approval evidenceを確認した親がexternal writeとして実行する。
+
+Fast modelを解決できない場合は弱いmodelへfallbackせずleadへ戻す。小さな定型subjectはlocal templateを優先し、worker起動を必須化しない。
+
 ## Research Ticket Gate
 
 AFK research ticket は facts を集めるためだけに使う。

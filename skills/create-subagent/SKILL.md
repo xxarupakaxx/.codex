@@ -38,7 +38,7 @@ allowed-tools: Read, Write, Glob, Grep, AskUserQuestion
 | Tier 2 | 品質・テスト・観測性・a11y 等の追加レビュー | 省略（親セッション継承） |
 | Tier 3 | セキュリティ・PRDレビュー・複雑判断 | custom時のみ `model = "gpt-5.5"` + `service_tier = "priority"` を検討 |
 | Explorer | ファイル検索・パターンマッチ | 既存 `explorer` / `architecture-explorer` role を優先。custom時は `model = "gpt-5.4"` + `service_tier = "priority"` |
-| Mini helper | commit文案・短い要約・定型整形 | metadataで利用可能な場合のみ、default/customで `model = "gpt-5.4-mini"` + `service_tier = "priority"` + `reasoning_effort = "low"` を検討 |
+| Fast helper | commit文案・短い要約・定型整形 | toolなしでleadが即検査できる場合のみ、`rules/model-routing.md`のFast classを検討。model slugをこのSkillへ複製しない |
 
 判定指針: `rules/model-routing.md` を参照。
 

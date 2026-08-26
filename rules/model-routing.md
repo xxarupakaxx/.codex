@@ -99,6 +99,20 @@ Sub-agent 起動時:
 - ユーザー要件が曖昧、ソース間に矛盾がある、引用や法務・医療・金融など高リスク根拠が必要。
 - role 定義済み agent で表現できる作業。role 既定を override しない。
 
+### Delivery draftのFast class契約
+
+commit messageとPR本文では、文章生成packetと副作用packetを分ける。Fast classが受け取るのはEvidenceとGit snapshotに拘束された`Delivery Draft Input`だけであり、tool、command、approval、commit、push、PR作成を含めない。
+
+- 単一目的の定型subjectはL0 localで作る。
+- 複数の意図、理由、trade-offを要約する価値がある場合だけFast classを使う。
+- Fast classは`gpt-5.6-luna`, effort `max`へ解決する。
+- `route_delivery_draft`の`allowed_tools == ()`を`scripts/draft_delivery_message.py`が、user configとshell/browser/apps/multi-agent等のtool featureを無効化したephemeral invocationとして維持する。
+- Lunaを解決できなければ弱いmodelへfallbackせずleadへ戻す。
+- outputは未信頼の`Delivery Draft Output`として親が`source_hash`と`claim_references`を検証する。
+- Git/GitHub write、principal確認、approval判定、最終delivery判定はFast classへ渡さない。
+
+決定的な契約検証は`scripts/agent_delivery_lifecycle.py`、Git snapshotとdrift検知は`scripts/git_delivery_contract.py`、isolated Luna起動は`scripts/draft_delivery_message.py`を使う。
+
 ## team-run の割り当て
 
 | teammate相当 | Codex agent_type | 役割 |

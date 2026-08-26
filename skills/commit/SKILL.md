@@ -1,70 +1,75 @@
 ---
-allowed-tools: Bash(git:*)
+allowed-tools: Bash(git:*), Bash(python3:*)
 argument-hint: [--push]
-description: 変更をコミット
+description: 検証済みの変更だけをcommitし、必要時に文案をFast workerへ委譲
 ---
 
-# /commit コマンド
+# /commit
 
-変更をコミットします。`--push` 引数でpushも実行。
+commit文案の生成とGit副作用を分離する。Fast workerはtoolなしで文案だけを返し、exact staging、事実確認、commit、pushはleadまたはtrusted local executorが行う。
 
-## 引数
+## 境界
 
-- `--push`: コミット後にpushする（デフォルト: false）
+- 文案の事実源は、Evidence Bundleと`git_delivery_contract.py`が固定したstaged snapshotだけである。
+- workerへGit/GitHub tool、command、approval、external writeを渡さない。
+- worker出力は未信頼のproposalであり、`validate_delivery_draft_pair`を通るまで使用しない。
+- commitはlocal Git write、pushはexternal writeとして別gateにする。
+- `git add -A`、暗黙の全stage、here-documentによるmessage展開を使わない。
 
-## 実行手順
+## 1. 対象を確定してexact stagingする
 
-### 1. 現在の状態確認
+`git status --short`、対象差分、直近logを確認する。user由来のdirty stateを分け、今回の対象pathだけを明示してstageする。deleteまたはrenameは依頼範囲と一致する場合だけ個別に許可する。
 
-```bash
-git status
-git diff --stat
-git log --oneline -5
-```
-
-### 2. コミットメッセージの決定
-
-変更内容を分析し、git-cz形式でコミットメッセージを作成:
-
-- prefix: feat/fix/docs/refactor/test/chore など
-- 絵文字なし
-- prefix以外は日本語
-- 例: `feat: ユーザー認証機能を追加`
-
-### 3. ステージング
+stage後に次を使い、各対象を`--allowed-path`で列挙したsnapshotを作る。
 
 ```bash
-git add <files>
+python3 ~/.codex/scripts/git_delivery_contract.py staged <repo-root> \
+  --allowed-path <path-1> --allowed-path <path-2>
 ```
 
-NOTE: CLAUDE.mdがglobal gitignoreされている場合は `git add -f` で追加
+`DRAFT_BLOCKED`、空差分、対象外path、unmerged、未許可delete/rename、secret、上限超過があればFast文案生成へ進まない。secret hitがscanner自身のpatternまたは明示的なfake test fixtureだけだと親が対象行を直接確認した場合は、hit pathと根拠をEvidenceへ残し、`worker_patch`を渡さずL0 local文案へ戻せる。実credentialの可能性が残る場合やその他のviolationではcommitへ進まない。
+この既定出力は`worker_patch`を除いた永続snapshotであり、task memoryへ保存できる。
 
-NOTE: rebase中にコンフリクトを検出した場合は `git status` で `UU` ファイルを特定し、base/ours/theirsを比較して両ブランチの意図を統合してから `git add` → `git rebase --continue` で完了する（出典: memories/rollout_summaries/2026-06-18T04-14-24-sLqw-git_pull_conflict_resolved_and_merged_to_main.md「Task 1」）。
+## 2. LocalかFast classかを選ぶ
 
-### 4. コミット
+単一目的で定型的なsubjectだけならlocal templateを使う。複数の意図、理由、trade-offを短く要約する価値が、委譲と統合のコストを上回る場合だけ`rules/model-routing.md`のFast classを使う。
+
+Fast classへ渡すのは、`Delivery Draft Input`、snapshotのpath/stat/hash、安全な範囲の`worker_patch`、Evidence参照だけである。raw diffが必要な場合だけ同じexact allowlistで`staged --include-worker-patch`を再実行し、永続snapshotと`source_hash`が一致することを確認してmemoryへ保存せず一時入力へ置く。`scripts/draft_delivery_message.py <temporary-input.json> --expected-source-hash <trusted-snapshot-hash>`が、user configとtool featureを無効化したisolated Luna Maxを起動し、typed outputを親validatorへ戻す。失敗時は弱いmodelへfallbackせずleadへ戻す。
+
+commit outputは次を満たす。
+
+- `status`: `DRAFT_READY`または`DRAFT_BLOCKED`
+- `content.type`: 許可されたgit-cz type
+- `content.subject`: 日本語、70文字以内、絵文字なし
+- `content.body`: 必要な場合だけwhat / why / trade-off
+- `claim_references`: inputで許可したpath、acceptance、test、riskだけ
+
+## 3. 親が文案を検証する
+
+まず`validate_delivery_draft_structure`でinput/outputを検証する。さらに実差分を読み、type、subject、bodyの各主張を確認し、合格した文案の`content_hash`と全`claim_references`へ束縛したClaim Verification Evidenceを親が作る。その証跡とtrusted snapshotの`source_hash`を`validate_delivery_draft_pair`へ渡し、意味reviewを飛ばした文案を拒否する。
+
+検証済みmessageをtask-localな一時fileへ平文で保存する。Fast worker自身にはfileを書かせない。
+
+## 4. driftを再確認してcommitする
+
+実行直前に、保存したsnapshotへ`git_delivery_contract.py check-staged`を実行し、snapshot fileとは別に保持した`--expected-source-hash`、最初と同じ全`--allowed-path`、delete/rename policyをtrusted parentから再指定する。結果が`DRAFT_STALE`または`DRAFT_BLOCKED`ならcommitせず、snapshotから作り直す。
+
+`READY`の場合だけ次を実行する。
 
 ```bash
-git commit -m "$(cat <<'EOF'
-<コミットメッセージ>
-EOF
-)"
+git commit --file=<validated-message-file>
 ```
 
-### 5. push（引数に --push がある場合のみ）
+commit後にSHA、実際のchanged paths、hook結果を確認し、Evidence Bundleの`writes_performed`へ接続する。
 
-$ARGUMENTS に `--push` が含まれる場合:
+## 5. pushは別gateで行う
 
-```bash
-git push
-```
+`--push`が指定されても、project policyまたはverified approval evidenceがpush対象を許可していることを確認する。remote、branch、現在のprincipalを確認し、accountを自動切替しない。許可がなければcommit済みで停止し、push待ちとして報告する。
 
-### 6. 結果の報告
+## 完了報告
 
-- コミットハッシュ
-- pushした場合はその旨
-
-## 実績由来の知見
-
-- `git push` が `Repository not found` を返したら、repo URLを疑う前に `gh auth status` でactive accountとremote ownerの一致を確認する（仕事repoと個人repoでアカウントを使い分けている環境では、切替忘れによる失敗が繰り返し発生している）。認証transportの片方が死んでいる場合はもう片方へ切替える（SSH疎通は `git ls-remote git@github.com:<owner>/<repo>.git` で確認、HTTPSへ戻すなら `gh auth setup-git`）（出典: memories/rollout_summaries/2026-06-23T06-22-45-7rsk-plugin_routing_sot_team_run_push.md「Task 2 Failures」、memories/rollout_summaries/2026-06-23T01-00-42-uYoW-claude_to_codex_config_sync_and_dotfiles_push.md「Task 2 Failures」、memories/rollout_summaries/2026-06-26T09-36-25-4B26-release_db_migration_sync_develop_before_pr3049.md「Task 1 Preference signals」）
-- sandbox内で `git commit` / `git worktree add` / rebase が `.git/index.lock` 等のpermissionエラーで失敗したら、コミット内容を変えずescalated permissionsで再実行する（複数rolloutで再発した既知事象）（出典: memories/rollout_summaries/2026-06-23T06-22-45-7rsk-plugin_routing_sot_team_run_push.md「Task 2 Failures」）
-- ユーザーがpushを指示している作業（設定・docs含む）はremoteへのpush完了までがdone。進捗報告より先にpushを完了させる（出典: memories/rollout_summaries/2026-06-23T01-00-42-uYoW-claude_to_codex_config_sync_and_dotfiles_push.md「Task 1/2 Preference signals」）
+- commit SHAとmessage
+- committed paths
+- test / hook結果
+- pushの実行有無とremote
+- 対象外dirty stateの残存状況

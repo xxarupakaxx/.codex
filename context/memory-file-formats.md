@@ -253,6 +253,40 @@ requirement、acceptance、test、finding、residual risk、実行済みwriteを
 
 Evidence Bundleが不完全、または未承認writeがある場合はdeliveryしない。
 
+### Delivery Draft Input
+
+Evidence BundleとGit snapshotから作る、commit messageまたはPR本文の一時的な入力契約である。既存Delivery lifecycleの`REVIEWED`から`DELIVERED`へ進む補助artifactであり、第二のlifecycleを作らない。
+
+必須field:
+
+- `draft_id`
+- `draft_kind`: `commit`または`pull_request`
+- `source_hash`
+- `changed_paths`
+- `evidence_bundle_id`
+- `acceptance_ids`
+- `test_ids`
+- `residual_risk_ids`
+- `template_sections`
+- `policy_source`
+
+commitではstaged snapshot、PRでは明示したbase/head SHAのsnapshotを使う。永続snapshotはcollectorの既定出力を使い、`worker_patch`を`null`にしたままhash、path、stat、policy、Evidence参照だけを残す。raw diffはsecret、binary、size gateを通り、同じpolicyで再収集した`source_hash`が永続snapshotと一致する場合だけworkerへ一時的に渡す。`--include-worker-patch`の出力をmemoryへ保存しない。
+
+### Delivery Draft Output
+
+Fast workerまたはleadが返す未信頼の文案である。
+
+必須field:
+
+- `draft_id`
+- `draft_kind`
+- `source_hash`
+- `status`: `DRAFT_READY`または`DRAFT_BLOCKED`
+- `claim_references`
+- `content`
+
+`claim_references`はinputで許可されたchanged path、acceptance、test、residual riskだけを参照し、`DRAFT_READY`では空にしない。outputの許可schema以外や、nested contentを含むtool、command、approval、side effect、external write targetを拒否する。親はtrusted snapshotから別に保持した`expected_source_hash`を使い、各claimを実差分とEvidenceへ戻って意味的に検証する。合格時だけ`status: pass`、`source_hash`、`content_hash`、完全な`claim_references`を持つClaim Verification Evidenceを作り、`validate_delivery_draft_pair`へ渡す。文案変更、source drift、証跡欠落があればdeliveryへ進めない。
+
 ### Escaped Defect Record
 
 PRまたはdelivery後に新しく見つかった漏れを、最初に防げたgateへ戻すためのrecordである。

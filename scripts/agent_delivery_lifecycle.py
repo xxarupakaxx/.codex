@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import sys
@@ -36,6 +37,26 @@ SAFETY_TRIGGERS = {
     "go_nogo_decision",
 }
 ARTIFACT_REQUIRED_FIELDS = {
+    "delivery_draft_input": (
+        "draft_id",
+        "draft_kind",
+        "source_hash",
+        "changed_paths",
+        "evidence_bundle_id",
+        "acceptance_ids",
+        "test_ids",
+        "residual_risk_ids",
+        "template_sections",
+        "policy_source",
+    ),
+    "delivery_draft_output": (
+        "draft_id",
+        "draft_kind",
+        "source_hash",
+        "status",
+        "claim_references",
+        "content",
+    ),
     "approved_prd": (
         "artifact_id",
         "source_hash",
@@ -91,6 +112,11 @@ ARTIFACT_REQUIRED_FIELDS = {
     ),
 }
 LIST_FIELDS = {
+    "changed_paths",
+    "test_ids",
+    "residual_risk_ids",
+    "template_sections",
+    "claim_references",
     "scope",
     "out_of_scope",
     "acceptance_ids",
@@ -117,6 +143,16 @@ POLICY_PROMOTION_PREFIXES = (
 APPROVAL_EVIDENCE = re.compile(
     r"^(?:human-approved|user-validation):[A-Za-z0-9._/-]+#[a-f0-9]{8,64}$"
 )
+COMMIT_TYPES = {"feat", "fix", "docs", "refactor", "test", "chore", "perf", "build", "ci"}
+PR_SECTIONS = {"summary", "why", "trade_off", "out_of_scope", "impact", "tests", "residual_risks"}
+DRAFT_PRIVILEGED_FIELDS = {
+    "tools", "commands", "approval_state", "approval_evidence", "side_effects_requested",
+    "external_write_targets", "write_request",
+}
+DRAFT_PRIVILEGED_KEYS = {
+    re.sub(r"[^a-z]", "", key.lower())
+    for key in DRAFT_PRIVILEGED_FIELDS
+} | {"tool", "command", "approval", "sideeffect", "externalwritetarget"}
 
 
 @dataclass(frozen=True)
@@ -134,6 +170,16 @@ class TransitionDecision:
     status: str
     action: str
     reason: str
+
+
+@dataclass(frozen=True)
+class DraftRoutingDecision:
+    status: str
+    handler: str
+    model: str | None
+    reasoning_effort: str | None
+    reasons: tuple[str, ...]
+    allowed_tools: tuple[str, ...] = ()
 
 
 def _axis_values(factors: Mapping[str, Any]) -> dict[str, int]:
@@ -217,6 +263,22 @@ def route_work_packet(
     return RoutingDecision("READY", route_id, capability, model, effort, reasons)
 
 
+def route_delivery_draft(
+    *,
+    requires_summary: bool,
+    available_models: Sequence[str] | None = None,
+) -> DraftRoutingDecision:
+    """Choose local formatting or the tool-free Fast worker for a delivery draft."""
+    if not requires_summary:
+        return DraftRoutingDecision("READY", "LOCAL_TEMPLATE", None, None, ("deterministic",))
+    model, effort = MODEL_ROSTER["Fast"]
+    if available_models is None or model not in available_models:
+        return DraftRoutingDecision(
+            "LEAD_REQUIRED", "LEAD", None, None, (f"model_unavailable:{model}",)
+        )
+    return DraftRoutingDecision("READY", "FAST_WORKER", model, effort, ("summary_required",))
+
+
 def validate_artifact(
     kind: str,
     payload: Mapping[str, Any],
@@ -230,6 +292,10 @@ def validate_artifact(
     for field in LIST_FIELDS.intersection(payload):
         if not isinstance(payload[field], list):
             errors.append(f"{field} must be a list")
+    if kind in {"delivery_draft_input", "delivery_draft_output"} and payload.get(
+        "draft_kind"
+    ) not in {"commit", "pull_request"}:
+        errors.append("draft_kind must be commit or pull_request")
     if kind == "approved_prd" and payload.get("review_status") != "pass":
         errors.append("review_status must be pass")
     if kind == "escaped_defect_record":
@@ -255,9 +321,14 @@ def validate_artifact(
         external_targets = payload.get("external_write_targets", [])
         side_effects = side_effects if isinstance(side_effects, list) else []
         external_targets = external_targets if isinstance(external_targets, list) else []
-        requires_approval = bool(external_targets) or any(
-            trigger in SAFETY_TRIGGERS for trigger in side_effects if isinstance(side_effects, list)
+        unknown_side_effects = sorted(
+            item for item in side_effects if isinstance(item, str) and item not in SAFETY_TRIGGERS
         )
+        if unknown_side_effects:
+            errors.append(
+                f"unknown side_effects_requested: {', '.join(unknown_side_effects)}"
+            )
+        requires_approval = bool(external_targets) or bool(side_effects)
         if requires_approval and payload.get("approval_required") is not True:
             errors.append("approval_required must be true for safety-triggering work")
         if (payload.get("approval_required") or requires_approval) and not _verified_approval_evidence(
@@ -266,10 +337,173 @@ def validate_artifact(
             safety_decision_id=payload.get("safety_decision_id"),
             targets=[
                 *external_targets,
-                *(item for item in side_effects if item in SAFETY_TRIGGERS),
+                *side_effects,
             ],
         ):
             errors.append("approval_evidence is required for approval-gated work")
+    return errors
+
+
+def delivery_draft_content_hash(draft_output: Mapping[str, Any]) -> str:
+    bound_content = {
+        "draft_id": draft_output.get("draft_id"),
+        "draft_kind": draft_output.get("draft_kind"),
+        "source_hash": draft_output.get("source_hash"),
+        "claim_references": draft_output.get("claim_references"),
+        "content": draft_output.get("content"),
+    }
+    encoded = json.dumps(
+        bound_content, ensure_ascii=False, sort_keys=True, separators=(",", ":")
+    )
+    return hashlib.sha256(encoded.encode("utf-8")).hexdigest()
+
+
+def validate_delivery_draft_structure(
+    draft_input: Mapping[str, Any],
+    draft_output: Mapping[str, Any],
+    *,
+    expected_source_hash: str,
+) -> list[str]:
+    """Validate an untrusted delivery draft against its bounded input."""
+    errors = [
+        *(f"input: {error}" for error in validate_artifact("delivery_draft_input", draft_input)),
+        *(f"output: {error}" for error in validate_artifact("delivery_draft_output", draft_output)),
+    ]
+    if draft_output.get("status") not in {"DRAFT_READY", "DRAFT_BLOCKED"}:
+        errors.append("status must be DRAFT_READY or DRAFT_BLOCKED")
+    def privileged_paths(value: Any, prefix: str = "") -> list[str]:
+        if isinstance(value, Mapping):
+            paths: list[str] = []
+            for key, child in value.items():
+                path = f"{prefix}.{key}" if prefix else str(key)
+                normalized_key = re.sub(r"[^a-z]", "", str(key).lower())
+                if normalized_key in DRAFT_PRIVILEGED_KEYS:
+                    paths.append(path)
+                paths.extend(privileged_paths(child, path))
+            return paths
+        if isinstance(value, list):
+            return [
+                path
+                for index, child in enumerate(value)
+                for path in privileged_paths(child, f"{prefix}[{index}]")
+            ]
+        return []
+
+    privileged = sorted(privileged_paths(draft_output))
+    if privileged:
+        errors.append(f"delivery draft contains privileged fields: {', '.join(privileged)}")
+    allowed_output_fields = set(ARTIFACT_REQUIRED_FIELDS["delivery_draft_output"])
+    unknown_output_fields = sorted(
+        str(key) for key in draft_output if key not in allowed_output_fields
+    )
+    if unknown_output_fields:
+        errors.append(
+            f"delivery draft contains unknown fields: {', '.join(unknown_output_fields)}"
+        )
+    for field in ("draft_id", "draft_kind", "source_hash"):
+        if draft_output.get(field) != draft_input.get(field):
+            errors.append(f"{field} does not match draft input")
+    if draft_input.get("source_hash") != expected_source_hash:
+        errors.append("source_hash does not match trusted snapshot")
+    allowed_claims = {
+        item
+        for field in ("acceptance_ids", "test_ids", "residual_risk_ids", "changed_paths")
+        for item in draft_input.get(field, [])
+        if isinstance(item, str)
+    }
+    claim_references = draft_output.get("claim_references", [])
+    if isinstance(claim_references, list):
+        if any(not isinstance(item, str) for item in claim_references):
+            errors.append("claim_references items must be strings")
+        if draft_output.get("status") == "DRAFT_READY" and not claim_references:
+            errors.append("claim_references are required for DRAFT_READY")
+        unbound = sorted(
+            item for item in claim_references if isinstance(item, str) and item not in allowed_claims
+        )
+        if unbound:
+            errors.append(f"claim_references contain unbound evidence: {', '.join(unbound)}")
+    content = draft_output.get("content")
+    if draft_output.get("status") == "DRAFT_READY" and not isinstance(content, Mapping):
+        errors.append("content must be an object for DRAFT_READY")
+    elif draft_output.get("status") == "DRAFT_READY" and draft_input.get("draft_kind") == "commit":
+        unknown_content = sorted(set(content) - {"type", "subject", "body"})
+        if unknown_content:
+            errors.append(f"commit content contains unknown fields: {', '.join(unknown_content)}")
+        commit_type = content.get("type")
+        subject = content.get("subject")
+        body = content.get("body", "")
+        if commit_type not in COMMIT_TYPES:
+            errors.append("commit type is not allowed")
+        if not isinstance(subject, str) or not subject.strip():
+            errors.append("commit subject is required")
+        elif len(subject) > 70:
+            errors.append("commit subject must be 70 characters or fewer")
+        elif any(ord(character) < 32 for character in subject):
+            errors.append("commit subject must be a single line without control characters")
+        elif not re.search(r"[\u3040-\u30ff\u3400-\u9fff]", subject):
+            errors.append("commit subject must include Japanese text")
+        if not isinstance(body, str) or "\x00" in body:
+            errors.append("commit body must be text without NUL characters")
+    elif draft_output.get("status") == "DRAFT_READY" and draft_input.get("draft_kind") == "pull_request":
+        unknown_content = sorted(set(content) - {"title", "sections"})
+        if unknown_content:
+            errors.append(f"PR content contains unknown fields: {', '.join(unknown_content)}")
+        title = content.get("title")
+        sections = content.get("sections")
+        if not isinstance(title, str) or not title.strip():
+            errors.append("PR title is required")
+        elif len(title) > 70:
+            errors.append("PR title must be 70 characters or fewer")
+        elif any(ord(character) < 32 for character in title):
+            errors.append("PR title must be a single line without control characters")
+        if not isinstance(sections, Mapping):
+            errors.append("PR sections must be an object")
+        else:
+            template_sections = draft_input.get("template_sections", [])
+            required_sections = PR_SECTIONS | {
+                item for item in template_sections if isinstance(item, str)
+            }
+            missing_sections = sorted(required_sections - set(sections))
+            if missing_sections:
+                errors.append(f"PR sections are missing: {', '.join(missing_sections)}")
+            invalid_sections = sorted(
+                key
+                for key, value in sections.items()
+                if not isinstance(value, str) or not value.strip() or "\x00" in value
+            )
+            if invalid_sections:
+                errors.append(
+                    f"PR sections must be non-empty text: {', '.join(invalid_sections)}"
+                )
+    return errors
+
+
+def validate_delivery_draft_pair(
+    draft_input: Mapping[str, Any],
+    draft_output: Mapping[str, Any],
+    *,
+    expected_source_hash: str,
+    verified_claim_evidence: Mapping[str, Any] | None = None,
+) -> list[str]:
+    """Validate structure plus parent-produced, content-hash-bound semantic evidence."""
+    errors = validate_delivery_draft_structure(
+        draft_input,
+        draft_output,
+        expected_source_hash=expected_source_hash,
+    )
+    if draft_output.get("status") != "DRAFT_READY":
+        return errors
+    expected_claims = draft_output.get("claim_references")
+    valid_evidence = (
+        isinstance(verified_claim_evidence, Mapping)
+        and verified_claim_evidence.get("status") == "pass"
+        and verified_claim_evidence.get("source_hash") == expected_source_hash
+        and verified_claim_evidence.get("content_hash")
+        == delivery_draft_content_hash(draft_output)
+        and verified_claim_evidence.get("claim_references") == expected_claims
+    )
+    if not valid_evidence:
+        errors.append("verified claim evidence is required for DRAFT_READY")
     return errors
 
 
@@ -337,7 +571,16 @@ def next_action(
     safety_triggers = set(raw_triggers) if isinstance(raw_triggers, list) else set()
     raw_side_effects = snapshot.get("side_effects_requested", [])
     if isinstance(raw_side_effects, list):
-        safety_triggers.update(item for item in raw_side_effects if item in SAFETY_TRIGGERS)
+        unknown_side_effects = sorted(
+            item for item in raw_side_effects if item not in SAFETY_TRIGGERS
+        )
+        if unknown_side_effects:
+            return TransitionDecision(
+                "WAITING_HUMAN",
+                "STOP",
+                f"unknown side effect requires classification: {', '.join(unknown_side_effects)}",
+            )
+        safety_triggers.update(raw_side_effects)
     external_targets = snapshot.get("external_write_targets", [])
     external_targets = external_targets if isinstance(external_targets, list) else []
     approval_gated = bool(snapshot.get("safety_trigger")) or bool(safety_triggers) or bool(external_targets)
