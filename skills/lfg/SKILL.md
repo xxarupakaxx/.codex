@@ -14,6 +14,7 @@ description: "Phase 0-5.5を自律チェーン実行する自律ワークフロ�
 - skill、role、外部write: `context/agent-team-routing.md`
 - model capability classとruntime roster: `rules/model-routing.md`
 - deterministic routingと次actionの検査: `scripts/agent_delivery_lifecycle.py`
+- Roadmap routeとPhase artifactの同期: `scripts/sync-roadmap.py`
 
 ## Entrypoint contract
 
@@ -24,6 +25,7 @@ description: "Phase 0-5.5を自律チェーン実行する自律ワークフロ�
 5. Phase 4の未解決findingは修正へ戻し、上限到達時は停止する。
 6. delivery後にescaped defectがあれば記録とreplayへ戻す。
 7. `COMPLETE`になった場合だけ終了する。
+8. Phase 2から5のartifact保存後にtrusted local executorで`sync-roadmap.py --workspace-root <workspace> --run-id <active-run-id> --phase <phase>`を実行する。Phase 2の`explicit-roadmap`と`roadmap`は`--open`を付け、exit codeとstdout JSONを`05_log.md`へ記録する。通常のmodel-controlled argsへreceiptを渡さない。trusted channelのないcustom workflowは`ROADMAP_TRUSTED_EXECUTOR_REQUIRED`で停止する。`log-only`はadapterのskip結果を記録する。
 
 このSkillはPhase本文、固定reviewer、固定round、artifact field、model表を複製しない。
 

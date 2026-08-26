@@ -7,6 +7,7 @@ import argparse
 import json
 import re
 import sys
+import tomllib
 from dataclasses import asdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -23,6 +24,22 @@ from agent_delivery_lifecycle import (
 
 
 ENTRYPOINT_MAX_LINES = 120
+ENTRYPOINT_MAX_BYTES = 24 * 1024
+ROLE_REASONING_FIELD = "model_reasoning_effort"
+REQUIRED_ROLE_FILES = (
+    "agents/implementation-planner.toml",
+    "agents/prd-reviewer.toml",
+    "agents/requirement-parser.toml",
+)
+REQUIRED_GLOBAL_MIRRORS = (
+    "AGENTS.md",
+    *REQUIRED_ROLE_FILES,
+    "scripts/sync-roadmap.py",
+    "scripts/validate-agent-harness.py",
+    "skills/lfg/SKILL.md",
+    "workflows/implementation-drive.js",
+    "workflows/roadmap-sync.js",
+)
 REQUIRED_REFERENCES = (
     "context/workflow-rules.md",
     "context/agent-team-routing.md",
@@ -35,6 +52,7 @@ REQUIRED_REFERENCES = (
     "rules/common-git-workflow.md",
     "rules/code-review-philosophy.md",
     "skills/team-run/SKILL.md",
+    "scripts/sync-roadmap.py",
 )
 ARTIFACT_NAME = re.compile(r"^\d{2}[-_].+\.md$")
 WORKFLOW_ARTIFACTS = {
@@ -97,6 +115,11 @@ def validate_entrypoint(repo_root: Path) -> list[str]:
         errors.append(
             f"AGENTS.md exceeds {ENTRYPOINT_MAX_LINES} lines: {line_count}"
         )
+    byte_count = len(text.encode("utf-8"))
+    if byte_count > ENTRYPOINT_MAX_BYTES:
+        errors.append(
+            f"AGENTS.md exceeds {ENTRYPOINT_MAX_BYTES} bytes: {byte_count}"
+        )
 
     for reference in REQUIRED_REFERENCES:
         if reference not in text:
@@ -134,6 +157,110 @@ def validate_entrypoint(repo_root: Path) -> list[str]:
                 errors.append(f"project AGENTS template missing {marker}: {relative}")
 
     return errors
+
+
+def load_toml(path: Path) -> tuple[dict[str, object] | None, list[str]]:
+    try:
+        return tomllib.loads(path.read_text(encoding="utf-8")), []
+    except (OSError, tomllib.TOMLDecodeError) as error:
+        return None, [f"{path}: invalid TOML: {error}"]
+
+
+def validate_runtime_config(
+    repo_root: Path, *, allow_host_notify: bool = False
+) -> list[str]:
+    errors: list[str] = []
+    for relative in REQUIRED_ROLE_FILES:
+        path = repo_root / relative
+        if not path.is_file():
+            errors.append(f"missing required role: {relative}")
+            continue
+        role, parse_errors = load_toml(path)
+        errors.extend(parse_errors)
+        if role is None:
+            continue
+        if "reasoning_effort" in role:
+            errors.append(
+                f"{relative}: unsupported role field reasoning_effort; use {ROLE_REASONING_FIELD}"
+            )
+        if not role.get(ROLE_REASONING_FIELD):
+            errors.append(f"{relative}: missing {ROLE_REASONING_FIELD}")
+
+    config_path = repo_root / "config.toml"
+    config, parse_errors = load_toml(config_path)
+    errors.extend(parse_errors)
+    if config is None:
+        return errors
+    if "notify" in config and not allow_host_notify:
+        errors.append("config.toml: project config must not own host-specific notify")
+    skills = config.get("skills")
+    if not isinstance(skills, dict) or skills.get("include_instructions") is not False:
+        errors.append(
+            "config.toml: skills.include_instructions must be false; route skills from canonical docs"
+        )
+    return errors
+
+
+def validate_global_mirror(repo_root: Path, global_home: Path) -> list[str]:
+    errors: list[str] = []
+    for relative in REQUIRED_GLOBAL_MIRRORS:
+        source = repo_root / relative
+        mirror = global_home / relative
+        if not mirror.is_file():
+            errors.append(f"missing global mirror: {mirror}")
+        elif source.read_bytes() != mirror.read_bytes():
+            errors.append(f"global mirror drift: {relative}")
+    return errors
+
+
+def discover_instruction_chain(
+    global_home: Path,
+    project_root: Path,
+    cwd: Path,
+    fallback_names: tuple[str, ...] = (),
+) -> list[Path]:
+    global_candidates = ("AGENTS.override.md", "AGENTS.md")
+    chain: list[Path] = []
+    for name in global_candidates:
+        candidate = global_home / name
+        if candidate.is_file() and candidate.read_text(encoding="utf-8").strip():
+            chain.append(candidate.resolve())
+            break
+
+    relative = cwd.resolve().relative_to(project_root.resolve())
+    directories = [project_root.resolve()]
+    current = project_root.resolve()
+    for part in relative.parts:
+        current /= part
+        directories.append(current)
+    for directory in directories:
+        for name in ("AGENTS.override.md", "AGENTS.md", *fallback_names):
+            candidate = directory / name
+            if candidate.is_file() and candidate.read_text(encoding="utf-8").strip():
+                chain.append(candidate.resolve())
+                break
+    return chain
+
+
+def validate_instruction_chain(
+    global_home: Path, project_root: Path, cwd: Path
+) -> list[str]:
+    try:
+        chain = discover_instruction_chain(global_home, project_root, cwd)
+    except ValueError:
+        return [f"cwd is outside project root: {cwd}"]
+    resolved_project_root = project_root.resolve()
+    project_sources = [
+        path for path in chain if path.is_relative_to(resolved_project_root)
+    ]
+    total = sum(path.stat().st_size for path in project_sources)
+    if total > ENTRYPOINT_MAX_BYTES:
+        return [
+            f"project instruction chain exceeds {ENTRYPOINT_MAX_BYTES} bytes: {total}"
+        ]
+    if not project_sources:
+        return ["project instruction chain is empty"]
+    return []
 
 
 def validate_markdown_artifact(path: Path) -> list[str]:
@@ -200,6 +327,7 @@ def validate_lfg_contract(repo_root: Path) -> list[str]:
         "context/agent-team-routing.md",
         "rules/model-routing.md",
         "scripts/agent_delivery_lifecycle.py",
+        "scripts/sync-roadmap.py",
     ):
         if reference not in canonical_text:
             errors.append(f"canonical LFG skill missing reference: {reference}")
@@ -260,6 +388,7 @@ def validate_lifecycle_contract(repo_root: Path) -> list[str]:
             "routingDecision.model",
             "WORK_PACKET_REQUIRES_TRUSTED_APPROVAL_RESOLUTION",
             "workflow('pr-review-loop'",
+            "workflow('roadmap-sync'",
         ),
         "skills/pr-watch/SKILL.md": (
             "Escaped Defect Record",
@@ -323,6 +452,9 @@ def main() -> int:
         "--repo-root", type=Path, default=Path(__file__).resolve().parents[1]
     )
     parser.add_argument("--artifact-dir", type=Path, action="append", default=[])
+    parser.add_argument("--workspace-root", type=Path)
+    parser.add_argument("--global-home", type=Path)
+    parser.add_argument("--skip-global-mirror", action="store_true")
     modes = parser.add_mutually_exclusive_group()
     modes.add_argument("--fast", action="store_true")
     modes.add_argument("--contracts", action="store_true")
@@ -330,7 +462,25 @@ def main() -> int:
     args = parser.parse_args()
 
     repo_root = args.repo_root.resolve()
+    selected_global_home = (args.global_home or Path.home() / ".codex").resolve()
     errors = validate_entrypoint(repo_root)
+    errors.extend(
+        validate_runtime_config(
+            repo_root,
+            allow_host_notify=repo_root == selected_global_home,
+        )
+    )
+    workspace_root = args.workspace_root.resolve() if args.workspace_root else None
+    if workspace_root:
+        errors.extend(
+            validate_instruction_chain(
+                selected_global_home,
+                workspace_root,
+                workspace_root,
+            )
+        )
+    if not args.skip_global_mirror:
+        errors.extend(validate_global_mirror(repo_root, selected_global_home))
     for artifact_dir in args.artifact_dir:
         errors.extend(validate_artifact_dir(artifact_dir.resolve()))
     if args.contracts or args.full_replay:

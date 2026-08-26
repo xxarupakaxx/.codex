@@ -1,7 +1,7 @@
 export const meta = {
   name: 'implementation-drive',
   description: 'Jiraチケット分析 → 実装方針決定 → 実装・テスト・レビュー',
-  whenToUse: 'Jiraチケットの実装を自動化したいとき。LFG runtimeが解決したroutingDecisionが必須。args: {ticketKey, routingDecision, useTournament?, allowExternalWrite?, approvalEvidence?}',
+  whenToUse: 'Jiraチケットを仕様化し、trusted Roadmap executor channelが未接続なら実装前に安全停止するとき。args: {ticketKey, workspaceRoot, taskMemoryDir, routingDecision, useTournament?, allowExternalWrite?, approvalEvidence?}',
   phases: [
     { title: 'Analyze', detail: 'チケット分析 + コードベース調査' },
     { title: 'Spec', detail: '仕様書ドラフト生成' },
@@ -227,6 +227,26 @@ if (workPlan.packets.some((packet) => packet.approval_required)) {
     reason: 'WORK_PACKET_REQUIRES_TRUSTED_APPROVAL_RESOLUTION',
     workPackets: workPlan.packets,
   }
+}
+
+const workspaceRoot = args?.workspaceRoot
+const taskMemoryDir = args?.taskMemoryDir
+if (
+  typeof workspaceRoot !== 'string'
+  || !workspaceRoot.startsWith('/')
+  || typeof taskMemoryDir !== 'string'
+  || !taskMemoryDir.startsWith(`${workspaceRoot}/.local/memory/`)
+) {
+  return { success: false, reason: 'ROADMAP_TASK_DIR_REQUIRED' }
+}
+const roadmapSync = await workflow('roadmap-sync', {
+  workspaceRoot,
+  taskDir: taskMemoryDir,
+  runId: args?.activeRunId,
+  phase: '2',
+})
+if (!roadmapSync?.success) {
+  return { success: false, reason: roadmapSync?.reason ?? 'ROADMAP_SYNC_FAILED' }
 }
 
 // --- Phase 3: Implement ---

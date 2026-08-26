@@ -2,7 +2,7 @@ name = "implementation-planner"
 description = "実装計画を策定。タスク分解、依存関係整理、実装順序決定を行う。"
 model = "gpt-5.6-sol"
 service_tier = "priority"
-reasoning_effort = "high"
+model_reasoning_effort = "high"
 developer_instructions = """
 # Implementation Planner
 
