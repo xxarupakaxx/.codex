@@ -50,7 +50,7 @@ draft objective → evidence pass → Goal Quality Gate → goalを作る → Sp
 - plugin / skill / agent role の選択は `context/agent-team-routing.md` を参照し、Phase順序やmodel方針は重複定義しない。
 - session-provided collaboration capability は role 既定の model/service_tier を優先する。
 - custom/default sub-agent に model を明示する場合は `rules/model-routing.md` の許可モデル集合に従い、必ず `service_tier = "priority"` をセットする。
-- `gpt-5.4-mini` は、現セッションの `spawn_agent` metadata で利用可能な場合に限り、commit文案、短い要約、定型整形など、低リスクで lead が即検査できる default/custom 作業に使える。利用できない環境では role 既定または model 省略へ戻す。
+- Fast classは、現セッションのmetadataで`rules/model-routing.md`のcurrent runtime resolutionを解決できる場合に限り、commit文案、短い要約、定型整形など、toolなしでleadが即検査できるdefault/custom作業に使える。利用できない場合は弱いmodelへfallbackせずleadへ戻す。
 - Codex で無効な model 名は prompts/examples に書かない。
 - 同時 sub-agent は4件目安。cleanup API がある場合だけ完了済み agent を閉じる。
 - sub-agent は lead の会話履歴を持たない。状態は Team Journal に逃がす。
@@ -60,11 +60,11 @@ draft objective → evidence pass → Goal Quality Gate → goalを作る → Sp
 team-run のコストは文脈分断と調整オーバーヘッドにある（金銭・トークンは本質ではない）。無駄撃ちを避けるため、起動前に次を順に確認する。
 
 1. **L0 local で足りるか**: `rg`、`git diff`、既存スクリプト、`multi_tool_use.parallel` で独立読み取りを処理できるなら sub-agent を起動しない。
-2. **L1 mini で足りるか**: commit文案、短いログ要約、定型整形、重複検出だけなら、現セッションの metadata で利用可能な場合に限り、必要時のみ `default` + `model="gpt-5.4-mini"` + `service_tier="priority"` + `reasoning_effort="low"` を使う。利用不可なら role 既定または model 省略へ戻す。
+2. **L1 Fast classで足りるか**: commit文案、短いログ要約、定型整形、重複検出だけなら、必要時のみ`default`へ委譲し、modelとeffortは`rules/model-routing.md`から解決する。tool、approval、external writeは渡さない。利用不可なら弱いmodelへfallbackせずleadへ戻す。
 3. **L2 role 既定が必要か**: 専門 role で表現できる調査・レビューは role 既定を使う。
 4. **L3 heavy が必要か**: GO/NO-GO、セキュリティ、重要設計、複雑実装は heavy role に任せる。mini に落とさない。
 
-mini で一度でも不確実性、矛盾、複数ファイル判断、ユーザー影響が出たら、その round は止めて role 既定へ昇格する。`service_tier` を落とすことをコスト最適化として扱わない。
+Fast classで一度でも不確実性、矛盾、複数ファイル判断、ユーザー影響が出たら、そのroundは止めてrole既定へ昇格する。`service_tier`を落とすことをコスト最適化として扱わない。
 
 ## Superpowers の使い所
 

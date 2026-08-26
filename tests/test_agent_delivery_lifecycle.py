@@ -9,9 +9,12 @@ SCRIPTS = Path(__file__).parents[1] / "scripts"
 sys.path.insert(0, str(SCRIPTS))
 
 from agent_delivery_lifecycle import (  # noqa: E402
+    delivery_draft_content_hash,
     next_action,
+    route_delivery_draft,
     route_work_packet,
     validate_artifact,
+    validate_delivery_draft_pair,
 )
 
 
@@ -27,6 +30,26 @@ ALL_MODELS = ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]
 
 
 class RoutingTest(unittest.TestCase):
+    def test_nontrivial_delivery_draft_routes_to_luna_without_tools(self) -> None:
+        decision = route_delivery_draft(
+            requires_summary=True,
+            available_models=ALL_MODELS,
+        )
+
+        self.assertEqual(
+            (decision.status, decision.handler, decision.model, decision.reasoning_effort),
+            ("READY", "FAST_WORKER", "gpt-5.6-luna", "max"),
+        )
+        self.assertEqual(decision.allowed_tools, ())
+
+    def test_unavailable_luna_returns_delivery_draft_to_lead(self) -> None:
+        decision = route_delivery_draft(
+            requires_summary=True,
+            available_models=["gpt-5.6-terra"],
+        )
+
+        self.assertEqual((decision.status, decision.handler, decision.model), ("LEAD_REQUIRED", "LEAD", None))
+
     def test_deterministic_local_uses_no_model(self) -> None:
         decision = route_work_packet(ZERO_FACTORS, deterministic_local=True)
         self.assertEqual((decision.route_id, decision.capability_class), ("fast-track", "Local"))
@@ -100,6 +123,311 @@ class RoutingTest(unittest.TestCase):
 
 
 class ArtifactContractTest(unittest.TestCase):
+    def test_delivery_draft_input_requires_bound_source_fields(self) -> None:
+        errors = validate_artifact("delivery_draft_input", {"draft_id": "draft-1"})
+
+        self.assertIn("missing required field: source_hash", errors)
+
+    def test_delivery_draft_rejects_unknown_kind(self) -> None:
+        payload = {
+            "draft_id": "draft-1", "draft_kind": "push", "source_hash": "abc",
+            "changed_paths": [], "evidence_bundle_id": "eb-1", "acceptance_ids": [],
+            "test_ids": [], "residual_risk_ids": [], "template_sections": [],
+            "policy_source": "AGENTS.md",
+        }
+
+        self.assertIn(
+            "draft_kind must be commit or pull_request",
+            validate_artifact("delivery_draft_input", payload),
+        )
+
+    def test_delivery_draft_output_rejects_unknown_status(self) -> None:
+        draft_input = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "changed_paths": ["app.py"], "evidence_bundle_id": "eb-1",
+            "acceptance_ids": ["A1"], "test_ids": ["T1"], "residual_risk_ids": [],
+            "template_sections": [], "policy_source": "AGENTS.md",
+        }
+        output = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "status": "APPROVED", "claim_references": ["A1", "T1"],
+            "content": {"type": "feat", "subject": "配送契約を追加", "body": ""},
+        }
+
+        self.assertIn(
+            "status must be DRAFT_READY or DRAFT_BLOCKED",
+            validate_delivery_draft_pair(draft_input, output, expected_source_hash="abc"),
+        )
+
+    def test_delivery_draft_rejects_claims_outside_bound_evidence(self) -> None:
+        draft_input = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "changed_paths": ["app.py"], "evidence_bundle_id": "eb-1",
+            "acceptance_ids": ["A1"], "test_ids": ["T1"],
+            "residual_risk_ids": ["R1"], "template_sections": [],
+            "policy_source": "AGENTS.md",
+        }
+        output = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "status": "DRAFT_READY", "claim_references": ["A1", "T-fabricated"],
+            "content": {"type": "feat", "subject": "配送契約を追加", "body": ""},
+        }
+
+        self.assertIn(
+            "claim_references contain unbound evidence: T-fabricated",
+            validate_delivery_draft_pair(draft_input, output, expected_source_hash="abc"),
+        )
+
+    def test_delivery_draft_rejects_source_hash_drift(self) -> None:
+        draft_input = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "before",
+            "changed_paths": ["app.py"], "evidence_bundle_id": "eb-1",
+            "acceptance_ids": [], "test_ids": [], "residual_risk_ids": [],
+            "template_sections": [], "policy_source": "AGENTS.md",
+        }
+        output = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "after",
+            "status": "DRAFT_READY", "claim_references": [],
+            "content": {"type": "fix", "subject": "差分を修正", "body": ""},
+        }
+
+        self.assertIn(
+            "source_hash does not match draft input",
+            validate_delivery_draft_pair(draft_input, output, expected_source_hash="before"),
+        )
+
+    def test_commit_draft_rejects_subject_over_seventy_characters(self) -> None:
+        draft_input = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "changed_paths": [], "evidence_bundle_id": "eb-1", "acceptance_ids": [],
+            "test_ids": [], "residual_risk_ids": [], "template_sections": [],
+            "policy_source": "AGENTS.md",
+        }
+        output = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "status": "DRAFT_READY", "claim_references": [],
+            "content": {"type": "feat", "subject": "あ" * 71, "body": ""},
+        }
+
+        self.assertIn(
+            "commit subject must be 70 characters or fewer",
+            validate_delivery_draft_pair(draft_input, output, expected_source_hash="abc"),
+        )
+
+    def test_commit_draft_requires_japanese_subject(self) -> None:
+        draft_input = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "changed_paths": ["app.py"], "evidence_bundle_id": "eb-1",
+            "acceptance_ids": [], "test_ids": [], "residual_risk_ids": [],
+            "template_sections": [], "policy_source": "AGENTS.md",
+        }
+        output = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "status": "DRAFT_READY", "claim_references": ["app.py"],
+            "content": {"type": "feat", "subject": "add delivery adapter", "body": ""},
+        }
+
+        self.assertIn(
+            "commit subject must include Japanese text",
+            validate_delivery_draft_pair(draft_input, output, expected_source_hash="abc"),
+        )
+
+    def test_pr_draft_requires_canonical_and_template_sections(self) -> None:
+        draft_input = {
+            "draft_id": "draft-2", "draft_kind": "pull_request", "source_hash": "abc",
+            "changed_paths": [], "evidence_bundle_id": "eb-1", "acceptance_ids": [],
+            "test_ids": [], "residual_risk_ids": [], "template_sections": ["security"],
+            "policy_source": "AGENTS.md",
+        }
+        output = {
+            "draft_id": "draft-2", "draft_kind": "pull_request", "source_hash": "abc",
+            "status": "DRAFT_READY", "claim_references": [],
+            "content": {"title": "配送契約を追加", "sections": {"summary": "概要"}},
+        }
+
+        errors = validate_delivery_draft_pair(
+            draft_input, output, expected_source_hash="abc"
+        )
+
+        self.assertIn("PR sections are missing: impact, out_of_scope, residual_risks, security, tests, trade_off, why", errors)
+
+    def test_delivery_draft_cannot_request_tools_or_approval(self) -> None:
+        draft_input = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "changed_paths": [], "evidence_bundle_id": "eb-1", "acceptance_ids": [],
+            "test_ids": [], "residual_risk_ids": [], "template_sections": [],
+            "policy_source": "AGENTS.md",
+        }
+        output = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "status": "DRAFT_READY", "claim_references": [], "tools": ["git"],
+            "approval_state": "approved",
+            "content": {"type": "feat", "subject": "配送契約を追加", "body": ""},
+        }
+
+        self.assertIn(
+            "delivery draft contains privileged fields: approval_state, tools",
+            validate_delivery_draft_pair(draft_input, output, expected_source_hash="abc"),
+        )
+
+    def test_delivery_draft_rejects_nested_privileged_fields(self) -> None:
+        draft_input = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "changed_paths": ["app.py"], "evidence_bundle_id": "eb-1",
+            "acceptance_ids": [], "test_ids": [], "residual_risk_ids": [],
+            "template_sections": [], "policy_source": "AGENTS.md",
+        }
+        output = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "status": "DRAFT_READY", "claim_references": ["app.py"],
+            "content": {
+                "type": "feat", "subject": "配送契約を追加", "body": "",
+                "commands": ["git push"],
+            },
+        }
+
+        self.assertIn(
+            "delivery draft contains privileged fields: content.commands",
+            validate_delivery_draft_pair(draft_input, output, expected_source_hash="abc"),
+        )
+
+    def test_delivery_draft_rejects_non_string_claim_reference(self) -> None:
+        draft_input = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "changed_paths": ["app.py"], "evidence_bundle_id": "eb-1",
+            "acceptance_ids": [], "test_ids": [], "residual_risk_ids": [],
+            "template_sections": [], "policy_source": "AGENTS.md",
+        }
+        output = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "status": "DRAFT_READY", "claim_references": [{"id": "app.py"}],
+            "content": {"type": "feat", "subject": "配送契約を追加", "body": ""},
+        }
+
+        self.assertIn(
+            "claim_references items must be strings",
+            validate_delivery_draft_pair(draft_input, output, expected_source_hash="abc"),
+        )
+
+    def test_delivery_draft_rejects_untrusted_source_hash(self) -> None:
+        draft_input = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "worker-hash",
+            "changed_paths": ["app.py"], "evidence_bundle_id": "eb-1",
+            "acceptance_ids": [], "test_ids": [], "residual_risk_ids": [],
+            "template_sections": [], "policy_source": "AGENTS.md",
+        }
+        output = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "worker-hash",
+            "status": "DRAFT_READY", "claim_references": ["app.py"],
+            "content": {"type": "feat", "subject": "配送契約を追加", "body": ""},
+        }
+
+        self.assertIn(
+            "source_hash does not match trusted snapshot",
+            validate_delivery_draft_pair(
+                draft_input, output, expected_source_hash="trusted-snapshot-hash"
+            ),
+        )
+
+    def test_ready_draft_requires_claim_references(self) -> None:
+        draft_input = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "changed_paths": ["app.py"], "evidence_bundle_id": "eb-1",
+            "acceptance_ids": [], "test_ids": [], "residual_risk_ids": [],
+            "template_sections": [], "policy_source": "AGENTS.md",
+        }
+        output = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "status": "DRAFT_READY", "claim_references": [],
+            "content": {"type": "feat", "subject": "配送契約を追加", "body": ""},
+        }
+
+        self.assertIn(
+            "claim_references are required for DRAFT_READY",
+            validate_delivery_draft_pair(draft_input, output, expected_source_hash="abc"),
+        )
+
+    def test_delivery_draft_rejects_unknown_content_fields_and_multiline_title(self) -> None:
+        draft_input = {
+            "draft_id": "draft-2", "draft_kind": "pull_request", "source_hash": "abc",
+            "changed_paths": ["app.py"], "evidence_bundle_id": "eb-1",
+            "acceptance_ids": [], "test_ids": [], "residual_risk_ids": [],
+            "template_sections": [], "policy_source": "AGENTS.md",
+        }
+        sections = {name: "確認済み" for name in (
+            "summary", "why", "trade_off", "out_of_scope", "impact", "tests",
+            "residual_risks",
+        )}
+        output = {
+            "draft_id": "draft-2", "draft_kind": "pull_request", "source_hash": "abc",
+            "status": "DRAFT_READY", "claim_references": ["app.py"],
+            "content": {"title": "安全な題名\n--body", "sections": sections, "extra": "x"},
+        }
+
+        errors = validate_delivery_draft_pair(
+            draft_input, output, expected_source_hash="abc"
+        )
+
+        self.assertIn("PR title must be a single line without control characters", errors)
+        self.assertIn("PR content contains unknown fields: extra", errors)
+
+    def test_delivery_draft_rejects_unknown_top_level_and_reserved_aliases(self) -> None:
+        draft_input = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "changed_paths": ["app.py"], "evidence_bundle_id": "eb-1",
+            "acceptance_ids": [], "test_ids": [], "residual_risk_ids": [],
+            "template_sections": [], "policy_source": "AGENTS.md",
+        }
+        output = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "status": "DRAFT_READY", "claim_references": ["app.py"],
+            "tool": "git", "whatever": "x",
+            "content": {"type": "feat", "subject": "配送契約を追加", "body": ""},
+        }
+
+        errors = validate_delivery_draft_pair(
+            draft_input, output, expected_source_hash="abc"
+        )
+
+        self.assertIn("delivery draft contains privileged fields: tool", errors)
+        self.assertIn("delivery draft contains unknown fields: tool, whatever", errors)
+
+    def test_ready_draft_requires_content_hash_bound_semantic_review(self) -> None:
+        draft_input = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "changed_paths": ["app.py"], "evidence_bundle_id": "eb-1",
+            "acceptance_ids": [], "test_ids": [], "residual_risk_ids": [],
+            "template_sections": [], "policy_source": "AGENTS.md",
+        }
+        output = {
+            "draft_id": "draft-1", "draft_kind": "commit", "source_hash": "abc",
+            "status": "DRAFT_READY", "claim_references": ["app.py"],
+            "content": {
+                "type": "feat", "subject": "配送契約を追加",
+                "body": "未検証のテストが通った",
+            },
+        }
+
+        self.assertIn(
+            "verified claim evidence is required for DRAFT_READY",
+            validate_delivery_draft_pair(draft_input, output, expected_source_hash="abc"),
+        )
+        evidence = {
+            "status": "pass",
+            "source_hash": "abc",
+            "content_hash": delivery_draft_content_hash(output),
+            "claim_references": ["app.py"],
+        }
+        self.assertEqual(
+            validate_delivery_draft_pair(
+                draft_input,
+                output,
+                expected_source_hash="abc",
+                verified_claim_evidence=evidence,
+            ),
+            [],
+        )
+
     def test_approved_prd_requires_independent_pass(self) -> None:
         payload = {
             "artifact_id": "prd-1",
@@ -143,6 +471,20 @@ class ArtifactContractTest(unittest.TestCase):
         }
         errors = validate_artifact("work_packet", payload)
         self.assertIn("approval_required must be true for safety-triggering work", errors)
+
+    def test_work_packet_rejects_unknown_side_effect(self) -> None:
+        payload = {
+            "artifact_id": "wp-unknown", "source_hash": "abc", "objective": "publish",
+            "scope": ["docs"], "acceptance_ids": ["A1"], "constraints": [],
+            "capability_class": "Judgment", "safety_decision_id": "safe-unknown",
+            "side_effects_requested": ["git_push"], "external_write_targets": [],
+            "approval_required": False, "approval_evidence": [], "dry_run_required": False,
+        }
+
+        self.assertIn(
+            "unknown side_effects_requested: git_push",
+            validate_artifact("work_packet", payload),
+        )
 
     def test_generated_or_comment_evidence_cannot_approve_work(self) -> None:
         payload = {
@@ -288,6 +630,17 @@ class LoopTransitionTest(unittest.TestCase):
         ):
             decision = next_action({"state": "SURVEYED", "approval_state": "approved", **extra})
             self.assertEqual(decision.status, "WAITING_HUMAN")
+
+    def test_unknown_requested_side_effect_fails_closed(self) -> None:
+        decision = next_action(
+            {
+                "state": "SURVEYED",
+                "approval_state": "approved",
+                "side_effects_requested": ["git_push"],
+            }
+        )
+
+        self.assertEqual(decision.status, "WAITING_HUMAN")
 
     def test_runtime_verified_evidence_unlocks_safety_transition(self) -> None:
         evidence = "user-validation:task/gate#abcdef12"

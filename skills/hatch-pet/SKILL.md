@@ -728,7 +728,7 @@ Final visual QA worker responsibilities:
 Model choice for workers:
 
 - Prefer a smaller capable model for brand discovery, since it returns a compact research brief rather than doing orchestration.
-- Prefer a smaller capable model for visual workers, such as `gpt-5.4-mini` with medium reasoning, when model override is available.
+- Prefer the current runtime roster's smallest capable class for visual workers when model override is available; resolve the concrete model through `rules/model-routing.md` instead of pinning a legacy slug.
 - Use the parent/default model only for orchestration or when a smaller worker model is unavailable.
 - Dynamically keep up to three generation workers active while at least three independent jobs are ready and capacity permits; backfill slots as workers finish. Use fewer workers when dependencies expose fewer jobs. Run final visual QA as a single worker after deterministic image processing. Close workers after their result has been consumed.
 - Once `look-cardinals` passes, start row 9 immediately. Start row 10 only after row 9 has passed deterministic registration, post-registration edge, semantic, and continuity QA; give row 10 the completed row 9 strip as continuity evidence.

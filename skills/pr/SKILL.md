@@ -1,119 +1,79 @@
 ---
 name: pr
-allowed-tools: Bash(git:*), Bash(gh:*)
+allowed-tools: Bash(git:*), Bash(gh:*), Bash(python3:*)
 argument-hint: [base-branch]
-description: Draft PRを作成
+description: Evidenceに拘束された文案を検証し、承認後にDraft PRを作成
 ---
 
-# /pr コマンド
+# /pr
 
-Draft PRを作成します。
+PR本文の文案生成とGitHubへのexternal writeを分離する。Fast workerはtoolなしのproposalだけを返し、leadがEvidence、template、base/head、principal、承認を検証してからDraft PRを作る。
 
-引数（base-branch）が省略された場合、`$ARGUMENTS` は PJ `AGENTS.md` の `BASE_BRANCH` に従い、未定義時は develop → main → master の順で存在するブランチを使う。
+## 境界
 
-## 実行手順
+- base branchとhead branchを明示し、生成時と作成直前のSHAを拘束する。
+- Evidence Bundleが不完全、CRITICAL / IMPORTANTが未解決、未承認writeがある場合は停止する。
+- workerへGit/GitHub tool、command、approval、認証済みsessionを渡さない。
+- `gh pr create --dry-run`はpushを伴う場合があるためpreflightへ使わない。
+- PR作成はverified approval evidenceまたは明示されたproject policyが対象repositoryと操作を許可する場合だけ行う。
 
-### 1. 現在の状態確認
+## 1. repositoryとPR範囲を確定する
 
-```bash
-git branch --show-current
-git status
-git log $ARGUMENTS..HEAD --oneline
-```
+現在branch、remote、head SHAを確認する。base argumentがなければproject `AGENTS.md`のbase policyを使い、それもなければ候補をread-onlyで調べて一つに確定する。暗黙のfallbackで作成しない。
 
-### 2. PRテンプレートの確認
-
-```bash
-ls .github/PULL_REQUEST_TEMPLATE.md 2>/dev/null
-```
-
-### 3. 変更内容の確認
+base/head SHAとchanged pathsを次で固定する。全changed pathを`--allowed-path`へ列挙し、delete/renameは依頼範囲と一致する場合だけ明示許可する。
 
 ```bash
-git diff $ARGUMENTS --name-only
-git diff $ARGUMENTS
+python3 ~/.codex/scripts/git_delivery_contract.py range <repo-root> \
+  --base <base-sha> --head <head-sha> \
+  --allowed-path <path-1> --allowed-path <path-2>
 ```
 
-### 3.5. 状態図の取り込み
+`DRAFT_BLOCKED`なら文案作成へ進まない。
+既定出力はraw diffを除いた永続snapshotである。本文生成にpatchが必要な場合だけ、同じallowlistとbase/headで`range --include-worker-patch`を再実行し、永続snapshotと`source_hash`が一致することを確認して一時入力として直接渡す。
 
-`/generate-state-diagram` が生成した `91_state_diagram.svg` と `91_state_diagram.md` を検出する。
+## 2. Evidenceとtemplateを入力へ束縛する
 
-```bash
-# MEMORY_DIR は PJ AGENTS.md 定義（未定義時は .local/）
-# 最新のメモリディレクトリから 91_state_diagram.svg を探す
-find "${MEMORY_DIR:-.local}/memory" -maxdepth 3 -name "91_state_diagram.svg" 2>/dev/null \
-  | xargs -I{} stat -f "%m %N" {} 2>/dev/null \
-  | sort -rn | head -1 | awk '{print $2}'
-```
+Evidence Bundleからacceptance evidence、tests、findings、residual risks、writes performedを取得する。repositoryのPR templateを読み、必須headingを`template_sections`へ記録する。
 
-判定:
+`Delivery Draft Input`にはsnapshotの`source_hash`、base/head SHA、changed paths、Evidence ID、acceptance/test/risk ID、template sections、policy sourceを入れる。raw diffはsnapshotが安全と判定した`worker_patch`だけを一時的に渡し、長期memoryへ保存しない。
 
-- **ファイルあり** → XMLとしてparseでき、外部resourceとevent handlerを含まないことを確認する。PR本文では `91_state_diagram.md` の関係要約を使う。SVGがrepository内のcommit済みpathにある場合だけMarkdown imageとして埋め込む。task memory内だけにあるSVGを、表示できない相対linkとして貼らない
-- **ファイルなし**:
-  - 変更にワークフロー/状態管理/外部連携/ドメインモデル変更を含む → `AskUserQuestion` で `/generate-state-diagram` を先に実行するか確認
-  - UIのみ / テストのみ / 設定・ドキュメントのみ → スキップ（`generate-state-diagram` Skill のスキップ条件と一致）
+## 3. Fast classは文案だけを返す
 
-### 4. PR本文の作成
+要約が必要なPR本文は`rules/model-routing.md`のFast classへ委譲できる。`scripts/draft_delivery_message.py <temporary-input.json> --expected-source-hash <trusted-snapshot-hash>`が、user configとtool featureを無効化したisolated Luna Maxを起動し、typed outputを親validatorへ戻す。起動または検証に失敗した場合は弱いmodelへfallbackせずleadへ戻す。
 
-PRを作る場合は、Evidence Bundleのrequirement、acceptance evidence、tests、findings、residual risks、writes performedを本文へ投影する。
+outputはtitle、summary、why、trade_off、out_of_scope、impact、tests、residual_risks、template固有section、`claim_references`を含む。`status`は`DRAFT_READY`または`DRAFT_BLOCKED`だけとする。
 
-Evidence Bundleが不完全、CRITICAL / IMPORTANTが未解決、またはexternal writeのapproval evidenceがない場合はPR作成を停止する。
+## 4. 親が本文を検証する
 
-テンプレートがあれば使用、なければ以下（状態図セクションはファイル検出時のみ含める）:
+まず`validate_delivery_draft_structure`でsource hash、必須section、template coverage、claim references、禁止fieldを検証する。親は各test、risk、影響範囲を実差分とEvidenceへ戻って確認し、合格した本文の`content_hash`と全`claim_references`へ束縛したClaim Verification Evidenceを作る。その証跡を`validate_delivery_draft_pair`へ渡し、意味reviewを飛ばした本文を拒否する。
 
-```markdown
-## 概要
-[変更内容の概要]
+検証済み本文をtask-localな平文fileへ保存する。既存templateの項目を削除せず、state diagramはcommit済みrepository pathまたは検証済み関係要約だけを使う。
 
-## やったこと
-- 変更1
-- 変更2
+## 5. external write gateを通す
 
-## やらなかったこと
-- スコープ外の内容
+`gh auth status`で現在のGitHub principalを確認し、remote ownerと照合する。別accountへ自動切替しない。verified approval evidenceがrepository、push、Draft PR作成を許可していることをtrusted runtimeで確認する。
 
-## 影響範囲
-- 影響を受ける画面・処理
+作成直前に`git_delivery_contract.py check-range`でbase/head refを再解決し、snapshot fileとは別に保持した`--expected-source-hash`、最初と同じ全`--allowed-path`、delete/rename policyをtrusted parentから再指定する。`DRAFT_STALE`または`DRAFT_BLOCKED`なら本文を使わず、snapshotから作り直す。
 
-## テスト方法
-[動作確認方法]
+## 6. Draft PRを作成する
 
-<!-- 91_state_diagram.md が存在する場合のみ以下を追加 -->
-## 処理フロー / 状態遷移
-
-> 自動生成: `/generate-state-diagram` のSVG出力
-> 詳細・用語集・ファイル構成マップは `91_state_diagram.md` を参照
-
-[SVGがcommit済みの場合は `![処理フロー](<repo-relative-svg-path>)`。それ以外は `91_state_diagram.md` の関係要約を記載]
-<!-- ここまで状態図セクション -->
-
-## チェックリスト
-- [ ] 型チェック通過
-- [ ] Lint通過
-- [ ] テスト通過
-```
-
-注意:
-
-- PRテンプレート（`.github/PULL_REQUEST_TEMPLATE.md`）が存在する場合、テンプレートの項目を勝手に削除してはならない（PJ `AGENTS.md` の禁止事項）。状態図セクションはテンプレート末尾（チェックリスト前など適切な位置）に追記する形で挿入
-- SVGはGitHubから取得できるcommit済みpathだけを埋め込む。local memory pathやdata URLは貼らない
-- SVG検証に失敗した場合は図を貼らず、「※SVG検証失敗のため省略」と記載してユーザーに通知する
-- PR本文更新は平文改行のファイルに書き出して `gh pr edit --body-file` で渡す（シェルクォート経由だとリテラル `\n` が本文に残ることがある）。テンプレ再構成時は技術的内容を保持し形式のみ変更する。DB schemaまたはGraphQL変更を含むPRでは、SVG flow図または同値な関係要約をbodyに含める
-- PR本文の再整形・更新時は、既に解消済みの古い注意書き（stale caveat）を現状と照合して削除する（旧schema制限に関する記述が解消後も残存していた実例。出典: memories/rollout_summaries/2026-06-26T08-53-53-tABQ-pr3049_template_pr_description_update_and_billing_cancel_not.md「Task 2 Failures」）
-- PR本文の事実一覧（影響範囲表等）は外部由来情報の転記でなく、リポジトリ内の実データ（例: `terraform/env/*/main.tf` の `gcp_project_id`）で裏取りして記載する（出典: memories/rollout_summaries/2026-06-19T02-01-11-sh6E-pr_2956_description_update_cloudsql_role.md「Reusable knowledge」）
-
-### 5. Draft PR作成
+headが対象remoteへpush済みであることを確認した後、次の形で明示する。
 
 ```bash
 gh pr create --draft \
-  --base $ARGUMENTS \
-  --title "<タイトル>" \
-  --body "$(cat <<'EOF'
-<本文>
-EOF
-)"
+  --base <base-branch> \
+  --head <head-branch> \
+  --title "<validated-title>" \
+  --body-file <validated-body-file>
 ```
 
-### 6. 結果の報告
+作成後にPR URL、number、base/head SHAを取得し、Evidence Bundleの`writes_performed`へ記録する。
 
-作成されたPRのURLを報告。
+## 完了報告
+
+- PR URLとnumber
+- base/head branchとSHA
+- Evidence Bundle、test、review結果
+- verified approval evidenceの参照
+- 対象外dirty stateと残存リスク

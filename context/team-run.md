@@ -73,7 +73,7 @@ Heat は変更規模やファイル数だけで決めない。設定ファイル
 
 性能が主目的または性能劣化リスクがある場合は `perf-reviewer` を足す。
 
-`gpt-5.4-mini` は reviewer の代替ではなく、commit文案、短い要約、定型整形、重複検出などの前段補助に限る。Review Heat を下げる理由として mini を使わない。
+Fast classはreviewerの代替ではなく、commit文案、短い要約、定型整形、重複検出など、toolなしでleadが即検査できる前段補助に限る。model slugは`rules/model-routing.md`で解決し、Review Heatを下げる理由としてFast classを使わない。
 
 ## Stop And Escalate
 
