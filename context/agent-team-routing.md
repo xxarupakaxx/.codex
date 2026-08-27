@@ -38,13 +38,37 @@ sub-agent へ委任する前に、次の条件をすべて確認する。満た�
 
 | 条件 | PASS の基準 |
 |---|---|
-| Local-first | `rg`、read-only tool call、または小さなローカル実行だけでは不足する |
-| 並列利益 | 独立作業の速度・専門性の利益が、委任と統合のコストを上回る |
+| Local-first | leadが`rg`、read-only tool call、または小さなローカル実行でscopeと既存patternを先に確認し、taskが自明な一操作だけでは閉じない |
+| 委譲利益 | 独立作業の速度、専門性、writer責務の隔離、またはleadの統合文脈を保つ利益が、委任と統合のコストを上回る |
 | 独立証拠 | objective、acceptance、成果物または checker を lead から独立して定義できる |
 | Write scope | maker ごとの write scope が disjoint、または同じ対象の writer が一人に固定される |
 | 外部副作用 | 外部書き込みがない、または対象と操作が既存 project policy かユーザー承認で許可されている |
 
 同一ファイルの密結合作業、逐次依存、低価値な要約は fan-out しない。reviewer は maker の自己申告ではなく、成果物と fresh な検証証拠を見る。
+
+### Delegation Decision
+
+変更・実装taskでは、local-first調査と計画でroute、実装単位、acceptance、write scopeを定めた直後、**その実装単位の対象成果物への最初のwriteより前**にDelegation Gateを評価する。判断を実装後へ先送りせず、結果を`05_log.md`の`Delegation Decision`節へ記録する。task memoryへの判断記録自体は、ここでいう対象成果物writeに含めない。
+
+| 判定 | 既定担当 |
+|---|---|
+| GateがすべてPASSし、独立した実装成果を定義できる | sessionの`worker` / `implementer` |
+| 小さな一操作、同一対象の密結合、逐次依存、委譲・統合コストが利益を上回る | lead |
+| collaboration capabilityがない、または許可されたroleを解決できない | lead。弱いmodelへfallbackせず、不在理由を記録する |
+| makerとは独立した検証に実効性がある | reviewer / checker。makerの担当判定とは別に評価する |
+
+非自明とは、独立したobjective、write scope、acceptance、成果物を持つ実装単位を指す。ファイル数や行数だけでは決めない。GateをPASSした非自明な実装をleadが直接行う場合は、例外理由を記録しなければwriteへ進まない。
+
+実装単位、acceptance、write scope、routeのいずれかがmaterialに変わった場合は、最新判断を`supersedes`で参照してDelegation Decisionを再記録する。旧判断のままwriteを再開しない。Roadmap routeはPhase 2同期時の機械検査を通過しなければPhase 3へ進めない。
+
+workerへはobjective、背景、scope、触らない境界、制約、副作用、成果物、acceptance、検証方法を渡す。leadはtask分解、writerの一意性、統合、一次資料と実結果の確認、freshな検証、最終判断、commit / push、外部writeを保持する。
+
+次はDelegation Decisionの代替にならない。
+
+- read-only調査だけをagentへ渡し、その後の独立可能な実装を再評価せずleadが始める。
+- workerへtask全体を無境界で渡し、write scopeやacceptanceを定義しない。
+- 最初のwrite後に、事後的に委譲理由またはlead実装理由を記録する。
+- 単純作業まで件数合わせでspawnする。
 
 ## Context Boundary
 

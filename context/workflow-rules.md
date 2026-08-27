@@ -141,7 +141,7 @@ route が明確な大規模タスクで、依存DAG、Cold-Start Brief、また�
 **Fast Trackフロー**:
 1. **Phase 0**: メモリディレクトリ作成 + 05_log.md初期化（learnings-researcherはスキップ可）
 2. **Phase 1**: 対象ファイル読み取り + 影響確認（外部情報参照はスキップ可）
-3. **Phase 2**: 計画を05_log.mdに簡潔に記録（コード変更なら要素別Complexity Budgetを1行以上記録。30_plan.md作成・deepening-plan・サブエージェントレビューはスキップ可）
+3. **Phase 2**: 計画を05_log.mdに簡潔に記録し、実装単位のacceptance / write scopeを定めた後、対象成果物write前にDelegation Decisionを記録する（コード変更なら要素別Complexity Budgetを1行以上記録。30_plan.md作成・deepening-plan・サブエージェントレビューはスキップ可）
 4. **Phase 3**: 実装 + コミット
 5. **Phase 4**: lint/format/typecheck + **コア1レビューアー**（変更内容に最も関連するもの1つ）で1ラウンド。target/actual/varianceを確認
 6. **Phase 5**: コード変更時だけ、Complexity Budgetを利用者向けの「変更量」として簡潔に報告
@@ -334,6 +334,15 @@ Delegation Gate を通る場合だけ、変更リスクに対応する最小の 
 - MINOR (= non-critical) でも正しさ・一貫性に関わる指摘（バグ、不整合、ハードコード等）は修正する
 - 純粋なスタイル・好みの問題のみスキップ可。判断に迷う場合はユーザーに確認する
 
+### Delegation Decision Gate
+
+計画でroute、実装単位、acceptance、write scopeが定まった直後、対象成果物への最初のwriteより前に、`context/agent-team-routing.md`のDelegation Gateを実装単位ごとに評価する。結果は`context/memory-file-formats.md`のschemaで`05_log.md`へ記録する。
+
+- Gateをすべて満たす非自明な実装は、sessionにcollaboration capabilityがあればworker / implementerを既定担当とする。
+- lead実装、capability不在、read-onlyのいずれも判断と理由を省略しない。
+- 実装単位、acceptance、write scope、routeがmaterialに変わったら、旧判断を`supersedes`で参照してwrite再開前に再評価する。
+- 全routeでPhase 2 artifactとDelegation Decision保存後に`scripts/sync-roadmap.py`を実行する。判断欠落またはschema不備で失敗した場合はPhase 3へ進まない。`log-only`は検査後にRoadmap生成をskipし、そのskip証跡を`05_log.md`へ記録する。
+
 ### UI/UX Design Approval Gate
 
 UI、UX、product flow、画面構成、visual direction、component patternについて新しいデザイン判断が必要なタスクは、`designing-ui-ux`を使い、次の順序で進める。このGateはFast Trackでも省略しない。
@@ -386,6 +395,8 @@ Goal outcome → spec requirement / direct requirement → ticket / WU / N/A (di
 **スキップ条件**: typo修正、設定変更のみ等の自明なタスクは、正式なSprint Contractを省略できる。ただしGoalを使う場合、Team Journalに最小Outcome Traceとholistic checkを残す工程は省略できない。
 
 ## Phase 3: 実装
+
+開始時に各実装単位の最新Delegation Decisionが現在のroute、acceptance、write scopeと一致することを確認する。不在、古い判断、未解決のschema不備があれば対象成果物へwriteせずPhase 2へ戻る。
 
 ### 実行戦略の選択
 

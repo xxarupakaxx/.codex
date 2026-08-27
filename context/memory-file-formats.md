@@ -146,6 +146,29 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 ---
 ```
 
+変更・実装taskでは、route、実装単位、acceptance、write scopeが定まった直後、対象成果物への最初のwrite前に次の節を追加する。task memoryへの判断記録自体は対象成果物writeに含めない。`decision: lead`も省略せず、Gateを満たさない条件または委譲コストが上回る具体的理由を書く。
+
+```markdown
+## YYYY-MM-DD HH:MM - Delegation Decision
+
+- decision: worker | lead | N/A (read-only)
+- role: worker | implementer | N/A
+- gate: PASS | FAIL | N/A
+- decision_unit: [Work Packet IDまたは一意な実装単位名]
+- passed_conditions: [Local-first, 委譲利益, 独立証拠, Write scope, 外部副作用から該当項目]
+- failed_conditions: [不成立条件。なければnone]
+- local_first_evidence: [scopeと既存patternを確認したpathまたはcommandの短い要約]
+- reason: [担当を選んだ具体的理由]
+- write_scope: [担当するpathまたは責務。leadの場合も対象を書く]
+- acceptance: [成果物とfreshな検証条件]
+- supersedes: [置換する過去判断の日時またはnone]
+- lead_retains: integration, source verification, fresh validation, final decision, external write
+```
+
+対象成果物への最初のwrite後の追記はpre-write gateの証跡として扱わない。実装単位、acceptance、write scope、routeのmaterial change後は、旧判断を`supersedes`で参照した新しい節をwrite再開前に追加する。read-only task、説明、診断だけで対象成果物writeを行わないtaskは`decision: N/A (read-only)`と記録してよい。
+
+Phase 2では全routeで`scripts/sync-roadmap.py`が最新節の存在、必須field、enumを検査する。`log-only`は検査PASS後にRoadmap生成をskipする。
+
 **agent review呼び出し時**: このファイルのフルパスを明示し、agentに中身を読ませる
 
 ## 00_spec.md

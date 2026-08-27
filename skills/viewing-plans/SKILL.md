@@ -69,7 +69,7 @@ Plan / LogのMCP toolが利用できない場合は個別Viewerを表示済み�
 
 ## ワークフロー
 
-最初にRoadmap適格性ゲートを実行する。`log-only`なら`05_log.md`へ判定を記録し、このスキルのRoadmap生成手順を終了する。
+最初にRoadmap適格性ゲートを実行する。`log-only`なら`05_log.md`へ判定を記録し、Phase 2でDelegation Decision保存後に`scripts/sync-roadmap.py`の検査・skip証跡を取得して、このスキルのRoadmap生成手順を終了する。
 
 ### 1. ファイル読み込み
 

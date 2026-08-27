@@ -20,8 +20,8 @@
 2. Goal、acceptance、仮定、不明点、重要なtrade-offを確定する。永続的な仕様判断はcode、test、docs、またはuser確認を根拠にする。
 3. Phase遷移前に所定artifactを`${MEMORY_DIR:-.local}/memory/`へ保存し、`05_log.md`を作業中に更新する。形式は`context/memory-file-formats.md`に従う。
 4. Skillの自動一覧に依存しない。`context/agent-team-routing.md`から必要最小のSkillを選び、選択した`SKILL.md`を全文読んでから実行する。userがSkill pathを明示した場合はそれを優先する。
-5. 委譲は独立した作業幅、隔離された専門性、独立検証に価値がある場合だけ行う。objective、背景、scope、制約、副作用、成果物、検証を渡し、親が一次資料と実結果へ戻って確認する。
-6. code変更は編集前後に`context/codemap.md`のCodemap gateを通す。Roadmap対象はPhase artifact保存後に`scripts/sync-roadmap.py`をtrusted local executorで実行し、成功証跡がない限り次Phaseへ進めない。
+5. 変更・実装taskは、routeと実装単位のacceptance / write scopeが定まった直後、対象成果物への最初のwriteより前に`context/agent-team-routing.md`のDelegation Decisionを行う。Delegation Gateを満たす非自明な実装は、sessionにcollaboration capabilityがあればworker / implementerへの委譲を既定とする。leadが直接実装する場合は理由を`05_log.md`へ記録し、実装単位、acceptance、write scope、routeがmaterialに変わったらwrite再開前に再評価する。leadは統合、一次資料確認、freshな検証、最終判断、外部writeを保持する。
+6. code変更は編集前後に`context/codemap.md`のCodemap gateを通す。Phase 2 artifact保存後は全routeで`scripts/sync-roadmap.py`をtrusted local executorから実行し、Delegation Decisionの検査を通す。`log-only`は検査後のskip証跡、`roadmap` / `explicit-roadmap`は同期成功証跡がない限り次Phaseへ進めない。
 7. freshな直接検証を先に行い、riskに応じた最小の独立checkerを追加する。CRITICALは必ず、正しさに関わるIMPORTANTとMINORは原則修正する。
 8. 完了時に変更、検証、review、残課題を報告する。設定済みと実行済み、構文成功とuser outcome達成を区別する。
 

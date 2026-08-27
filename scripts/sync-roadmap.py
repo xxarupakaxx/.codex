@@ -23,6 +23,18 @@ PHASE_STATES = {
     "4": "verifying",
     "5": "completed",
 }
+DELEGATION_DECISION_FIELDS = (
+    "decision", "role", "gate", "decision_unit",
+    "passed_conditions", "failed_conditions", "local_first_evidence", "reason",
+    "write_scope", "acceptance", "supersedes", "lead_retains",
+)
+DELEGATION_DECISION_ENUMS = {
+    "decision": {"worker", "lead", "N/A (read-only)"},
+    "role": {"worker", "implementer", "N/A"},
+    "gate": {"PASS", "FAIL", "N/A"},
+}
+DELEGATION_DECISION_PATTERN = re.compile(r"(?ms)^## .+ - Delegation Decision[^\n]*\n(.*?)(?=^## |\Z)")
+DECISION_FIELD_PATTERN = re.compile(r"^\s*-\s*([A-Za-z_][A-Za-z0-9_]*):\s*(.*)$")
 
 
 def valid_task_dir(path: Path, memory_root: Path) -> bool:
@@ -69,6 +81,23 @@ def source_fingerprints(task_dir: Path, route: str) -> dict[str, str]:
 def detect_route(log_text: str) -> str | None:
     matches = ROUTE_PATTERN.findall(log_text)
     return matches[-1] if matches else None
+
+
+def validate_delegation_decision(log_text: str) -> tuple[list[str] | None, list[str]]:
+    matches = list(DELEGATION_DECISION_PATTERN.finditer(log_text))
+    if not matches:
+        return None, []
+    fields: dict[str, str] = {}
+    for line in matches[-1].group(1).splitlines():
+        match = DECISION_FIELD_PATTERN.match(line)
+        if match:
+            fields[match.group(1)] = match.group(2).strip()
+    missing = [field for field in DELEGATION_DECISION_FIELDS if not fields.get(field)]
+    invalid = [
+        field for field, choices in DELEGATION_DECISION_ENUMS.items()
+        if fields.get(field) and fields[field] not in choices
+    ]
+    return missing, invalid
 
 
 def roadmap_command(
@@ -120,9 +149,22 @@ def synchronize(
     log_path = task_dir / "05_log.md"
     if not log_path.is_file():
         return 2, {"status": "failed", "reason": "log_missing", "path": str(log_path)}
-    route = detect_route(log_path.read_text(encoding="utf-8"))
+    log_text = log_path.read_text(encoding="utf-8")
+    route = detect_route(log_text)
     if route is None:
         return 2, {"status": "failed", "reason": "route_missing"}
+    if phase == "2":
+        missing_fields, invalid_fields = validate_delegation_decision(log_text)
+        if missing_fields is None:
+            return 2, {"status": "failed", "route": route, "reason": "delegation_decision_missing"}
+        if missing_fields or invalid_fields:
+            return 2, {
+                "status": "failed",
+                "route": route,
+                "reason": "delegation_decision_invalid",
+                **({"missing_fields": missing_fields} if missing_fields else {}),
+                **({"invalid_fields": invalid_fields} if invalid_fields else {}),
+            }
     if route == "log-only":
         return 0, {
             "status": "skipped",
