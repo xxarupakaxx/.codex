@@ -524,38 +524,43 @@ Phase直結でないユーティリティスキル。**状況が発生したら*
 
 ## HTML Viewer Tools
 
-Task Workspaceは`roadmap.html`を唯一の人向け入口とし、Plan / ProgressとfreshなCode Mapを同じ画面で切り替える。Codemap freshnessは`codemap.lock`を正本とし、Roadmapの更新時刻で代用しない。
+Task Workspaceは`roadmap.html`を俯瞰の主入口とし、Plan / ProgressとfreshなCode Mapを同じ画面で切り替える。Plan / Logの個別本文は各MCP Viewerで開く。Codemap freshnessは`codemap.lock`を正本とし、Roadmapの更新時刻で代用しない。
 
 計画ファイル・ログをMCP Apps経由でインタラクティブに閲覧するためのHTMLビューア。
-**自動発動**によりユーザー操作不要で表示される。
+Roadmap、Plan、Logは所定のPhaseで自動表示される。
 
 ### MCP Apps ツール
 
 | ツール名 | MCPツール | 対象ファイル | 主な機能 |
 |---------|----------|------------|---------|
+| Task Workspace | ローカルHTML + Roadmap generator | task Markdown | Plan / Progress、成果物、検証状態 |
 | Plan Viewer | `mcp__workflow-html-app__view-plan` | 30_plan.md | Markdownレンダリング、コメント機能、Claudeへのフィードバック送信 |
-| Log Viewer | `mcp__workflow-html-app__view-plan` | 05_log.md | Phase検出、タイムライン可視化（予定） |
+| Log Viewer | `mcp__workflow-html-app__view-log` | 05_log.md | Markdownレンダリング、コメント機能 |
 
 ### 自動発動条件（ユーザー確認不要）
 
 以下のタイミングで`viewing-plans`スキルが**自動的に**発動：
 
-1. **Phase 2完了時**: 30_plan.md作成後、`mcp__workflow-html-app__view-plan`でHTML UIを表示
-2. **Phase 5完了時**: 05_log.md確定後、同様にHTML UIを表示
+1. **Phase 2完了時**: `roadmap.html`を生成・表示し、30_plan.mdを`mcp__workflow-html-app__view-plan`でPlan Viewerへ表示
+2. **Phase 3/4更新時**: Roadmap watch中なら更新内容を自動再描画
+3. **Phase 5完了時**: 最終`roadmap.html`を表示し、05_log.mdを`mcp__workflow-html-app__view-log`でLog Viewerへ表示
+
+Plan / LogのMCP toolが利用できない場合は表示済みと扱わず、runtime登録またはsession再起動が必要なblockerとして記録する。
 
 ### 使用方法（自動）
 
 ```
-1. Read ツールで対象ファイル（30_plan.md / 05_log.md）を読み込み
-2. mcp__workflow-html-app__view-plan に content（Markdownコンテンツ）を渡す
-3. MCP Apps が自動的にHTML UIを開く（ユーザー操作不要）
+1. Roadmap generatorでtask memory directoryを表示
+2. Phase 2では30_plan.mdをview-planへ渡す
+3. Phase 5では05_log.mdをview-logへ渡す
+4. MCP Appsが各HTML UIを開く（ユーザー操作不要）
 ```
 
 ### 手動トリガー
 
 以下のフレーズでも発動可能：
 - 「計画をビューアで見たい」「HTMLで確認したい」
-- 「ログをタイムラインで見たい」
+- 「ログをビューアで見たい」
 - `/viewing-plans` 実行
 
 ### セキュリティ

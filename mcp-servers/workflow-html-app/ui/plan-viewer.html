@@ -589,16 +589,16 @@
     <header class="viewer-header">
       <div>
         <p class="eyebrow">Workflow / source-bound</p>
-        <h1>計画を読む</h1>
+        <h1 id="viewer-title">文書を読む</h1>
       </div>
       <span id="status" class="status" role="status" aria-live="polite">内容待ち</span>
     </header>
 
     <nav id="plan-outline" aria-labelledby="outline-heading">
       <p class="panel-kicker">Document map</p>
-      <h2 id="outline-heading">この計画の構造</h2>
+      <h2 id="outline-heading">この文書の構造</h2>
       <ol id="outline-list"></ol>
-      <dl class="progress-grid" aria-label="計画の進捗">
+      <dl id="progress-grid" class="progress-grid" aria-label="文書の進捗">
         <div><dt>完了</dt><dd id="progress-complete">0</dd></div>
         <div><dt>全項目</dt><dd id="progress-total">0</dd></div>
         <div><dt>残り</dt><dd id="progress-remaining">0</dd></div>
@@ -608,21 +608,21 @@
 
     <main id="plan-document">
       <div class="document-bar" aria-hidden="true">
-        <span>Plan / live document</span>
+        <span id="document-kind-label">Document / live source</span>
         <span>Read → inspect → respond</span>
       </div>
       <div id="content">
-        <div class="loading">計画の Markdown を待っています</div>
+        <div class="loading">Markdown を待っています</div>
       </div>
     </main>
 
     <aside class="comment-section" id="plan-review" aria-labelledby="review-heading">
       <p class="panel-kicker">Review channel</p>
-      <h2 id="review-heading">計画へコメント</h2>
-      <p class="review-copy">判断、懸念、修正依頼を計画の文脈へ返します。</p>
+      <h2 id="review-heading">文書へコメント</h2>
+      <p id="review-copy" class="review-copy">判断、懸念、修正依頼を文書の文脈へ返します。</p>
       <div class="comment-form">
         <label for="comment-input">Review note</label>
-        <textarea id="comment-input" placeholder="例：Task 2 の検証条件を具体化して" aria-describedby="comment-help"></textarea>
+        <textarea id="comment-input" placeholder="この文書へのコメントを入力" aria-describedby="comment-help"></textarea>
         <span id="comment-help" class="review-copy">空欄では送信できません。</span>
         <button id="send-btn" type="button" disabled>コメントを送る</button>
       </div>
@@ -633,6 +633,56 @@
   <script type="module">
     import { marked } from 'marked';
     import DOMPurify from 'dompurify';
+
+    const DEFAULT_DOCUMENT_KIND = {
+      key: 'document',
+      appName: 'Document Viewer',
+      title: '文書を読む',
+      outline: 'この文書の構造',
+      label: 'Document / live source',
+      reviewHeading: '文書へコメント',
+      reviewCopy: '判断、懸念、修正依頼を文書の文脈へ返します。',
+      placeholder: 'この文書へのコメントを入力',
+      commentPrefix: 'Document Comment',
+    };
+    let activeDocumentKind = DEFAULT_DOCUMENT_KIND;
+
+    function detectDocumentKind(markdown) {
+      const firstHeading = markdown.match(/^#\s+(.+)$/m)?.[1]?.trim() || '';
+      if (/(?:作業ログ|ログ|log)/i.test(firstHeading)) {
+        return {
+          ...DEFAULT_DOCUMENT_KIND,
+          key: 'log', appName: 'Log Viewer', title: '作業ログを読む',
+          outline: 'このログの構造', label: 'Log / live record',
+          reviewHeading: 'ログへコメント',
+          reviewCopy: '確認、補足、修正依頼を作業ログの文脈へ返します。',
+          placeholder: '例：Phase 4 の検証結果を追記して', commentPrefix: 'Log Comment',
+        };
+      }
+      if (/(?:実装計画|計画|plan)/i.test(firstHeading)) {
+        return {
+          ...DEFAULT_DOCUMENT_KIND,
+          key: 'plan', appName: 'Plan Viewer', title: '計画を読む',
+          outline: 'この計画の構造', label: 'Plan / live document',
+          reviewHeading: '計画へコメント',
+          reviewCopy: '判断、懸念、修正依頼を計画の文脈へ返します。',
+          placeholder: '例：Task 2 の検証条件を具体化して', commentPrefix: 'Plan Comment',
+        };
+      }
+      return DEFAULT_DOCUMENT_KIND;
+    }
+
+    function applyDocumentKind(markdown) {
+      activeDocumentKind = detectDocumentKind(markdown);
+      document.title = `${activeDocumentKind.appName} - MCP App`;
+      document.getElementById('viewer-title').textContent = activeDocumentKind.title;
+      document.getElementById('outline-heading').textContent = activeDocumentKind.outline;
+      document.getElementById('document-kind-label').textContent = activeDocumentKind.label;
+      document.getElementById('review-heading').textContent = activeDocumentKind.reviewHeading;
+      document.getElementById('review-copy').textContent = activeDocumentKind.reviewCopy;
+      document.getElementById('comment-input').placeholder = activeDocumentKind.placeholder;
+      document.getElementById('progress-grid').setAttribute('aria-label', `${activeDocumentKind.title}の進捗`);
+    }
 
     // 信頼するオリジンのホワイトリスト
     const TRUSTED_ORIGINS = [
@@ -665,7 +715,7 @@
         window.addEventListener('message', (event) => this.handleMessage(event));
 
         // Notify parent that we're ready
-        this.sendToParent({ type: 'app-ready', name: 'Plan Viewer', version: '1.0.0' });
+        this.sendToParent({ type: 'app-ready', name: 'Document Viewer', version: '1.0.0' });
       }
 
       handleMessage(event) {
@@ -719,7 +769,7 @@
           role: 'user',
           content: [{
             type: 'text',
-            text: `[Plan Comment]\n${comment}`
+            text: `[${activeDocumentKind.commentPrefix}]\n${comment}`
           }]
         };
 
@@ -805,6 +855,7 @@
     // Handle content from MCP server
     // CRITICAL: DOMPurifyでサニタイズしてXSSを防止
     app.onContentReceived = (markdown) => {
+      applyDocumentKind(markdown);
       const rawHtml = marked.parse(markdown);
       const sanitizedHtml = DOMPurify.sanitize(rawHtml, {
         ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'hr',
@@ -880,6 +931,7 @@ When running inside Claude, this viewer receives Markdown from the MCP server an
       const rawHtml = marked.parse(demoMarkdown);
       const sanitizedHtml = DOMPurify.sanitize(rawHtml);
       contentEl.innerHTML = sanitizedHtml;
+      applyDocumentKind(demoMarkdown);
       enhancePlanDocument(demoMarkdown);
     }
   </script>

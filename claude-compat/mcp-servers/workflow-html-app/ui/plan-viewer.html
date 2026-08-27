@@ -177,7 +177,7 @@
 <body>
   <div class="container">
     <header>
-      <h1>Plan Viewer</h1>
+      <h1 id="viewer-title">Document Viewer</h1>
       <span id="status" class="status">Waiting for content...</span>
     </header>
 
@@ -186,9 +186,9 @@
     </div>
 
     <div class="comment-section">
-      <h3>Send Comment to Claude</h3>
+      <h3 id="review-heading">Send Document Comment to Claude</h3>
       <div class="comment-form">
-        <textarea id="comment-input" placeholder="Enter your comment about this plan..."></textarea>
+        <textarea id="comment-input" placeholder="Enter your comment about this document..."></textarea>
         <button id="send-btn" disabled>Send</button>
       </div>
       <div id="comments-list"></div>
@@ -198,6 +198,44 @@
   <script type="module">
     import { marked } from 'marked';
     import DOMPurify from 'dompurify';
+
+    const DEFAULT_DOCUMENT_KIND = {
+      appName: 'Document Viewer',
+      title: 'Document Viewer',
+      reviewHeading: 'Send Document Comment to Claude',
+      placeholder: 'Enter your comment about this document...',
+      commentPrefix: 'Document Comment',
+    };
+    let activeDocumentKind = DEFAULT_DOCUMENT_KIND;
+
+    function detectDocumentKind(markdown) {
+      const firstHeading = markdown.match(/^#\s+(.+)$/m)?.[1]?.trim() || '';
+      if (/(?:作業ログ|ログ|log)/i.test(firstHeading)) {
+        return {
+          ...DEFAULT_DOCUMENT_KIND,
+          appName: 'Log Viewer', title: 'Log Viewer',
+          reviewHeading: 'Send Log Comment to Claude',
+          placeholder: 'Enter your comment about this log...', commentPrefix: 'Log Comment',
+        };
+      }
+      if (/(?:実装計画|計画|plan)/i.test(firstHeading)) {
+        return {
+          ...DEFAULT_DOCUMENT_KIND,
+          appName: 'Plan Viewer', title: 'Plan Viewer',
+          reviewHeading: 'Send Plan Comment to Claude',
+          placeholder: 'Enter your comment about this plan...', commentPrefix: 'Plan Comment',
+        };
+      }
+      return DEFAULT_DOCUMENT_KIND;
+    }
+
+    function applyDocumentKind(markdown) {
+      activeDocumentKind = detectDocumentKind(markdown);
+      document.title = `${activeDocumentKind.appName} - MCP App`;
+      document.getElementById('viewer-title').textContent = activeDocumentKind.title;
+      document.getElementById('review-heading').textContent = activeDocumentKind.reviewHeading;
+      document.getElementById('comment-input').placeholder = activeDocumentKind.placeholder;
+    }
 
     // 信頼するオリジンのホワイトリスト
     const TRUSTED_ORIGINS = [
@@ -230,7 +268,7 @@
         window.addEventListener('message', (event) => this.handleMessage(event));
 
         // Notify parent that we're ready
-        this.sendToParent({ type: 'app-ready', name: 'Plan Viewer', version: '1.0.0' });
+        this.sendToParent({ type: 'app-ready', name: 'Document Viewer', version: '1.0.0' });
       }
 
       handleMessage(event) {
@@ -284,7 +322,7 @@
           role: 'user',
           content: [{
             type: 'text',
-            text: `[Plan Comment]\n${comment}`
+            text: `[${activeDocumentKind.commentPrefix}]\n${comment}`
           }]
         };
 
@@ -321,6 +359,7 @@
     // Handle content from MCP server
     // CRITICAL: DOMPurifyでサニタイズしてXSSを防止
     app.onContentReceived = (markdown) => {
+      applyDocumentKind(markdown);
       const rawHtml = marked.parse(markdown);
       const sanitizedHtml = DOMPurify.sanitize(rawHtml, {
         ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'hr',
@@ -395,6 +434,7 @@ When running inside Claude, this viewer receives Markdown from the MCP server an
       const rawHtml = marked.parse(demoMarkdown);
       const sanitizedHtml = DOMPurify.sanitize(rawHtml);
       contentEl.innerHTML = sanitizedHtml;
+      applyDocumentKind(demoMarkdown);
     }
   </script>
 </body>

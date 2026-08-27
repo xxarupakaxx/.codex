@@ -72,6 +72,48 @@ export function createServer(): McpServer {
     }
   );
 
+  // Register view-log tool
+  server.tool(
+    "view-log",
+    "作業ログ（05_log.md）をインタラクティブHTMLで表示。Markdownコンテンツを渡すとLog Viewerで可視化",
+    {
+      content: z.string().describe("Markdownコンテンツ"),
+    },
+    async ({ content }) => {
+      return {
+        content: [{ type: "text", text: content }],
+        _meta: {
+          ui: {
+            resourceUri: "ui://log-viewer/index.html",
+          },
+        },
+      };
+    }
+  );
+
+  server.resource(
+    "log-viewer-ui",
+    new ResourceTemplate("ui://log-viewer/{path}", { list: undefined }),
+    async (uri) => {
+      const htmlPath = join(__dirname, "ui", "plan-viewer.html");
+
+      try {
+        const htmlContent = readFileSync(htmlPath, "utf-8");
+        return {
+          contents: [{ uri: uri.href, mimeType: "text/html", text: htmlContent }],
+        };
+      } catch {
+        return {
+          contents: [{
+            uri: uri.href,
+            mimeType: "text/html",
+            text: "<html><body><h1>Log Viewer</h1><p>Loading...</p></body></html>",
+          }],
+        };
+      }
+    }
+  );
+
   // Register view-diagram tool
   server.tool(
     "view-diagram",

@@ -41,3 +41,17 @@ test("Plan Viewerは三領域をresponsiveかつkeyboard visibleなlayoutで表�
   assert.match(html, /prefers-reduced-motion:\s*reduce/);
   assert.match(html, /@media\s*\(hover:\s*hover\)\s*and\s*\(pointer:\s*fine\)/);
 });
+
+test("共用Document ViewerはPlanとLogを先頭見出しから識別すべき", () => {
+  const html = read("ui/plan-viewer.html");
+
+  assert.match(html, /function detectDocumentKind\(markdown\)/);
+  assert.match(html, /作業ログ\|ログ\|log/);
+  assert.match(html, /実装計画\|計画\|plan/);
+  assert.match(html, /commentPrefix: 'Log Comment'/);
+  assert.match(html, /commentPrefix: 'Plan Comment'/);
+  assert.match(html, /return DEFAULT_DOCUMENT_KIND/);
+  assert.match(html, /name: 'Document Viewer'/);
+  assert.match(html, /applyDocumentKind\(markdown\)/);
+  assert.match(html, /DOMPurify\.sanitize/);
+});
