@@ -21,17 +21,11 @@ npm run build
 
 ## Claude Code連携設定
 
-`~/.claude.json` または `settings.json` に以下を追加:
+Claude CLIでuser scopeへ登録:
 
-```json
-{
-  "mcpServers": {
-    "workflow-html-app": {
-      "command": "node",
-      "args": ["/Users/yoshiki.morii/.claude/mcp-servers/workflow-html-app/dist/main.js"]
-    }
-  }
-}
+```bash
+claude mcp add --scope user workflow-html-app -- \
+  bash -c 'exec node "$HOME/.claude/mcp-servers/workflow-html-app/dist/main.js"'
 ```
 
 ## 使用方法
