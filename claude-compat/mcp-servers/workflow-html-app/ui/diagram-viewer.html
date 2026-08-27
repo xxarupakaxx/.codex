@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';">
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';">
   <title>Diagram Viewer - MCP App</title>
   <style>
     :root {
@@ -61,6 +61,7 @@
       justify-content: space-between;
       align-items: center;
       gap: 16px;
+      min-width: 0;
       min-height: 44px;
       border-bottom: 1px solid var(--border);
       padding-bottom: 12px;
@@ -71,6 +72,7 @@
       font-size: 1.1rem;
       font-weight: 650;
       line-height: 1.2;
+      min-width: 0;
       overflow: hidden;
       text-overflow: ellipsis;
       white-space: nowrap;
@@ -82,6 +84,8 @@
       gap: 10px;
       flex-wrap: wrap;
       justify-content: flex-end;
+      min-width: 0;
+      max-width: 100%;
     }
 
     .status {
@@ -99,6 +103,9 @@
       display: flex;
       align-items: center;
       gap: 6px;
+      flex-wrap: wrap;
+      min-width: 0;
+      max-width: 100%;
     }
 
     .controls button,
@@ -766,7 +773,8 @@
   </div>
 
   <script type="module">
-    import mermaid from 'https://cdn.jsdelivr.net/npm/mermaid@11/dist/mermaid.esm.min.mjs';
+    import { App, PostMessageTransport } from '@modelcontextprotocol/ext-apps';
+    import mermaid from 'mermaid';
 
     mermaid.initialize({
       startOnLoad: false,
@@ -784,70 +792,40 @@
       },
     });
 
-    const TRUSTED_ORIGINS = [
-      'https://claude.ai',
-      'https://www.claude.ai',
-      'vscode-webview://',
-      'file://'
-    ];
-
-    function isTrustedOrigin(origin) {
-      if (!origin) return false;
-      return TRUSTED_ORIGINS.some(trusted => {
-        if (trusted.endsWith('://')) {
-          return origin.startsWith(trusted);
-        }
-        return origin === trusted;
-      });
-    }
-
     class MCPAppClient {
       constructor() {
         this.connected = false;
-        this.pendingMessages = [];
         this.onContentReceived = null;
-        this.parentOrigin = null;
+        this.client = new App(
+          { name: 'Diagram Viewer', version: '1.1.0' },
+          {},
+          { autoResize: true, strict: true }
+        );
 
-        window.addEventListener('message', (event) => this.handleMessage(event));
-        this.sendToParent({ type: 'app-ready', name: 'Diagram Viewer', version: '1.1.0' });
+        this.client.ontoolresult = (toolResult) => {
+          if (!this.connected) return;
+          if (!toolResult || !Array.isArray(toolResult.content)) return;
+          const textContent = toolResult.content.find((block) => block && block.type === 'text');
+          if (typeof textContent?.text === 'string' && this.onContentReceived) {
+            this.onContentReceived(textContent.text);
+          }
+        };
+
+        this.connect();
       }
 
-      handleMessage(event) {
-        if (!isTrustedOrigin(event.origin) && event.origin !== '') {
-          console.warn(`Rejected message from untrusted origin: ${event.origin}`);
-          return;
-        }
+      async connect() {
+        if (window.parent === window) return;
 
-        const data = event.data;
-        if (!data || typeof data !== 'object') return;
-
-        if (data.type === 'connected' && event.origin) {
-          this.parentOrigin = event.origin;
-        }
-
-        switch (data.type) {
-          case 'tool-result':
-            if (data.content && this.onContentReceived) {
-              const textContent = data.content.find(c => c.type === 'text');
-              if (textContent) {
-                this.onContentReceived(textContent.text);
-              }
-            }
-            break;
-
-          case 'connected':
-            this.connected = true;
-            this.updateStatus(true);
-            this.pendingMessages.forEach(msg => this.sendToParent(msg));
-            this.pendingMessages = [];
-            break;
-        }
-      }
-
-      sendToParent(message) {
-        if (window.parent !== window) {
-          const targetOrigin = this.parentOrigin || '*';
-          window.parent.postMessage(message, targetOrigin);
+        try {
+          const transport = new PostMessageTransport(window.parent, window.parent);
+          await this.client.connect(transport);
+          this.connected = true;
+          this.updateStatus(true);
+        } catch (error) {
+          console.warn('MCP Apps connection failed:', error);
+          this.connected = false;
+          this.updateStatus(false);
         }
       }
 

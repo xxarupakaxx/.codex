@@ -1,10 +1,110 @@
-import { McpServer, ResourceTemplate } from "@modelcontextprotocol/sdk/server/mcp.js";
+import {
+  RESOURCE_MIME_TYPE,
+  registerAppResource,
+  registerAppTool,
+} from "@modelcontextprotocol/ext-apps/server";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { z } from "zod";
-import { readFileSync } from "node:fs";
-import { join, dirname } from "node:path";
+import { existsSync, readFileSync } from "node:fs";
+import { dirname, isAbsolute, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
+const packageRoot = existsSync(join(__dirname, "package.json"))
+  ? __dirname
+  : join(__dirname, "..");
+const distRoot = join(packageRoot, "dist");
+const pointerPath = join(distRoot, "ui-current.json");
+const versionRoot = join(distRoot, "ui-versions");
+
+const PLAN_VIEWER_URI = "ui://plan-viewer/index.html";
+const LOG_VIEWER_URI = "ui://log-viewer/index.html";
+const DIAGRAM_VIEWER_URI = "ui://diagram-viewer/index.html";
+const VERIFICATION_VIEWER_URI = "ui://verification-viewer/index.html";
+const ROUTE_KIND_META_KEY = "workflow-html-app/routeKind";
+
+type DocumentRouteKind = "plan" | "log" | "verification";
+
+const resourceUiMeta = {
+  ui: {
+    csp: {
+      connectDomains: [],
+      resourceDomains: [],
+      frameDomains: [],
+      baseUriDomains: [],
+    },
+    prefersBorder: true,
+  },
+};
+
+function currentBundleFile(fileName: string) {
+  const pointer = JSON.parse(readFileSync(pointerPath, "utf-8"));
+  const version = pointer.version;
+  if (typeof version !== "string" || !/^[A-Za-z0-9._-]+$/.test(version)) {
+    throw new Error("invalid UI bundle pointer version");
+  }
+  if (Array.isArray(pointer.files) && !pointer.files.includes(fileName)) {
+    throw new Error(`UI bundle pointer does not include ${fileName}`);
+  }
+  const bundleRoot = resolve(versionRoot, version);
+  const relativePath = relative(versionRoot, bundleRoot).split(sep).join("/");
+  if (!relativePath || relativePath === "." || relativePath.startsWith("../") || isAbsolute(relativePath)) {
+    throw new Error("UI bundle pointer escapes version root");
+  }
+  return join(bundleRoot, fileName);
+}
+
+function htmlResource(uriHref: string, fileName: string) {
+  const htmlContent = readFileSync(currentBundleFile(fileName), "utf-8");
+  return {
+    contents: [
+      {
+        uri: uriHref,
+        mimeType: RESOURCE_MIME_TYPE,
+        text: htmlContent,
+        _meta: resourceUiMeta,
+      },
+    ],
+  };
+}
+
+function resourceError(uriHref: string, fileName: string, error: unknown) {
+  const message = error instanceof Error ? error.message : String(error);
+  return {
+    contents: [
+      {
+        uri: uriHref,
+        mimeType: "text/plain",
+        text: `Verified UI bundle is unavailable for ${fileName}: ${message}`,
+      },
+    ],
+  };
+}
+
+function safeHtmlResource(uriHref: string, fileName: string) {
+  try {
+    return htmlResource(uriHref, fileName);
+  } catch (error) {
+    return resourceError(uriHref, fileName, error);
+  }
+}
+
+function documentToolResult(content: string, routeKind: DocumentRouteKind) {
+  return {
+    content: [
+      {
+        type: "text" as const,
+        text: content,
+      },
+    ],
+    structuredContent: {
+      routeKind,
+    },
+    _meta: {
+      [ROUTE_KIND_META_KEY]: routeKind,
+    },
+  };
+}
 
 export function createServer(): McpServer {
   const server = new McpServer({
@@ -12,234 +112,133 @@ export function createServer(): McpServer {
     version: "0.1.0",
   });
 
-  // Register view-plan tool
-  server.tool(
+  registerAppTool(
+    server,
     "view-plan",
-    "計画ファイル（30_plan.md）をインタラクティブHTMLで表示。Markdownコンテンツを渡すとHTML UIで可視化",
     {
-      content: z.string().describe("Markdownコンテンツ"),
-    },
-    async ({ content }) => {
-      // Return the content as-is; the UI will render it
-      return {
-        content: [
-          {
-            type: "text",
-            text: content,
-          },
-        ],
-        // MCP Apps metadata to link to UI
-        _meta: {
-          ui: {
-            resourceUri: "ui://plan-viewer/index.html",
-          },
+      title: "View Plan",
+      description: "計画ファイル（30_plan.md）をインタラクティブHTMLで表示。Markdownコンテンツを渡すとHTML UIで可視化",
+      inputSchema: {
+        content: z.string().describe("Markdownコンテンツ"),
+      },
+      _meta: {
+        ui: {
+          resourceUri: PLAN_VIEWER_URI,
+          visibility: ["model"],
         },
-      };
-    }
+      },
+    },
+    async ({ content }) => documentToolResult(content, "plan"),
   );
 
-  // Register UI resource for plan-viewer
-  server.resource(
+  registerAppResource(
+    server,
     "plan-viewer-ui",
-    new ResourceTemplate("ui://plan-viewer/{path}", { list: undefined }),
-    async (uri) => {
-      // For now, return the HTML content inline
-      // In production, this would be bundled by Vite
-      const htmlPath = join(__dirname, "ui", "plan-viewer.html");
-
-      try {
-        const htmlContent = readFileSync(htmlPath, "utf-8");
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              mimeType: "text/html",
-              text: htmlContent,
-            },
-          ],
-        };
-      } catch {
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              mimeType: "text/html",
-              text: "<html><body><h1>Plan Viewer</h1><p>Loading...</p></body></html>",
-            },
-          ],
-        };
-      }
-    }
+    PLAN_VIEWER_URI,
+    {
+      description: "Plan Viewer MCP App resource",
+      _meta: resourceUiMeta,
+    },
+    async (uri) => safeHtmlResource(uri.href, "plan-viewer.html"),
   );
 
-  // Register view-log tool
-  server.tool(
+  registerAppTool(
+    server,
     "view-log",
-    "作業ログ（05_log.md）をインタラクティブHTMLで表示。Markdownコンテンツを渡すとLog Viewerで可視化",
     {
-      content: z.string().describe("Markdownコンテンツ"),
-    },
-    async ({ content }) => {
-      return {
-        content: [
-          {
-            type: "text",
-            text: content,
-          },
-        ],
-        _meta: {
-          ui: {
-            resourceUri: "ui://log-viewer/index.html",
-          },
+      title: "View Log",
+      description: "作業ログ（05_log.md）をインタラクティブHTMLで表示。Markdownコンテンツを渡すとLog Viewerで可視化",
+      inputSchema: {
+        content: z.string().describe("Markdownコンテンツ"),
+      },
+      _meta: {
+        ui: {
+          resourceUri: LOG_VIEWER_URI,
+          visibility: ["model"],
         },
-      };
-    }
+      },
+    },
+    async ({ content }) => documentToolResult(content, "log"),
   );
 
-  // Register a distinct Log Viewer resource backed by the shared safe document UI.
-  server.resource(
+  registerAppResource(
+    server,
     "log-viewer-ui",
-    new ResourceTemplate("ui://log-viewer/{path}", { list: undefined }),
-    async (uri) => {
-      const htmlPath = join(__dirname, "ui", "plan-viewer.html");
-
-      try {
-        const htmlContent = readFileSync(htmlPath, "utf-8");
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              mimeType: "text/html",
-              text: htmlContent,
-            },
-          ],
-        };
-      } catch {
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              mimeType: "text/html",
-              text: "<html><body><h1>Log Viewer</h1><p>Loading...</p></body></html>",
-            },
-          ],
-        };
-      }
-    }
+    LOG_VIEWER_URI,
+    {
+      description: "Log Viewer MCP App resource backed by the shared document bundle",
+      _meta: resourceUiMeta,
+    },
+    async (uri) => safeHtmlResource(uri.href, "plan-viewer.html"),
   );
 
-  // Register view-diagram tool
-  server.tool(
+  registerAppTool(
+    server,
     "view-diagram",
-    "Mermaid図と任意のGraph JSONをインタラクティブHTMLで表示。Mermaidのズーム・パン、2.5Dレイヤービュー、Graph JSON timeline再生に対応",
     {
-      mermaidCode: z.string().describe("Mermaidダイアグラムコード"),
-      title: z.string().optional().describe("図のタイトル（オプション）"),
-      graphJson: z.string().optional().describe("2.5Dレイヤービュー用のGraph JSON（オプション）"),
-    },
-    async ({ mermaidCode, title, graphJson }) => {
-      return {
-        content: [
-          {
-            type: "text",
-            text: JSON.stringify({ mermaidCode, title: title || "Diagram", graphJson }),
-          },
-        ],
-        _meta: {
-          ui: {
-            resourceUri: "ui://diagram-viewer/index.html",
-          },
+      title: "View Diagram",
+      description: "Mermaid図と任意のGraph JSONをインタラクティブHTMLで表示。Mermaidのズーム・パン、2.5Dレイヤービュー、Graph JSON timeline再生に対応",
+      inputSchema: {
+        mermaidCode: z.string().describe("Mermaidダイアグラムコード"),
+        title: z.string().optional().describe("図のタイトル（オプション）"),
+        graphJson: z.string().optional().describe("2.5Dレイヤービュー用のGraph JSON（オプション）"),
+      },
+      _meta: {
+        ui: {
+          resourceUri: DIAGRAM_VIEWER_URI,
+          visibility: ["model"],
         },
-      };
-    }
+      },
+    },
+    async ({ mermaidCode, title, graphJson }) => ({
+      content: [
+        {
+          type: "text" as const,
+          text: JSON.stringify({ mermaidCode, title: title || "Diagram", graphJson }),
+        },
+      ],
+    }),
   );
 
-  // Register UI resource for diagram-viewer
-  server.resource(
+  registerAppResource(
+    server,
     "diagram-viewer-ui",
-    new ResourceTemplate("ui://diagram-viewer/{path}", { list: undefined }),
-    async (uri) => {
-      const htmlPath = join(__dirname, "ui", "diagram-viewer.html");
-
-      try {
-        const htmlContent = readFileSync(htmlPath, "utf-8");
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              mimeType: "text/html",
-              text: htmlContent,
-            },
-          ],
-        };
-      } catch {
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              mimeType: "text/html",
-              text: "<html><body><h1>Diagram Viewer</h1><p>Loading...</p></body></html>",
-            },
-          ],
-        };
-      }
-    }
-  );
-
-  // Register view-verification tool
-  server.tool(
-    "view-verification",
-    "検証ガイド（90_verification.md）をインタラクティブHTMLで表示。チェックリストの進捗トラッキング付き",
+    DIAGRAM_VIEWER_URI,
     {
-      content: z.string().describe("Markdownコンテンツ"),
+      description: "Diagram Viewer MCP App resource",
+      _meta: resourceUiMeta,
     },
-    async ({ content }) => {
-      return {
-        content: [
-          {
-            type: "text",
-            text: content,
-          },
-        ],
-        _meta: {
-          ui: {
-            resourceUri: "ui://verification-viewer/index.html",
-          },
-        },
-      };
-    }
+    async (uri) => safeHtmlResource(uri.href, "diagram-viewer.html"),
   );
 
-  // Register UI resource for verification-viewer
-  server.resource(
-    "verification-viewer-ui",
-    new ResourceTemplate("ui://verification-viewer/{path}", { list: undefined }),
-    async (uri) => {
-      const htmlPath = join(__dirname, "ui", "verification-viewer.html");
+  registerAppTool(
+    server,
+    "view-verification",
+    {
+      title: "View Verification",
+      description: "検証ガイド（90_verification.md）をインタラクティブHTMLで表示。チェックリストの進捗トラッキング付き",
+      inputSchema: {
+        content: z.string().describe("Markdownコンテンツ"),
+      },
+      _meta: {
+        ui: {
+          resourceUri: VERIFICATION_VIEWER_URI,
+          visibility: ["model"],
+        },
+      },
+    },
+    async ({ content }) => documentToolResult(content, "verification"),
+  );
 
-      try {
-        const htmlContent = readFileSync(htmlPath, "utf-8");
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              mimeType: "text/html",
-              text: htmlContent,
-            },
-          ],
-        };
-      } catch {
-        return {
-          contents: [
-            {
-              uri: uri.href,
-              mimeType: "text/html",
-              text: "<html><body><h1>Verification Guide</h1><p>Loading...</p></body></html>",
-            },
-          ],
-        };
-      }
-    }
+  registerAppResource(
+    server,
+    "verification-viewer-ui",
+    VERIFICATION_VIEWER_URI,
+    {
+      description: "Verification Viewer MCP App resource generated from the document bundle",
+      _meta: resourceUiMeta,
+    },
+    async (uri) => safeHtmlResource(uri.href, "verification-viewer.html"),
   );
 
   return server;

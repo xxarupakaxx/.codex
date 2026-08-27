@@ -9,7 +9,7 @@ Codemapは、コード変更へ着手する前に読むtask単位の根拠付き
 - `codemap.json`: AIが読む正本。scope、lane、node、edge、evidenceを保持する。
 - `codemap.lock`: source/map fingerprintと展開済みsource manifestを保持するcommit marker。
 
-二点は `scripts/generate-codemap.py refresh` だけで更新する。個別手編集しない。JSONをatomic replaceし、lockを最後に置く。途中失敗後はold lockとnew outputが一致せず、次のcheckが失敗する。人向け表示は`roadmap.html`のCode Map viewが担い、別の`codemap.html`は生成しない。
+二点は `scripts/generate-codemap.py refresh` だけで更新する。個別手編集しない。JSONをatomic replaceし、lockを最後に置く。途中失敗後はold lockとnew outputが一致せず、次のcheckが失敗する。人向け表示は`roadmap.html`のProject Map + FocusからDetail drawerを開き、Impact内のCode Mapが担う。別の`codemap.html`は生成しない。既存の`codemap.html`名はmanifest上の`grandfathered` surfaceであり、live routeへ戻さない。
 
 authoring sourceは同じtask memory directoryの `codemap.source.json` とする。これは生成二点に含めず、lockへbytes fingerprintを記録する。source定義を変えたままrefreshしなければstaleである。
 
@@ -82,7 +82,7 @@ AIは「ありそう」という理由でverified edgeを作らない。推測�
 
 ## UI契約
 
-Codemap UIは`roadmap.html`のTask Workspaceに埋め込まれた`kind: codemap` adapterを使う。Roadmap snapshotは表示用にCodemap payloadを含むが、freshnessの正本は`codemap.lock`である。
+Codemap UIは`roadmap.html`のTask Workspaceに埋め込まれた`kind: codemap` adapterを使う。Roadmap snapshotは表示用にCodemap payloadを含むが、freshnessの正本は`codemap.lock`である。Code Mapは常時表示や常時toggleではなく、Detail drawerのImpactから開く補助面である。
 
 - laneを左から右へ並べる。
 - node選択でincoming/outgoingの1-hop関係だけをright inspectorへ出す。
@@ -93,7 +93,7 @@ Codemap UIは`roadmap.html`のTask Workspaceに埋め込まれた`kind: codemap`
 
 ## Roadmapとの統合境界
 
-- `roadmap.html`: Plan / ProgressとCode Mapを切り替える唯一の人向け入口。
+- `roadmap.html`: Project Map + FocusとDetail drawerを持つ唯一の人向け入口。Code MapはImpactから開く。
 - `roadmap-snapshot.json`: live表示用にRoadmapと検証済みCodemap payloadを保持する。
 - `codemap.json` / `codemap.lock`: caller、impact、test、dependency、evidenceとsource freshnessの機械判定。
 

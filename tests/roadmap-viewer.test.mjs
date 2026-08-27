@@ -453,7 +453,7 @@ test('default選択はactive Taskを使い、実装説明とsource previewを同
   assert.doesNotMatch(explicitlySelected.selectedSourcePreview.code, /buildExecutionBrief/);
 });
 
-test('active Taskがなければ最初の未完了Task、全完了なら先頭Taskをdefault選択すべき', () => {
+test('active Taskがなければ最初の未完了Task、全完了なら最後の完了Taskをdefault選択すべき', () => {
   const firstIncomplete = model.buildModel(model.normalizeSnapshot({
     files: {
       '30_plan.md': `## Task 1: 完了
@@ -486,7 +486,9 @@ test('active Taskがなければ最初の未完了Task、全完了なら先頭Ta
 - [x] 完了した。`
     }
   }), { nowMs });
-  assert.equal(model.buildExecutionBrief(allComplete).selectedTask.number, '1');
+  const completeBrief = model.buildExecutionBrief(allComplete);
+  assert.equal(completeBrief.currentTask.number, '2');
+  assert.equal(completeBrief.selectedTask.number, '2');
 });
 
 test('legacy snapshotはsource未記録を明示し、planからcodeを補作しないべき', () => {
@@ -588,24 +590,53 @@ test('roadmap routeはblockedを未着手へ丸めず文字でも区別すべき
   });
 
   assert.match(route.summary, /Task 1 ブロック/);
-  assert.match(html, /task\.status === 'blocked' \? 'ブロック'/);
+  assert.match(html, /statusLabel\(currentTask\.status\)/);
 });
 
-test('first-screen roadmap routeはアクセシブルなinline SVGとテキスト代替を持つべき', () => {
+test('first-screen roadmap routeは4stage Project Mapとして読めるべき', () => {
   for (const id of ['brief-route', 'brief-route-map', 'brief-route-summary']) {
     assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
   }
   assert.match(html, /function renderRoadmapRoute\(route\)/);
-  assert.match(html, /class="brief-route-svg"/);
-  assert.match(html, /role="img" aria-labelledby="brief-route-svg-title brief-route-svg-desc"/);
-  assert.match(html, /<title id="brief-route-svg-title">計画の現在地<\/title>/);
-  assert.match(html, /<desc id="brief-route-svg-desc">\$\{escapeHtml\(route\.summary\)\}<\/desc>/);
-  assert.match(html, /route-node blocked/);
-  assert.match(html, /route-node current/);
-  assert.match(html, /route-node\.next/);
-  assert.match(html, /route-selection/);
-  assert.match(html, /\.route-edge\.complete/);
-  assert.match(html, /\.route-edge\.planned/);
+  assert.match(html, /PROJECT MAP/);
+  assert.match(html, /企画から検証まで/);
+  assert.match(html, /class="project-map-grid"/);
+  assert.match(html, /role="list" aria-label="企画、設計、実装、検証のProject Map"/);
+});
+
+test('Project Map mobile layoutは128px内で4stageを横overflowなしに保つべき', () => {
+  assert.match(html, /\.brief-route\s*\{[^}]*max-height:\s*180px[^}]*overflow:\s*auto/s);
+  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.brief-route\s*\{[^}]*max-height:\s*128px/);
+  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.brief-route-head h3\s*\{[^}]*white-space:\s*nowrap/);
+  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.brief-route-map\s*\{[^}]*overflow-x:\s*hidden/);
+  assert.match(html, /\.project-map-grid\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/);
+});
+
+test('Project Map nodeは代表識別とcurrent stateを短く表示すべき', () => {
+  const renderSource = html.match(/function renderRoadmapRoute\(route\) \{([\s\S]*?)\n    \}\n    function centerRoadmapRoute/)?.[1] || '';
+  assert.match(renderSource, /currentTask = route\.tasks\.find\(task => task\.isCurrent\)/);
+  assert.match(renderSource, /stage: '企画'/);
+  assert.match(renderSource, /stage: '設計'/);
+  assert.match(renderSource, /stage: '実装'/);
+  assert.match(renderSource, /stage: '検証'/);
+  assert.match(renderSource, /現在・\$\{statusLabel\(currentTask\.status\)\}/);
+  assert.match(renderSource, /project-map-glyph/);
+  assert.match(renderSource, /project-map-state/);
+});
+
+test('Project Map compact化は旧SVG routeの横スクロールへ戻さないべき', () => {
+  const renderSource = html.match(/function renderRoadmapRoute\(route\) \{([\s\S]*?)\n    \}\n    function centerRoadmapRoute/)?.[1] || '';
+  assert.doesNotMatch(renderSource, /brief-route-svg/);
+  assert.doesNotMatch(renderSource, /style="min-width:\$\{width\}px"/);
+  assert.doesNotMatch(renderSource, /requestAnimationFrame\(centerRoadmapRoute\)/);
+  assert.match(html, /\.project-map-node\.current/);
+  assert.match(html, /\.project-map-node\.missing/);
+});
+
+test('Project Map desktop layoutは180px上限で既存brief順序を保つべき', () => {
+  assert.match(html, /\.brief-route\s*\{[^}]*max-height:\s*180px[^}]*overflow:\s*auto/s);
+  assert.ok(html.indexOf('id="brief-route"') < html.indexOf('id="brief-design-summary"'));
+  assert.ok(html.indexOf('id="brief-route"') < html.indexOf('id="brief-flow"'));
 });
 
 test('Taskに目的・変更対象・成果物・検証があるとき flowは実行契約を保持すべき', () => {
@@ -1335,16 +1366,19 @@ test('task hub shell exposes list detail status settings and responsive behavior
 test('single-task HTMLは具体的な実行briefをConcept Mapより先に配置すべき', () => {
   const ids = [
     'execution-brief',
+    'current-focus',
+    'current-primary-action',
     'brief-design-summary',
-    'brief-flow',
     'brief-spec',
     'brief-approach',
     'brief-boundary',
-    'brief-claims',
-    'brief-artifacts',
-    'implementation-task-purpose',
-    'implementation-task-output',
     'brief-quick-links',
+    'detail-drawer',
+    'detail-tab-document',
+    'detail-tab-change',
+    'detail-tab-impact',
+    'detail-tab-test',
+    'detail-tab-sources',
     'concept-map-disclosure'
   ];
   for (const id of ids) {
@@ -1352,8 +1386,13 @@ test('single-task HTMLは具体的な実行briefをConcept Mapより先に配置
   }
   assert.doesNotMatch(html, /id=["']brief-summary["']/);
   assert.doesNotMatch(html, /id=["']source-line["']/);
+  assert.doesNotMatch(html, /id=["']workspace-view-plan["']/);
+  assert.doesNotMatch(html, /id=["']workspace-view-code["']/);
+  assert.doesNotMatch(html.match(/<header class="app-header"[\s\S]*?<\/header>/)?.[0] || '', /codemap-gate/);
+  assert.match(html, /id="detail-panel-impact"[\s\S]*id="codemap-gate"/);
   assert.ok(html.indexOf('id="brief-route"') < html.indexOf('id="brief-design-summary"'));
-  assert.ok(html.indexOf('id="brief-design-summary"') < html.indexOf('id="brief-flow"'));
+  assert.ok(html.indexOf('id="brief-route"') < html.indexOf('id="current-focus"'));
+  assert.ok(html.indexOf('id="current-focus"') < html.indexOf('id="brief-design-summary"'));
   assert.ok(html.indexOf('id="execution-brief"') < html.indexOf('id="concept-map-disclosure"'));
 });
 
@@ -1375,6 +1414,8 @@ test('Concept Mapのinspectorはprimary briefを上書きせずprovenanceがあ�
 test('brief-first layoutはdesktopの情報階層とmobileの一列順序を維持すべき', () => {
   assert.match(html, /\.execution-brief\s*\{[^}]*order:\s*1/);
   assert.match(html, /\.concept-map-disclosure\s*\{[^}]*order:\s*2/);
+  assert.match(html, /\.current-focus\s*\{/);
+  assert.match(html, /<div class="detail-drawer" id="detail-drawer"[^>]*hidden>/);
   assert.match(html, /\.design-summary-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3,/);
   assert.match(html, /\.claim-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3,/);
   assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.design-summary-grid,[\s\S]*\.claim-grid\s*\{[^}]*grid-template-columns:\s*1fr/);
@@ -1395,8 +1436,9 @@ test('設計書の主見出しは選択Taskではなく計画全体の目的を�
   assert.match(html, /function openArtifact\(name, section = ''\)/);
 });
 
-test('implementation workspaceはTask indexと選択detailを持つsplit viewであるべき', () => {
+test('implementation workspaceはdrawer内でTask indexと選択detailを持つsplit viewであるべき', () => {
   for (const id of [
+    'detail-panel-change',
     'brief-workspace',
     'brief-task-index',
     'brief-task-detail',
@@ -1407,12 +1449,13 @@ test('implementation workspaceはTask indexと選択detailを持つsplit viewで
   ]) {
     assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
   }
+  assert.match(html, /id="detail-panel-change"[\s\S]*id="brief-workspace"/);
   assert.match(html, /\.brief-workspace\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:/);
   assert.match(html, /@media \(max-width:\s*900px\)[\s\S]*\.brief-workspace\s*\{[^}]*grid-template-columns:\s*1fr/);
   assert.match(html, /\.brief-source-code\s*\{[^}]*overflow-x:\s*auto/);
 });
 
-test('選択Taskは現在Taskと別の主状態で、計画と実コードも異なるsurfaceであるべき', () => {
+test('選択Taskは現在Taskと別stateで、EvidenceとImpactはdrawer内のon-demand surfaceであるべき', () => {
   assert.match(
     html,
     /\.brief-flow-item\.current:not\(\[aria-selected="true"\]\)\s*\{/,
@@ -1438,6 +1481,12 @@ test('選択Taskは現在Taskと別の主状態で、計画と実コードも異
     /\.brief-source-preview\s*\{[^}]*border-top:[^;]+;/s,
     'current source fact needs a distinct source surface',
   );
+  assert.match(html, /function renderCurrentFocus\(brief, model\)/);
+  assert.match(html, /current-focus-task-title'\)\.textContent = current\?\.title/);
+  assert.match(html, /function renderImpactCodeMap\(brief\)/);
+  assert.match(html, /id="detail-panel-sources"[\s\S]*id="brief-claims"[\s\S]*id="brief-artifacts"/);
+  assert.match(html, /data-detail-open="impact"/);
+  assert.doesNotMatch(html, /workspace-view-switch/);
 });
 
 test('implementation workspaceはsourceのpath・anchor・codeをHTML escapeして描画すべき', () => {
@@ -1534,19 +1583,20 @@ test('implementation workspaceは選択Taskの実装図と同値な関係一覧�
 });
 
 test('viewing-plansのauthoring contractは設計summaryとTask実行契約を要求すべき', () => {
-  for (const label of ['実施Task', '仕様', '実装根拠', '実行順序', '事実・判断・未確定', '成果物']) {
+  assert.match(viewingPlansSkill, /(?:実施Task|Current Task)/);
+  for (const label of ['仕様', '実装根拠', '(?:実行順序|全体像)', '(?:事実・判断・未確定|Evidence)', '成果物']) {
     assert.match(viewingPlansSkill, new RegExp(label));
   }
-  for (const contract of ['compact status bar', '主見出しは計画全体の目的', '主要要件、設計判断、境界、完了条件', '`現在` と `次`', 'quick link', 'source drawer']) {
+  for (const contract of ['Project Map \\+ Focus', 'Current Task', 'primary action', 'NextまたはBlocker', 'Detail drawer', 'ImpactからCode Map']) {
     assert.match(viewingPlansSkill, new RegExp(contract));
   }
   for (const heading of ['#### 目的', '#### 変更対象', '#### 実装根拠', '#### 実装', '#### 実装図', '#### 成果物', '#### 検証']) {
     assert.match(memoryFileFormats, new RegExp(heading));
   }
   assert.match(memoryFileFormats, /repo:<relative-path>#<anchor-or-Lx-Ly>/);
-  assert.match(viewingPlansSkill, /現在の実コード/);
-  assert.match(viewingPlansSkill, /存在しないafter codeを生成しない/);
-  assert.match(viewingPlansSkill, /実装図.*関係を推測しない/s);
+  assert.match(viewingPlansSkill, /生成時点の実source/);
+  assert.match(viewingPlansSkill, /bare pathや `変更対象` からsource参照を推測しない/);
+  assert.match(viewingPlansSkill, /実装図.*planに明示されたnodeとedgeだけ/s);
 });
 
 test('viewing-plansは短い保守作業をRoadmapから除外し必要時だけ昇格すべき', () => {

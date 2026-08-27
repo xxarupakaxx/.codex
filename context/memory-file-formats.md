@@ -59,7 +59,7 @@
 | team-journal.md | agentの稼働・引継ぎ記録 | team-run実行中（任意） |
 | 90_pr.md | PR内容 | PR作成時 |
 | 99_history.md | 意思決定ログ | 随時 |
-| roadmap.html | ブラウザ用ロードマップビュー | Phase 2完了後・実装中に再生成 |
+| roadmap.html | `html-plan` routeのProject Map + Focusビュー | Phase 2完了後・実装中に再生成 |
 | roadmap-snapshot.json | live更新用snapshot | `--serve --watch` 利用時に自動更新 |
 
 ### task-meta.json（必須・machine-owned）
@@ -104,7 +104,11 @@ Live Activityはmemory fileへ複製しない。Codex app-serverが返すsession
 
 ### Live Roadmap Viewer
 
-`roadmap.html` は `scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task>` で生成する。Plan / ProgressとfreshなCode Mapを切り替えるTask Workspaceである。Codex app の横で開きっぱなしにして進捗を見たい場合は次を使う:
+`roadmap.html` は `scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task>` で生成する。`html-plan` routeの派生成果物であり、source、lifecycle、static/browser profileは `context/html-artifact-contract.md` と `config/html-surfaces.json` を正本にする。初期画面はProject Map + Focusで、全体像、Current Task、primary action、NextまたはBlocker、Evidenceをsource-backedに示す。
+
+Code Mapは常時toggleではなく、Detail drawerのImpactから開く。freshnessの正本は`codemap.lock`であり、Roadmapの更新時刻やsnapshot生成時刻で代用しない。
+
+Codex app の横で開きっぱなしにして進捗を見たい場合は次を使う:
 
 ```bash
 python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --watch
@@ -116,6 +120,16 @@ python3 scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/<task> --serve --w
 - source内容と表示対象artifact metadataのfingerprintが不変なら、HTMLとsnapshotを書き換えない。
 - 複数セッションで同時に使う場合は、セッションごとに `${MEMORY_DIR}/memory/YYMMDD_<task_name>/` を分ける。必要なら `--port <port>` で明示的に分ける。
 - live表示は補助ビューであり、05_log.md / 40_progress.md / 80_review.md が正本。
+
+Roadmap generatorが参照できるsourceは次に限定する。欠落している情報をViewer側でcommitmentとして補作しない。
+
+- 企画: `00_spec.md`
+- 設計: `20_survey.md` / `30_plan.md`
+- 実装: `30_plan.md`、`40_progress.md`、task directory内の実artifact metadata
+- 検証: `checkpoint.md` / `80_review.md` / `90_verification.md`
+- Code Map: freshな`codemap.json` / `codemap.lock`
+
+HTMLやSVGを成果物として追加した場合も、長期正本はMarkdown、SVG、Codemap、task memoryである。HTMLはmanifest登録済みproducerからの派生配布物として扱い、invalid renderで既存配布物を上書きしない。
 
 ## 05_log.md（重要）
 
@@ -400,7 +414,7 @@ replayの成功とpromotion適用の承認は別状態とし、L3 / L4またはp
 |-------|-------|------|
 ```
 
-Roadmap Viewerは各Taskの `目的`、`変更対象`、`実装根拠`、`実装`、任意の`実装図`、`成果物`、`検証`をsource-boundで表示する。記載がないfieldをViewer側で推測して埋めない。
+Roadmap ViewerはProject Map + Focusで各Taskの `目的`、`変更対象`、`実装根拠`、`実装`、任意の`実装図`、`成果物`、`検証`をsource-boundで表示する。記載がないfieldをViewer側で推測して埋めない。Detail drawerはDocument、Change、Impact、Test、Sourcesを持ち、Code MapはImpactから開く。
 
 `実装図` は任意fieldであり、最初の `diagram-json` ブロックを選択Taskの実装フローへ使う。`direction`、`nodes`、`edges`の明示値だけを読み、Roadmap HTMLでは自己完結したinline SVGとして描画する。対応する形は矩形と判断node、関係は有向edgeとedge labelに限定する。Viewerは実装手順、変更対象、実コードからnodeやedgeを補作しない。図と同じ関係をテキスト一覧でも表示する。
 

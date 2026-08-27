@@ -80,23 +80,31 @@ test("build step emits the static diagram viewer used by the dist server", () =>
   assert.match(packageJson.scripts["build:ui"], /copy-static-ui\.mjs/);
   assert.match(copyScript, /diagram-viewer\.html/);
   assert.match(copyScript, /verification-viewer\.html/);
+  assert.match(copyScript, /ui-current\.json/);
+  assert.match(copyScript, /ui-versions/);
+  assert.match(copyScript, /installVersionedBundle/);
+  assert.match(copyScript, /failBeforePointerRename/);
+  assert.match(copyScript, /runVite\("plan-viewer", false\)/);
+  assert.match(copyScript, /runVite\("diagram-viewer", true\)/);
+  assert.match(copyScript, /syncVerificationAlias/);
+  assert.match(copyScript, /verify-html-surfaces\.py/);
+  assert.match(copyScript, /verify-html-artifacts\.mjs/);
+  assert.doesNotMatch(copyScript, /syncCompatibilityUi|compatibilityUiDir/);
 });
 
-test("generate-state-diagram-3d documents graph JSON and requires workflow-html-app MCP", () => {
+test("generate-state-diagram-3d documents time-aware graph JSON and standalone HTML boundary", () => {
   const skill = readFirst([
     "../../../skills/generate-state-diagram-3d/SKILL.md",
     "../../skills/generate-state-diagram-3d/SKILL.md",
   ]);
 
-  assert.match(skill, /91_state_diagram_graph\.json/);
+  assert.match(skill, /91_state_diagram_3d\.json/);
   assert.match(skill, /91_state_diagram_3d\.html/);
-  assert.match(skill, /graphJson/);
+  assert.match(skill, /Graph JSON/);
   assert.match(skill, /2\.5D/);
-  assert.match(skill, /UI \/ API \/ Domain \/ DB \/ External/);
-  assert.match(skill, /workflow-html-app MCP/);
-  assert.match(skill, /mcp__workflow-html-app__view-diagram/);
   assert.match(skill, /timeline/);
-  assert.match(skill, /replay/);
+  assert.match(skill, /自己完結/);
+  assert.match(skill, /Mermaid入力を必須にするviewer経路は使わない/);
 });
 
 test("base generate-state-diagram stays Mermaid-focused and does not own graphJson output", () => {

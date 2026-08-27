@@ -59,6 +59,7 @@ Phase の順序はこのファイルを SSoT とする。一方、各Phaseで **
 | `grilling-with-docs` | Phase 1-2 | codebase と docs に alignment を蓄積する | spec / ticket route を選ぶ場合は alignment から ticket 化まで同じ文脈を保ち、個別 ticket 実装は durable artifact から fresh に始める |
 | `prototyping-solutions` | Phase 1-2 | 一つの design question に対する decision evidence | production 実装ではない。branch、issue、commit は project policy と承認に従う |
 | `designing-ui-ux` | Phase 1-4 | product context、design direction、UI基盤、実装後の独立評価 | 新しいUI/UX判断を含む場合はPhase 2のUI/UX Design Approval Gateを通し、承認前にproduction UIを実装しない |
+| HTML artifact route | Phase 1-4 | Effective HTML 6 routeをlocal producerへ対応させる | `context/html-artifact-contract.md` と `config/html-surfaces.json` を正本とし、配布前にstatic/browser gateを通す |
 | `modeling-domains` / `designing-codebases` | Phase 1-2 | domain vocabulary / deep-module vocabulary | global process、ADR gate、実装許可を所有しない |
 | `software-architecture` | Phase 1-2 | 新規systemの境界、bounded context、DDD判断 | 既存codebaseの改善surveyや選択済みmoduleの局所改善を置き換えない。実装はPhase 3の別gate |
 | `writing-specifications` | Phase 2 | 合意済み会話を test seam を含む spec にする | material な未決事項を spec の形で埋めず、再インタビューや無承認の tracker 公開を行わない |
@@ -354,6 +355,20 @@ UI、UX、product flow、画面構成、visual direction、component patternに�
 5. 承認後にlayout、visual direction、interaction model、主要component patternをmaterialに変える場合は、変更案を提示して再承認を得る。
 
 ユーザーが具体的なデザイン仕様または既存design systemをすでに承認しており、その内容を新しい判断なしに忠実に実装する場合は再承認を求めない。視覚・layout・interactionを変えないbehavior-onlyのUI bug修正も対象外とする。適用対象か判断できない場合は、このGateを適用する。
+
+### HTML Artifact Contract Gate
+
+HTMLを生成、更新、配布、またはMCP Apps resourceとして返すtaskでは、対象producerの最初のwriteより前に `context/html-artifact-contract.md` と `config/html-surfaces.json` を確認する。
+
+1. Effective HTML 6 route（`html`、`design-artifact`、`html-wireframe`、`html-prototype`、`html-plan`、`html-diagram`）から対象routeを一つ決める。
+2. producer、source、output pattern、artifact kind、static profile、browser profileがmanifestに登録済みであることを確認する。未登録ならHTMLを配布せず、manifest・checker・docsを揃える計画へ戻す。
+3. `design-artifact`、`html-wireframe`、`html-prototype`で新しいUI/UX判断を含む場合は、UI/UX Design Approval Gateを先に通す。
+4. 図はSVGを正本にする。新規MermaidをMarkdownへ生成せず、HTMLは必要なときだけ正本SVGをinlineで埋め込む派生成果物にする。
+5. static gateを先に実行し、browser profileが要求するviewport、zoom、overflow、keyboard、focus、forced colors、reduced motion、contrast、console/page errorをbrowser gateで検証する。static warningをbrowser PASSの代替にしない。
+6. buildやrenderの失敗時は既存配布物を上書きしない。RoadmapとMCP UIはtemporary outputを検証してからpublishする。
+7. canonical surfaceから`legacy`または`grandfathered` surfaceへのlive参照を作らない。`codemap.html`はgrandfatheredであり、新規の人向け入口にしない。
+
+External write、production deploy、public share、権限、課金、認証、runtime policy変更は、このGateだけでは許可されない。User Validation GateまたはExternal Write Gateの承認証跡が必要である。
 
 ### User Validation Gate
 
@@ -674,7 +689,9 @@ Phase直結でないユーティリティスキル。**状況が発生したら*
 ## HTML Viewer Tools
 
 計画ファイル・ログ・レビュー結果をブラウザでインタラクティブに閲覧するためのHTMLビューア。
-Task Workspaceは`roadmap.html`を俯瞰の主入口として生成し、Plan / ProgressとfreshなCode Mapを同じ画面で切り替える。「現在地」「稼働中の作業」「成果物」「計画」「更新鮮度」「caller / impact / guarding test」を確認できる。`--serve --watch`で起動すると、Codex appの横で開いたブラウザが`roadmap-snapshot.json`をpollingし、Roadmap source、artifact metadata、または検証済みCodemap payloadが変化したときだけ自動更新される。Plan Viewer / Log Viewerは個別ファイルの本文確認に使う。
+Task Workspaceは`html-plan` routeのcanonical outputとして`roadmap.html`を生成する。初期画面はProject Map + Focusで、全体像、Current Task、唯一のprimary action、NextまたはBlocker、Evidenceをsource-backedに示す。Code Mapは常時切替ではなくDetail drawerのImpactから開く。`--serve --watch`で起動すると、Codex appの横で開いたブラウザが`roadmap-snapshot.json`をpollingし、Roadmap source、artifact metadata、または検証済みCodemap payloadが変化したときだけ自動更新される。Plan Viewer / Log Viewer / Verification Viewerは個別ファイル本文の補助確認に使う。
+
+HTML出力のroute、lifecycle、static/browser profileは `context/html-artifact-contract.md` と `config/html-surfaces.json` を正本とする。新規HTMLやMCP Apps UIは、manifest登録、static gate、該当browser gateを通すまで配布完了にしない。
 
 複数 task を横断して確認する場合は Roadmap Task Hub を起動する:
 
@@ -690,18 +707,19 @@ Task Hubは各sessionの計画全文よりLive Activityを優先する。session
 
 | ツール名 | MCPツール | 対象ファイル | 主な機能 |
 |---------|----------|------------|---------|
-| Task Workspace | ローカルHTML (`tools/roadmap_viewer.html`) + Roadmap / Codemap generator | task Markdown、`codemap.json` / `codemap.lock` | Plan / Progress、Code Map、preflight状態、live polling |
-| Plan Viewer | `mcp__workflow-html-app__view-plan` | 30_plan.md | Markdownレンダリング、コメント機能、Codexへのフィードバック送信 |
+| Task Workspace | ローカルHTML (`tools/roadmap_viewer.html`) + Roadmap / Codemap generator | task Markdown、`codemap.json` / `codemap.lock` | Project Map + Focus、Detail drawer、Impact Code Map、live polling |
+| Plan Viewer | `mcp__workflow-html-app__view-plan` | 30_plan.md | Markdownレンダリング、コメント機能、対応hostへのフィードバック送信 |
 | Log Viewer | `mcp__workflow-html-app__view-log` | 05_log.md | 見出しoutline、進捗集計、コメント機能 |
+| Verification Viewer | `mcp__workflow-html-app__view-verification` | 90_verification.md | checklist確認、Plan/Logと共有する安全なdocument bundle |
 
 ### 自動発動条件（ユーザー確認不要）
 
 以下のタイミングで`viewing-plans`スキルが**自動的に**発動：
 
-1. **Phase 2完了時**: 30_plan.md作成後、code変更taskはCodemap checkを通し、`scripts/generate-roadmap-view.py <memory_dir>`でTask Workspaceを生成・表示してから、`mcp__workflow-html-app__view-plan`でPlan Viewerを表示
+1. **Phase 2完了時**: 30_plan.md作成後、code変更taskはCodemap checkを通し、`scripts/generate-roadmap-view.py <memory_dir>`でProject Map + FocusのTask Workspaceを生成・表示してから、`mcp__workflow-html-app__view-plan`でPlan Viewerを表示
 2. **横で見たい場合**: `scripts/generate-roadmap-view.py <memory_dir> --serve --watch` を起動し、表示URLを案内
 3. **Phase 3/4更新時**: `40_progress.md` / `80_review.md` / `05_log.md` / `team-journal.md` / `90_verification.md` または成果物metadataの変更後、watch中なら `roadmap-snapshot.json` が更新され、ブラウザが自動再描画
-4. **Phase 5完了時**: 最終 `roadmap.html` を生成・表示し、`mcp__workflow-html-app__view-log`で05_log.mdをLog Viewerへ表示
+4. **Phase 5完了時**: 最終 `roadmap.html` を生成・表示し、`mcp__workflow-html-app__view-log`で05_log.mdをLog Viewerへ表示。`90_verification.md`がある場合は`mcp__workflow-html-app__view-verification`でVerification Viewerへ表示
 
 ### 使用方法（自動）
 
@@ -709,7 +727,7 @@ Task Hubは各sessionの計画全文よりLive Activityを優先する。session
 1. メモリディレクトリ（${MEMORY_DIR}/memory/<task>）を特定
 2. python3 scripts/generate-roadmap-view.py <memory_dir> を実行
 3. 生成された <memory_dir>/roadmap.html をユーザーに提示
-4. Phase 2で30_plan.mdを`view-plan`へ、Phase 5で05_log.mdを`view-log`へ渡す
+4. Phase 2で30_plan.mdを`view-plan`へ、Phase 5で05_log.mdを`view-log`へ渡す。90_verification.mdがある場合は`view-verification`へ渡す
 ```
 
 ライブ表示:
@@ -732,9 +750,9 @@ generatorはtask directory配下の通常ファイルを成果物metadataとし�
 
 ### セキュリティ
 
-- **DOMPurify**: HTMLサニタイズでXSS防止
-- **CSP**: Content Security Policyヘッダー
-- **オリジン検証**: 信頼済みオリジンのみpostMessage許可
+- **CSP**: self-contained HTML resourceとして外部loadを禁止する
+- **Sanitization**: Markdown本文とuser contentをDOMへ入れる前にescape / sanitizeする
+- **MCP Apps protocol**: 対応hostでは `text/html;profile=mcp-app`、事前宣言resource URI、standard transportを使い、非対応hostではtext resultへ退化する
 
 ## 禁止事項
 

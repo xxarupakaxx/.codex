@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import { mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, mkdtempSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { createServer } from "node:http";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -8,19 +8,26 @@ import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
 const templatePath = fileURLToPath(new URL("../../../tools/roadmap_viewer.html", import.meta.url));
+const latestRoadmapSnapshotPath = fileURLToPath(new URL("../../../../.local/memory/260827_effective-html-roadmap-overhaul/roadmap-snapshot.json", import.meta.url));
 const graphMap = `# Concept Map
 
-\`\`\`mermaid
-flowchart TB
-  G["理解できる計画"]
-  F["snapshotに本文がある"]
-  D{"brief-firstを採用"}
-  A["実行計画"]
-  V["browserで検証"]
-  G -->|"必要とする"| D
-  F -->|"判断材料にする"| D
-  D -->|"生み出す"| A
-  V -->|"検証する"| A
+\`\`\`diagram-json
+{
+  "direction": "TB",
+  "nodes": [
+    {"id":"G","label":"理解できる計画"},
+    {"id":"F","label":"snapshotに本文がある"},
+    {"id":"D","label":"brief-firstを採用","shape":"decision"},
+    {"id":"A","label":"実行計画"},
+    {"id":"V","label":"browserで検証"}
+  ],
+  "edges": [
+    {"from":"G","to":"D","label":"必要とする"},
+    {"from":"F","to":"D","label":"判断材料にする"},
+    {"from":"D","to":"A","label":"生み出す"},
+    {"from":"V","to":"A","label":"検証する"}
+  ]
+}
 \`\`\`
 `;
 
@@ -91,13 +98,19 @@ function buildSnapshot() {
 
 ### 実装図
 
-\`\`\`mermaid
-flowchart LR
-T["contract test"]
-M["Viewer model"]
-U["実装UI"]
-T -->|"固定する"| M
-M -->|"描画する"| U
+\`\`\`diagram-json
+{
+  "direction": "LR",
+  "nodes": [
+    {"id":"T","label":"contract test"},
+    {"id":"M","label":"Viewer model"},
+    {"id":"U","label":"実装UI"}
+  ],
+  "edges": [
+    {"from":"T","to":"M","label":"固定する"},
+    {"from":"M","to":"U","label":"描画する"}
+  ]
+}
 \`\`\`
 
 ### 成果物
@@ -189,6 +202,11 @@ function buildImplementationSnapshot() {
   return snapshot;
 }
 
+function buildLatestRoadmapSnapshot() {
+  if (!existsSync(latestRoadmapSnapshotPath)) return buildSnapshot();
+  return JSON.parse(readFileSync(latestRoadmapSnapshotPath, "utf8"));
+}
+
 function writeFixture(snapshotInput = buildSnapshot()) {
   const directory = mkdtempSync(join(tmpdir(), "roadmap-viewer-runtime-"));
   const template = readFileSync(templatePath, "utf8");
@@ -211,7 +229,7 @@ async function withPage(t, viewport, callback, snapshot = buildSnapshot()) {
     }
     const page = await browser.newPage({ viewport });
     await page.goto(`file://${fixture.path}`);
-    await page.waitForSelector("#brief-flow .brief-flow-item");
+    await page.waitForSelector("#current-focus");
     await callback(page);
     await page.close();
   } finally {
@@ -247,7 +265,7 @@ async function withLivePage(t, viewport, callback, snapshotInput = buildSnapshot
     const page = await browser.newPage({ viewport });
     const address = server.address();
     await page.goto(`http://127.0.0.1:${address.port}/roadmap.html`);
-    await page.waitForSelector("#brief-flow .brief-flow-item");
+    await page.waitForSelector("#current-focus");
     await callback(page, (nextSnapshot) => { snapshot = nextSnapshot; });
     await page.close();
   } finally {
@@ -257,38 +275,76 @@ async function withLivePage(t, viewport, callback, snapshotInput = buildSnapshot
   }
 }
 
-test("first screen exposes the plan purpose roadmap design and selected task detail", async (t) => {
+test("first screen exposes Project Map and Current Focus while evidence stays on-demand", async (t) => {
   await withPage(t, { width: 1440, height: 1000 }, async (page) => {
     const state = await page.evaluate(() => ({
       executionVisible: document.querySelector("#execution-brief")?.getBoundingClientRect().height > 0,
-      firstTask: document.querySelector("#brief-flow .brief-flow-item strong")?.textContent,
       planTitle: document.querySelector("#execution-brief-title")?.textContent,
-      selectedTitle: document.querySelector("#implementation-task-title")?.textContent,
-      selectedPurpose: document.querySelector("#implementation-task-purpose")?.textContent,
+      currentTitle: document.querySelector("#current-focus-task-title")?.textContent,
+      currentPurpose: document.querySelector("#current-focus-purpose")?.textContent,
+      primaryAction: document.querySelector("#current-primary-action")?.textContent,
       context: document.querySelector("#brief-design-context")?.textContent,
       requirements: document.querySelector("#brief-requirements")?.textContent,
       decisions: document.querySelector("#brief-design-decisions")?.textContent,
       boundaries: document.querySelector("#brief-boundaries")?.textContent,
       selectedMetric: document.querySelector("#brief-current-status")?.textContent,
-      claimHeadings: [...document.querySelectorAll("#brief-claims h4")].map((node) => node.textContent),
-      artifacts: [...document.querySelectorAll("#brief-artifact-grid [data-artifact]")].map((node) => node.dataset.artifact),
+      workspaceToggleCount: document.querySelectorAll("#workspace-view-plan, #workspace-view-code, .workspace-view-switch").length,
+      headerCodemapVisible: Boolean(document.querySelector(".app-header #codemap-gate")?.getClientRects().length),
+      impactCodemapStatusVisible: Boolean(document.querySelector("#detail-panel-impact #impact-code-map-status")?.getClientRects().length),
+      evidenceVisible: Boolean(document.querySelector("#brief-claims")?.getClientRects().length || document.querySelector("#brief-artifacts")?.getClientRects().length),
+      selectedDetailVisible: Boolean(document.querySelector("#implementation-workspace")?.getClientRects().length || document.querySelector("#brief-source-preview")?.getClientRects().length),
       graphOpen: document.querySelector("#concept-map-disclosure")?.open,
     }));
 
     assert.equal(state.executionVisible, true);
-    assert.equal(state.firstTask, "contractを固定する");
     assert.match(state.planTitle, /実行Task、仕様、実装根拠/);
-    assert.equal(state.selectedTitle, "contractを固定する");
-    assert.match(state.selectedPurpose, /第一画面の読解要件/);
+    assert.equal(state.currentTitle, "contractを固定する");
+    assert.match(state.currentPurpose, /第一画面の読解要件/);
+    assert.match(state.primaryAction, /contract testを追加/);
     assert.match(state.context, /設計意図まで第一画面で理解/);
     assert.match(state.requirements, /Taskと仕様を同時に読める/);
     assert.match(state.decisions, /第一画面をbrief-firstにする/);
     assert.match(state.boundaries, /schema version 1を維持/);
     assert.match(state.selectedMetric, /1 \/ 2/);
-    assert.deepEqual(state.claimHeadings, ["事実", "判断", "未確定"]);
-    assert.deepEqual(state.artifacts, ["00_spec.md", "30_plan.md", "40_progress.md", "80_review.md"]);
+    assert.equal(state.workspaceToggleCount, 0);
+    assert.equal(state.headerCodemapVisible, false);
+    assert.equal(state.impactCodemapStatusVisible, false);
+    assert.equal(state.evidenceVisible, false);
+    assert.equal(state.selectedDetailVisible, false);
     assert.equal(state.graphOpen, false);
+
+    await page.locator('[data-detail-open="sources"]').click();
+    await page.waitForFunction(() => !document.querySelector("#detail-drawer")?.hidden);
+    assert.deepEqual(await page.locator("#brief-claims h4").allTextContents(), ["事実", "判断", "未確定"]);
+    assert.deepEqual(
+      await page.locator("#brief-artifact-grid [data-artifact]").evaluateAll((nodes) => nodes.map((node) => node.dataset.artifact)),
+      ["00_spec.md", "30_plan.md", "40_progress.md", "80_review.md"],
+    );
+    await page.keyboard.press("Escape");
+    assert.equal(await page.evaluate(() => document.querySelector("#detail-drawer")?.hidden), true);
+    assert.equal(await page.evaluate(() => document.activeElement?.dataset.detailOpen), "sources");
   });
+
+  const completed = buildSnapshot();
+  completed.files["40_progress.md"] = `# 進捗
+
+| Task | 状態 | 進捗 |
+| --- | --- | --- |
+| Task 1 | 完了 | 2/2 |
+| Task 2 | 完了 | 1/1 |
+`;
+  await withPage(t, { width: 1280, height: 900 }, async (page) => {
+    assert.equal(await page.locator("#current-focus-task-title").textContent(), "brief UIを実装する");
+    assert.equal(await page.locator("#current-primary-action").textContent(), "成果を確認");
+    assert.match(await page.locator("#brief-current-status").textContent(), /2 \/ 2 · 完了/);
+
+    await page.locator("#open-detail-drawer").click();
+    await page.waitForFunction(() => !document.querySelector("#detail-drawer")?.hidden);
+    await page.locator('[data-implementation-task="1"]').click();
+    assert.equal(await page.locator("#implementation-task-title").textContent(), "contractを固定する");
+    assert.equal(await page.locator("#current-focus-task-title").textContent(), "contractを固定する");
+    assert.equal(await page.locator("#current-primary-action").textContent(), "成果を確認");
+  }, completed);
 });
 
 test("motion system keeps transitions brief, stateful, and reduced-motion aware", async (t) => {
@@ -317,6 +373,8 @@ test("motion system keeps transitions brief, stateful, and reduced-motion aware"
 
     await page.emulateMedia({ reducedMotion: "reduce" });
     assert.equal(await page.evaluate(() => getComputedStyle(document.documentElement).getPropertyValue("--motion-distance").trim()), "2px");
+    await page.locator("#open-detail-drawer").click();
+    await page.waitForFunction(() => !document.querySelector("#detail-drawer")?.hidden);
     const changed = await page.evaluate(() => {
       document.querySelector('[data-implementation-task="2"]').click();
       return {
@@ -382,16 +440,80 @@ test("desktop tablet and mobile preserve section order without horizontal overfl
         overflow: document.documentElement.scrollWidth - window.innerWidth,
         executionTop: document.querySelector("#execution-brief")?.getBoundingClientRect().top,
         conceptTop: document.querySelector("#concept-map-disclosure")?.getBoundingClientRect().top,
-        claimColumns: getComputedStyle(document.querySelector(".claim-grid")).gridTemplateColumns.split(" ").length,
+        evidenceVisible: Boolean(document.querySelector("#brief-claims")?.getClientRects().length || document.querySelector("#brief-artifacts")?.getClientRects().length),
         quickSpecInViewport: document.querySelector('#brief-quick-links [data-artifact="00_spec.md"]')?.getBoundingClientRect().bottom <= innerHeight,
       }));
 
       assert.ok(state.overflow <= 1, `${viewport.width}px has horizontal overflow ${state.overflow}px`);
       assert.ok(state.executionTop < state.conceptTop);
       assert.equal(state.quickSpecInViewport, true);
-      if (viewport.width === 375) assert.equal(state.claimColumns, 1);
+      assert.equal(state.evidenceVisible, false);
     });
   }
+});
+
+test("mobile Project Map keeps four readable stage representatives in 128px", async (t) => {
+  await withPage(t, { width: 375, height: 812 }, async (page) => {
+    const state = await page.evaluate(() => {
+      const route = document.querySelector("#brief-route");
+      const map = document.querySelector("#brief-route-map");
+      const title = document.querySelector("#brief-route-title");
+      const titleRect = title.getBoundingClientRect();
+      const stages = [...document.querySelectorAll(".project-map-stage")].map((stage) => {
+        const rect = stage.getBoundingClientRect();
+        const node = stage.querySelector(".project-map-node");
+        const nodeRect = node.getBoundingClientRect();
+        return {
+          stage: stage.querySelector("h4")?.textContent,
+          text: node?.textContent || "",
+          left: rect.left,
+          right: rect.right,
+          width: rect.width,
+          nodeWidth: nodeRect.width,
+          nodeHeight: nodeRect.height,
+        };
+      });
+      const mapRect = map.getBoundingClientRect();
+      return {
+        title: title.textContent,
+        titleWidth: titleRect.width,
+        titleHeight: titleRect.height,
+        routeHeight: route.getBoundingClientRect().height,
+        horizontalOverflow: map.scrollWidth - map.clientWidth,
+        mapLeft: mapRect.left,
+        mapRight: mapRect.right,
+        workspaceToggleCount: document.querySelectorAll("#workspace-view-plan, #workspace-view-code, .workspace-view-switch").length,
+        evidenceVisible: Boolean(document.querySelector("#brief-claims")?.getClientRects().length || document.querySelector("#brief-artifacts")?.getClientRects().length),
+        selectedDetailVisible: Boolean(document.querySelector("#implementation-workspace")?.getClientRects().length || document.querySelector("#brief-source-preview")?.getClientRects().length),
+        currentFocus: document.querySelector("#current-focus-task-title")?.textContent || "",
+        stages,
+      };
+    });
+
+    assert.equal(state.title, "企画から検証まで");
+    assert.ok(state.titleWidth > state.titleHeight * 3, "Project Map heading should read horizontally");
+    assert.ok(state.routeHeight <= 128, `Project Map height ${state.routeHeight}px exceeds 128px`);
+    assert.ok(state.horizontalOverflow <= 1, `Project Map overflow ${state.horizontalOverflow}px`);
+    assert.deepEqual(state.stages.map((stage) => stage.stage), ["企画", "設計", "実装", "検証"]);
+    assert.ok(state.stages.every((stage) => stage.left >= state.mapLeft - 1 && stage.right <= state.mapRight + 1 && stage.width > 0));
+    assert.ok(state.stages.every((stage) => stage.nodeWidth > 0 && stage.nodeHeight > 0 && stage.text.trim().length >= 2));
+    assert.ok(state.stages.some((stage) => /現在|進行中/.test(stage.text)));
+    assert.equal(state.workspaceToggleCount, 0);
+    assert.equal(state.evidenceVisible, false);
+    assert.equal(state.selectedDetailVisible, false);
+    assert.ok(state.currentFocus.trim().length > 0);
+
+    const focusBefore = await page.locator("#current-focus-task-title").textContent();
+    await page.locator('[data-detail-open="impact"]').click();
+    await page.waitForFunction(() => !document.querySelector("#detail-drawer")?.hidden);
+    assert.equal(await page.locator("#detail-tab-impact").getAttribute("aria-selected"), "true");
+    assert.equal(await page.locator("#detail-panel-impact").isVisible(), true);
+    assert.equal(await page.evaluate(() => document.body.classList.contains("codemap-mode")), false);
+    assert.equal(await page.locator("#current-focus-task-title").textContent(), focusBefore);
+    await page.keyboard.press("Escape");
+    assert.equal(await page.evaluate(() => document.querySelector("#detail-drawer")?.hidden), true);
+    assert.equal(await page.evaluate(() => document.activeElement?.id), "open-impact-map");
+  }, buildLatestRoadmapSnapshot());
 });
 
 test("keyboard opens a source artifact and the concept disclosure on mobile", async (t) => {
@@ -475,6 +597,8 @@ test("live polling refreshes freshness and a changed snapshot updates the curren
 
 test("implementation workspace keeps every task visible and binds selection to plan steps and real source", async (t) => {
   await withPage(t, { width: 1440, height: 1000 }, async (page) => {
+    await page.locator("#open-detail-drawer").click();
+    await page.waitForFunction(() => !document.querySelector("#detail-drawer")?.hidden);
     await page.waitForFunction(() => /contract test/.test(document.querySelector("#implementation-task-output")?.textContent || ""));
     const tasks = page.locator("[data-implementation-task]");
     assert.equal(await tasks.count(), 2);
@@ -526,6 +650,8 @@ test("implementation workspace keeps every task visible and binds selection to p
 
 test("implementation workspace renders syntax color and only the selected task explicit diagram", async (t) => {
   await withPage(t, { width: 1440, height: 1000 }, async (page) => {
+    await page.locator("#open-detail-drawer").click();
+    await page.waitForFunction(() => !document.querySelector("#detail-drawer")?.hidden);
     assert.ok(await page.locator("#implementation-code .syntax-keyword").count() >= 1);
     assert.ok(await page.locator("#implementation-code .syntax-string").count() >= 1);
     assert.deepEqual(
@@ -550,6 +676,8 @@ test("implementation workspace splits on desktop and stacks without page overflo
     { width: 375, height: 812, columns: 1 },
   ]) {
     await withPage(t, viewport, async (page) => {
+      await page.locator("#open-detail-drawer").click();
+      await page.waitForFunction(() => !document.querySelector("#detail-drawer")?.hidden);
       const state = await page.locator("#implementation-workspace").evaluate((workspace) => {
         const code = document.querySelector("#implementation-code");
         return {
@@ -597,6 +725,8 @@ test("live source refresh replaces resolved code with an explicit missing-anchor
   const initial = buildImplementationSnapshot();
   await withLivePage(t, { width: 1280, height: 900 }, async (page, setSnapshot) => {
     await page.waitForFunction(() => document.querySelector("#live-status-text")?.textContent === "Live");
+    await page.locator("#open-detail-drawer").click();
+    await page.waitForFunction(() => !document.querySelector("#detail-drawer")?.hidden);
     assert.match(await page.locator("#implementation-code").textContent(), /boundedSourceLine/);
     await page.locator("#implementation-code").focus();
 

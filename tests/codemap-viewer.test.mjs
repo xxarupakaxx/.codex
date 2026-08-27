@@ -144,15 +144,16 @@ test('roadmap snapshots preserve an embedded codemap workspace view', () => {
   }));
 });
 
-test('codemap markup keeps semantic lanes, path copy, and mode restoration hooks', () => {
+test('codemap markup keeps semantic lanes and exposes Impact Code Map inside the detail drawer', () => {
   assert.match(html, /class="codemap-lane-group"[^>]*role="group"/);
   assert.match(html, /id="copy-codemap-path"/);
-  assert.match(html, /conceptMapOpenBeforeCodemap/);
-  assert.match(html, /id="workspace-view-plan"/);
-  assert.match(html, /id="workspace-view-code"/);
+  assert.match(html, /id="detail-tab-impact"/);
+  assert.match(html, /id="detail-panel-impact"/);
+  assert.match(html, /id="impact-code-map"/);
+  assert.match(html, /renderImpactCodeMap/);
   assert.match(html, /id="codemap-gate"/);
-  assert.match(html, /updateWorkspaceUrl/);
-  assert.match(html, /searchParams\.set\('view', 'code'\)/);
+  assert.doesNotMatch(html, /id="workspace-view-plan"/);
+  assert.doesNotMatch(html, /id="workspace-view-code"/);
   assert.match(html, /body\.codemap-mode \.explicit-node-layer \.node-meta[^}]*11px/);
 });
 

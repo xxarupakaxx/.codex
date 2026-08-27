@@ -20,6 +20,7 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "tools" / "roadmap_viewer.html"
+HTML_CONTRACT = ROOT / "scripts" / "html_artifact_contract.py"
 PLACEHOLDER = '{"__ROADMAP_SNAPSHOT_JSON__": true}'
 DEFAULT_FILES = [
     "00_spec.md",
@@ -41,9 +42,27 @@ EMBEDDED_SNAPSHOT_RE = re.compile(
     r'<script\b(?=[^>]*\bid=["\']embedded-snapshot["\'])[^>]*>(.*?)</script\s*>',
     re.IGNORECASE | re.DOTALL,
 )
+HEAD_OPEN_RE = re.compile(r"(<head\b[^>]*>)", re.IGNORECASE)
+ARTIFACT_KIND_META_RE = re.compile(
+    r'<meta\b[^>]*\bname=["\']artifact-kind["\']',
+    re.IGNORECASE,
+)
+CSP_META_RE = re.compile(
+    r'<meta\b[^>]*\bhttp-equiv=["\']Content-Security-Policy["\']',
+    re.IGNORECASE,
+)
 TASK_HEADING_RE = re.compile(
     r"^(#{2,3})\s+(?:Task|タスク)\s+(\d+(?:\.\d+)?)\s*[:：]",
     re.IGNORECASE | re.MULTILINE,
+)
+ROADMAP_CSP = (
+    "default-src 'none'; "
+    "script-src 'unsafe-inline'; "
+    "style-src 'unsafe-inline'; "
+    "img-src data:; "
+    "connect-src 'self'; "
+    "base-uri 'none'; "
+    "form-action 'none'"
 )
 MARKDOWN_HEADING_RE = re.compile(r"^(#{1,6})\s+\S", re.MULTILINE)
 IMPLEMENTATION_EVIDENCE_RE = re.compile(
@@ -847,7 +866,41 @@ def render_html(snapshot: dict[str, object]) -> str:
     if PLACEHOLDER not in template:
         raise ValueError(f"placeholder not found in {TEMPLATE}")
     payload = json.dumps(snapshot, ensure_ascii=False).replace("</", "<\\/")
-    return template.replace(PLACEHOLDER, payload, 1)
+    return apply_roadmap_static_contract_meta(template.replace(PLACEHOLDER, payload, 1))
+
+
+def apply_roadmap_static_contract_meta(html: str) -> str:
+    additions: list[str] = []
+    if not ARTIFACT_KIND_META_RE.search(html):
+        additions.append('  <meta name="artifact-kind" content="html-plan">')
+    if not CSP_META_RE.search(html):
+        additions.append(
+            f'  <meta http-equiv="Content-Security-Policy" content="{ROADMAP_CSP}">'
+        )
+    if not additions:
+        return html
+    match = HEAD_OPEN_RE.search(html)
+    if not match:
+        return html
+    return html[: match.end()] + "\n" + "\n".join(additions) + html[match.end() :]
+
+
+def validate_roadmap_html(html: str, output: Path) -> None:
+    spec = importlib.util.spec_from_file_location("html_artifact_contract", HTML_CONTRACT)
+    if spec is None or spec.loader is None:
+        raise ValueError(f"cannot load HTML artifact contract: {HTML_CONTRACT}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    try:
+        module.assert_valid_html(
+            html,
+            profile_name="roadmap-generated",
+            path=str(output),
+            expected_artifact_kind="html-plan",
+        )
+    except Exception as error:
+        raise ValueError(f"roadmap output failed static HTML contract: {error}") from error
 
 
 def read_json_snapshot(path: Path) -> dict[str, object] | None:
@@ -921,7 +974,9 @@ def write_outputs(
     if previous_timestamp:
         snapshot["generatedAt"] = previous_timestamp
 
-    write_text_if_changed(output, render_html(snapshot))
+    rendered_html = render_html(snapshot)
+    validate_roadmap_html(rendered_html, output)
+    write_text_if_changed(output, rendered_html)
 
     if write_json:
         write_text_if_changed(

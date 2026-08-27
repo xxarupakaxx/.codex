@@ -5,6 +5,7 @@ Codex が installed plugins / skills / sub-agent roles を選ぶためのルー�
 このファイルの責務は **tool / plugin / skill / agent role の選択** に限定する。
 
 - Phase の順序やゲートは `context/workflow-rules.md` を SSoT とする。
+- HTML artifact のroute、lifecycle、static/browser gateは `context/html-artifact-contract.md` と `config/html-surfaces.json` を SSoT とする。
 - model / service_tier / agent_type の詳細は `rules/model-routing.md` を SSoT とする。
 - `/team-run` のチーム構成・Review Heat・終了判定は `context/team-run.md` を SSoT とする。
 - `/graph-engineering` の adoption boundary、contract、routing、state authority は `context/graph-engineering.md` を SSoT とする。実行 harness は `team-run` を再利用する。
@@ -78,6 +79,29 @@ workerへはobjective、背景、scope、触らない境界、制約、副作用
 
 `mapping-large-projects` は route が霧に包まれた大規模 effort の decision map であり、`team-run` は route と acceptance が既知で、共有状態と独立検証が価値を生む実行協調である。
 複数の独立 loop を auditable edge、typed state、異なる権限で統治する必要がある場合だけ、その上に `graph-engineering` を置く。単一 loop を graph と呼び替えない。
+
+## HTML Artifact Routing
+
+HTMLを生成、更新、配布、またはMCP Apps resourceとして返す可能性があるtaskでは、対象Skillやproducerを呼び出す前に `context/html-artifact-contract.md` と `config/html-surfaces.json` を確認する。未登録producer、未登録tracked HTML surface、またはroute未確定のHTMLは作らない。
+
+| route | primary owner | 呼び出し前gate | 呼び出し後gate |
+|---|---|---|---|
+| `html` | `creating-html-documents` | manifestのproducer/profile確認 | static gate + 必要なbrowser profile |
+| `design-artifact` | `designing-ui-ux` | UI/UX Design Approval Gate | static gate + design approval browser matrix |
+| `html-wireframe` | `designing-ui-ux` | low-fidelity目的と承認境界の確認 | static gate + wireframe browser matrix |
+| `html-prototype` | `designing-ui-ux` / `design-eval-loop` | prototypeがproduction実装ではないことを記録 | static gate + prototype browser matrix |
+| `html-plan` | `viewing-plans` / Roadmap generator | Roadmap route、Codemap freshness、source rules確認 | `verify-html-surfaces.py`、Roadmap atomic publish、必要なMCP browser matrix |
+| `html-diagram` | `visualizing-work` → `generate-state-diagram` / `diagram-design` | SVG正本と出力path確認 | static gate + diagram browser matrix |
+
+producer Skillの本文が外部由来またはreference由来の場合、本体を編集してgateを埋め込まない。local routing、共通contract、manifest、pre/post validationで強制する。
+
+Design系routeで新しいvisual direction、layout、interaction model、主要component patternを決める場合は、`workflow-rules.md`のUI/UX Design Approval Gateを先に通す。比較用HTML、wireframe、prototypeは承認artifactであり、production UIの外部公開や実装承認とは別に扱う。
+
+図はSVGを正本にする。Markdownへ新規Mermaidを生成しない。HTML diagramは必要な場合だけ正本SVGをinlineで埋め込む派生成果物とし、`html-diagram` routeのstatic/browser gateを通す。
+
+RoadmapのCode Mapは `codemap.html` ではなく、Project Map + FocusのDetail drawerにあるImpactから開く。`codemap.json` / `codemap.lock`のfreshnessは `context/codemap.md` のCodemap gateで確認し、Roadmapのmtimeや表示更新で代用しない。
+
+MCP Appsは `text/html;profile=mcp-app`、事前宣言resource URI、text fallbackを互換契約として保持する。custom host前提やstale source fallbackで失敗を隠さず、canonical buildからcompatibilityを生成する。tool名、resource URI、adapter差分を変える必要がある場合は、manifestとAcceptanceを更新する別gateへ戻す。
 
 ## Delivery lifecycle routing
 

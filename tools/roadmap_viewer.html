@@ -370,14 +370,87 @@
     .brief-metrics dt { margin-bottom: 4px; color: var(--faint); font-size: 11px; font-weight: 750; }
     .brief-metrics dd { margin: 0; max-width: 260px; color: var(--ink); font-size: 13px; font-weight: 730; overflow-wrap: anywhere; }
     .brief-route {
+      max-height: 180px;
       padding: 14px 18px 12px;
+      overflow: auto;
       border-bottom: 1px solid var(--line);
       background: var(--surface);
     }
     .brief-route-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; }
     .brief-route-head h3 { margin: 2px 0 0; font-size: 15px; letter-spacing: -.01em; }
     .brief-route-legend { color: var(--muted); font-size: 10px; white-space: nowrap; }
-    .brief-route-map { margin-top: 8px; overflow-x: auto; overscroll-behavior-x: contain; }
+    .brief-route-map { margin-top: 8px; overflow-x: hidden; overscroll-behavior-x: contain; }
+    .project-map-grid {
+      min-width: 0;
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .project-map-stage {
+      min-width: 0;
+      display: grid;
+      align-content: start;
+      gap: 5px;
+    }
+    .project-map-stage h4 {
+      margin: 0;
+      color: var(--faint);
+      font-size: 10px;
+      font-weight: 820;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .project-map-node {
+      width: 100%;
+      min-height: 42px;
+      padding: 7px 8px;
+      display: grid;
+      grid-template-columns: 20px minmax(0, 1fr);
+      align-items: center;
+      gap: 7px;
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--accent);
+      border-radius: 6px;
+      background: var(--surface);
+      color: var(--ink);
+      text-align: left;
+    }
+    .project-map-node.current {
+      border-color: var(--accent);
+      background: var(--surface-accent);
+      box-shadow: inset 3px 0 0 var(--accent);
+    }
+    .project-map-node.planned { border-left-style: dashed; border-left-color: var(--line-strong); }
+    .project-map-node.missing { border-left-style: dashed; border-left-color: var(--warn-text); }
+    .project-map-glyph {
+      width: 20px;
+      height: 20px;
+      display: grid;
+      place-items: center;
+      border: 1px solid var(--line-strong);
+      border-radius: 50%;
+      color: var(--accent-strong);
+      font-size: 10px;
+      font-weight: 850;
+    }
+    .project-map-copy { min-width: 0; display: grid; gap: 2px; }
+    .project-map-title {
+      overflow: hidden;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 770;
+      line-height: 1.25;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+    .project-map-state {
+      overflow: hidden;
+      color: var(--muted);
+      font-size: 10px;
+      line-height: 1.25;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
     .brief-route-svg { width: 100%; height: 118px; display: block; }
     .brief-route-svg text { font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", "Noto Sans JP", sans-serif; }
     .route-edge { stroke-width: 2; }
@@ -397,6 +470,139 @@
     .route-tag { fill: var(--muted); font-size: 9px; font-weight: 760; text-anchor: middle; }
     .route-next-tag { fill: var(--accent-blue); font-size: 9px; font-weight: 820; text-anchor: middle; }
     .brief-route-summary { margin: 6px 0 0; color: var(--muted); font-size: 11px; }
+    .current-focus {
+      padding: 24px 28px;
+      display: grid;
+      gap: 14px;
+      border-bottom: 1px solid var(--line);
+      background:
+        linear-gradient(135deg, color-mix(in srgb, var(--accent) 8%, transparent), transparent 48%),
+        var(--surface);
+    }
+    .current-focus-head {
+      display: flex;
+      align-items: end;
+      justify-content: space-between;
+      gap: 16px;
+    }
+    .current-focus-head h3 { margin: 2px 0 0; color: var(--ink); font-size: 18px; letter-spacing: -.01em; }
+    .current-focus-head p:last-child { margin: 0; color: var(--muted); font-size: 12px; }
+    .current-focus-card {
+      padding: 18px;
+      display: grid;
+      grid-template-columns: minmax(0, 1.15fr) minmax(240px, .85fr);
+      gap: 16px;
+      border: 1px solid var(--line);
+      border-left: 4px solid var(--accent);
+      border-radius: var(--radius-lg);
+      background: var(--surface-soft);
+    }
+    .current-focus-card h4 { margin: 3px 0 0; color: var(--ink); font-size: 20px; letter-spacing: -.015em; }
+    .current-focus-purpose { margin: 8px 0 0; color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .current-focus-output { margin: 9px 0 0; color: var(--accent-strong); font-size: 11px; font-weight: 760; overflow-wrap: anywhere; }
+    .current-focus-contract {
+      margin: 0;
+      display: grid;
+      gap: 8px;
+    }
+    .current-focus-contract div {
+      min-width: 0;
+      padding: 10px 11px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+    .current-focus-contract dt {
+      color: var(--accent-strong);
+      font: 800 9px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .current-focus-contract dd { margin: 4px 0 0; color: var(--ink); font-size: 12px; line-height: 1.45; overflow-wrap: anywhere; }
+    .current-focus-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+    .detail-drawer {
+      position: fixed;
+      inset: 0;
+      z-index: 70;
+      padding: 22px;
+      display: grid;
+      place-items: center;
+      background: color-mix(in srgb, var(--ink) 38%, transparent);
+    }
+    .detail-drawer[hidden] { display: none; }
+    .detail-drawer-panel {
+      width: min(1080px, 100%);
+      max-height: min(840px, calc(100vh - 44px));
+      display: grid;
+      grid-template-rows: auto auto minmax(0, 1fr);
+      border: 1px solid var(--line-strong);
+      border-radius: var(--radius-lg);
+      background: var(--surface);
+      box-shadow: var(--shadow-xl);
+      overflow: hidden;
+    }
+    .detail-drawer-header {
+      padding: 18px 20px;
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 16px;
+      border-bottom: 1px solid var(--line);
+    }
+    .detail-drawer-header h2 { margin: 2px 0 0; color: var(--ink); font-size: 20px; letter-spacing: -.015em; }
+    .detail-drawer-header p:last-child { margin: 6px 0 0; color: var(--muted); font-size: 12px; }
+    .detail-tabs {
+      padding: 8px 10px;
+      display: flex;
+      gap: 6px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-soft);
+      overflow-x: auto;
+    }
+    .detail-tab {
+      min-height: 38px;
+      padding: 8px 12px;
+      border: 1px solid transparent;
+      border-radius: 999px;
+      color: var(--muted);
+      background: transparent;
+      font-size: 12px;
+      font-weight: 780;
+      white-space: nowrap;
+      cursor: pointer;
+    }
+    .detail-tab[aria-selected="true"] {
+      border-color: var(--accent);
+      color: var(--accent-strong);
+      background: var(--surface-accent);
+    }
+    .detail-drawer-body {
+      min-height: 0;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    .detail-panel { padding: 18px 20px; }
+    .detail-panel[hidden] { display: none; }
+    .detail-panel-lead { margin: 0 0 14px; color: var(--muted); font-size: 13px; line-height: 1.55; }
+    .detail-document-grid,
+    .impact-code-map {
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+    }
+    .detail-document-card,
+    .impact-node {
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-soft);
+    }
+    .detail-document-card strong,
+    .impact-node strong { display: block; color: var(--ink); font-size: 13px; overflow-wrap: anywhere; }
+    .detail-document-card span,
+    .impact-node span { display: block; margin-top: 4px; color: var(--muted); font-size: 11px; line-height: 1.45; overflow-wrap: anywhere; }
+    .impact-status { margin: 0 0 12px; color: var(--muted); font-size: 12px; }
     .brief-flow-section,
     .brief-claims-section,
     .brief-artifact-section { padding: 22px 28px; border-bottom: 1px solid var(--line); }
@@ -818,10 +1024,64 @@
     @media (max-width: 720px) {
       .brief-header,
       .design-summary,
+      .current-focus,
       .brief-route,
       .brief-flow-section,
       .brief-claims-section,
       .brief-artifact-section { padding: 18px 16px; }
+      .brief-route {
+        max-height: 128px;
+        padding: 10px 12px 8px;
+      }
+      .brief-route-head {
+        align-items: center;
+        justify-content: flex-start;
+        gap: 8px;
+      }
+      .brief-route-head > div {
+        min-width: 0;
+        display: flex;
+        align-items: center;
+        gap: 6px;
+      }
+      .brief-route-head .brief-kicker {
+        flex: 0 0 auto;
+        font-size: 8px;
+        letter-spacing: .06em;
+      }
+      .brief-route-head h3 {
+        min-width: max-content;
+        margin: 0;
+        font-size: 13px;
+        line-height: 1.2;
+        white-space: nowrap;
+      }
+      .brief-route-legend { display: none; }
+      .brief-route-map { margin-top: 5px; overflow-x: hidden; }
+      .brief-route-summary { margin-top: 4px; line-height: 1.3; }
+      .project-map-grid { gap: 5px; }
+      .project-map-stage { gap: 4px; }
+      .project-map-stage h4 { font-size: 8px; letter-spacing: .04em; }
+      .project-map-node {
+        min-height: 40px;
+        padding: 5px 4px;
+        grid-template-columns: 18px minmax(0, 1fr);
+        gap: 4px;
+      }
+      .project-map-glyph { width: 18px; height: 18px; font-size: 9px; }
+      .project-map-copy { gap: 1px; }
+      .project-map-title { font-size: 9px; line-height: 1.15; }
+      .project-map-state { font-size: 8px; line-height: 1.15; }
+      .current-focus-card { grid-template-columns: 1fr; padding: 14px; }
+      .current-focus-head { align-items: start; flex-direction: column; gap: 5px; }
+      .current-focus-actions { display: grid; grid-template-columns: 1fr; }
+      .detail-drawer { padding: 0; place-items: stretch; }
+      .detail-drawer-panel { width: 100%; max-height: 100vh; border-radius: 0; }
+      .detail-drawer-header { padding: 14px 16px; }
+      .detail-tabs { padding: 8px; }
+      .detail-panel { padding: 14px 16px; }
+      .detail-document-grid,
+      .impact-code-map { grid-template-columns: 1fr; }
       .brief-step-source { display: none; }
       .brief-section-heading { align-items: start; flex-direction: column; gap: 4px; }
       .design-summary-grid,
@@ -2581,10 +2841,6 @@
     @media (prefers-reduced-motion: reduce) {
       body.codemap-mode .explicit-node-layer .graph-node { transition: none; }
     }
-    .workspace-view-switch { display: inline-flex; align-items: center; gap: 2px; padding: 2px; border: 1px solid var(--line); border-radius: 8px; background: var(--surface-soft); }
-    .workspace-view-switch .btn { min-height: 30px; padding: 5px 9px; border: 0; box-shadow: none; }
-    .workspace-view-switch .btn[aria-pressed="true"] { background: var(--surface); color: var(--accent-strong); box-shadow: 0 1px 2px color-mix(in srgb, var(--ink) 12%, transparent); }
-    .workspace-view-switch .btn:disabled { cursor: not-allowed; opacity: .55; }
     .codemap-gate { max-width: 260px; overflow: hidden; color: var(--muted); font-size: 11px; font-weight: 750; text-overflow: ellipsis; white-space: nowrap; }
     .codemap-gate[data-status="fresh"] { color: var(--success); }
     .codemap-gate[data-status="missing"], .codemap-gate[data-status="mismatch"], .codemap-gate[data-status="stale"], .codemap-gate[data-status="insufficient"] { color: var(--danger); }
@@ -2605,11 +2861,6 @@
         </div>
       </div>
       <div class="toolbar" role="group" aria-label="Viewer操作">
-        <span class="workspace-view-switch" role="group" aria-label="Task Workspace表示">
-          <button class="btn" type="button" id="workspace-view-plan" aria-pressed="true">Plan</button>
-          <button class="btn" type="button" id="workspace-view-code" aria-pressed="false">Code Map</button>
-        </span>
-        <span class="codemap-gate" id="codemap-gate" role="status" aria-live="polite">Codemap: —</span>
         <span class="live-badge" id="live-status">
           <img class="icon" id="live-status-icon" alt="">
           <span id="live-status-text">Static</span>
@@ -2705,11 +2956,36 @@
 
       <section class="brief-route" id="brief-route" aria-labelledby="brief-route-title">
         <div class="brief-route-head">
-          <div><p class="brief-kicker">ROADMAP</p><h3 id="brief-route-title">計画の現在地</h3></div>
-          <span class="brief-route-legend" id="brief-route-legend">左から実行順 · 外周は選択中</span>
+          <div><p class="brief-kicker">PROJECT MAP</p><h3 id="brief-route-title">企画から検証まで</h3></div>
+          <span class="brief-route-legend" id="brief-route-legend">4 stage · Currentは実装stageに表示</span>
         </div>
         <div class="brief-route-map" id="brief-route-map"></div>
         <p class="brief-route-summary" id="brief-route-summary">現在地を確認中</p>
+      </section>
+
+      <section class="current-focus" id="current-focus" aria-labelledby="current-focus-title">
+        <div class="current-focus-head">
+          <div><p class="brief-kicker">CURRENT FOCUS</p><h3 id="current-focus-title">Current Task</h3></div>
+          <p id="brief-current-task">現在のTaskを確認中</p>
+        </div>
+        <article class="current-focus-card" aria-labelledby="current-focus-task-title">
+          <div>
+            <p class="brief-kicker" id="current-focus-meta">TASK未記録</p>
+            <h4 id="current-focus-task-title">Taskを読み込み中です。</h4>
+            <p class="current-focus-purpose" id="current-focus-purpose">Taskの目的を読み込み中です。</p>
+            <p class="current-focus-output" id="current-focus-output">成果物を読み込み中です。</p>
+            <div class="current-focus-actions" aria-label="Current Taskの詳細操作">
+              <button class="btn primary" type="button" id="open-detail-drawer" data-detail-open="change" aria-haspopup="dialog" aria-controls="detail-drawer">Detailを開く</button>
+              <button class="btn" type="button" data-detail-open="sources" aria-haspopup="dialog" aria-controls="detail-drawer">Evidence</button>
+              <button class="btn" type="button" id="open-impact-map" data-detail-open="impact" aria-haspopup="dialog" aria-controls="detail-drawer">Impact Code Map</button>
+            </div>
+          </div>
+          <dl class="current-focus-contract" aria-label="Current Taskの実行契約">
+            <div><dt>Primary action</dt><dd id="current-primary-action">未記録</dd></div>
+            <div><dt>Done conditions</dt><dd id="current-done-preview">未記録</dd></div>
+            <div><dt>Next / Blocker</dt><dd id="current-next-line">未記録</dd></div>
+          </dl>
+        </article>
       </section>
 
       <section class="design-summary" id="brief-design-summary" aria-labelledby="brief-design-summary-title">
@@ -2743,80 +3019,119 @@
           </article>
         </div>
       </section>
-
-      <section class="brief-flow-section" aria-labelledby="brief-flow-title">
-        <div class="brief-section-heading">
-          <div><p class="brief-kicker">IMPLEMENTATION MAP</p><h3 id="brief-flow-title">全体像と実装プレビュー</h3></div>
-          <p id="brief-current-task">現在のTaskを確認中</p>
-        </div>
-        <div id="brief-workspace">
-          <div class="brief-workspace" id="implementation-workspace">
-            <nav class="brief-task-index" id="brief-task-index" aria-label="実装Task一覧">
-              <div class="brief-flow" id="brief-flow" role="tablist" aria-orientation="vertical"></div>
-            </nav>
-            <article class="brief-task-detail" id="implementation-detail" role="tabpanel" aria-live="off">
-              <div id="brief-task-detail">
-                <header class="brief-task-detail-header">
-                  <p class="brief-kicker" id="implementation-task-meta">SELECTED TASK</p>
-                  <h4 id="implementation-task-title">Taskを選択してください</h4>
-                  <p class="brief-task-purpose" id="implementation-task-purpose">Taskの目的を読み込み中です。</p>
-                  <p class="brief-task-output" id="implementation-task-output">成果物を読み込み中です。</p>
-                </header>
-                <section class="brief-implementation" id="brief-implementation" aria-labelledby="implementation-heading">
-                  <h5 id="implementation-heading">こう実装する <span>計画</span></h5>
-                  <ul id="implementation-steps"></ul>
-                </section>
-                <section class="implementation-diagram" id="implementation-diagram" aria-labelledby="implementation-diagram-heading">
-                  <div class="implementation-diagram-heading">
-                    <h5 id="implementation-diagram-heading">実装フロー</h5>
-                    <span>planに明示された関係</span>
-                  </div>
-                  <div class="implementation-diagram-flow" id="implementation-diagram-flow"></div>
-                  <ol class="implementation-diagram-relations" id="implementation-diagram-relations" aria-label="実装図の関係"></ol>
-                  <p class="implementation-diagram-message" id="implementation-diagram-message"></p>
-                </section>
-                <section class="brief-source-preview" id="brief-source-preview" aria-labelledby="implementation-source-heading" tabindex="-1">
-                  <div class="brief-source-heading">
-                    <div>
-                      <h5 id="implementation-source-heading">現在の実コード <span>生成時点の事実</span></h5>
-                      <p class="brief-source-location" id="brief-source-location">
-                        <code id="implementation-source-path">実コード参照が未記録</code>
-                        <span id="implementation-source-range"></span>
-                      </p>
-                    </div>
-                    <code class="brief-source-anchor" id="implementation-source-anchor"></code>
-                  </div>
-                  <p class="brief-source-message" id="implementation-source-message"></p>
-                  <pre class="brief-source-code" id="brief-source-code"><code class="brief-source-code" id="implementation-code" tabindex="0" aria-label="現在の実コード抜粋"></code></pre>
-                </section>
-                <dl class="brief-task-contract" id="implementation-contract"></dl>
-                <button class="brief-source-link" type="button" data-artifact="30_plan.md">30_plan.md で計画を確認</button>
-              </div>
-            </article>
-          </div>
-        </div>
-      </section>
-
-      <section class="brief-claims-section" id="brief-claims" aria-labelledby="brief-claims-title">
-        <div class="brief-section-heading">
-          <div><p class="brief-kicker">SOURCE-BOUND CLAIMS</p><h3 id="brief-claims-title">事実・判断・未確定</h3></div>
-          <p>明示されたsourceだけを表示</p>
-        </div>
-        <div class="claim-grid">
-          <article class="claim-card fact"><h4>事実</h4><div id="brief-facts"></div></article>
-          <article class="claim-card decision"><h4>判断</h4><div id="brief-decisions"></div></article>
-          <article class="claim-card open"><h4>未確定</h4><div id="brief-open-items"></div></article>
-        </div>
-      </section>
-
-      <section class="brief-artifact-section" id="brief-artifacts" aria-labelledby="brief-artifacts-title">
-        <div class="brief-section-heading">
-          <div><p class="brief-kicker">OUTPUTS</p><h3 id="brief-artifacts-title">生まれる成果物</h3></div>
-          <p>正本を直接開く</p>
-        </div>
-        <div class="brief-artifact-grid" id="brief-artifact-grid"></div>
-      </section>
     </section>
+
+    <div class="detail-drawer" id="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="detail-drawer-title" hidden>
+      <section class="detail-drawer-panel">
+        <header class="detail-drawer-header">
+          <div>
+            <p class="brief-kicker">DETAIL DRAWER</p>
+            <h2 id="detail-drawer-title">Current Taskの詳細</h2>
+            <p id="detail-drawer-summary">Document、Change、Impact、Test、Sourcesを必要な時だけ開きます。</p>
+          </div>
+          <button class="btn icon-only" type="button" id="close-detail-drawer" aria-label="Detail drawerを閉じる">
+            <img class="icon" data-icon="x" alt="">
+          </button>
+        </header>
+        <div class="detail-tabs" id="detail-tabs" role="tablist" aria-label="Detail drawer sections">
+          <button class="detail-tab" id="detail-tab-document" type="button" role="tab" data-detail-tab="document" aria-selected="true" aria-controls="detail-panel-document" tabindex="0">Document</button>
+          <button class="detail-tab" id="detail-tab-change" type="button" role="tab" data-detail-tab="change" aria-selected="false" aria-controls="detail-panel-change" tabindex="-1">Change</button>
+          <button class="detail-tab" id="detail-tab-impact" type="button" role="tab" data-detail-tab="impact" aria-selected="false" aria-controls="detail-panel-impact" tabindex="-1">Impact</button>
+          <button class="detail-tab" id="detail-tab-test" type="button" role="tab" data-detail-tab="test" aria-selected="false" aria-controls="detail-panel-test" tabindex="-1">Test</button>
+          <button class="detail-tab" id="detail-tab-sources" type="button" role="tab" data-detail-tab="sources" aria-selected="false" aria-controls="detail-panel-sources" tabindex="-1">Sources</button>
+        </div>
+        <div class="detail-drawer-body">
+          <section class="detail-panel" id="detail-panel-document" role="tabpanel" aria-labelledby="detail-tab-document" tabindex="0">
+            <p class="detail-panel-lead" id="detail-document-summary">正本文書とCurrent Taskの根拠を表示します。</p>
+            <div class="detail-document-grid" id="detail-document-grid"></div>
+          </section>
+          <section class="detail-panel" id="detail-panel-change" role="tabpanel" aria-labelledby="detail-tab-change" tabindex="0" hidden>
+            <section class="brief-flow-section" aria-labelledby="brief-flow-title">
+              <div class="brief-section-heading">
+                <div><p class="brief-kicker">CHANGE</p><h3 id="brief-flow-title">選択Taskの実装プレビュー</h3></div>
+                <p id="selected-task-context">SelectedはCurrentとは別に保持</p>
+              </div>
+              <div id="brief-workspace">
+                <div class="brief-workspace" id="implementation-workspace">
+                  <nav class="brief-task-index" id="brief-task-index" aria-label="実装Task一覧">
+                    <div class="brief-flow" id="brief-flow" role="tablist" aria-orientation="vertical"></div>
+                  </nav>
+                  <article class="brief-task-detail" id="implementation-detail" role="tabpanel" aria-live="off">
+                    <div id="brief-task-detail">
+                      <header class="brief-task-detail-header">
+                        <p class="brief-kicker" id="implementation-task-meta">SELECTED TASK</p>
+                        <h4 id="implementation-task-title">Taskを選択してください</h4>
+                        <p class="brief-task-purpose" id="implementation-task-purpose">Taskの目的を読み込み中です。</p>
+                        <p class="brief-task-output" id="implementation-task-output">成果物を読み込み中です。</p>
+                      </header>
+                      <section class="brief-implementation" id="brief-implementation" aria-labelledby="implementation-heading">
+                        <h5 id="implementation-heading">こう実装する <span>計画</span></h5>
+                        <ul id="implementation-steps"></ul>
+                      </section>
+                      <section class="implementation-diagram" id="implementation-diagram" aria-labelledby="implementation-diagram-heading">
+                        <div class="implementation-diagram-heading">
+                          <h5 id="implementation-diagram-heading">実装フロー</h5>
+                          <span>planに明示された関係</span>
+                        </div>
+                        <div class="implementation-diagram-flow" id="implementation-diagram-flow"></div>
+                        <ol class="implementation-diagram-relations" id="implementation-diagram-relations" aria-label="実装図の関係"></ol>
+                        <p class="implementation-diagram-message" id="implementation-diagram-message"></p>
+                      </section>
+                      <section class="brief-source-preview" id="brief-source-preview" aria-labelledby="implementation-source-heading" tabindex="-1">
+                        <div class="brief-source-heading">
+                          <div>
+                            <h5 id="implementation-source-heading">現在の実コード <span>生成時点の事実</span></h5>
+                            <p class="brief-source-location" id="brief-source-location">
+                              <code id="implementation-source-path">実コード参照が未記録</code>
+                              <span id="implementation-source-range"></span>
+                            </p>
+                          </div>
+                          <code class="brief-source-anchor" id="implementation-source-anchor"></code>
+                        </div>
+                        <p class="brief-source-message" id="implementation-source-message"></p>
+                        <pre class="brief-source-code" id="brief-source-code"><code class="brief-source-code" id="implementation-code" tabindex="0" aria-label="現在の実コード抜粋"></code></pre>
+                      </section>
+                      <dl class="brief-task-contract" id="implementation-contract"></dl>
+                      <button class="brief-source-link" type="button" data-artifact="30_plan.md">30_plan.md で計画を確認</button>
+                    </div>
+                  </article>
+                </div>
+              </div>
+            </section>
+          </section>
+          <section class="detail-panel" id="detail-panel-impact" role="tabpanel" aria-labelledby="detail-tab-impact" tabindex="0" hidden>
+            <p class="detail-panel-lead">Impact Code Mapはこのdrawer内で確認します。Current FocusとSelected Taskは維持されます。</p>
+            <span class="codemap-gate visually-hidden" id="codemap-gate" role="status" aria-live="polite">Codemap: —</span>
+            <p class="impact-status" id="impact-code-map-status">Codemap確認中</p>
+            <div class="impact-code-map" id="impact-code-map" role="list" aria-label="Impact Code Map"></div>
+          </section>
+          <section class="detail-panel" id="detail-panel-test" role="tabpanel" aria-labelledby="detail-tab-test" tabindex="0" hidden>
+            <p class="detail-panel-lead">完了条件と検証はmobileでもdrawer内で到達できます。</p>
+            <div class="detail-document-grid" id="detail-test-grid"></div>
+          </section>
+          <section class="detail-panel" id="detail-panel-sources" role="tabpanel" aria-labelledby="detail-tab-sources" tabindex="0" hidden>
+            <section class="brief-claims-section" id="brief-claims" aria-labelledby="brief-claims-title">
+              <div class="brief-section-heading">
+                <div><p class="brief-kicker">SOURCE-BOUND CLAIMS</p><h3 id="brief-claims-title">事実・判断・未確定</h3></div>
+                <p>明示されたsourceだけを表示</p>
+              </div>
+              <div class="claim-grid">
+                <article class="claim-card fact"><h4>事実</h4><div id="brief-facts"></div></article>
+                <article class="claim-card decision"><h4>判断</h4><div id="brief-decisions"></div></article>
+                <article class="claim-card open"><h4>未確定</h4><div id="brief-open-items"></div></article>
+              </div>
+            </section>
+            <section class="brief-artifact-section" id="brief-artifacts" aria-labelledby="brief-artifacts-title">
+              <div class="brief-section-heading">
+                <div><p class="brief-kicker">OUTPUTS</p><h3 id="brief-artifacts-title">生まれる成果物</h3></div>
+                <p>正本を直接開く</p>
+              </div>
+              <div class="brief-artifact-grid" id="brief-artifact-grid"></div>
+            </section>
+          </section>
+        </div>
+      </section>
+    </div>
 
     <details class="concept-map-disclosure" id="concept-map-disclosure">
       <summary><span><strong>関係図で見る</strong><small>概念間のつながりを補助的に確認</small></span><img class="icon summary-chevron" data-icon="chevron" alt=""></summary>
@@ -4030,14 +4345,18 @@
           ? { ...artifact, path, label, exists: true }
           : { path, name: path, label, type: 'md', size: 0, modifiedAt: '', state: '', exists: false };
       });
-      const currentTask = model.activeTask || model.recordedActiveTask || model.nextSteps[0] || null;
+      const selectedCandidate = model.tasks.find(task => task.number === String(selectedTaskNumber)) || null;
+      const completedFallback = selectedCandidate?.status === 'complete'
+        ? selectedCandidate
+        : model.completedTasks[model.completedTasks.length - 1] || model.tasks[model.tasks.length - 1] || null;
+      const currentTask = model.activeTask || model.recordedActiveTask || model.nextSteps[0] || completedFallback;
       const currentIndex = currentTask
         ? model.tasks.findIndex(task => task.number === currentTask.number)
         : -1;
       const nextTask = currentIndex >= 0
         ? model.tasks.slice(currentIndex + 1).find(task => task.status !== 'complete') || null
         : model.tasks.find(task => task.status !== 'complete') || null;
-      const selectedTask = model.tasks.find(task => task.number === String(selectedTaskNumber))
+      const selectedTask = selectedCandidate
         || currentTask
         || model.tasks.find(task => task.status !== 'complete')
         || model.tasks[0]
@@ -4603,13 +4922,6 @@
     const KNOWN_FILES = ROADMAP_MODEL.MODEL_KNOWN_FILES;
     let currentSnapshot = ROADMAP_MODEL.normalizeSnapshot({ title: 'Roadmap', files: {} });
     let workspaceRootSnapshot = currentSnapshot;
-    let workspaceView = new URLSearchParams(location.search).get('view') === 'code' ? 'code' : 'plan';
-    function updateWorkspaceUrl() {
-      const url = new URL(location.href);
-      if (workspaceView === 'code') url.searchParams.set('view', 'code');
-      else url.searchParams.delete('view');
-      history.replaceState(null, '', url);
-    }
     let currentModel = null;
     let lastSnapshotSignature = '';
     let selectedImplementationTaskNumber = '';
@@ -4625,7 +4937,8 @@
     let previewSourceText = '';
     let lastImplementationAnnouncementKey = '';
     let selectedGraphNodeId = '';
-    let conceptMapOpenBeforeCodemap = null;
+    let activeDetailTab = 'document';
+    let detailDrawerRestoreFocus = null;
     let viewerNavRestoreFocus = null;
     let viewerNavScrollFrame = null;
     let viewerNavScrollLockUntil = 0;
@@ -4839,36 +5152,21 @@
       const focusKey = captureFocusKey();
       const normalizedRoot = ROADMAP_MODEL.normalizeSnapshot(snapshotInput);
       if (normalizedRoot.kind !== 'codemap') workspaceRootSnapshot = normalizedRoot;
-      if (workspaceView === 'code' && !workspaceRootSnapshot.codemap) workspaceView = 'plan';
-      currentSnapshot = workspaceView === 'code' && workspaceRootSnapshot.codemap
-        ? workspaceRootSnapshot.codemap
-        : normalizedRoot;
+      currentSnapshot = normalizedRoot;
       lastSnapshotSignature = ROADMAP_MODEL.snapshotSignature(normalizedRoot);
       currentModel = ROADMAP_MODEL.buildModel(currentSnapshot);
       const isCodemap = currentSnapshot.kind === 'codemap';
       document.body.classList.toggle('codemap-mode', isCodemap);
       const conceptMap = byId('concept-map-disclosure');
-      const wasCodemap = previousModel?.snapshot.kind === 'codemap';
-      if (isCodemap && !wasCodemap) {
-        conceptMapOpenBeforeCodemap = conceptMap.open;
-        conceptMap.open = true;
-      } else if (!isCodemap && wasCodemap) {
-        conceptMap.open = Boolean(conceptMapOpenBeforeCodemap);
-        conceptMapOpenBeforeCodemap = null;
-      }
+      if (isCodemap && previousModel?.snapshot.kind !== 'codemap') conceptMap.open = true;
       byId('codemap-toolbar').hidden = !isCodemap;
       byId('codemap-mobile-context').hidden = !isCodemap;
-      byId('workspace-view-plan').setAttribute('aria-pressed', String(workspaceView === 'plan'));
-      byId('workspace-view-code').setAttribute('aria-pressed', String(workspaceView === 'code'));
-      byId('workspace-view-code').disabled = !workspaceRootSnapshot.codemap;
       const codemapStatus = workspaceRootSnapshot.codemapStatus || 'not-applicable';
-      byId('workspace-view-code').textContent = codemapStatus === 'fresh' ? 'Code Map' : `Code Map · ${codemapStatus}`;
       const codemapMessage = workspaceRootSnapshot.codemapMessage || `Codemap: ${codemapStatus}`;
       const codemapGate = byId('codemap-gate');
       codemapGate.dataset.status = codemapStatus;
       codemapGate.textContent = `Codemap: ${codemapStatus}`;
       codemapGate.title = codemapMessage;
-      byId('workspace-view-code').title = `${codemapMessage} Refresh: python3 scripts/generate-codemap.py refresh … && python3 scripts/generate-codemap.py check …`;
       byId('graph-shell').setAttribute('aria-label', isCodemap ? '根拠付きコード関係図' : '成果までの構造グラフ');
       const activeNumber = currentModel.activeTask?.number;
       if (!taskExpansionInitialized) {
@@ -5277,41 +5575,37 @@
     }
     function renderRoadmapRoute(route) {
       const host = byId('brief-route-map');
-      byId('brief-route-summary').textContent = route.visibleSummary;
+      byId('brief-route-summary').textContent = route.tasks.length
+        ? `${route.visibleSummary} · 4 stage`
+        : 'Project Map: Task未記録';
       if (!route.tasks.length) {
         host.innerHTML = '<p class="brief-empty">30_plan.mdにTaskが未記録です。</p>';
         return;
       }
-      const compact = window.matchMedia('(max-width: 720px)').matches;
-      const step = compact ? 110 : 150;
-      const start = compact ? 48 : 62;
-      const y = 42;
-      const width = Math.max(compact ? 300 : 360, start * 2 + step * (route.tasks.length - 1));
-      byId('brief-route-legend').textContent = `全${route.tasks.length}Task · 左から実行順 · 外周は選択中`;
-      const edges = route.tasks.slice(1).map((task, index) => {
-        const previous = route.tasks[index];
-        const tone = previous.status === 'complete' ? 'complete' : 'planned';
-        return `<line class="route-edge ${tone}" x1="${start + index * step + 18}" y1="${y}" x2="${start + (index + 1) * step - 18}" y2="${y}"/>`;
-      }).join('');
-      const nodes = route.tasks.map((task, index) => {
-        const x = start + index * step;
-        const state = task.status === 'complete' ? 'complete' : task.status === 'blocked' ? 'blocked' : task.isCurrent ? 'current' : 'planned';
-        const shape = state === 'current'
-          ? `<polygon class="route-node current" points="${x},23 ${x + 19},42 ${x},61 ${x - 19},42"/>`
-          : state === 'blocked'
-            ? `<rect class="route-node blocked" x="${x - 17}" y="25" width="34" height="34" rx="5"/>`
-            : `<circle class="route-node ${state}${task.isNext ? ' next' : ''}" cx="${x}" cy="${y}" r="17"/>`;
-        const symbol = state === 'complete' ? '✓' : state === 'blocked' ? '!' : task.isCurrent ? '▶' : task.number;
-        const tag = task.isCurrent ? '現在' : task.isNext ? '次' : task.status === 'complete' ? '完了' : task.status === 'blocked' ? 'ブロック' : '未着手';
-        const selected = task.isSelected ? `<circle class="route-selection" cx="${x}" cy="${y}" r="24"/><text class="route-tag" x="${x}" y="12">選択中</text>` : '';
-        const nextTag = task.isNext && !task.isSelected ? `<text class="route-next-tag" x="${x}" y="12">次</text>` : '';
-        const title = task.title.length > 11 ? `${task.title.slice(0, 10)}…` : task.title;
-        return `<g>${selected}${nextTag}${shape}<text class="route-symbol ${state}" x="${x}" y="46">${escapeHtml(symbol)}</text><text class="route-task-number" x="${x}" y="78">Task ${escapeHtml(task.number)}</text><text class="route-task-title" x="${x}" y="94">${escapeHtml(title)}</text><text class="route-tag" x="${x}" y="109">${escapeHtml(tag)}</text></g>`;
-      }).join('');
-      host.innerHTML = `<svg class="brief-route-svg" style="min-width:${width}px" width="${width}" height="118" viewBox="0 0 ${width} 118" role="img" aria-labelledby="brief-route-svg-title brief-route-svg-desc"><title id="brief-route-svg-title">計画の現在地</title><desc id="brief-route-svg-desc">${escapeHtml(route.summary)}</desc>${edges}${nodes}</svg>`;
-      const focusIndex = Math.max(0, route.tasks.findIndex(task => task.isCurrent || task.isSelected));
-      host.dataset.focusX = String(start + focusIndex * step);
-      requestAnimationFrame(centerRoadmapRoute);
+      const currentTask = route.tasks.find(task => task.isCurrent) || route.tasks.find(task => task.status !== 'complete') || route.tasks[0];
+      const done = route.tasks.filter(task => task.status === 'complete').length;
+      const verificationState = done === route.tasks.length ? '完了' : '未作成';
+      byId('brief-route-legend').textContent = `企画 → 設計 → 実装 → 検証 · CurrentとSelectedは別状態`;
+      const stages = [
+        { stage: '企画', glyph: 'D', title: '仕様', state: 'sourceあり', tone: 'complete' },
+        { stage: '設計', glyph: 'D', title: '計画', state: `${route.tasks.length} Task`, tone: 'complete' },
+        {
+          stage: '実装',
+          glyph: currentTask?.status === 'blocked' ? '!' : currentTask?.number || 'T',
+          title: currentTask ? `Task ${currentTask.number}` : 'Task未記録',
+          state: currentTask ? `現在・${statusLabel(currentTask.status)}` : '未記録',
+          tone: currentTask?.isCurrent ? 'current' : currentTask?.status || 'planned'
+        },
+        { stage: '検証', glyph: 'V', title: '検証', state: verificationState, tone: verificationState === '完了' ? 'complete' : 'missing' }
+      ];
+      host.innerHTML = `<div class="project-map-grid" id="project-map" role="list" aria-label="企画、設計、実装、検証のProject Map">${stages.map(item => `
+        <section class="project-map-stage" role="listitem" aria-label="${escapeHtml(item.stage)}">
+          <h4>${escapeHtml(item.stage)}</h4>
+          <div class="project-map-node ${escapeHtml(item.tone)}">
+            <span class="project-map-glyph" aria-hidden="true">${escapeHtml(item.glyph)}</span>
+            <span class="project-map-copy"><span class="project-map-title">${escapeHtml(item.title)}</span><span class="project-map-state">${escapeHtml(item.state)}</span></span>
+          </div>
+        </section>`).join('')}</div>`;
     }
     function centerRoadmapRoute() {
       const host = byId('brief-route-map');
@@ -5329,6 +5623,106 @@
       byId('brief-design-decisions').innerHTML = list(design.decisions, '設計判断が未記録です。');
       byId('brief-boundaries').innerHTML = list(design.boundaries, '境界が未記録です。');
       byId('brief-done').innerHTML = list(design.done, '完了条件が未記録です。');
+    }
+    function primaryActionFor(task, model) {
+      if (!task) return { label: '未記録', state: 'missing' };
+      const unresolved = task.blockedBy
+        ? Array.from(task.blockedBy.matchAll(/(?:Task|タスク)\s+(\d+(?:\.\d+)?)/gi))
+            .map(match => match[1])
+            .filter(number => model.tasks.find(item => item.number === number)?.status !== 'complete')
+        : [];
+      if (unresolved.length) return { label: task.blockedBy || 'Blocker未記録', state: 'blocked' };
+      if (task.status === 'blocked') return { label: task.blockedBy || 'Blocker未記録', state: 'blocked' };
+      if (task.status === 'complete') return { label: '成果を確認', state: 'complete' };
+      const nextStep = task.implementation[0] || task.steps.find(step => !step.complete)?.label || '未記録';
+      return { label: nextStep, state: nextStep === '未記録' ? 'missing' : 'active' };
+    }
+    function doneConditionsFor(task) {
+      if (!task) return ['未記録'];
+      const conditions = [
+        ...task.verification,
+        ...task.steps.filter(step => !step.complete).map(step => step.label)
+      ].filter(Boolean);
+      return (conditions.length ? conditions : ['未記録']).slice(0, 5);
+    }
+    function renderCurrentFocus(brief, model) {
+      const current = brief.currentTask;
+      const next = brief.nextTask;
+      const action = primaryActionFor(current, model);
+      const done = doneConditionsFor(current);
+      byId('current-focus-meta').textContent = current
+        ? `TASK ${current.number} · ${statusLabel(current.status)}`
+        : 'TASK未記録';
+      byId('current-focus-task-title').textContent = current?.title || 'Taskを選択してください';
+      byId('current-focus-purpose').textContent = current?.purpose || 'Taskの目的が未記録';
+      byId('current-focus-output').textContent = `成果物: ${current?.outputs?.length ? current.outputs.join('、') : '未記録'}`;
+      byId('current-primary-action').textContent = action.label;
+      byId('current-primary-action').dataset.state = action.state;
+      byId('current-done-preview').textContent = done.join(' / ');
+      byId('current-next-line').textContent = action.state === 'blocked'
+        ? `Blocker: ${action.label}`
+        : next
+          ? `Next: Task ${next.number}「${next.title}」`
+          : model.fixedProgress.total > 0 && model.fixedProgress.done === model.fixedProgress.total
+            ? 'Next: なし'
+            : 'Next: 未記録';
+      byId('detail-drawer-title').textContent = current
+        ? `Task ${current.number}: ${current.title}`
+        : 'Current Taskの詳細';
+      byId('detail-drawer-summary').textContent = current
+        ? `CurrentはTask ${current.number}、Selectedはdrawer内で別に保持します。`
+        : 'Document、Change、Impact、Test、Sourcesを必要な時だけ開きます。';
+    }
+    function renderDetailDocument(brief, model) {
+      byId('detail-document-summary').textContent = brief.design.goal.text || '計画全体の目的が未記録です。';
+      const rows = [
+        ['仕様', '00_spec.md', brief.spec.summary],
+        ['設計', '30_plan.md', brief.approach.summary],
+        ['進捗', '40_progress.md', model.waiting.reason],
+        ['レビュー', '80_review.md', model.reviews.hasReview ? 'レビュー記録あり' : 'レビュー未記録']
+      ];
+      byId('detail-document-grid').innerHTML = rows.map(([label, path, summary]) => `
+        <button class="detail-document-card" type="button" data-artifact="${escapeHtml(path)}">
+          <strong>${escapeHtml(label)} · ${escapeHtml(path)}</strong>
+          <span>${escapeHtml(summary || '未記録')}</span>
+        </button>`).join('');
+    }
+    function renderImpactCodeMap(brief) {
+      const host = byId('impact-code-map');
+      const status = workspaceRootSnapshot.codemapStatus || 'not-applicable';
+      const message = workspaceRootSnapshot.codemapMessage || `Codemap: ${status}`;
+      byId('impact-code-map-status').textContent = `Codemap: ${status} · ${message}`;
+      const codemap = workspaceRootSnapshot.codemap;
+      if (!codemap?.nodes?.length) {
+        host.innerHTML = '<p class="brief-empty">Impact Code MapはfreshなCodemapがある時だけdrawer内に表示します。</p>';
+        return;
+      }
+      const selected = brief.selectedTask;
+      const token = selected ? new RegExp(`task\\s*${selected.number}|${selected.number.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i') : null;
+      const related = codemap.nodes
+        .filter(node => !token || token.test(`${node.id} ${node.title} ${node.path || ''} ${node.summary || ''}`))
+        .slice(0, 6);
+      const nodes = related.length ? related : codemap.nodes.slice(0, 6);
+      host.innerHTML = nodes.map(node => `
+        <article class="impact-node" role="listitem">
+          <strong>${escapeHtml(node.title || node.path || node.id)}</strong>
+          <span>${escapeHtml([node.kind, node.path, node.status].filter(Boolean).join(' · ') || 'relation source未記録')}</span>
+        </article>`).join('');
+    }
+    function renderDetailTests(brief) {
+      const task = brief.selectedTask || brief.currentTask;
+      const done = doneConditionsFor(task);
+      const verification = task?.verification?.length ? task.verification : ['検証未記録'];
+      byId('detail-test-grid').innerHTML = [
+        ['Done conditions', done.join(' / ')],
+        ['Verification', verification.join(' / ')],
+        ['Status', task ? statusLabel(task.status) : 'Task未記録'],
+        ['Source', task?.target || '変更対象未記録']
+      ].map(([label, value]) => `
+        <article class="detail-document-card">
+          <strong>${escapeHtml(label)}</strong>
+          <span>${escapeHtml(value)}</span>
+        </article>`).join('');
     }
     function renderExecutionBrief(model) {
       const hadCodeFocus = document.activeElement?.id === 'implementation-code';
@@ -5362,6 +5756,10 @@
       ].join(' / ');
       renderDesignSummary(brief.design);
       renderRoadmapRoute(ROADMAP_MODEL.buildRoadmapRoute(brief));
+      renderCurrentFocus(brief, model);
+      renderDetailDocument(brief, model);
+      renderImpactCodeMap(brief);
+      renderDetailTests(brief);
       syncImplementationTabOrientation();
       byId('brief-flow').innerHTML = brief.flow.length
         ? brief.flow.map(task => {
@@ -5386,6 +5784,9 @@
         : '<p class="brief-empty">30_plan.mdにTaskが未記録です。</p>';
       const preview = brief.selectedSourcePreview;
       byId('implementation-detail').setAttribute('aria-labelledby', selectedTask ? `implementation-task-tab-${selectedTask.number}` : 'brief-flow-title');
+      byId('selected-task-context').textContent = selectedTask
+        ? `Selected: Task ${selectedTask.number}「${selectedTask.title}」 / Current: ${current ? `Task ${current.number}` : '未記録'}`
+        : 'Selected Task未記録';
       byId('implementation-task-meta').textContent = selectedTask
         ? `TASK ${selectedTask.number} · ${statusLabel(selectedTask.status)}`
         : 'TASK未記録';
@@ -5842,6 +6243,62 @@
       target.scrollIntoView({ block: 'start', behavior: 'auto' });
       requestAnimationFrame(() => target.focus({ preventScroll: true }));
     }
+    function detailDrawerOpen() {
+      return !byId('detail-drawer').hidden;
+    }
+    function detailTabs() {
+      return Array.from(document.querySelectorAll('[data-detail-tab]'));
+    }
+    function detailDrawerFocusable() {
+      return Array.from(byId('detail-drawer').querySelectorAll('button:not([disabled]), [href], input:not([disabled]), textarea:not([disabled]), select:not([disabled]), [tabindex]:not([tabindex="-1"])'))
+        .filter(element => !element.hidden && !element.closest('[hidden]') && element.offsetParent !== null);
+    }
+    function selectDetailTab(name, { focus = false } = {}) {
+      const tabs = detailTabs();
+      const next = tabs.some(tab => tab.dataset.detailTab === name) ? name : 'document';
+      activeDetailTab = next;
+      tabs.forEach(tab => {
+        const selected = tab.dataset.detailTab === next;
+        tab.setAttribute('aria-selected', String(selected));
+        tab.tabIndex = selected ? 0 : -1;
+        const panel = byId(tab.getAttribute('aria-controls'));
+        if (panel) panel.hidden = !selected;
+      });
+      if (next === 'impact' && currentModel) {
+        renderImpactCodeMap(ROADMAP_MODEL.buildExecutionBrief(currentModel, selectedImplementationTaskNumber));
+      }
+      if (focus) byId(`detail-tab-${next}`)?.focus({ preventScroll: true });
+    }
+    function openDetailDrawer(tab = 'document', trigger = document.activeElement) {
+      detailDrawerRestoreFocus = trigger;
+      selectDetailTab(tab);
+      byId('detail-drawer').hidden = false;
+      document.body.classList.add('detail-drawer-open');
+      byId('state-announcer').textContent = `${tab === 'impact' ? 'Impact Code Map' : 'Detail drawer'}を開きました。`;
+      requestAnimationFrame(() => (byId(`detail-tab-${activeDetailTab}`) || byId('close-detail-drawer'))?.focus({ preventScroll: true }));
+    }
+    function closeDetailDrawer({ restoreFocus = true } = {}) {
+      byId('detail-drawer').hidden = true;
+      document.body.classList.remove('detail-drawer-open');
+      byId('state-announcer').textContent = 'Detail drawerを閉じました。';
+      if (restoreFocus && canReceiveRestoredFocus(detailDrawerRestoreFocus)) {
+        detailDrawerRestoreFocus.focus({ preventScroll: true });
+      } else if (restoreFocus) {
+        byId('open-detail-drawer')?.focus({ preventScroll: true });
+      }
+      detailDrawerRestoreFocus = null;
+    }
+    function moveDetailTab(current, key) {
+      const tabs = detailTabs();
+      const index = tabs.indexOf(current);
+      if (index < 0) return;
+      let target = current;
+      if (key === 'Home') target = tabs[0];
+      else if (key === 'End') target = tabs[tabs.length - 1];
+      else if (key === 'ArrowRight') target = tabs[(index + 1) % tabs.length];
+      else if (key === 'ArrowLeft') target = tabs[(index - 1 + tabs.length) % tabs.length];
+      selectDetailTab(target.dataset.detailTab, { focus: true });
+    }
     function stopLivePolling() {
       if (liveTimer !== null) window.clearInterval(liveTimer);
       liveTimer = null;
@@ -5959,7 +6416,38 @@
         const button = event.target.closest('.viewer-nav-button');
         if (button) activateViewerNav(button);
       });
+      byId('close-detail-drawer').addEventListener('click', () => closeDetailDrawer());
+      byId('detail-drawer').addEventListener('click', event => {
+        if (event.target === byId('detail-drawer')) closeDetailDrawer();
+      });
       document.addEventListener('keydown', event => {
+        if (detailDrawerOpen()) {
+          const detailTab = event.target.closest?.('[data-detail-tab]');
+          if (detailTab && ['ArrowLeft', 'ArrowRight', 'Home', 'End'].includes(event.key)) {
+            event.preventDefault();
+            moveDetailTab(detailTab, event.key);
+            return;
+          }
+          if (event.key === 'Escape') {
+            event.preventDefault();
+            closeDetailDrawer();
+            return;
+          }
+          if (event.key === 'Tab') {
+            const focusable = detailDrawerFocusable();
+            if (!focusable.length) return;
+            const first = focusable[0];
+            const last = focusable[focusable.length - 1];
+            if (event.shiftKey && document.activeElement === first) {
+              event.preventDefault();
+              last.focus();
+            } else if (!event.shiftKey && document.activeElement === last) {
+              event.preventDefault();
+              first.focus();
+            }
+            return;
+          }
+        }
         const implementationTask = event.target.closest?.('[data-implementation-task]');
         const implementationOrientation = byId('brief-flow').getAttribute('aria-orientation');
         const implementationKeys = implementationOrientation === 'horizontal'
@@ -6041,21 +6529,6 @@
         viewerNavScrollFrame = requestAnimationFrame(updateViewerNavFromScroll);
       }, { passive: true });
       byId('open-files').addEventListener('click', () => fileInput.click());
-      byId('workspace-view-plan').addEventListener('click', () => {
-        updateWithMotion(() => {
-          workspaceView = 'plan';
-          updateWorkspaceUrl();
-          render(workspaceRootSnapshot, { announce: false });
-        }, '#concept-map-disclosure');
-      });
-      byId('workspace-view-code').addEventListener('click', () => {
-        if (!workspaceRootSnapshot.codemap) return;
-        updateWithMotion(() => {
-          workspaceView = 'code';
-          updateWorkspaceUrl();
-          render(workspaceRootSnapshot, { announce: false });
-        }, '#concept-map-disclosure');
-      });
       fileInput.addEventListener('change', async () => {
         try { await loadFiles(fileInput.files); }
         catch { showToast('ファイルを読み込めませんでした'); }
@@ -6099,6 +6572,16 @@
         if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fileInput.click(); }
       });
       document.addEventListener('click', event => {
+        const detailOpen = event.target.closest('[data-detail-open]');
+        if (detailOpen) {
+          openDetailDrawer(detailOpen.dataset.detailOpen || 'document', detailOpen);
+          return;
+        }
+        const detailTab = event.target.closest('[data-detail-tab]');
+        if (detailTab) {
+          selectDetailTab(detailTab.dataset.detailTab, { focus: true });
+          return;
+        }
         const implementationTask = event.target.closest('[data-implementation-task]');
         if (implementationTask) {
           selectImplementationTask(implementationTask.dataset.implementationTask);

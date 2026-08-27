@@ -7,253 +7,727 @@
   <title>Plan Viewer - MCP App</title>
   <style>
     :root {
-      --bg: #1a1a2e;
-      --surface: #16213e;
-      --text: #eee;
-      --text-muted: #888;
-      --accent: #0f4c75;
-      --accent-hover: #3282b8;
-      --border: #333;
+      color-scheme: light;
+      --paper: #f1eee4;
+      --sheet: #fffdf7;
+      --ink: #1b211d;
+      --muted: #626960;
+      --line: #c9cbc0;
+      --line-strong: #202620;
+      --green: #23684f;
+      --green-soft: #e4eee7;
+      --red: #b7453b;
+      --red-dark: #91332b;
+      --code: #17201b;
+      --focus: #0b67c1;
     }
 
     * {
       box-sizing: border-box;
-      margin: 0;
-      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.6;
-      padding: 20px;
+      margin: 0;
+      min-width: 320px;
+      background-color: var(--paper);
+      background-image:
+        linear-gradient(rgba(32, 38, 32, 0.035) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(32, 38, 32, 0.035) 1px, transparent 1px);
+      background-size: 32px 32px;
+      color: var(--ink);
+      font-family: Inter, ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.65;
+    }
+
+    button,
+    textarea {
+      font: inherit;
+    }
+
+    button:focus-visible,
+    textarea:focus-visible,
+    a:focus-visible,
+    [tabindex="-1"]:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 3px;
     }
 
     .container {
-      max-width: 900px;
+      display: grid;
+      grid-template-columns: minmax(180px, 240px) minmax(0, 760px) minmax(220px, 300px);
+      justify-content: center;
+      align-items: start;
+      gap: 20px;
+      width: min(100%, 1400px);
       margin: 0 auto;
+      padding: 24px;
     }
 
-    header {
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 20px;
-      padding-bottom: 10px;
-      border-bottom: 1px solid var(--border);
+    .viewer-header {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 20px;
+      min-height: 116px;
+      padding: 22px 0 18px;
+      border-top: 5px solid var(--line-strong);
+      border-bottom: 1px solid var(--line-strong);
     }
 
-    h1 {
-      font-size: 1.5rem;
+    .eyebrow,
+    .panel-kicker,
+    .document-label {
+      margin: 0 0 6px;
+      color: var(--green);
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 0.7rem;
+      font-weight: 750;
+      letter-spacing: 0.13em;
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+
+    .viewer-header h1 {
+      margin: 0;
+      font-family: Georgia, "Yu Mincho", serif;
+      font-size: clamp(2rem, 5vw, 4.6rem);
+      font-weight: 500;
+      letter-spacing: -0.045em;
+      line-height: 0.95;
     }
 
     .status {
-      font-size: 0.8rem;
-      color: var(--text-muted);
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 32px;
+      padding: 5px 10px;
+      border: 1px solid var(--line);
+      background: var(--sheet);
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .status::before {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      content: "";
     }
 
     .status.connected {
-      color: #4caf50;
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .status.connected::before {
+      background: var(--green);
+    }
+
+    #plan-outline,
+    #plan-review {
+      position: sticky;
+      top: 24px;
+      border-top: 3px solid var(--line-strong);
+      background: rgba(255, 253, 247, 0.86);
+      backdrop-filter: blur(10px);
+    }
+
+    #plan-outline {
+      padding: 18px 16px 16px;
+    }
+
+    #plan-outline h2,
+    #plan-review h2 {
+      margin: 0;
+      font-family: Georgia, "Yu Mincho", serif;
+      font-size: 1.2rem;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    #outline-list {
+      margin: 18px 0;
+      padding: 12px 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      list-style: none;
+    }
+
+    #outline-list:empty::before {
+      display: block;
+      color: var(--muted);
+      content: "見出しを待っています";
+      font-size: 0.78rem;
+    }
+
+    #outline-list li + li {
+      margin-top: 2px;
+    }
+
+    #outline-list button {
+      width: 100%;
+      min-height: 44px;
+      padding: 8px 6px;
+      border: 0;
+      border-left: 2px solid transparent;
+      background: transparent;
+      color: var(--ink);
+      cursor: pointer;
+      font-size: 0.78rem;
+      font-weight: 650;
+      line-height: 1.35;
+      text-align: left;
+      transition: border-color 150ms ease, color 150ms ease, background-color 150ms ease;
+    }
+
+    #outline-list .outline-subitem button {
+      padding-left: 18px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .progress-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      margin: 0;
+      background: var(--line);
+      border: 1px solid var(--line);
+    }
+
+    .progress-grid div {
+      padding: 9px 6px;
+      background: var(--sheet);
+      text-align: center;
+    }
+
+    .progress-grid dt {
+      color: var(--muted);
+      font-size: 0.63rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+    }
+
+    .progress-grid dd {
+      margin: 2px 0 0;
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 1.15rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    #progress-meter {
+      width: 100%;
+      height: 5px;
+      margin-top: 12px;
+      border: 0;
+      background: var(--line);
+      accent-color: var(--green);
+    }
+
+    #progress-meter::-webkit-progress-bar {
+      background: var(--line);
+    }
+
+    #progress-meter::-webkit-progress-value {
+      background: var(--green);
+    }
+
+    #plan-document {
+      min-width: 0;
+      border-top: 5px solid var(--green);
+      background: var(--sheet);
+      box-shadow: 0 16px 40px rgba(32, 38, 32, 0.08);
+    }
+
+    .document-bar {
+      display: flex;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 10px 28px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 0.64rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
 
     #content {
-      background: var(--surface);
-      padding: 20px;
-      border-radius: 8px;
-      margin-bottom: 20px;
+      counter-reset: section;
+      padding: clamp(28px, 6vw, 64px);
+      overflow-wrap: anywhere;
     }
 
-    #content h1, #content h2, #content h3 {
-      margin-top: 1.5em;
-      margin-bottom: 0.5em;
-    }
-
-    #content h1:first-child, #content h2:first-child {
+    #content > :first-child {
       margin-top: 0;
     }
 
-    #content p {
-      margin-bottom: 1em;
+    #content > :last-child {
+      margin-bottom: 0;
     }
 
-    #content ul, #content ol {
-      margin-left: 1.5em;
-      margin-bottom: 1em;
+    #content h1 {
+      max-width: 16ch;
+      margin: 0 0 1.2em;
+      font-family: Georgia, "Yu Mincho", serif;
+      font-size: clamp(2rem, 5vw, 3.7rem);
+      font-weight: 500;
+      letter-spacing: -0.04em;
+      line-height: 1.02;
+    }
+
+    #content h2 {
+      counter-increment: section;
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
+      gap: 12px;
+      margin: 2.5em 0 0.8em;
+      padding-top: 14px;
+      border-top: 1px solid var(--line-strong);
+      font-family: Georgia, "Yu Mincho", serif;
+      font-size: clamp(1.4rem, 3vw, 2rem);
+      font-weight: 600;
+      line-height: 1.2;
+      scroll-margin-top: 24px;
+    }
+
+    #content h2::before {
+      color: var(--green);
+      content: counter(section, decimal-leading-zero);
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      line-height: 2;
+    }
+
+    #content h3 {
+      margin: 2em 0 0.65em;
+      color: var(--green);
+      font-size: 1rem;
+      font-weight: 750;
+      letter-spacing: 0.01em;
+      scroll-margin-top: 24px;
+    }
+
+    #content h4,
+    #content h5,
+    #content h6 {
+      margin: 1.6em 0 0.55em;
+    }
+
+    #content p,
+    #content ul,
+    #content ol,
+    #content blockquote,
+    #content pre,
+    #content .table-wrap {
+      margin: 0 0 1.25em;
+    }
+
+    #content ul,
+    #content ol {
+      padding-left: 1.4em;
+    }
+
+    #content li + li {
+      margin-top: 0.35em;
+    }
+
+    #content a {
+      color: var(--green);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 0.18em;
+    }
+
+    #content blockquote {
+      padding: 16px 18px;
+      border-left: 4px solid var(--green);
+      background: var(--green-soft);
+      color: #35423a;
+    }
+
+    #content blockquote > :last-child {
+      margin-bottom: 0;
     }
 
     #content code {
-      background: rgba(255,255,255,0.1);
-      padding: 2px 6px;
-      border-radius: 4px;
-      font-family: 'SF Mono', Monaco, monospace;
+      padding: 0.15em 0.35em;
+      background: #e8e5dc;
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 0.88em;
     }
 
     #content pre {
-      background: #0d1117;
-      padding: 15px;
-      border-radius: 6px;
+      max-width: 100%;
+      padding: 18px;
       overflow-x: auto;
-      margin-bottom: 1em;
+      border-top: 4px solid var(--green);
+      background: var(--code);
+      color: #eef3ec;
+      line-height: 1.55;
     }
 
     #content pre code {
-      background: none;
       padding: 0;
+      background: transparent;
+      color: inherit;
     }
 
-    .comment-section {
-      background: var(--surface);
-      padding: 20px;
-      border-radius: 8px;
+    .table-wrap {
+      max-width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--line);
     }
 
-    .comment-section h3 {
-      margin-bottom: 15px;
-      font-size: 1rem;
+    #content table {
+      width: 100%;
+      min-width: 520px;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+    }
+
+    #content th,
+    #content td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    #content th {
+      background: #ebe8de;
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+    }
+
+    #plan-review {
+      padding: 18px 16px 16px;
+    }
+
+    .review-copy {
+      margin: 10px 0 16px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.55;
     }
 
     .comment-form {
-      display: flex;
+      display: grid;
       gap: 10px;
     }
 
+    .comment-form label {
+      color: var(--muted);
+      font-size: 0.7rem;
+      font-weight: 750;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
     .comment-form textarea {
-      flex: 1;
-      padding: 10px;
-      border: 1px solid var(--border);
-      border-radius: 6px;
-      background: var(--bg);
-      color: var(--text);
-      font-family: inherit;
+      width: 100%;
+      min-height: 128px;
+      padding: 12px;
       resize: vertical;
-      min-height: 60px;
+      border: 1px solid var(--line-strong);
+      border-radius: 0;
+      background: var(--sheet);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+
+    .comment-form textarea::placeholder {
+      color: #858b83;
     }
 
     .comment-form button {
-      padding: 10px 20px;
-      background: var(--accent);
+      min-height: 44px;
+      padding: 10px 16px;
+      border: 1px solid var(--red);
+      border-radius: 0;
+      background: var(--red);
       color: white;
-      border: none;
-      border-radius: 6px;
       cursor: pointer;
-      font-weight: 500;
-      transition: background 0.2s;
+      font-weight: 750;
+      transition: background-color 150ms ease, border-color 150ms ease, transform 100ms ease;
     }
 
-    .comment-form button:hover {
-      background: var(--accent-hover);
+    .comment-form button:active:not(:disabled) {
+      transform: scale(0.97);
     }
 
     .comment-form button:disabled {
-      opacity: 0.5;
+      border-color: var(--line);
+      background: #d8d7d0;
+      color: #777c76;
       cursor: not-allowed;
     }
 
     #comments-list {
-      margin-top: 15px;
+      display: grid;
+      gap: 8px;
+      margin-top: 14px;
     }
 
     .comment {
-      background: var(--bg);
-      padding: 10px 15px;
-      border-radius: 6px;
-      margin-bottom: 10px;
-      border-left: 3px solid var(--accent);
+      padding: 10px 0 10px 12px;
+      border-left: 3px solid var(--green);
+      color: #384039;
+      font-size: 0.78rem;
+      overflow-wrap: anywhere;
     }
 
     .comment-time {
-      font-size: 0.75rem;
-      color: var(--text-muted);
+      margin-top: 5px;
+      color: var(--muted);
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 0.65rem;
     }
 
     .loading {
+      min-height: 240px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
       text-align: center;
-      padding: 40px;
-      color: var(--text-muted);
+    }
+
+    @media (hover: hover) and (pointer: fine) {
+      #outline-list button:hover {
+        border-left-color: var(--green);
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .comment-form button:hover:not(:disabled) {
+        border-color: var(--red-dark);
+        background: var(--red-dark);
+      }
+    }
+
+    @media (max-width: 1100px) {
+      .container {
+        grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+      }
+
+      #plan-review {
+        position: static;
+        grid-column: 2;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .container {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+        padding: 14px;
+      }
+
+      .viewer-header {
+        grid-template-columns: 1fr;
+        min-height: 0;
+        padding: 16px 0;
+      }
+
+      .viewer-header h1 {
+        font-size: clamp(2.25rem, 15vw, 3.6rem);
+      }
+
+      .status {
+        justify-self: start;
+      }
+
+      #plan-outline,
+      #plan-review {
+        position: static;
+        grid-column: 1;
+      }
+
+      #plan-document {
+        grid-column: 1;
+      }
+
+      #content {
+        padding: 28px 20px 36px;
+      }
+
+      #content h2 {
+        grid-template-columns: 32px minmax(0, 1fr);
+      }
+
+      .document-bar {
+        padding-inline: 20px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      *,
+      *::before,
+      *::after {
+        transition-duration: 0.01ms !important;
+      }
     }
   </style>
 </head>
 <body>
   <div class="container">
-    <header>
-      <h1 id="viewer-title">Document Viewer</h1>
-      <span id="status" class="status">Waiting for content...</span>
+    <header class="viewer-header">
+      <div>
+        <p class="eyebrow">Workflow / source-bound</p>
+        <h1 id="viewer-title">文書を読む</h1>
+      </div>
+      <span id="status" class="status" role="status" aria-live="polite">内容待ち</span>
     </header>
 
-    <div id="content">
-      <div class="loading">Markdown content will appear here</div>
-    </div>
+    <nav id="plan-outline" aria-labelledby="outline-heading">
+      <p class="panel-kicker">Document map</p>
+      <h2 id="outline-heading">この文書の構造</h2>
+      <ol id="outline-list"></ol>
+      <dl id="progress-grid" class="progress-grid" aria-label="文書の進捗">
+        <div><dt>完了</dt><dd id="progress-complete">0</dd></div>
+        <div><dt>全項目</dt><dd id="progress-total">0</dd></div>
+        <div><dt>残り</dt><dd id="progress-remaining">0</dd></div>
+      </dl>
+      <progress id="progress-meter" max="1" value="0" aria-label="文書の進捗"></progress>
+    </nav>
 
-    <div class="comment-section">
-      <h3 id="review-heading">Send Document Comment to Claude</h3>
-      <div class="comment-form">
-        <textarea id="comment-input" placeholder="Enter your comment about this document..."></textarea>
-        <button id="send-btn" disabled>Send</button>
+    <main id="plan-document">
+      <div class="document-bar" aria-hidden="true">
+        <span id="document-kind-label">Document / live source</span>
+        <span>Read → inspect → respond</span>
       </div>
-      <div id="comments-list"></div>
-    </div>
+      <div id="content">
+        <div class="loading">Markdown を待っています</div>
+      </div>
+    </main>
+
+    <aside class="comment-section" id="plan-review" aria-labelledby="review-heading">
+      <p class="panel-kicker">Review channel</p>
+      <h2 id="review-heading">文書へコメント</h2>
+      <p id="review-copy" class="review-copy">判断、懸念、修正依頼を文書の文脈へ返します。</p>
+      <div class="comment-form">
+        <label for="comment-input">Review note</label>
+        <textarea id="comment-input" placeholder="この文書へのコメントを入力" aria-describedby="comment-help"></textarea>
+        <span id="comment-help" class="review-copy">空欄では送信できません。</span>
+        <button id="send-btn" type="button" disabled>コメントを送る</button>
+      </div>
+      <div id="comments-list" aria-live="polite"></div>
+    </aside>
   </div>
 
   <script type="module">
+    import { App, PostMessageTransport } from '@modelcontextprotocol/ext-apps';
     import { marked } from 'marked';
     import DOMPurify from 'dompurify';
 
+    const ROUTE_KIND_META_KEY = 'workflow-html-app/routeKind';
     const DEFAULT_DOCUMENT_KIND = {
+      key: 'document',
       appName: 'Document Viewer',
-      title: 'Document Viewer',
-      reviewHeading: 'Send Document Comment to Claude',
-      placeholder: 'Enter your comment about this document...',
+      title: '文書を読む',
+      outline: 'この文書の構造',
+      label: 'Document / live source',
+      progressLabel: '文書チェックリストの進捗',
+      reviewHeading: '文書へコメント',
+      reviewCopy: '判断、懸念、修正依頼を文書の文脈へ返します。',
+      placeholder: 'この文書へのコメントを入力',
       commentPrefix: 'Document Comment',
+    };
+    const DOCUMENT_KINDS = {
+      document: DEFAULT_DOCUMENT_KIND,
+      log: {
+        ...DEFAULT_DOCUMENT_KIND,
+        key: 'log', appName: 'Log Viewer', title: '作業ログを読む',
+        outline: 'このログの構造', label: 'Log / live record',
+        progressLabel: '作業ログチェック項目の進捗',
+        reviewHeading: 'ログへコメント',
+        reviewCopy: '確認、補足、修正依頼を作業ログの文脈へ返します。',
+        placeholder: '例：Phase 4 の検証結果を追記して', commentPrefix: 'Log Comment',
+      },
+      verification: {
+        ...DEFAULT_DOCUMENT_KIND,
+        key: 'verification', appName: 'Verification Guide Viewer', title: '検証ガイドを読む',
+        outline: 'この検証ガイドの構造', label: 'Verification / checklist',
+        progressLabel: '検証チェックリストの進捗',
+        reviewHeading: '検証ガイドへコメント',
+        reviewCopy: '不足している確認項目、懸念、追加してほしい検証を返します。',
+        placeholder: '例：失敗時の観測ポイントも追加して', commentPrefix: 'Verification Comment',
+      },
+      plan: {
+        ...DEFAULT_DOCUMENT_KIND,
+        key: 'plan', appName: 'Plan Viewer', title: '計画を読む',
+        outline: 'この計画の構造', label: 'Plan / live document',
+        progressLabel: '計画タスクの進捗',
+        reviewHeading: '計画へコメント',
+        reviewCopy: '判断、懸念、修正依頼を計画の文脈へ返します。',
+        placeholder: '例：Task 2 の検証条件を具体化して', commentPrefix: 'Plan Comment',
+      },
     };
     let activeDocumentKind = DEFAULT_DOCUMENT_KIND;
 
-    function detectDocumentKind(markdown) {
+    function normalizeRouteKind(value) {
+      if (typeof value !== 'string') return '';
+      const routeKind = value.trim().toLowerCase();
+      return Object.prototype.hasOwnProperty.call(DOCUMENT_KINDS, routeKind) ? routeKind : '';
+    }
+
+    function detectDocumentKind(markdown, routeKind, options = {}) {
+      const routeDocumentKind = DOCUMENT_KINDS[normalizeRouteKind(routeKind)];
+      if (routeDocumentKind) return routeDocumentKind;
+      if (!options.allowHeadingFallback) return DEFAULT_DOCUMENT_KIND;
       const firstHeading = markdown.match(/^#\s+(.+)$/m)?.[1]?.trim() || '';
       if (/(?:作業ログ|ログ|log)/i.test(firstHeading)) {
-        return {
-          ...DEFAULT_DOCUMENT_KIND,
-          appName: 'Log Viewer', title: 'Log Viewer',
-          reviewHeading: 'Send Log Comment to Claude',
-          placeholder: 'Enter your comment about this log...', commentPrefix: 'Log Comment',
-        };
+        return DOCUMENT_KINDS.log;
+      }
+      if (/(?:検証ガイド|検証|verification)/i.test(firstHeading)) {
+        return DOCUMENT_KINDS.verification;
       }
       if (/(?:実装計画|計画|plan)/i.test(firstHeading)) {
-        return {
-          ...DEFAULT_DOCUMENT_KIND,
-          appName: 'Plan Viewer', title: 'Plan Viewer',
-          reviewHeading: 'Send Plan Comment to Claude',
-          placeholder: 'Enter your comment about this plan...', commentPrefix: 'Plan Comment',
-        };
+        return DOCUMENT_KINDS.plan;
       }
       return DEFAULT_DOCUMENT_KIND;
     }
 
-    function applyDocumentKind(markdown) {
-      activeDocumentKind = detectDocumentKind(markdown);
+    function applyDocumentKind(markdown, routeKind, options = {}) {
+      activeDocumentKind = detectDocumentKind(markdown, routeKind, options);
       document.title = `${activeDocumentKind.appName} - MCP App`;
       document.getElementById('viewer-title').textContent = activeDocumentKind.title;
+      document.getElementById('outline-heading').textContent = activeDocumentKind.outline;
+      document.getElementById('document-kind-label').textContent = activeDocumentKind.label;
       document.getElementById('review-heading').textContent = activeDocumentKind.reviewHeading;
+      document.getElementById('review-copy').textContent = activeDocumentKind.reviewCopy;
       document.getElementById('comment-input').placeholder = activeDocumentKind.placeholder;
+      document.getElementById('progress-grid').setAttribute('aria-label', activeDocumentKind.progressLabel);
+      document.getElementById('progress-meter').setAttribute('aria-label', activeDocumentKind.progressLabel);
     }
 
-    // 信頼するオリジンのホワイトリスト
-    const TRUSTED_ORIGINS = [
-      'https://claude.ai',
-      'https://www.claude.ai',
-      'vscode-webview://',
-      'file://'
-    ];
-
-    // オリジン検証関数
-    function isTrustedOrigin(origin) {
-      if (!origin) return false;
-      return TRUSTED_ORIGINS.some(trusted => {
-        if (trusted.endsWith('://')) {
-          return origin.startsWith(trusted);
-        }
-        return origin === trusted;
-      });
+    function extractToolPayload(toolResult) {
+      if (!toolResult || !Array.isArray(toolResult.content)) return { text: '', routeKind: '' };
+      const textContent = toolResult.content.find((block) => block && block.type === 'text');
+      return {
+        text: typeof textContent?.text === 'string' ? textContent.text : '',
+        routeKind: normalizeRouteKind(
+          toolResult.structuredContent?.routeKind
+          || toolResult._meta?.[ROUTE_KIND_META_KEY]
+          || toolResult._meta?.routeKind
+          || toolResult.metadata?.routeKind
+        ),
+      };
     }
 
     // MCP App client for bidirectional communication
@@ -262,57 +736,40 @@
         this.connected = false;
         this.pendingMessages = [];
         this.onContentReceived = null;
-        this.parentOrigin = null;
+        this.client = new App(
+          { name: 'Document Viewer', version: '1.0.0' },
+          {},
+          { autoResize: true, strict: true }
+        );
 
-        // Listen for messages from parent (Claude host)
-        window.addEventListener('message', (event) => this.handleMessage(event));
+        this.client.ontoolresult = (toolResult) => {
+          if (!this.connected) return;
+          const payload = extractToolPayload(toolResult);
+          if (payload.text && this.onContentReceived) {
+            this.onContentReceived(payload);
+          }
+        };
 
-        // Notify parent that we're ready
-        this.sendToParent({ type: 'app-ready', name: 'Document Viewer', version: '1.0.0' });
+        this.connect();
       }
 
-      handleMessage(event) {
-        // オリジン検証（CRITICAL: セキュリティ対策）
-        if (!isTrustedOrigin(event.origin) && event.origin !== '') {
-          console.warn(`Rejected message from untrusted origin: ${event.origin}`);
-          return;
-        }
+      async connect() {
+        if (window.parent === window) return;
 
-        const data = event.data;
-        if (!data || typeof data !== 'object') return;
-
-        // 接続時に親オリジンを記録
-        if (data.type === 'connected' && event.origin) {
-          this.parentOrigin = event.origin;
-        }
-
-        switch (data.type) {
-          case 'tool-result':
-            // Received content from MCP server via host
-            if (data.content && this.onContentReceived) {
-              const textContent = data.content.find(c => c.type === 'text');
-              if (textContent) {
-                this.onContentReceived(textContent.text);
-              }
-            }
-            break;
-
-          case 'connected':
-            this.connected = true;
-            this.updateStatus(true);
-            // Send any pending messages
-            this.pendingMessages.forEach(msg => this.sendToParent(msg));
-            this.pendingMessages = [];
-            break;
-        }
-      }
-
-      sendToParent(message) {
-        if (window.parent !== window) {
-          // 親オリジンが判明している場合はそれを使用、そうでなければ'*'
-          // （初回接続時のみワイルドカード許容）
-          const targetOrigin = this.parentOrigin || '*';
-          window.parent.postMessage(message, targetOrigin);
+        try {
+          const transport = new PostMessageTransport(window.parent, window.parent);
+          await this.client.connect(transport);
+          this.connected = true;
+          this.updateStatus(true);
+          const pending = [...this.pendingMessages];
+          this.pendingMessages = [];
+          for (const message of pending) {
+            await this.client.sendMessage(message);
+          }
+        } catch (error) {
+          console.warn('MCP Apps connection failed:', error);
+          this.connected = false;
+          this.updateStatus(false);
         }
       }
 
@@ -327,7 +784,7 @@
         };
 
         if (this.connected) {
-          this.sendToParent(message);
+          await this.client.sendMessage(message);
         } else {
           this.pendingMessages.push(message);
         }
@@ -336,13 +793,13 @@
       updateStatus(connected) {
         const statusEl = document.getElementById('status');
         if (connected) {
-          statusEl.textContent = 'Connected';
+          statusEl.textContent = '接続済み';
           statusEl.classList.add('connected');
-          document.getElementById('send-btn').disabled = false;
         } else {
-          statusEl.textContent = 'Disconnected';
+          statusEl.textContent = '未接続';
           statusEl.classList.remove('connected');
         }
+        syncSendState();
       }
     }
 
@@ -356,10 +813,59 @@
     // Local comments storage
     const comments = [];
 
+    function countPlanTasks(markdown) {
+      const tasks = markdown.match(/^\s*-\s+\[[ xX]\]/gm) || [];
+      const complete = tasks.filter(task => /\[[xX]\]/.test(task)).length;
+      return { complete, total: tasks.length };
+    }
+
+    function enhancePlanDocument(markdown) {
+      const outline = document.getElementById('outline-list');
+      outline.replaceChildren();
+      const usedIds = new Map();
+      contentEl.querySelectorAll('h2, h3').forEach((heading) => {
+        const base = heading.textContent.trim().toLowerCase()
+          .replace(/[^\p{L}\p{N}]+/gu, '-')
+          .replace(/^-|-$/g, '') || 'section';
+        const count = usedIds.get(base) || 0;
+        usedIds.set(base, count + 1);
+        heading.id = count ? `${base}-${count + 1}` : base;
+
+        const item = document.createElement('li');
+        item.className = heading.tagName === 'H3' ? 'outline-subitem' : '';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = heading.textContent;
+        button.addEventListener('click', () => {
+          heading.scrollIntoView({ block: 'start' });
+          heading.focus({ preventScroll: true });
+        });
+        heading.tabIndex = -1;
+        item.appendChild(button);
+        outline.appendChild(item);
+      });
+
+      const progress = countPlanTasks(markdown);
+      document.getElementById('progress-complete').textContent = String(progress.complete);
+      document.getElementById('progress-total').textContent = String(progress.total);
+      document.getElementById('progress-remaining').textContent = String(progress.total - progress.complete);
+      const meter = document.getElementById('progress-meter');
+      meter.max = Math.max(progress.total, 1);
+      meter.value = progress.complete;
+
+      contentEl.querySelectorAll('table').forEach((table) => {
+        if (table.parentElement.classList.contains('table-wrap')) return;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'table-wrap';
+        table.parentNode.insertBefore(wrapper, table);
+        wrapper.appendChild(table);
+      });
+    }
+
     // Handle content from MCP server
     // CRITICAL: DOMPurifyでサニタイズしてXSSを防止
-    app.onContentReceived = (markdown) => {
-      applyDocumentKind(markdown);
+    app.onContentReceived = ({ text: markdown, routeKind }) => {
+      applyDocumentKind(markdown, routeKind);
       const rawHtml = marked.parse(markdown);
       const sanitizedHtml = DOMPurify.sanitize(rawHtml, {
         ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'hr',
@@ -371,14 +877,12 @@
         ADD_ATTR: ['target'],
       });
       contentEl.innerHTML = sanitizedHtml;
+      enhancePlanDocument(markdown);
       app.updateStatus(true);
     };
 
-    // Escape HTML to prevent XSS in comments
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
+    function syncSendState() {
+      sendBtn.disabled = !commentInput.value.trim();
     }
 
     // Send comment
@@ -393,10 +897,12 @@
       // Update UI
       const commentEl = document.createElement('div');
       commentEl.className = 'comment';
-      commentEl.innerHTML = `
-        <div>${escapeHtml(comment)}</div>
-        <div class="comment-time">${now}</div>
-      `;
+      const commentText = document.createElement('div');
+      commentText.textContent = comment;
+      const commentTime = document.createElement('div');
+      commentTime.className = 'comment-time';
+      commentTime.textContent = `${now} / 送信済み`;
+      commentEl.append(commentText, commentTime);
       commentsList.appendChild(commentEl);
 
       // Send to Claude
@@ -404,18 +910,19 @@
 
       // Clear input
       commentInput.value = '';
+      syncSendState();
     });
 
     // Enable send button when there's input
     commentInput.addEventListener('input', () => {
-      sendBtn.disabled = !commentInput.value.trim();
+      syncSendState();
     });
 
     // Demo: simulate receiving content (for standalone testing)
     if (window.parent === window) {
       // Running standalone (not in iframe)
-      document.getElementById('status').textContent = 'Standalone Mode';
-      sendBtn.disabled = false;
+      document.getElementById('status').textContent = 'スタンドアロン';
+      document.getElementById('status').classList.add('connected');
 
       // Show demo content
       const demoMarkdown = `# Demo Plan
@@ -434,7 +941,8 @@ When running inside Claude, this viewer receives Markdown from the MCP server an
       const rawHtml = marked.parse(demoMarkdown);
       const sanitizedHtml = DOMPurify.sanitize(rawHtml);
       contentEl.innerHTML = sanitizedHtml;
-      applyDocumentKind(demoMarkdown);
+      applyDocumentKind(demoMarkdown, 'plan', { allowHeadingFallback: true });
+      enhancePlanDocument(demoMarkdown);
     }
   </script>
 </body>

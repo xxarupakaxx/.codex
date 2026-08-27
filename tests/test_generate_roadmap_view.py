@@ -28,9 +28,26 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
 
         self.template = self.root / "roadmap_viewer.html"
         self.template.write_text(
-            '<script id="embedded-snapshot" type="application/json">'
-            f"{roadmap.PLACEHOLDER}"
-            "</script>"
+            "\n".join(
+                [
+                    "<!DOCTYPE html>",
+                    '<html lang="ja">',
+                    "<head>",
+                    '  <meta charset="UTF-8">',
+                    '  <meta name="viewport" content="width=device-width, initial-scale=1.0">',
+                    "  <title>Roadmap Test</title>",
+                    "</head>",
+                    "<body>",
+                    '  <main id="main-content">',
+                    '    <script id="embedded-snapshot" type="application/json">'
+                    f"{roadmap.PLACEHOLDER}"
+                    "</script>",
+                    "  </main>",
+                    "</body>",
+                    "</html>",
+                    "",
+                ]
+            )
         )
         self.previous_template = roadmap.TEMPLATE
         roadmap.TEMPLATE = self.template
@@ -326,6 +343,49 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
                 json_output: (json_output.stat().st_ino, json_output.stat().st_mtime_ns),
             },
         )
+
+    def test_rendered_roadmap_gets_static_contract_metadata(self) -> None:
+        snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+
+        html = roadmap.render_html(snapshot)
+
+        self.assertIn('name="artifact-kind" content="html-plan"', html)
+        self.assertIn('http-equiv="Content-Security-Policy"', html)
+        roadmap.validate_roadmap_html(html, self.task_dir / "roadmap.html")
+
+    def test_invalid_roadmap_html_does_not_overwrite_existing_outputs(self) -> None:
+        output = self.task_dir / "roadmap.html"
+        json_output = self.task_dir / "roadmap-snapshot.json"
+        output.write_text("previous valid html")
+        json_output.write_text('{"previous": true}')
+        self.template.write_text(
+            "\n".join(
+                [
+                    "<!DOCTYPE html>",
+                    '<html lang="ja">',
+                    "<head>",
+                    '  <meta charset="UTF-8">',
+                    '  <meta name="viewport" content="width=device-width, initial-scale=1.0">',
+                    "  <title>Broken Roadmap</title>",
+                    "</head>",
+                    "<body>",
+                    '  <main id="dup"></main>',
+                    '  <section id="dup"></section>',
+                    '  <script id="embedded-snapshot" type="application/json">'
+                    f"{roadmap.PLACEHOLDER}"
+                    "</script>",
+                    "</body>",
+                    "</html>",
+                    "",
+                ]
+            )
+        )
+
+        with self.assertRaisesRegex(ValueError, "static HTML contract"):
+            roadmap.write_outputs(self.task_dir, output, write_json=True, source_root=self.root)
+
+        self.assertEqual(output.read_text(), "previous valid html")
+        self.assertEqual(json_output.read_text(), '{"previous": true}')
 
     def test_write_outputs_creates_stable_task_metadata(self) -> None:
         output = self.task_dir / "roadmap.html"

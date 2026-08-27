@@ -603,7 +603,7 @@
         <div><dt>全項目</dt><dd id="progress-total">0</dd></div>
         <div><dt>残り</dt><dd id="progress-remaining">0</dd></div>
       </dl>
-      <progress id="progress-meter" max="1" value="0" aria-label="計画の完了率"></progress>
+      <progress id="progress-meter" max="1" value="0" aria-label="文書の進捗"></progress>
     </nav>
 
     <main id="plan-document">
@@ -631,49 +631,80 @@
   </div>
 
   <script type="module">
+    import { App, PostMessageTransport } from '@modelcontextprotocol/ext-apps';
     import { marked } from 'marked';
     import DOMPurify from 'dompurify';
 
+    const ROUTE_KIND_META_KEY = 'workflow-html-app/routeKind';
     const DEFAULT_DOCUMENT_KIND = {
       key: 'document',
       appName: 'Document Viewer',
       title: '文書を読む',
       outline: 'この文書の構造',
       label: 'Document / live source',
+      progressLabel: '文書チェックリストの進捗',
       reviewHeading: '文書へコメント',
       reviewCopy: '判断、懸念、修正依頼を文書の文脈へ返します。',
       placeholder: 'この文書へのコメントを入力',
       commentPrefix: 'Document Comment',
     };
+    const DOCUMENT_KINDS = {
+      document: DEFAULT_DOCUMENT_KIND,
+      log: {
+        ...DEFAULT_DOCUMENT_KIND,
+        key: 'log', appName: 'Log Viewer', title: '作業ログを読む',
+        outline: 'このログの構造', label: 'Log / live record',
+        progressLabel: '作業ログチェック項目の進捗',
+        reviewHeading: 'ログへコメント',
+        reviewCopy: '確認、補足、修正依頼を作業ログの文脈へ返します。',
+        placeholder: '例：Phase 4 の検証結果を追記して', commentPrefix: 'Log Comment',
+      },
+      verification: {
+        ...DEFAULT_DOCUMENT_KIND,
+        key: 'verification', appName: 'Verification Guide Viewer', title: '検証ガイドを読む',
+        outline: 'この検証ガイドの構造', label: 'Verification / checklist',
+        progressLabel: '検証チェックリストの進捗',
+        reviewHeading: '検証ガイドへコメント',
+        reviewCopy: '不足している確認項目、懸念、追加してほしい検証を返します。',
+        placeholder: '例：失敗時の観測ポイントも追加して', commentPrefix: 'Verification Comment',
+      },
+      plan: {
+        ...DEFAULT_DOCUMENT_KIND,
+        key: 'plan', appName: 'Plan Viewer', title: '計画を読む',
+        outline: 'この計画の構造', label: 'Plan / live document',
+        progressLabel: '計画タスクの進捗',
+        reviewHeading: '計画へコメント',
+        reviewCopy: '判断、懸念、修正依頼を計画の文脈へ返します。',
+        placeholder: '例：Task 2 の検証条件を具体化して', commentPrefix: 'Plan Comment',
+      },
+    };
     let activeDocumentKind = DEFAULT_DOCUMENT_KIND;
 
-    function detectDocumentKind(markdown) {
+    function normalizeRouteKind(value) {
+      if (typeof value !== 'string') return '';
+      const routeKind = value.trim().toLowerCase();
+      return Object.prototype.hasOwnProperty.call(DOCUMENT_KINDS, routeKind) ? routeKind : '';
+    }
+
+    function detectDocumentKind(markdown, routeKind, options = {}) {
+      const routeDocumentKind = DOCUMENT_KINDS[normalizeRouteKind(routeKind)];
+      if (routeDocumentKind) return routeDocumentKind;
+      if (!options.allowHeadingFallback) return DEFAULT_DOCUMENT_KIND;
       const firstHeading = markdown.match(/^#\s+(.+)$/m)?.[1]?.trim() || '';
       if (/(?:作業ログ|ログ|log)/i.test(firstHeading)) {
-        return {
-          ...DEFAULT_DOCUMENT_KIND,
-          key: 'log', appName: 'Log Viewer', title: '作業ログを読む',
-          outline: 'このログの構造', label: 'Log / live record',
-          reviewHeading: 'ログへコメント',
-          reviewCopy: '確認、補足、修正依頼を作業ログの文脈へ返します。',
-          placeholder: '例：Phase 4 の検証結果を追記して', commentPrefix: 'Log Comment',
-        };
+        return DOCUMENT_KINDS.log;
+      }
+      if (/(?:検証ガイド|検証|verification)/i.test(firstHeading)) {
+        return DOCUMENT_KINDS.verification;
       }
       if (/(?:実装計画|計画|plan)/i.test(firstHeading)) {
-        return {
-          ...DEFAULT_DOCUMENT_KIND,
-          key: 'plan', appName: 'Plan Viewer', title: '計画を読む',
-          outline: 'この計画の構造', label: 'Plan / live document',
-          reviewHeading: '計画へコメント',
-          reviewCopy: '判断、懸念、修正依頼を計画の文脈へ返します。',
-          placeholder: '例：Task 2 の検証条件を具体化して', commentPrefix: 'Plan Comment',
-        };
+        return DOCUMENT_KINDS.plan;
       }
       return DEFAULT_DOCUMENT_KIND;
     }
 
-    function applyDocumentKind(markdown) {
-      activeDocumentKind = detectDocumentKind(markdown);
+    function applyDocumentKind(markdown, routeKind, options = {}) {
+      activeDocumentKind = detectDocumentKind(markdown, routeKind, options);
       document.title = `${activeDocumentKind.appName} - MCP App`;
       document.getElementById('viewer-title').textContent = activeDocumentKind.title;
       document.getElementById('outline-heading').textContent = activeDocumentKind.outline;
@@ -681,26 +712,22 @@
       document.getElementById('review-heading').textContent = activeDocumentKind.reviewHeading;
       document.getElementById('review-copy').textContent = activeDocumentKind.reviewCopy;
       document.getElementById('comment-input').placeholder = activeDocumentKind.placeholder;
-      document.getElementById('progress-grid').setAttribute('aria-label', `${activeDocumentKind.title}の進捗`);
+      document.getElementById('progress-grid').setAttribute('aria-label', activeDocumentKind.progressLabel);
+      document.getElementById('progress-meter').setAttribute('aria-label', activeDocumentKind.progressLabel);
     }
 
-    // 信頼するオリジンのホワイトリスト
-    const TRUSTED_ORIGINS = [
-      'https://claude.ai',
-      'https://www.claude.ai',
-      'vscode-webview://',
-      'file://'
-    ];
-
-    // オリジン検証関数
-    function isTrustedOrigin(origin) {
-      if (!origin) return false;
-      return TRUSTED_ORIGINS.some(trusted => {
-        if (trusted.endsWith('://')) {
-          return origin.startsWith(trusted);
-        }
-        return origin === trusted;
-      });
+    function extractToolPayload(toolResult) {
+      if (!toolResult || !Array.isArray(toolResult.content)) return { text: '', routeKind: '' };
+      const textContent = toolResult.content.find((block) => block && block.type === 'text');
+      return {
+        text: typeof textContent?.text === 'string' ? textContent.text : '',
+        routeKind: normalizeRouteKind(
+          toolResult.structuredContent?.routeKind
+          || toolResult._meta?.[ROUTE_KIND_META_KEY]
+          || toolResult._meta?.routeKind
+          || toolResult.metadata?.routeKind
+        ),
+      };
     }
 
     // MCP App client for bidirectional communication
@@ -709,57 +736,40 @@
         this.connected = false;
         this.pendingMessages = [];
         this.onContentReceived = null;
-        this.parentOrigin = null;
+        this.client = new App(
+          { name: 'Document Viewer', version: '1.0.0' },
+          {},
+          { autoResize: true, strict: true }
+        );
 
-        // Listen for messages from parent (Claude host)
-        window.addEventListener('message', (event) => this.handleMessage(event));
+        this.client.ontoolresult = (toolResult) => {
+          if (!this.connected) return;
+          const payload = extractToolPayload(toolResult);
+          if (payload.text && this.onContentReceived) {
+            this.onContentReceived(payload);
+          }
+        };
 
-        // Notify parent that we're ready
-        this.sendToParent({ type: 'app-ready', name: 'Document Viewer', version: '1.0.0' });
+        this.connect();
       }
 
-      handleMessage(event) {
-        // オリジン検証（CRITICAL: セキュリティ対策）
-        if (!isTrustedOrigin(event.origin) && event.origin !== '') {
-          console.warn(`Rejected message from untrusted origin: ${event.origin}`);
-          return;
-        }
+      async connect() {
+        if (window.parent === window) return;
 
-        const data = event.data;
-        if (!data || typeof data !== 'object') return;
-
-        // 接続時に親オリジンを記録
-        if (data.type === 'connected' && event.origin) {
-          this.parentOrigin = event.origin;
-        }
-
-        switch (data.type) {
-          case 'tool-result':
-            // Received content from MCP server via host
-            if (data.content && this.onContentReceived) {
-              const textContent = data.content.find(c => c.type === 'text');
-              if (textContent) {
-                this.onContentReceived(textContent.text);
-              }
-            }
-            break;
-
-          case 'connected':
-            this.connected = true;
-            this.updateStatus(true);
-            // Send any pending messages
-            this.pendingMessages.forEach(msg => this.sendToParent(msg));
-            this.pendingMessages = [];
-            break;
-        }
-      }
-
-      sendToParent(message) {
-        if (window.parent !== window) {
-          // 親オリジンが判明している場合はそれを使用、そうでなければ'*'
-          // （初回接続時のみワイルドカード許容）
-          const targetOrigin = this.parentOrigin || '*';
-          window.parent.postMessage(message, targetOrigin);
+        try {
+          const transport = new PostMessageTransport(window.parent, window.parent);
+          await this.client.connect(transport);
+          this.connected = true;
+          this.updateStatus(true);
+          const pending = [...this.pendingMessages];
+          this.pendingMessages = [];
+          for (const message of pending) {
+            await this.client.sendMessage(message);
+          }
+        } catch (error) {
+          console.warn('MCP Apps connection failed:', error);
+          this.connected = false;
+          this.updateStatus(false);
         }
       }
 
@@ -774,7 +784,7 @@
         };
 
         if (this.connected) {
-          this.sendToParent(message);
+          await this.client.sendMessage(message);
         } else {
           this.pendingMessages.push(message);
         }
@@ -854,8 +864,8 @@
 
     // Handle content from MCP server
     // CRITICAL: DOMPurifyでサニタイズしてXSSを防止
-    app.onContentReceived = (markdown) => {
-      applyDocumentKind(markdown);
+    app.onContentReceived = ({ text: markdown, routeKind }) => {
+      applyDocumentKind(markdown, routeKind);
       const rawHtml = marked.parse(markdown);
       const sanitizedHtml = DOMPurify.sanitize(rawHtml, {
         ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'hr',
@@ -931,7 +941,7 @@ When running inside Claude, this viewer receives Markdown from the MCP server an
       const rawHtml = marked.parse(demoMarkdown);
       const sanitizedHtml = DOMPurify.sanitize(rawHtml);
       contentEl.innerHTML = sanitizedHtml;
-      applyDocumentKind(demoMarkdown);
+      applyDocumentKind(demoMarkdown, 'plan', { allowHeadingFallback: true });
       enhancePlanDocument(demoMarkdown);
     }
   </script>

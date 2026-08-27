@@ -3,392 +3,943 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Security-Policy"
-    content="default-src 'self';
-             script-src 'self' 'unsafe-inline' https://cdn.jsdelivr.net;
-             style-src 'self' 'unsafe-inline';
-             img-src 'self' data:;
-             connect-src 'self';">
-  <title>Verification Guide Viewer</title>
+  <meta http-equiv="Content-Security-Policy" content="default-src 'self'; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data:; connect-src 'self';">
+  <title>Plan Viewer - MCP App</title>
   <style>
     :root {
-      --bg-color: #ffffff;
-      --text-color: #1a1a2e;
-      --border-color: #e0e0e0;
-      --header-bg: #f8f9fa;
-      --link-color: #0066cc;
-      --code-bg: #f5f5f5;
-      --table-header-bg: #f0f0f0;
-      --checkbox-checked: #22c55e;
-      --progress-bg: #e5e5e5;
-      --progress-fill: #22c55e;
+      color-scheme: light;
+      --paper: #f1eee4;
+      --sheet: #fffdf7;
+      --ink: #1b211d;
+      --muted: #626960;
+      --line: #c9cbc0;
+      --line-strong: #202620;
+      --green: #23684f;
+      --green-soft: #e4eee7;
+      --cobalt: #3156c9;
+      --cobalt-soft: #e8ecfb;
+      --red: #b7453b;
+      --red-dark: #91332b;
+      --code: #17201b;
+      --focus: #0b67c1;
     }
 
     * {
       box-sizing: border-box;
-      margin: 0;
-      padding: 0;
+    }
+
+    html {
+      scroll-behavior: smooth;
     }
 
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
-      background-color: var(--bg-color);
-      color: var(--text-color);
-      line-height: 1.6;
+      margin: 0;
+      min-width: 320px;
+      background-color: var(--paper);
+      color: var(--ink);
+      font-family: ui-sans-serif, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      line-height: 1.65;
+    }
+
+    button,
+    textarea {
+      font: inherit;
+    }
+
+    button:focus-visible,
+    textarea:focus-visible,
+    a:focus-visible,
+    [tabindex="-1"]:focus-visible {
+      outline: 3px solid var(--focus);
+      outline-offset: 3px;
     }
 
     .container {
-      max-width: 900px;
+      display: grid;
+      grid-template-columns: minmax(180px, 240px) minmax(0, 760px) minmax(220px, 300px);
+      justify-content: center;
+      align-items: start;
+      gap: 20px;
+      width: min(100%, 1400px);
       margin: 0 auto;
-      padding: 20px;
+      padding: 24px;
     }
 
-    .header {
+    .viewer-header {
+      grid-column: 1 / -1;
+      display: grid;
+      grid-template-columns: minmax(0, 1fr) auto;
+      align-items: end;
+      gap: 20px;
+      min-height: 116px;
+      padding: 22px 0 18px;
+      border-top: 5px solid var(--line-strong);
+      border-bottom: 1px solid var(--line-strong);
+    }
+
+    .eyebrow,
+    .panel-kicker,
+    .document-label {
+      margin: 0 0 6px;
+      color: var(--green);
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 0.7rem;
+      font-weight: 750;
+      letter-spacing: 0.13em;
+      line-height: 1.4;
+      text-transform: uppercase;
+    }
+
+    .viewer-header h1 {
+      margin: 0;
+      font-family: Georgia, "Yu Mincho", serif;
+      font-size: clamp(2rem, 5vw, 4.6rem);
+      font-weight: 500;
+      letter-spacing: -0.045em;
+      line-height: 0.95;
+    }
+
+    .status {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      min-height: 32px;
+      padding: 5px 10px;
+      border: 1px solid var(--line);
+      background: var(--sheet);
+      color: var(--muted);
+      font-size: 0.75rem;
+      font-weight: 700;
+      white-space: nowrap;
+    }
+
+    .status::before {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      background: var(--muted);
+      content: "";
+    }
+
+    .status.connected {
+      border-color: var(--green);
+      color: var(--green);
+    }
+
+    .status.connected::before {
+      background: var(--green);
+    }
+
+    #plan-outline,
+    #plan-review {
+      position: sticky;
+      top: 24px;
+      border-top: 3px solid var(--line-strong);
+      background: var(--sheet);
+    }
+
+    #plan-outline {
+      padding: 18px 16px 16px;
+    }
+
+    #plan-outline h2,
+    #plan-review h2 {
+      margin: 0;
+      font-family: Georgia, "Yu Mincho", serif;
+      font-size: 1.2rem;
+      font-weight: 600;
+      line-height: 1.2;
+    }
+
+    #outline-list {
+      margin: 18px 0;
+      padding: 12px 0;
+      border-top: 1px solid var(--line);
+      border-bottom: 1px solid var(--line);
+      list-style: none;
+    }
+
+    #outline-list:empty::before {
+      display: block;
+      color: var(--muted);
+      content: "見出しを待っています";
+      font-size: 0.78rem;
+    }
+
+    #outline-list li + li {
+      margin-top: 2px;
+    }
+
+    #outline-list button {
+      width: 100%;
+      min-height: 44px;
+      padding: 8px 6px;
+      border: 0;
+      border-left: 2px solid transparent;
+      background: transparent;
+      color: var(--ink);
+      cursor: pointer;
+      font-size: 0.78rem;
+      font-weight: 650;
+      line-height: 1.35;
+      text-align: left;
+      transition: border-color 150ms ease, color 150ms ease, background-color 150ms ease;
+    }
+
+    #outline-list .outline-subitem button {
+      padding-left: 18px;
+      color: var(--muted);
+      font-weight: 500;
+    }
+
+    .progress-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 1px;
+      margin: 0;
+      background: var(--line);
+      border: 1px solid var(--line);
+    }
+
+    .progress-grid div {
+      padding: 9px 6px;
+      background: var(--sheet);
+      text-align: center;
+    }
+
+    .progress-grid dt {
+      color: var(--muted);
+      font-size: 0.63rem;
+      font-weight: 700;
+      letter-spacing: 0.06em;
+    }
+
+    .progress-grid dd {
+      margin: 2px 0 0;
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 1.15rem;
+      font-weight: 800;
+      line-height: 1;
+    }
+
+    #progress-meter {
+      width: 100%;
+      height: 5px;
+      margin-top: 12px;
+      border: 0;
+      background: var(--line);
+      accent-color: var(--green);
+    }
+
+    #progress-meter::-webkit-progress-bar {
+      background: var(--line);
+    }
+
+    #progress-meter::-webkit-progress-value {
+      background: var(--green);
+    }
+
+    #plan-document {
+      min-width: 0;
+      border-top: 5px solid var(--green);
+      background: var(--sheet);
+      box-shadow: 0 16px 40px rgba(32, 38, 32, 0.08);
+    }
+
+    .document-bar {
       display: flex;
       justify-content: space-between;
-      align-items: center;
-      padding: 16px 20px;
-      background: var(--header-bg);
-      border-bottom: 1px solid var(--border-color);
-      position: sticky;
-      top: 0;
-      z-index: 100;
+      gap: 16px;
+      padding: 10px 28px;
+      border-bottom: 1px solid var(--line);
+      color: var(--muted);
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 0.64rem;
+      font-weight: 700;
+      letter-spacing: 0.08em;
+      text-transform: uppercase;
     }
 
-    .header h1 {
-      font-size: 1.25rem;
-      font-weight: 600;
+    #content {
+      counter-reset: section;
+      padding: clamp(28px, 6vw, 64px);
+      overflow-wrap: anywhere;
     }
 
-    .progress-container {
-      display: flex;
-      align-items: center;
+    #content > :first-child {
+      margin-top: 0;
+    }
+
+    #content > :last-child {
+      margin-bottom: 0;
+    }
+
+    #content h1 {
+      max-width: 16ch;
+      margin: 0 0 1.2em;
+      font-family: Georgia, "Yu Mincho", serif;
+      font-size: clamp(2rem, 5vw, 3.7rem);
+      font-weight: 500;
+      letter-spacing: -0.04em;
+      line-height: 1.02;
+    }
+
+    #content h2 {
+      counter-increment: section;
+      display: grid;
+      grid-template-columns: 42px minmax(0, 1fr);
       gap: 12px;
-    }
-
-    .progress-bar {
-      width: 120px;
-      height: 8px;
-      background: var(--progress-bg);
-      border-radius: 4px;
-      overflow: hidden;
-    }
-
-    .progress-fill {
-      height: 100%;
-      background: var(--progress-fill);
-      transition: width 0.3s ease;
-    }
-
-    .progress-text {
-      font-size: 0.875rem;
-      color: #666;
-    }
-
-    .content {
-      padding: 24px 0;
-    }
-
-    /* Markdown styles */
-    .content h1 { font-size: 1.75rem; margin: 1.5em 0 0.75em; border-bottom: 2px solid var(--border-color); padding-bottom: 0.3em; }
-    .content h2 { font-size: 1.5rem; margin: 1.25em 0 0.5em; border-bottom: 1px solid var(--border-color); padding-bottom: 0.25em; }
-    .content h3 { font-size: 1.25rem; margin: 1em 0 0.5em; }
-    .content h4 { font-size: 1.1rem; margin: 1em 0 0.5em; }
-
-    .content p { margin: 0.75em 0; }
-
-    .content ul, .content ol {
-      margin: 0.75em 0;
-      padding-left: 2em;
-    }
-
-    .content li {
-      margin: 0.4em 0;
-    }
-
-    /* Checklist styles */
-    .content li.task-list-item {
-      list-style: none;
-      margin-left: -1.5em;
-      display: flex;
-      align-items: flex-start;
-      gap: 8px;
-    }
-
-    .content li.task-list-item input[type="checkbox"] {
-      margin-top: 0.3em;
-      width: 18px;
-      height: 18px;
-      cursor: pointer;
-      accent-color: var(--checkbox-checked);
-    }
-
-    .content li.task-list-item.checked {
-      text-decoration: line-through;
-      opacity: 0.7;
-    }
-
-    .content a {
-      color: var(--link-color);
-      text-decoration: none;
-    }
-
-    .content a:hover {
-      text-decoration: underline;
-    }
-
-    .content code {
-      font-family: 'SF Mono', Monaco, Consolas, monospace;
-      font-size: 0.9em;
-      background: var(--code-bg);
-      padding: 0.2em 0.4em;
-      border-radius: 4px;
-    }
-
-    .content pre {
-      background: var(--code-bg);
-      padding: 16px;
-      border-radius: 8px;
-      overflow-x: auto;
-      margin: 1em 0;
-    }
-
-    .content pre code {
-      background: none;
-      padding: 0;
-    }
-
-    .content blockquote {
-      border-left: 4px solid var(--border-color);
-      padding-left: 16px;
-      margin: 1em 0;
-      color: #666;
-    }
-
-    .content table {
-      width: 100%;
-      border-collapse: collapse;
-      margin: 1em 0;
-    }
-
-    .content th, .content td {
-      border: 1px solid var(--border-color);
-      padding: 8px 12px;
-      text-align: left;
-    }
-
-    .content th {
-      background: var(--table-header-bg);
+      margin: 2.5em 0 0.8em;
+      padding-top: 14px;
+      border-top: 1px solid var(--line-strong);
+      font-family: Georgia, "Yu Mincho", serif;
+      font-size: clamp(1.4rem, 3vw, 2rem);
       font-weight: 600;
+      line-height: 1.2;
+      scroll-margin-top: 24px;
     }
 
-    .content hr {
-      border: none;
-      border-top: 1px solid var(--border-color);
-      margin: 2em 0;
+    #content h2::before {
+      color: var(--green);
+      content: counter(section, decimal-leading-zero);
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 0.72rem;
+      letter-spacing: 0.08em;
+      line-height: 2;
+    }
+
+    #content h3 {
+      margin: 2em 0 0.65em;
+      color: var(--green);
+      font-size: 1rem;
+      font-weight: 750;
+      letter-spacing: 0.01em;
+      scroll-margin-top: 24px;
+    }
+
+    #content h4,
+    #content h5,
+    #content h6 {
+      margin: 1.6em 0 0.55em;
+    }
+
+    #content p,
+    #content ul,
+    #content ol,
+    #content blockquote,
+    #content pre,
+    #content .table-wrap {
+      margin: 0 0 1.25em;
+    }
+
+    #content ul,
+    #content ol {
+      padding-left: 1.4em;
+    }
+
+    #content li + li {
+      margin-top: 0.35em;
+    }
+
+    #content a {
+      color: var(--green);
+      text-decoration-thickness: 1px;
+      text-underline-offset: 0.18em;
+    }
+
+    #content blockquote {
+      padding: 16px 18px;
+      border-left: 4px solid var(--green);
+      background: var(--green-soft);
+      color: #35423a;
+    }
+
+    #content blockquote > :last-child {
+      margin-bottom: 0;
+    }
+
+    #content code {
+      padding: 0.15em 0.35em;
+      background: #e8e5dc;
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 0.88em;
+    }
+
+    #content pre {
+      max-width: 100%;
+      padding: 18px;
+      overflow-x: auto;
+      border-top: 4px solid var(--green);
+      background: var(--code);
+      color: #eef3ec;
+      line-height: 1.55;
+    }
+
+    #content pre code {
+      padding: 0;
+      background: transparent;
+      color: inherit;
+    }
+
+    .table-wrap {
+      max-width: 100%;
+      overflow-x: auto;
+      border: 1px solid var(--line);
+    }
+
+    #content table {
+      width: 100%;
+      min-width: 520px;
+      border-collapse: collapse;
+      font-size: 0.86rem;
+    }
+
+    #content th,
+    #content td {
+      padding: 10px 12px;
+      border-bottom: 1px solid var(--line);
+      text-align: left;
+      vertical-align: top;
+    }
+
+    #content th {
+      background: #ebe8de;
+      font-size: 0.72rem;
+      letter-spacing: 0.04em;
+    }
+
+    #plan-review {
+      padding: 18px 16px 16px;
+    }
+
+    .review-copy {
+      margin: 10px 0 16px;
+      color: var(--muted);
+      font-size: 0.78rem;
+      line-height: 1.55;
+    }
+
+    .comment-form {
+      display: grid;
+      gap: 10px;
+    }
+
+    .comment-form label {
+      color: var(--muted);
+      font-size: 0.7rem;
+      font-weight: 750;
+      letter-spacing: 0.06em;
+      text-transform: uppercase;
+    }
+
+    .comment-form textarea {
+      width: 100%;
+      min-height: 128px;
+      padding: 12px;
+      resize: vertical;
+      border: 1px solid var(--line-strong);
+      border-radius: 0;
+      background: var(--sheet);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+
+    .comment-form textarea::placeholder {
+      color: #858b83;
+    }
+
+    .comment-form button {
+      min-height: 44px;
+      padding: 10px 16px;
+      border: 1px solid var(--red);
+      border-radius: 0;
+      background: var(--red);
+      color: white;
+      cursor: pointer;
+      font-weight: 750;
+      transition: background-color 150ms ease, border-color 150ms ease, transform 100ms ease;
+    }
+
+    .comment-form button:active:not(:disabled) {
+      transform: scale(0.97);
+    }
+
+    .comment-form button:disabled {
+      border-color: var(--line);
+      background: #d8d7d0;
+      color: #777c76;
+      cursor: not-allowed;
+    }
+
+    #comments-list {
+      display: grid;
+      gap: 8px;
+      margin-top: 14px;
+    }
+
+    .comment {
+      padding: 10px 0 10px 12px;
+      border-left: 3px solid var(--green);
+      color: #384039;
+      font-size: 0.78rem;
+      overflow-wrap: anywhere;
+    }
+
+    .comment-time {
+      margin-top: 5px;
+      color: var(--muted);
+      font-family: ui-monospace, "SFMono-Regular", Consolas, monospace;
+      font-size: 0.65rem;
     }
 
     .loading {
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      height: 200px;
-      color: #666;
+      min-height: 240px;
+      display: grid;
+      place-items: center;
+      color: var(--muted);
+      text-align: center;
     }
 
-    .error {
-      color: #dc2626;
-      padding: 16px;
-      background: #fef2f2;
-      border-radius: 8px;
-      margin: 16px 0;
+    @media (hover: hover) and (pointer: fine) {
+      #outline-list button:hover {
+        border-left-color: var(--green);
+        background: var(--green-soft);
+        color: var(--green);
+      }
+
+      .comment-form button:hover:not(:disabled) {
+        border-color: var(--red-dark);
+        background: var(--red-dark);
+      }
+    }
+
+    @media (max-width: 1100px) {
+      .container {
+        grid-template-columns: minmax(180px, 220px) minmax(0, 1fr);
+      }
+
+      #plan-review {
+        position: static;
+        grid-column: 2;
+      }
+    }
+
+    @media (max-width: 720px) {
+      .container {
+        grid-template-columns: minmax(0, 1fr);
+        gap: 14px;
+        padding: 14px;
+      }
+
+      .viewer-header {
+        grid-template-columns: 1fr;
+        min-height: 0;
+        padding: 16px 0;
+      }
+
+      .viewer-header h1 {
+        font-size: clamp(2.25rem, 15vw, 3.6rem);
+      }
+
+      .status {
+        justify-self: start;
+      }
+
+      #plan-outline,
+      #plan-review {
+        position: static;
+        grid-column: 1;
+      }
+
+      #plan-document {
+        grid-column: 1;
+      }
+
+      #content {
+        padding: 28px 20px 36px;
+      }
+
+      #content h2 {
+        grid-template-columns: 32px minmax(0, 1fr);
+      }
+
+      .document-bar {
+        padding-inline: 20px;
+      }
+    }
+
+    @media (prefers-reduced-motion: reduce) {
+      html {
+        scroll-behavior: auto;
+      }
+
+      *,
+      *::before,
+      *::after {
+        transition-duration: 0.01ms !important;
+      }
     }
   </style>
 </head>
 <body>
-  <div class="header">
-    <h1>Verification Guide</h1>
-    <div class="progress-container">
-      <div class="progress-bar">
-        <div class="progress-fill" id="progressFill" style="width: 0%"></div>
-      </div>
-      <span class="progress-text" id="progressText">0/0</span>
-    </div>
-  </div>
-
   <div class="container">
-    <div class="content" id="content">
-      <div class="loading">Loading verification guide...</div>
-    </div>
+    <header class="viewer-header">
+      <div>
+        <p class="eyebrow">Workflow / source-bound</p>
+        <h1 id="viewer-title">文書を読む</h1>
+      </div>
+      <span id="status" class="status" role="status" aria-live="polite">内容待ち</span>
+    </header>
+
+    <nav id="plan-outline" aria-labelledby="outline-heading">
+      <p class="panel-kicker">Document map</p>
+      <h2 id="outline-heading">この文書の構造</h2>
+      <ol id="outline-list"></ol>
+      <dl id="progress-grid" class="progress-grid" aria-label="文書の進捗">
+        <div><dt>完了</dt><dd id="progress-complete">0</dd></div>
+        <div><dt>全項目</dt><dd id="progress-total">0</dd></div>
+        <div><dt>残り</dt><dd id="progress-remaining">0</dd></div>
+      </dl>
+      <progress id="progress-meter" max="1" value="0" aria-label="文書チェックリストの進捗"></progress>
+    </nav>
+
+    <main id="plan-document">
+      <div class="document-bar" aria-hidden="true">
+        <span id="document-kind-label">Document / live source</span>
+        <span>Read → inspect → respond</span>
+      </div>
+      <div id="content">
+        <div class="loading">Markdown を待っています</div>
+      </div>
+    </main>
+
+    <aside class="comment-section" id="plan-review" aria-labelledby="review-heading">
+      <p class="panel-kicker">Review channel</p>
+      <h2 id="review-heading">文書へコメント</h2>
+      <p id="review-copy" class="review-copy">判断、懸念、修正依頼を文書の文脈へ返します。</p>
+      <div class="comment-form">
+        <label for="comment-input">Review note</label>
+        <textarea id="comment-input" placeholder="この文書へのコメントを入力" aria-describedby="comment-help"></textarea>
+        <span id="comment-help" class="review-copy">空欄では送信できません。</span>
+        <button id="send-btn" type="button" disabled>コメントを送る</button>
+      </div>
+      <div id="comments-list" aria-live="polite"></div>
+    </aside>
   </div>
 
   <script type="module">
-    import { marked } from 'https://cdn.jsdelivr.net/npm/marked@15.0.0/lib/marked.esm.js';
-    import DOMPurify from 'https://cdn.jsdelivr.net/npm/dompurify@3.2.5/dist/purify.es.mjs';
+    import { App, PostMessageTransport } from '@modelcontextprotocol/ext-apps';
+    import { marked } from 'marked';
+    import DOMPurify from 'dompurify';
 
-    // Configure marked for GFM (GitHub Flavored Markdown) with task lists
-    marked.setOptions({
-      gfm: true,
-      breaks: true
-    });
+    const ROUTE_KIND_META_KEY = 'workflow-html-app/routeKind';
+    const DEFAULT_DOCUMENT_KIND = {
+      key: 'document',
+      appName: 'Document Viewer',
+      title: '文書を読む',
+      outline: 'この文書の構造',
+      label: 'Document / live source',
+      progressLabel: '文書チェックリストの進捗',
+      reviewHeading: '文書へコメント',
+      reviewCopy: '判断、懸念、修正依頼を文書の文脈へ返します。',
+      placeholder: 'この文書へのコメントを入力',
+      commentPrefix: 'Document Comment',
+    };
+    const DOCUMENT_KINDS = {
+      document: DEFAULT_DOCUMENT_KIND,
+      log: {
+        ...DEFAULT_DOCUMENT_KIND,
+        key: 'log', appName: 'Log Viewer', title: '作業ログを読む',
+        outline: 'このログの構造', label: 'Log / live record',
+        progressLabel: '作業ログチェック項目の進捗',
+        reviewHeading: 'ログへコメント',
+        reviewCopy: '確認、補足、修正依頼を作業ログの文脈へ返します。',
+        placeholder: '例：Phase 4 の検証結果を追記して', commentPrefix: 'Log Comment',
+      },
+      verification: {
+        ...DEFAULT_DOCUMENT_KIND,
+        key: 'verification', appName: 'Verification Guide Viewer', title: '検証ガイドを読む',
+        outline: 'この検証ガイドの構造', label: 'Verification / checklist',
+        progressLabel: '検証チェックリストの進捗',
+        reviewHeading: '検証ガイドへコメント',
+        reviewCopy: '不足している確認項目、懸念、追加してほしい検証を返します。',
+        placeholder: '例：失敗時の観測ポイントも追加して', commentPrefix: 'Verification Comment',
+      },
+      plan: {
+        ...DEFAULT_DOCUMENT_KIND,
+        key: 'plan', appName: 'Plan Viewer', title: '計画を読む',
+        outline: 'この計画の構造', label: 'Plan / live document',
+        progressLabel: '計画タスクの進捗',
+        reviewHeading: '計画へコメント',
+        reviewCopy: '判断、懸念、修正依頼を計画の文脈へ返します。',
+        placeholder: '例：Task 2 の検証条件を具体化して', commentPrefix: 'Plan Comment',
+      },
+    };
+    let activeDocumentKind = DEFAULT_DOCUMENT_KIND;
 
-    // Trusted origins for postMessage
-    const TRUSTED_ORIGINS = [
-      'https://claude.ai',
-      'https://www.claude.ai',
-      'vscode-webview://',
-      'file://'
-    ];
-
-    function isTrustedOrigin(origin) {
-      if (!origin) return false;
-      return TRUSTED_ORIGINS.some(trusted => {
-        if (trusted.endsWith('://')) {
-          return origin.startsWith(trusted);
-        }
-        return origin === trusted;
-      });
+    function normalizeRouteKind(value) {
+      if (typeof value !== 'string') return '';
+      const routeKind = value.trim().toLowerCase();
+      return Object.prototype.hasOwnProperty.call(DOCUMENT_KINDS, routeKind) ? routeKind : '';
     }
 
-    // MCP App client
+    function detectDocumentKind(markdown, routeKind, options = {}) {
+      const routeDocumentKind = DOCUMENT_KINDS[normalizeRouteKind(routeKind)];
+      if (routeDocumentKind) return routeDocumentKind;
+      if (!options.allowHeadingFallback) return DEFAULT_DOCUMENT_KIND;
+      const firstHeading = markdown.match(/^#\s+(.+)$/m)?.[1]?.trim() || '';
+      if (/(?:作業ログ|ログ|log)/i.test(firstHeading)) {
+        return DOCUMENT_KINDS.log;
+      }
+      if (/(?:検証ガイド|検証|verification)/i.test(firstHeading)) {
+        return DOCUMENT_KINDS.verification;
+      }
+      if (/(?:実装計画|計画|plan)/i.test(firstHeading)) {
+        return DOCUMENT_KINDS.plan;
+      }
+      return DEFAULT_DOCUMENT_KIND;
+    }
+
+    function applyDocumentKind(markdown, routeKind, options = {}) {
+      activeDocumentKind = detectDocumentKind(markdown, routeKind, options);
+      document.title = `${activeDocumentKind.appName} - MCP App`;
+      document.getElementById('viewer-title').textContent = activeDocumentKind.title;
+      document.getElementById('outline-heading').textContent = activeDocumentKind.outline;
+      document.getElementById('document-kind-label').textContent = activeDocumentKind.label;
+      document.getElementById('review-heading').textContent = activeDocumentKind.reviewHeading;
+      document.getElementById('review-copy').textContent = activeDocumentKind.reviewCopy;
+      document.getElementById('comment-input').placeholder = activeDocumentKind.placeholder;
+      document.getElementById('progress-grid').setAttribute('aria-label', activeDocumentKind.progressLabel);
+      document.getElementById('progress-meter').setAttribute('aria-label', activeDocumentKind.progressLabel);
+    }
+
+    function extractToolPayload(toolResult) {
+      if (!toolResult || !Array.isArray(toolResult.content)) return { text: '', routeKind: '' };
+      const textContent = toolResult.content.find((block) => block && block.type === 'text');
+      return {
+        text: typeof textContent?.text === 'string' ? textContent.text : '',
+        routeKind: normalizeRouteKind(
+          toolResult.structuredContent?.routeKind
+          || toolResult._meta?.[ROUTE_KIND_META_KEY]
+          || toolResult._meta?.routeKind
+          || toolResult.metadata?.routeKind
+        ),
+      };
+    }
+
     class MCPAppClient {
       constructor() {
         this.connected = false;
+        this.pendingMessages = [];
         this.onContentReceived = null;
-        this.parentOrigin = null;
+        this.client = new App(
+          { name: 'Document Viewer', version: '1.0.0' },
+          {},
+          { autoResize: true, strict: true }
+        );
 
-        window.addEventListener('message', (event) => this.handleMessage(event));
-
-        // Notify parent we're ready
-        this.sendToParent({
-          type: 'app-ready',
-          name: 'Verification Guide Viewer',
-          version: '1.0.0'
-        });
-      }
-
-      handleMessage(event) {
-        if (!isTrustedOrigin(event.origin) && event.origin !== '') {
-          console.warn(`Rejected message from untrusted origin: ${event.origin}`);
-          return;
-        }
-
-        const data = event.data;
-
-        if (data.type === 'connected') {
-          this.connected = true;
-          this.parentOrigin = event.origin;
-        } else if (data.type === 'tool-result') {
-          const textContent = data.content.find(c => c.type === 'text');
-          if (textContent && this.onContentReceived) {
-            this.onContentReceived(textContent.text);
+        this.client.ontoolresult = (toolResult) => {
+          if (!this.connected) return;
+          const payload = extractToolPayload(toolResult);
+          const text = payload.text;
+          if (text && this.onContentReceived) {
+            this.onContentReceived(payload);
           }
+        };
+
+        this.connect();
+      }
+
+      async connect() {
+        if (window.parent === window) return;
+
+        try {
+          const transport = new PostMessageTransport(window.parent, window.parent);
+          await this.client.connect(transport);
+          this.connected = true;
+          this.updateStatus(true);
+          const pending = [...this.pendingMessages];
+          this.pendingMessages = [];
+          for (const message of pending) {
+            await this.client.sendMessage(message);
+          }
+        } catch (error) {
+          console.warn('MCP Apps connection failed:', error);
+          this.connected = false;
+          this.updateStatus(false);
         }
       }
 
-      sendToParent(message) {
-        if (window.parent !== window) {
-          window.parent.postMessage(message, this.parentOrigin || '*');
+      async sendComment(comment) {
+        const message = {
+          type: 'user-message',
+          role: 'user',
+          content: [{
+            type: 'text',
+            text: `[${activeDocumentKind.commentPrefix}]\n${comment}`
+          }]
+        };
+
+        if (this.connected) {
+          await this.client.sendMessage(message);
+        } else {
+          this.pendingMessages.push(message);
         }
+      }
+
+      updateStatus(connected, message) {
+        const statusEl = document.getElementById('status');
+        if (connected) {
+          statusEl.textContent = message || '接続済み';
+          statusEl.classList.add('connected');
+        } else {
+          statusEl.textContent = message || '未接続';
+          statusEl.classList.remove('connected');
+        }
+        syncSendState();
       }
     }
 
     // Initialize
     const app = new MCPAppClient();
     const contentEl = document.getElementById('content');
-    const progressFill = document.getElementById('progressFill');
-    const progressText = document.getElementById('progressText');
+    const commentInput = document.getElementById('comment-input');
+    const sendBtn = document.getElementById('send-btn');
+    const commentsList = document.getElementById('comments-list');
 
-    function escapeHtml(text) {
-      const div = document.createElement('div');
-      div.textContent = text;
-      return div.innerHTML;
+    // Local comments storage
+    const comments = [];
+
+    function countPlanTasks(markdown) {
+      const tasks = markdown.match(/^\s*-\s+\[[ xX]\]/gm) || [];
+      const complete = tasks.filter(task => /\[[xX]\]/.test(task)).length;
+      return { complete, total: tasks.length };
     }
 
-    function updateProgress() {
-      const checkboxes = contentEl.querySelectorAll('input[type="checkbox"]');
-      const total = checkboxes.length;
-      const checked = Array.from(checkboxes).filter(cb => cb.checked).length;
+    function enhancePlanDocument(markdown) {
+      const outline = document.getElementById('outline-list');
+      outline.replaceChildren();
+      const usedIds = new Map();
+      contentEl.querySelectorAll('h2, h3').forEach((heading) => {
+        const base = heading.textContent.trim().toLowerCase()
+          .replace(/[^\p{L}\p{N}]+/gu, '-')
+          .replace(/^-|-$/g, '') || 'section';
+        const count = usedIds.get(base) || 0;
+        usedIds.set(base, count + 1);
+        heading.id = count ? `${base}-${count + 1}` : base;
 
-      progressText.textContent = `${checked}/${total}`;
-      progressFill.style.width = total > 0 ? `${(checked / total) * 100}%` : '0%';
-    }
-
-    function setupCheckboxes() {
-      const checkboxes = contentEl.querySelectorAll('input[type="checkbox"]');
-      checkboxes.forEach(checkbox => {
-        const li = checkbox.closest('li');
-        if (li) {
-          li.classList.add('task-list-item');
-          if (checkbox.checked) {
-            li.classList.add('checked');
-          }
-        }
-
-        checkbox.addEventListener('change', (e) => {
-          const li = e.target.closest('li');
-          if (li) {
-            li.classList.toggle('checked', e.target.checked);
-          }
-          updateProgress();
+        const item = document.createElement('li');
+        item.className = heading.tagName === 'H3' ? 'outline-subitem' : '';
+        const button = document.createElement('button');
+        button.type = 'button';
+        button.textContent = heading.textContent;
+        button.addEventListener('click', () => {
+          heading.scrollIntoView({ block: 'start' });
+          heading.focus({ preventScroll: true });
         });
+        heading.tabIndex = -1;
+        item.appendChild(button);
+        outline.appendChild(item);
       });
 
-      updateProgress();
+      const progress = countPlanTasks(markdown);
+      document.getElementById('progress-complete').textContent = String(progress.complete);
+      document.getElementById('progress-total').textContent = String(progress.total);
+      document.getElementById('progress-remaining').textContent = String(progress.total - progress.complete);
+      const meter = document.getElementById('progress-meter');
+      meter.max = Math.max(progress.total, 1);
+      meter.value = progress.complete;
+
+      contentEl.querySelectorAll('table').forEach((table) => {
+        if (table.parentElement.classList.contains('table-wrap')) return;
+        const wrapper = document.createElement('div');
+        wrapper.className = 'table-wrap';
+        table.parentNode.insertBefore(wrapper, table);
+        wrapper.appendChild(table);
+      });
     }
 
-    function renderContent(markdown) {
-      try {
-        const rawHtml = marked.parse(markdown);
-        const sanitizedHtml = DOMPurify.sanitize(rawHtml, {
-          ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'hr',
-                         'ul', 'ol', 'li', 'a', 'strong', 'em', 'code', 'pre',
-                         'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
-                         'img', 'span', 'div', 'input'],
-          ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id', 'type', 'checked', 'disabled'],
-          ALLOW_DATA_ATTR: false,
-        });
-        contentEl.innerHTML = sanitizedHtml;
-        setupCheckboxes();
-      } catch (error) {
-        contentEl.innerHTML = `<div class="error">Failed to render content: ${escapeHtml(error.message)}</div>`;
-      }
-    }
-
-    // Handle content from MCP
-    app.onContentReceived = (markdown) => {
-      renderContent(markdown);
+    // Handle content from MCP server
+    // CRITICAL: DOMPurifyでサニタイズしてXSSを防止
+    app.onContentReceived = ({ text: markdown, routeKind }) => {
+      applyDocumentKind(markdown, routeKind);
+      const rawHtml = marked.parse(markdown);
+      const sanitizedHtml = DOMPurify.sanitize(rawHtml, {
+        ALLOWED_TAGS: ['h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'p', 'br', 'hr',
+                       'ul', 'ol', 'li', 'a', 'strong', 'em', 'code', 'pre',
+                       'blockquote', 'table', 'thead', 'tbody', 'tr', 'th', 'td',
+                       'img', 'span', 'div'],
+        ALLOWED_ATTR: ['href', 'src', 'alt', 'title', 'class', 'id'],
+        ALLOW_DATA_ATTR: false,
+        ADD_ATTR: ['target'],
+      });
+      contentEl.innerHTML = sanitizedHtml;
+      enhancePlanDocument(markdown);
+      app.updateStatus(true);
     };
 
-    // Standalone mode for testing
+    function syncSendState() {
+      sendBtn.disabled = !commentInput.value.trim();
+    }
+
+    // Send comment
+    sendBtn.addEventListener('click', async () => {
+      const comment = commentInput.value.trim();
+      if (!comment) return;
+
+      // Add to local list
+      const now = new Date().toLocaleTimeString();
+      comments.push({ text: comment, time: now });
+
+      // Update UI
+      const commentEl = document.createElement('div');
+      commentEl.className = 'comment';
+      const commentText = document.createElement('div');
+      commentText.textContent = comment;
+      const commentTime = document.createElement('div');
+      commentTime.className = 'comment-time';
+      commentTime.textContent = `${now} / 送信済み`;
+      commentEl.append(commentText, commentTime);
+      commentsList.appendChild(commentEl);
+
+      // Send to Claude
+      await app.sendComment(comment);
+
+      // Clear input
+      commentInput.value = '';
+      syncSendState();
+    });
+
+    // Enable send button when there's input
+    commentInput.addEventListener('input', () => {
+      syncSendState();
+    });
+
+    // Demo: simulate receiving content (for standalone testing)
     if (window.parent === window) {
-      const demoContent = `# Verification Guide
+      // Running standalone (not in iframe)
+      document.getElementById('status').textContent = 'スタンドアロン';
+      document.getElementById('status').classList.add('connected');
 
-## Prerequisites
-- [ ] Development server is running
-- [x] Database is connected
+      // Show demo content
+      const demoMarkdown = `# Demo Plan
 
-## Test Cases
+## Overview
+This is a demo of the Plan Viewer MCP App.
 
-### 1. User Authentication
-- [ ] Login with valid credentials
-- [ ] Login with invalid password shows error
-- [ ] Logout clears session
-
-### 2. Data Display
-| Page | Status |
-|------|--------|
-| Dashboard | Pending |
-| Settings | Verified |
+## Tasks
+- [ ] Task 1
+- [ ] Task 2
+- [x] Task 3 (completed)
 
 ## Notes
-> Remember to check the console for errors
+When running inside Claude, this viewer receives Markdown from the MCP server and displays it here.`;
 
-\`\`\`bash
-npm run test
-\`\`\`
-`;
-      setTimeout(() => renderContent(demoContent), 500);
+      const rawHtml = marked.parse(demoMarkdown);
+      const sanitizedHtml = DOMPurify.sanitize(rawHtml);
+      contentEl.innerHTML = sanitizedHtml;
+      applyDocumentKind(demoMarkdown, 'plan', { allowHeadingFallback: true });
+      enhancePlanDocument(demoMarkdown);
     }
   </script>
 </body>
