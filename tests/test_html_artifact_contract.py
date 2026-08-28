@@ -170,6 +170,20 @@ class HtmlArtifactContractTest(unittest.TestCase):
         )
         self.assertEqual(manifest["effectiveHtml"]["license"], "MIT")
 
+        routes = {item["id"]: item for item in manifest["routes"]}
+        self.assertEqual(routes["html"]["browserProfile"], "desktop-document")
+        self.assertEqual(routes["html-diagram"]["browserProfile"], "desktop-diagram")
+        self.assertEqual(
+            manifest["browserProfiles"]["desktop-document"],
+            ["1440x900", "overflow", "keyboard", "focus"],
+        )
+        self.assertNotIn("375x812", manifest["browserProfiles"]["desktop-document"])
+
+        producers = {item["id"]: item for item in manifest["producers"]}
+        self.assertEqual(producers["creating-html-documents"]["browserProfile"], "desktop-document")
+        self.assertEqual(producers["state-diagram-html"]["browserProfile"], "desktop-diagram")
+        self.assertEqual(producers["state-diagram-html"]["outputPatterns"], ["91_state_diagram.html"])
+
     def test_manifest_checker_rejects_unregistered_tracked_html(self) -> None:
         with tempfile.TemporaryDirectory() as temp:
             root = Path(temp)

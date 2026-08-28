@@ -86,12 +86,12 @@ HTMLを生成、更新、配布、またはMCP Apps resourceとして返す可�
 
 | route | primary owner | 呼び出し前gate | 呼び出し後gate |
 |---|---|---|---|
-| `html` | `creating-html-documents` | manifestのproducer/profile確認 | static gate + 必要なbrowser profile |
+| `html` | `creating-html-documents` | manifestのproducer/profile確認 | static gate + desktop-document。mobile / print / PDFは明示依頼時だけ追加 |
 | `design-artifact` | `designing-ui-ux` | UI/UX Design Approval Gate | static gate + design approval browser matrix |
 | `html-wireframe` | `designing-ui-ux` | low-fidelity目的と承認境界の確認 | static gate + wireframe browser matrix |
 | `html-prototype` | `designing-ui-ux` / `design-eval-loop` | prototypeがproduction実装ではないことを記録 | static gate + prototype browser matrix |
 | `html-plan` | `viewing-plans` / Roadmap generator | Roadmap route、Codemap freshness、source rules確認 | `verify-html-surfaces.py`、Roadmap atomic publish、必要なMCP browser matrix |
-| `html-diagram` | `visualizing-work` → `generate-state-diagram` / `diagram-design` | SVG正本と出力path確認 | static gate + diagram browser matrix |
+| `html-diagram` | `visualizing-work` → `generate-state-diagram` / `diagram-design` | SVG正本と出力path確認 | static gate + producer登録済みprofile。静的図の既定はdesktop-diagram |
 
 producer Skillの本文が外部由来またはreference由来の場合、本体を編集してgateを埋め込まない。local routing、共通contract、manifest、pre/post validationで強制する。
 

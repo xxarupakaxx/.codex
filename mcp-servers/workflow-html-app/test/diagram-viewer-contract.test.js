@@ -107,7 +107,7 @@ test("generate-state-diagram-3d documents time-aware graph JSON and standalone H
   assert.match(skill, /Mermaid入力を必須にするviewer経路は使わない/);
 });
 
-test("base generate-state-diagram stays Mermaid-focused and does not own graphJson output", () => {
+test("base generate-state-diagram stays SVG-focused and does not own graphJson output", () => {
   const skill = readFirst([
     "../../../skills/generate-state-diagram/SKILL.md",
     "../../skills/generate-state-diagram/SKILL.md",

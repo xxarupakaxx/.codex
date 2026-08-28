@@ -19,12 +19,12 @@ manifestにないHTML producerやtracked HTML surfaceを新規のcanonical route
 
 | route | local owner | artifact kind | static profile | browser profile | 主な用途 |
 |---|---|---|---|---|---|
-| `html` | `creating-html-documents` | `html-document` | `strict-self-contained` | `html-document-matrix` | 自己完結の説明文書、教育資料、mixedでないHTML |
+| `html` | `creating-html-documents` | `html-document` | `strict-self-contained` | `desktop-document` | PCで読む自己完結の説明文書、教育資料、mixedでないHTML |
 | `design-artifact` | `designing-ui-ux` | `design-artifact` | `strict-self-contained` | `design-approval-matrix` | 承認済みのUI/UX visual artifact |
 | `html-wireframe` | `designing-ui-ux` | `html-wireframe` | `strict-self-contained` | `wireframe-matrix` | low-fidelity構造確認 |
 | `html-prototype` | `designing-ui-ux` + `design-eval-loop` | `html-prototype` | `strict-self-contained` | `prototype-matrix` | working-flowやinteraction prototype |
 | `html-plan` | `viewing-plans` + Roadmap generator | `html-plan` | `roadmap-generated` | `roadmap-matrix` | `roadmap.html`、Plan/Log/Verification MCP UI |
-| `html-diagram` | `visualizing-work` → `generate-state-diagram` / `diagram-design` | `html-diagram` | `strict-self-contained` | `diagram-matrix` | SVG正本をinline表示する補助図HTML |
+| `html-diagram` | `visualizing-work` → `generate-state-diagram` / `diagram-design` | `html-diagram` | `strict-self-contained` | `desktop-diagram` | SVG正本をPCで読む補助図HTML。3D等のspecialized producerはmanifest登録済みprofileを使う |
 
 routeを選べないHTMLは作らない。複数routeの要素を持つ場合は、user-visibleな配布物を所有するrouteを主にし、補助要素はmanifest上のproducerとsurfaceへ明示する。
 
@@ -86,19 +86,16 @@ python3 .codex/scripts/verify-html-surfaces.py
 
 ## Browser Gate
 
-browser profileはmanifestの`browserProfiles`を正本にする。代表的なmatrixは次を含む。
+browser profileはmanifestの`browserProfiles`を正本にする。`html`と静的`html-diagram`の既定はPC閲覧へ絞り、次を含む。
 
-- 375x812、768x1024、1440x900
-- 200% zoom
+- 1440x900
 - body overflow
 - keyboard flow
-- focus visibility / restoration
-- forced colors
-- reduced motion
-- WCAG AA contrast
-- console error / page error
+- focus visibility
 
 MCP Apps、Roadmap、prototypeなどruntime挙動を持つsurfaceは、該当profileのbrowser gateがfreshでなければ配布完了にしない。
+
+mobile / tablet responsive、print preview、PDF exportは`html`と静的`html-diagram`の既定gateに含めない。ユーザーがその配布形式を明示した場合だけ、対象viewportまたはprint / PDFの追加gateを実行する。specialized producerがmanifestで広いmatrixを持つ場合は、そのprofileを維持する。
 
 ## Roadmap / Code Map
 

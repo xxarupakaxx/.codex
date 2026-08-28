@@ -13,7 +13,7 @@
       "localOwner": "creating-html-documents",
       "artifactKind": "html-document",
       "staticProfile": "strict-self-contained",
-      "browserProfile": "html-document-matrix",
+      "browserProfile": "desktop-document",
       "validationCommands": ["python3 .codex/scripts/verify-html-surfaces.py"]
     },
     {
@@ -56,7 +56,7 @@
       "localOwner": "visualizing-work",
       "artifactKind": "html-diagram",
       "staticProfile": "strict-self-contained",
-      "browserProfile": "diagram-matrix",
+      "browserProfile": "desktop-diagram",
       "validationCommands": ["python3 .codex/scripts/verify-html-surfaces.py"]
     }
   ],
@@ -105,6 +105,8 @@
     }
   },
   "browserProfiles": {
+    "desktop-document": ["1440x900", "overflow", "keyboard", "focus"],
+    "desktop-diagram": ["1440x900", "overflow", "keyboard", "focus", "svg-visible"],
     "html-document-matrix": ["375x812", "768x1024", "1440x900", "200%-zoom", "overflow", "keyboard", "focus", "forced-colors", "reduced-motion"],
     "design-approval-matrix": ["375x812", "768x1024", "1440x900", "overflow", "keyboard", "focus", "contrast"],
     "wireframe-matrix": ["375x812", "768x1024", "1440x900", "overflow", "keyboard", "focus"],
@@ -188,7 +190,7 @@
       "outputPatterns": ["*.html"],
       "artifactKind": "html-document",
       "staticProfile": "strict-self-contained",
-      "browserProfile": "html-document-matrix"
+      "browserProfile": "desktop-document"
     },
     {
       "id": "state-diagram-html",
@@ -196,10 +198,10 @@
       "owner": "generate-state-diagram",
       "source": "skills/generate-state-diagram/SKILL.md",
       "templates": [],
-      "outputPatterns": ["91_state_diagram.html", "91_state_diagram_3d.html"],
+      "outputPatterns": ["91_state_diagram.html"],
       "artifactKind": "html-diagram",
       "staticProfile": "strict-self-contained",
-      "browserProfile": "diagram-matrix"
+      "browserProfile": "desktop-diagram"
     },
     {
       "id": "state-diagram-3d-html",
@@ -265,7 +267,7 @@
     {"path": "claude-compat/mcp-servers/workflow-html-app/ui/plan-viewer.html", "lifecycle": "compatibility", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "roadmap-matrix"},
     {"path": "claude-compat/mcp-servers/workflow-html-app/ui/diagram-viewer.html", "lifecycle": "compatibility", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "diagram-matrix"},
     {"path": "claude-compat/mcp-servers/workflow-html-app/ui/verification-viewer.html", "lifecycle": "compatibility", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "roadmap-matrix"},
-    {"path": "skills/creating-html-documents/assets/editorial-document.html", "lifecycle": "canonical", "owner": "creating-html-documents", "artifactKind": "html-document", "staticProfile": "legacy-grandfathered", "browserProfile": "html-document-matrix"},
+    {"path": "skills/creating-html-documents/assets/editorial-document.html", "lifecycle": "canonical", "owner": "creating-html-documents", "artifactKind": "html-document", "staticProfile": "legacy-grandfathered", "browserProfile": "desktop-document"},
     {"path": "tools/plan_viewer.html", "lifecycle": "legacy", "owner": "viewing-plans", "artifactKind": "legacy-plan-viewer", "staticProfile": "legacy-grandfathered", "browserProfile": "roadmap-matrix"},
     {"path": "tools/log_viewer.html", "lifecycle": "legacy", "owner": "viewing-plans", "artifactKind": "legacy-log-viewer", "staticProfile": "legacy-grandfathered", "browserProfile": "roadmap-matrix"},
     {"path": "tools/diagram_viewer.html", "lifecycle": "legacy", "owner": "visualizing-work", "artifactKind": "legacy-diagram-viewer", "staticProfile": "legacy-grandfathered", "browserProfile": "diagram-matrix"},
