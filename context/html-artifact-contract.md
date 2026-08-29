@@ -49,13 +49,15 @@ HTMLを作る前に次を行う。
 4. 図を作る場合はSVGを正本にする。Markdownへ新規Mermaidを生成しない。HTMLは必要な場合だけ正本SVGをinlineで埋め込む派生成果物にする。
 5. external write、production deploy、権限、課金、認証、公開共有を伴う場合はUser Validation GateまたはExternal Write Gateで承認証跡を確認する。
 
-HTML生成後、配布前に次を行う。
+HTML生成後、配布前に次を行う。ここでいう配布前gateは、surface実装やmanifest契約を変えるときの標準である。task-localなRoadmap再生成でrenderer系を変えない場合の段階化は、この一覧の後に定める。
 
 1. static gateを実行する。
 2. routeのbrowser profileに対応するbrowser gateを実行する。static warningをbrowser PASSの代替にしない。
 3. buildやrenderが失敗した場合、既存の有効な配布物を上書きしない。
 4. canonicalから`legacy`または`grandfathered` surfaceへのlive参照がないことを確認する。
 5. 実行したcommand、対象surface、残ったwarningまたはmanual review項目をtask memoryへ記録する。
+
+Roadmapの通常生成でrenderer、共通CSS、UI preview common primitive、breakpoint、focus restoration、live updateの共通挙動を変えていない場合は、task-localな配布前確認としてstatic gateとdesktop smokeを実測する。`roadmap-matrix`自体は緩和せず、上記の共通挙動を変えた変更、release前確認、またはmanifest surfaceの契約変更ではfull browser profileを実測する。
 
 ## Static Gate
 
@@ -93,7 +95,11 @@ browser profileはmanifestの`browserProfiles`を正本にする。`html`と静�
 - keyboard flow
 - focus visibility
 
-MCP Apps、Roadmap、prototypeなどruntime挙動を持つsurfaceは、該当profileのbrowser gateがfreshでなければ配布完了にしない。
+MCP Apps、Roadmap renderer、prototypeなどruntime挙動を持つsurface実装は、該当profileのbrowser gateがfreshでなければreleaseまたはsurface契約変更の配布完了にしない。
+
+`roadmap-matrix` は現在も 375px、768px、1440px、200% zoom、overflow、keyboard、focus restoration、forced colors、reduced motion、contrast を含む。通常のRoadmap再生成ではstatic + desktop smokeを近道として記録できるが、renderer / common CSS / UI preview common primitive / breakpointを変えた時点でこの近道は使わない。
+
+browser automationでは決定的なoverflow、focus、keyboard、console/page error assertionを先に見る。画像またはLLM reviewは、browser assertionが失敗したsurface、または視覚判断を明示的に求められたsurfaceだけに使う。
 
 mobile / tablet responsive、print preview、PDF exportは`html`と静的`html-diagram`の既定gateに含めない。ユーザーがその配布形式を明示した場合だけ、対象viewportまたはprint / PDFの追加gateを実行する。specialized producerがmanifestで広いmatrixを持つ場合は、そのprofileを維持する。
 
@@ -110,6 +116,12 @@ mobile / tablet responsive、print preview、PDF exportは`html`と静的`html-d
 Currentはfreshなin-progress、なければ最初の未完了Taskから一意に決める。primary actionはunresolved blocker、または対象Taskの`実装`sectionにある最初の未完了checkboxだけを使う。欠落時は「未記録」と表示し、commitmentを補作しない。
 
 Code Mapは常時toggleではない。Detail drawerのImpactから開き、閉じたら起点へfocusを戻す。`codemap.json` / `codemap.lock`は機械判定の正本であり、Roadmapの更新時刻でfreshnessを代用しない。
+
+UI変更Taskでは、Task内の `ui-preview-json` からoptionalな `uiPreviews` をsnapshot v1へ追加できる。rootは `{version, taskNumber, previews:[最大3]}`、`taskNumber` はTask見出しから抽出した数値文字列、各previewは `{id,title,layout,provenance,before,after,uncertainty}` である。これは既存snapshot versionを上げないadditive fieldであり、legacy snapshotやTask Hubの既存表示を変えない。Beforeは `provenance.before.source=repo:...`、`baseRef`、`observedLabels`、Afterは `provenance.after.source`、未確認事項は`uncertainty`として分け、sourceを確認できないBeforeをHTMLや推測で補作しない。
+
+UI previewはRoadmap Change詳細の小さな比較模型であり、ページ全体captureや自由配置editorではない。`topnav`、`sidebar`、`settings`、`list`、`form`は表示presetとして扱い、itemは `{id,label,kind,change,state?}` で表す。`kind`は `label`、`item`、`group`、`action`、`input` の共通primitive、`change`は `same`、`added`、`modified`、`removed` の4値だけを許可し、色だけでなく文言、記号、badge、境界線、ARIA labelで示す。生HTML、外部URL、任意repository code実行、ASTからの見た目断定は禁止する。
+
+reference HTMLから得た900px程度のeditorial canvas、小さいUI模型、新規画面のAfter-only表示は設計指針として扱う。Google Fonts、外部CSS、reference HTMLのtokenはコピーせず、Roadmap既存のdesign token、system font、CSP、self-contained契約を維持する。
 
 ## MCP Apps
 

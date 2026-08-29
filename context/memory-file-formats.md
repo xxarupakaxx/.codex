@@ -128,6 +128,7 @@ Roadmap generatorが参照できるsourceは次に限定する。欠落してい
 - 実装: `30_plan.md`、`40_progress.md`、task directory内の実artifact metadata
 - 検証: `checkpoint.md` / `80_review.md` / `90_verification.md`
 - Code Map: freshな`codemap.json` / `codemap.lock`
+- UI preview: UI変更Task内の任意 `ui-preview-json` 1ブロック。rootは `{version, taskNumber, previews:[最大3]}`、`taskNumber` はTask見出しから抽出した数値文字列、Beforeは `provenance.before` のbase ref実装source、Afterは `provenance.after.source` の仕様・計画、未決事項は`uncertainty`へ分離する
 
 HTMLやSVGを成果物として追加した場合も、長期正本はMarkdown、SVG、Codemap、task memoryである。HTMLはmanifest登録済みproducerからの派生配布物として扱い、invalid renderで既存配布物を上書きしない。
 
@@ -418,11 +419,19 @@ Roadmap ViewerはProject Map + Focusで各Taskの `目的`、`変更対象`、`�
 
 `実装図` は任意fieldであり、最初の `diagram-json` ブロックを選択Taskの実装フローへ使う。`direction`、`nodes`、`edges`の明示値だけを読み、Roadmap HTMLでは自己完結したinline SVGとして描画する。対応する形は矩形と判断node、関係は有向edgeとedge labelに限定する。Viewerは実装手順、変更対象、実コードからnodeやedgeを補作しない。図と同じ関係をテキスト一覧でも表示する。
 
+`ui-preview-json` はUI変更Taskだけに置ける任意fieldであり、各Task内の最初の1ブロックだけを候補にする。rootは `{version, taskNumber, previews:[最大3]}` とし、`taskNumber` はTask見出しから抽出した数値文字列、各previewは `{id,title,layout,provenance,before,after,uncertainty}` を持つ。複数block、Task外block、Task番号不一致、version不一致はinvalidにする。authoring規則、5 layout preset、5 common primitive、省略規則は `skills/viewing-plans/references/ui-change-preview.md` を正本にする。
+
+UI previewのBeforeは `provenance.before.source=repo:...`、`baseRef`、`observedLabels` で確認した事実であり、Afterは `provenance.after.source` が指す仕様・計画上の未実装案である。generatorはReact / Next.jsなどrepository codeを実行せず、ASTから見た目を断定せず、生HTMLを受け付けない。base ref未指定、plan宣言refとCLI refの不一致、Roadmap Task Hub経由、source拒否、anchor driftではBeforeを補作せず、`unverified`と理由をsnapshotへ残す。
+
+snapshot v1の `uiPreviews` はoptional additive fieldである。legacy snapshotまたはUI previewのないTaskでは空配列相当として扱い、既存のProject Map + Focus、source preview、Task Hub表示を変えない。Viewerは選択Task番号と完全一致するpreviewだけをChange詳細へ結び付け、別Taskや変更対象pathからfallbackしない。
+
+UI preview itemは `{id,label,kind,change,state?}` とし、同じ画面要素にstable IDを使い、差分を `same` / `added` / `modified` / `removed` の4値だけで表す。layoutは `topnav` / `sidebar` / `settings` / `list` / `form` の表示preset、kindは `label` / `item` / `group` / `action` / `input` の共通primitiveに限定し、1 side最大24 item、1文字列最大120文字、1 block最大16KiBを超えない。新規画面は `before.items=[]` かつ `provenance.before.source` なしのAfter-only wireframeとして扱い、常に「計画案・未実装」と分かるlabelを表示する。
+
 `実装根拠` は任意fieldであり、最初のinline code参照1件だけを実ソース抜粋へ使う。書式は `repo:<source-rootからの相対path>#<anchor>` または `repo:<source-rootからの相対path>#L<開始行>-L<終了行>` とする。bare path、absolute path、`..` を含むpathは解決しない。
 
 generatorは実コードを最大12行・4KiBに制限し、snapshot全体でも32KiBを超えて埋め込まない。既定allowlist外のprefixは `--source-allow-prefix` で明示する。個人ノート領域、hidden state、secret file、`automation_read: false`、symlink、binary、非UTF-8、1MiB超のfile、high-confidenceなsecret contentは本文を表示しない。
 
-Viewerでは `実装` を「こう実装する」という計画、`実装図`をplanに明示した変更フロー、generatorが解決した抜粋を「現在の実コード」という生成時点の事実として分離する。sourceが未記録または拒否された場合、plan中のcodeらしい文字列から補作しない。source previewはtokenごとにescapeしてから色付けし、未対応言語は色なしのescape済み本文へ戻す。
+Viewerでは `実装` を「こう実装する」という計画、`実装図`をplanに明示した変更フロー、generatorが解決した抜粋を「現在の実コード」という生成時点の事実、`ui-preview-json`を「base refから確認した現状」と「計画案」の比較として分離する。sourceが未記録または拒否された場合、plan中のcodeらしい文字列から補作しない。source previewはtokenごとにescapeしてから色付けし、未対応言語は色なしのescape済み本文へ戻す。
 
 `事実・判断・未確定`のsource priorityは `viewing-plans` を正本とする。既存taskの `team-journal.md` にある `Decisions` と `Open Questions` も有効なsourceとして扱う。
 

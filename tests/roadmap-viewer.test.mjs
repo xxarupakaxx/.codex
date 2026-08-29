@@ -294,6 +294,135 @@ const implementationSourcePreviews = [
   }
 ];
 
+const implementationUiPreviews = [
+  {
+    taskNumber: '1',
+    version: 1,
+    screen: 'Detail drawer actions',
+    title: 'Evidence action wording',
+    layout: 'topnav',
+    isNewScreen: false,
+    status: 'verified',
+    before: {
+      status: 'verified',
+      items: [
+        { id: 'detail', label: 'Detailを開く', kind: 'button', state: 'primary', change: 'same' },
+        { id: 'sources', label: 'Sources', kind: 'tab', state: 'secondary', change: 'modified' },
+        { id: 'help', label: 'Help', kind: 'link', state: 'secondary', change: 'same' }
+      ]
+    },
+    after: {
+      status: 'planned',
+      items: [
+        { id: 'detail', label: 'Detailを開く', kind: 'button', state: 'primary', change: 'same' },
+        { id: 'help', label: 'Help', kind: 'link', state: 'secondary', change: 'same' },
+        { id: 'sources', label: 'Evidence', kind: 'tab', state: 'secondary', change: 'modified' },
+        { id: 'diff', label: 'UI差分', kind: 'section', state: 'new', change: 'added' }
+      ]
+    },
+    provenance: {
+      evidenceRevision: 'abc1234',
+      path: '.codex/tools/roadmap_viewer.html',
+      anchor: 'data-detail-open="sources"',
+      planSource: '30_plan.md#Task 1'
+    },
+    uncertainty: ['hover stateは実ブラウザ確認で確定する。'],
+    ignoredHtml: '<script>alert(1)</script>'
+  },
+  {
+    taskNumber: '2',
+    version: 1,
+    screen: 'UI Preview panel',
+    title: '新規UI差分panel',
+    layout: 'list',
+    newScreen: true,
+    status: 'unverified',
+    before: { status: 'source-unavailable', items: [] },
+    after: [
+      { id: 'summary', label: '要約', kind: 'region', state: 'visible', change: 'added' },
+      { id: 'preview', label: 'Before / After', kind: 'region', state: 'planned', change: 'added' }
+    ],
+    evidenceRevision: 'def5678',
+    provenance: {
+      path: '.codex/tools/roadmap_viewer.html',
+      anchor: 'function renderExecutionBrief(model)',
+      planSource: '30_plan.md#Task 2'
+    },
+    uncertainty: ['generator統合後にbase ref statusを再確認する。']
+  },
+  {
+    taskNumber: '3',
+    version: 1,
+    screen: 'Skipped preview',
+    title: '別Task preview',
+    layout: 'settings',
+    before: [],
+    after: [{ id: 'flag', label: 'Flag', kind: 'toggle', state: 'off', change: 'added' }]
+  }
+];
+
+const generatorExactUiPreviews = [
+  {
+    taskNumber: '1',
+    version: 1,
+    screen: 'Detail drawer actions',
+    title: 'Evidence action wording',
+    layout: 'topnav',
+    status: 'unverified',
+    message: 'base refのanchor確認待ち',
+    source: {
+      path: '.codex/tools/roadmap_viewer.html',
+      anchor: 'data-detail-open="sources"',
+      status: 'anchor-missing',
+      message: 'source anchor drift',
+      evidenceRevision: 'feed1234'
+    },
+    provenance: {
+      before: {
+        source: 'repo:.codex/tools/roadmap_viewer.html#data-detail-open="sources"',
+        baseRef: 'origin/main',
+        observedLabels: ['Detailを開く', 'Sources']
+      },
+      after: {
+        source: '30_plan.md#Task 1'
+      }
+    },
+    before: {
+      items: [
+        { id: 'detail', label: 'Detailを開く', kind: 'button', state: 'primary', change: 'same' },
+        { id: 'sources', label: 'Sources', kind: 'tab', state: 'secondary', change: 'modified' }
+      ]
+    },
+    after: {
+      items: [
+        { id: 'detail', label: 'Detailを開く', kind: 'button', state: 'primary', change: 'same' },
+        { id: 'sources', label: 'Evidence', kind: 'tab', state: 'secondary', change: 'modified' }
+      ]
+    },
+    ignoredHtml: '<img src=x onerror=alert(1)>'
+  },
+  {
+    taskNumber: '2',
+    version: 1,
+    screen: 'UI Preview panel',
+    title: '新規UI差分panel',
+    layout: 'list',
+    status: 'planned',
+    message: 'new screen has no before source',
+    provenance: {
+      before: { baseRef: 'origin/main', observedLabels: [] },
+      after: { source: '30_plan.md#Task 2' }
+    },
+    before: { items: [] },
+    after: {
+      items: [
+        { id: 'summary', label: '要約', kind: 'region', state: 'visible', change: 'added' },
+        { id: 'preview', label: 'Before / After', kind: 'region', state: 'planned', change: 'added' }
+      ]
+    }
+  }
+];
+
 function contrastRatio(foreground, background) {
   const channel = value => {
     const normalized = value / 255;
@@ -419,6 +548,94 @@ test('source previewの変更はsnapshot signatureを変えてlive更新対象�
   assert.notEqual(model.snapshotSignature(base), model.snapshotSignature(changed));
 });
 
+test('uiPreviewsはsnapshot v1のoptional additive fieldとして許可fieldだけ正規化されるべき', () => {
+  const normalized = model.normalizeSnapshot({
+    version: 1,
+    generatedAt,
+    files: implementationPreviewFiles,
+    uiPreviews: [
+      implementationUiPreviews[0],
+      { ...implementationUiPreviews[1], unexpected: 'drop me' },
+      { taskNumber: '2', version: 1, screen: 'Bad', title: 'Bad', layout: 'canvas', before: [], after: [] }
+    ]
+  });
+
+  assert.equal(normalized.version, 1);
+  assert.ok(Array.isArray(normalized.uiPreviews), 'uiPreviews must normalize to an array');
+  assert.equal(normalized.uiPreviews.length, 2);
+  assert.deepEqual(Object.keys(normalized.uiPreviews[0]).sort(), [
+    'after',
+    'before',
+    'evidenceRevision',
+    'isNewScreen',
+    'layout',
+    'provenance',
+    'screen',
+    'status',
+    'taskNumber',
+    'title',
+    'uncertainty',
+    'version'
+  ]);
+  assert.equal(normalized.uiPreviews[0].layout, 'topnav');
+  assert.equal(normalized.uiPreviews[0].before.items[1].change, 'modified');
+  assert.equal(normalized.uiPreviews[0].after.items.find(item => item.id === 'diff').change, 'added');
+  assert.equal(normalized.uiPreviews[0].provenance.evidenceRevision, 'abc1234');
+  assert.equal(normalized.uiPreviews[0].ignoredHtml, undefined);
+  assert.doesNotMatch(JSON.stringify(normalized.uiPreviews), /drop me|ignoredHtml/);
+
+  const legacy = model.normalizeSnapshot({ version: 1, files: {} });
+  assert.deepEqual(JSON.parse(JSON.stringify(legacy.uiPreviews)), []);
+});
+
+test('generator exact-shapeのuiPreviewはsourceとprovenance.beforeからViewer modelへ適合すべき', () => {
+  const normalized = model.normalizeSnapshot({
+    version: 1,
+    generatedAt,
+    files: implementationPreviewFiles,
+    uiPreviews: generatorExactUiPreviews
+  });
+
+  assert.equal(normalized.uiPreviews.length, 2);
+  assert.equal(normalized.uiPreviews[0].provenance.path, '.codex/tools/roadmap_viewer.html');
+  assert.equal(normalized.uiPreviews[0].provenance.anchor, 'data-detail-open="sources"');
+  assert.equal(normalized.uiPreviews[0].provenance.evidenceRevision, 'feed1234');
+  assert.equal(normalized.uiPreviews[0].provenance.baseRef, 'origin/main');
+  assert.equal(normalized.uiPreviews[0].before.status, 'anchor-missing');
+  assert.equal(normalized.uiPreviews[0].before.message, 'source anchor drift');
+  assert.equal(normalized.uiPreviews[0].source, undefined);
+  assert.equal(normalized.uiPreviews[0].provenance.before, undefined);
+  assert.doesNotMatch(JSON.stringify(normalized.uiPreviews), /ignoredHtml|observedLabels|onerror/);
+
+  assert.equal(normalized.uiPreviews[1].isNewScreen, true);
+  assert.equal(normalized.uiPreviews[1].before.items.length, 0);
+  assert.equal(normalized.uiPreviews[1].after.items.length, 2);
+
+  const result = model.buildModel(normalized, { nowMs });
+  const brief = model.buildExecutionBrief(result, '1');
+  assert.equal(brief.selectedUiPreviews[0].provenance.path, '.codex/tools/roadmap_viewer.html');
+  assert.equal(brief.selectedUiPreviews[0].before.status, 'anchor-missing');
+  assert.equal(brief.selectedUiPreviews[0].before.message, 'source anchor drift');
+  assert.equal(model.buildExecutionBrief(result, '2').selectedUiPreviews[0].isNewScreen, true);
+});
+
+test('uiPreviewの変更はsnapshot signatureを変えてlive更新対象になるべき', () => {
+  const base = {
+    version: 1,
+    generatedAt,
+    files: implementationPreviewFiles,
+    uiPreviews: implementationUiPreviews
+  };
+  const changed = {
+    ...base,
+    uiPreviews: implementationUiPreviews.map(preview => preview.taskNumber === '2'
+      ? { ...preview, title: '新規UI差分panel revised' }
+      : preview)
+  };
+
+  assert.notEqual(model.snapshotSignature(base), model.snapshotSignature(changed));
+});
+
 test('Taskの実装sectionは選択Taskのこう実装する手順として抽出されるべき', () => {
   const result = model.buildModel(model.normalizeSnapshot({
     generatedAt,
@@ -508,6 +725,48 @@ test('legacy snapshotはsource未記録を明示し、planからcodeを補作し
   assert.equal(brief.selectedSourcePreview.code, '');
   assert.ok(brief.selectedSourcePreview.message);
   assert.doesNotMatch(JSON.stringify(brief.selectedSourcePreview), /inventedAfterCode/);
+});
+
+test('uiPreviewは選択Taskだけに結び付き、item IDで変更内容と順序変更を分けるべき', () => {
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: implementationPreviewFiles,
+    sourcePreviews: implementationSourcePreviews,
+    uiPreviews: implementationUiPreviews
+  }), { nowMs });
+
+  const first = model.buildExecutionBrief(result, '1');
+  assert.equal(first.selectedTask.number, '1');
+  assert.equal(first.selectedSourcePreview.taskNumber, '1');
+  assert.equal(first.selectedUiPreviews.length, 1);
+  assert.equal(first.selectedUiPreviews[0].taskNumber, '1');
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(first.selectedUiPreviews[0].pairs.map(pair => [pair.id, pair.change, pair.orderChanged]))),
+    [
+      ['detail', 'same', false],
+      ['sources', 'modified', true],
+      ['help', 'same', true],
+      ['diff', 'added', false]
+    ]
+  );
+
+  const second = model.buildExecutionBrief(result, '2');
+  assert.equal(second.selectedTask.number, '2');
+  assert.equal(second.selectedUiPreviews.length, 1);
+  assert.equal(second.selectedUiPreviews[0].isNewScreen, true);
+  assert.equal(second.selectedUiPreviews[0].pairs.every(pair => pair.change === 'added'), true);
+
+  const absent = model.buildExecutionBrief(result, '9');
+  assert.equal(absent.selectedTask.number, '2');
+  assert.equal(absent.selectedUiPreviews[0].taskNumber, '2');
+
+  const noPreview = model.buildExecutionBrief(model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: implementationPreviewFiles,
+    uiPreviews: implementationUiPreviews.filter(preview => preview.taskNumber === '3')
+  }), { nowMs }), '2');
+  assert.equal(noPreview.selectedTask.number, '2');
+  assert.deepEqual(noPreview.selectedUiPreviews, []);
 });
 
 test('missing・secret・unavailable sourceは理由だけを返しcodeを保持しないべき', () => {
@@ -1453,6 +1712,32 @@ test('implementation workspaceはdrawer内でTask indexと選択detailを持つs
   assert.match(html, /\.brief-workspace\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:/);
   assert.match(html, /@media \(max-width:\s*900px\)[\s\S]*\.brief-workspace\s*\{[^}]*grid-template-columns:\s*1fr/);
   assert.match(html, /\.brief-source-code\s*\{[^}]*overflow-x:\s*auto/);
+});
+
+test('Change detailは要約、UI差分、Evidenceの順でProgressiveに表示すべき', () => {
+  for (const id of [
+    'brief-ui-preview',
+    'ui-preview-list',
+    'brief-change-evidence',
+    'ui-preview-evidence-toggle',
+    'ui-preview-evidence',
+    'ui-preview-evidence-close',
+    'ui-preview-evidence-list'
+  ]) {
+    assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
+  }
+  assert.ok(html.indexOf('id="brief-implementation"') < html.indexOf('id="brief-ui-preview"'));
+  assert.ok(html.indexOf('id="brief-ui-preview"') < html.indexOf('id="brief-change-evidence"'));
+  assert.match(html, /現状・base refから確認/);
+  assert.match(html, /計画案・未実装/);
+  assert.match(html, /新規画面/);
+  assert.match(html, /\.ui-preview-sides\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s);
+  assert.match(html, /@media \(max-width:\s*720px\)[\s\S]*\.ui-preview-sides\s*\{[^}]*grid-template-columns:\s*1fr/s);
+  for (const change of ['same', 'added', 'modified', 'removed']) {
+    assert.match(html, new RegExp(`change-${change}`), `${change} state needs class coverage`);
+  }
+  assert.match(html, /aria-label="\$\{escapeHtml\(aria\)\}"/);
+  assert.match(html, /setUiPreviewEvidenceExpanded/);
 });
 
 test('選択Taskは現在Taskと別stateで、EvidenceとImpactはdrawer内のon-demand surfaceであるべき', () => {

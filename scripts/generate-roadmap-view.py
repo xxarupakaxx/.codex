@@ -10,6 +10,7 @@ import json
 import os
 import re
 import stat
+import subprocess
 import sys
 import threading
 import time
@@ -119,6 +120,14 @@ MAX_SOURCE_FILE_BYTES = 1024 * 1024
 MAX_PREVIEW_LINES = 12
 MAX_PREVIEW_BYTES = 4 * 1024
 MAX_TOTAL_PREVIEW_BYTES = 32 * 1024
+MAX_SOURCE_PREVIEW_COUNT = 24
+MAX_UI_PREVIEW_BLOCK_BYTES = 16 * 1024
+MAX_UI_PREVIEWS_PER_TASK = 3
+MAX_UI_PREVIEW_COUNT = 24
+MAX_TOTAL_UI_PREVIEW_BYTES = 64 * 1024
+MAX_UI_ITEMS_PER_SIDE = 24
+MAX_UI_TEXT_CHARS = 120
+GIT_SUBPROCESS_TIMEOUT = 5.0
 
 SECRET_CONTENT_PATTERNS = (
     re.compile(
@@ -171,6 +180,17 @@ LANGUAGE_BY_SUFFIX = {
     ".yml": "yaml",
     ".zsh": "shell",
 }
+UI_PREVIEW_BLOCK_RE = re.compile(
+    r"```[ \t]*ui-preview-json[ \t]*\r?\n([\s\S]*?)\r?\n```",
+    re.IGNORECASE,
+)
+STABLE_UI_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]{0,63}$")
+GIT_SHA_RE = re.compile(r"^[0-9a-f]{40,64}$")
+RAW_HTML_RE = re.compile(r"</?[A-Za-z][^>]*>")
+EXTERNAL_URL_RE = re.compile(r"(?i)(?:https?:)?//")
+ALLOWED_UI_LAYOUTS = {"topnav", "sidebar", "settings", "list", "form"}
+ALLOWED_UI_ITEM_KINDS = {"label", "item", "group", "action", "input"}
+ALLOWED_UI_CHANGES = {"same", "added", "modified", "removed"}
 
 
 class RoadmapHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -291,8 +311,8 @@ def infer_source_root(task_dir: Path) -> Path | None:
     return None
 
 
-def parse_source_preview_references(plan: str) -> list[tuple[str, str]]:
-    references: list[tuple[str, str]] = []
+def iter_task_sections(plan: str) -> list[tuple[str, int, int, str]]:
+    sections: list[tuple[str, int, int, str]] = []
     task_matches = list(TASK_HEADING_RE.finditer(plan))
     for index, task_match in enumerate(task_matches):
         section_start = task_match.end()
@@ -316,7 +336,20 @@ def parse_source_preview_references(plan: str) -> list[tuple[str, str]]:
         )
         if peer_heading is not None:
             section_end = peer_heading.start()
-        task_section = plan[section_start:section_end]
+        sections.append(
+            (
+                task_match.group(2),
+                section_start,
+                section_end,
+                plan[section_start:section_end],
+            )
+        )
+    return sections
+
+
+def parse_source_preview_references(plan: str) -> list[tuple[str, str]]:
+    references: list[tuple[str, str]] = []
+    for task_number, _, _, task_section in iter_task_sections(plan):
         evidence = IMPLEMENTATION_EVIDENCE_RE.search(task_section)
         if not evidence:
             continue
@@ -326,7 +359,7 @@ def parse_source_preview_references(plan: str) -> list[tuple[str, str]]:
         reference = first_inline.group(1).strip()
         if not reference.startswith("repo:"):
             continue
-        references.append((task_match.group(2), reference))
+        references.append((task_number, reference))
     return references
 
 
@@ -345,8 +378,9 @@ def source_preview_record(
     end_line: int | None = None,
     code: str = "",
     truncated: bool = False,
+    evidence_revision: str | None = None,
 ) -> dict[str, object]:
-    return {
+    record: dict[str, object] = {
         "taskNumber": task_number,
         "path": relative_path,
         "anchor": anchor,
@@ -358,6 +392,9 @@ def source_preview_record(
         "message": message,
         "truncated": truncated,
     }
+    if evidence_revision:
+        record["evidenceRevision"] = evidence_revision
+    return record
 
 
 def split_source_reference(reference: str) -> tuple[str, str]:
@@ -388,11 +425,10 @@ def normalize_source_prefixes(prefixes: list[str] | None) -> tuple[tuple[str, ..
     return tuple(normalized)
 
 
-def validate_source_path(
+def validate_source_path_parts(
     raw_path: str,
-    source_root: Path,
     allowed_prefixes: tuple[tuple[str, ...], ...],
-) -> tuple[Path | None, str, str]:
+) -> tuple[tuple[str, ...] | None, str, str]:
     if (
         not raw_path
         or raw_path.startswith(("/", "~", "\\"))
@@ -428,6 +464,22 @@ def validate_source_path(
     ):
         return None, "source-denied", "source allowlist外のため表示できません。"
 
+    return path_parts, "", ""
+
+
+def validate_source_path(
+    raw_path: str,
+    source_root: Path,
+    allowed_prefixes: tuple[tuple[str, ...], ...],
+) -> tuple[Path | None, str, str]:
+    path_parts, status, message = validate_source_path_parts(
+        raw_path,
+        allowed_prefixes,
+    )
+    if path_parts is None:
+        return None, status, message
+
+    raw_parts = list(path_parts)
     candidate = source_root.joinpath(*raw_parts)
     try:
         candidate.relative_to(source_root)
@@ -499,6 +551,99 @@ def truncate_utf8(text: str, byte_limit: int) -> tuple[str, bool]:
     return encoded[:byte_limit].decode("utf-8", errors="ignore"), True
 
 
+def preview_text_record(
+    task_number: str,
+    relative_path: str,
+    anchor: str,
+    text: str,
+    *,
+    remaining_bytes: int,
+    evidence_revision: str | None = None,
+) -> dict[str, object]:
+    if markdown_disallows_automation(text, relative_path):
+        return source_preview_record(
+            task_number,
+            relative_path,
+            anchor,
+            status="source-denied",
+            message="automation_read: falseのため本文を取得しません。",
+            evidence_revision=evidence_revision,
+        )
+
+    lines = text.splitlines()
+    range_match = LINE_RANGE_RE.fullmatch(anchor)
+    truncated = False
+    if range_match:
+        requested_start = int(range_match.group(1))
+        requested_end = int(range_match.group(2))
+        if requested_end < requested_start or requested_start > len(lines):
+            return source_preview_record(
+                task_number,
+                relative_path,
+                anchor,
+                status="anchor-missing",
+                message="指定されたline rangeが見つかりません。",
+                evidence_revision=evidence_revision,
+            )
+        start_line = requested_start
+        end_line = min(requested_end, len(lines), start_line + MAX_PREVIEW_LINES - 1)
+        truncated = end_line < requested_end
+    else:
+        start_index = next(
+            (index for index, line in enumerate(lines) if anchor in line),
+            None,
+        )
+        if start_index is None:
+            return source_preview_record(
+                task_number,
+                relative_path,
+                anchor,
+                status="anchor-missing",
+                message="指定されたanchorが現在のsourceに見つかりません。",
+                evidence_revision=evidence_revision,
+            )
+        start_line = start_index + 1
+        end_line = min(len(lines), start_line + MAX_PREVIEW_LINES - 1)
+        truncated = end_line < len(lines)
+
+    code = "\n".join(lines[start_line - 1 : end_line])
+    if contains_secret_content(code):
+        return source_preview_record(
+            task_number,
+            relative_path,
+            anchor,
+            status="secret-content",
+            message="秘密情報らしき内容を検出したため本文を表示しません。",
+            evidence_revision=evidence_revision,
+        )
+
+    code, preview_truncated = truncate_utf8(code, MAX_PREVIEW_BYTES)
+    truncated = truncated or preview_truncated
+    if remaining_bytes <= 0:
+        return source_preview_record(
+            task_number,
+            relative_path,
+            anchor,
+            status="budget-exhausted",
+            message="snapshotのsource preview上限に達したため本文を表示しません。",
+            evidence_revision=evidence_revision,
+        )
+    code, total_truncated = truncate_utf8(code, remaining_bytes)
+    truncated = truncated or total_truncated
+    return source_preview_record(
+        task_number,
+        relative_path,
+        anchor,
+        status="resolved",
+        message="",
+        start_line=start_line,
+        end_line=end_line,
+        code=code,
+        truncated=truncated,
+        evidence_revision=evidence_revision,
+    )
+
+
 def extract_source_preview(
     task_number: str,
     reference: str,
@@ -567,81 +712,187 @@ def extract_source_preview(
             status="source-denied",
             message="UTF-8ではないsource fileは表示できません。",
         )
-    if markdown_disallows_automation(text, relative_path):
+    return preview_text_record(
+        task_number,
+        relative_path,
+        anchor,
+        text,
+        remaining_bytes=remaining_bytes,
+    )
+
+
+def git_output(source_root: Path, args: list[str], *, text: bool = True) -> subprocess.CompletedProcess[str] | subprocess.CompletedProcess[bytes]:
+    command = ["git", *args]
+    try:
+        return subprocess.run(
+            command,
+            cwd=source_root,
+            check=False,
+            capture_output=True,
+            text=text,
+            timeout=GIT_SUBPROCESS_TIMEOUT,
+        )
+    except subprocess.TimeoutExpired:
+        return subprocess.CompletedProcess(
+            command,
+            124,
+            stdout="" if text else b"",
+            stderr="git subprocess timed out" if text else b"git subprocess timed out",
+        )
+
+
+def resolve_git_commit(source_root: Path | None, ref: str | None) -> tuple[str | None, str]:
+    if source_root is None or not ref:
+        return None, "base refが未指定のためBeforeを確認できません。"
+    result = git_output(
+        source_root,
+        ["rev-parse", "--verify", "--quiet", "--end-of-options", f"{ref}^{{commit}}"],
+    )
+    revision = result.stdout.strip() if isinstance(result.stdout, str) else ""
+    if result.returncode != 0 or not GIT_SHA_RE.fullmatch(revision):
+        return None, "base refをcommit SHAへ解決できません。"
+    return revision, ""
+
+
+def read_git_blob(
+    source_root: Path,
+    revision: str,
+    relative_path: str,
+    allowed_prefixes: tuple[tuple[str, ...], ...],
+    cache: dict[tuple[str, str], tuple[bytes | None, str, str]] | None = None,
+) -> tuple[bytes | None, str, str]:
+    path_parts, status, message = validate_source_path_parts(
+        relative_path,
+        allowed_prefixes,
+    )
+    if path_parts is None:
+        return None, status, message
+    safe_path = "/".join(path_parts)
+    key = (revision, safe_path)
+    if cache is not None and key in cache:
+        return cache[key]
+
+    def cached(result: tuple[bytes | None, str, str]) -> tuple[bytes | None, str, str]:
+        if cache is not None:
+            cache[key] = result
+        return result
+
+    current_path, current_status, current_message = validate_source_path(
+        relative_path,
+        source_root,
+        allowed_prefixes,
+    )
+    if current_path is None and current_status != "source-missing":
+        return cached((None, current_status, current_message))
+    if current_path is not None:
+        try:
+            current_text = current_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeDecodeError):
+            current_text = ""
+        if markdown_disallows_automation(current_text, relative_path):
+            return cached((None, "source-denied", "automation_read: falseのため本文を取得しません。"))
+    tree = git_output(
+        source_root,
+        ["ls-tree", "-z", revision, "--", safe_path],
+        text=False,
+    )
+    if tree.returncode != 0 or not tree.stdout:
+        return cached((None, "source-missing", "base ref内に参照先のsource fileが見つかりません。"))
+    entry = bytes(tree.stdout).split(b"\0", 1)[0].decode("utf-8", errors="replace")
+    meta, _, found_path = entry.partition("\t")
+    parts = meta.split()
+    if len(parts) < 3 or found_path != safe_path:
+        return cached((None, "source-unavailable", "base refのtree entryを確認できません。"))
+    mode, kind, object_id = parts[:3]
+    if kind != "blob" or mode not in {"100644", "100755"}:
+        return cached((None, "source-denied", "regular fileではないため表示できません。"))
+    size = git_output(source_root, ["cat-file", "-s", object_id])
+    try:
+        byte_count = int(str(size.stdout).strip()) if size.returncode == 0 else -1
+    except ValueError:
+        byte_count = -1
+    if byte_count < 0:
+        return cached((None, "source-unavailable", "base refのblob sizeを確認できません。"))
+    if byte_count > MAX_SOURCE_FILE_BYTES:
+        return cached((None, "source-denied", "1MiBを超えるsource fileは読み込みません。"))
+    blob = git_output(source_root, ["cat-file", "blob", object_id], text=False)
+    if blob.returncode != 0:
+        return cached((None, "source-unavailable", "base refのblobを読み込めません。"))
+    return cached((bytes(blob.stdout), "", ""))
+
+
+def extract_git_source_preview(
+    task_number: str,
+    reference: str,
+    *,
+    source_root: Path | None,
+    allowed_prefixes: tuple[tuple[str, ...], ...],
+    remaining_bytes: int,
+    evidence_revision: str | None,
+    base_ref_message: str,
+    git_blob_cache: dict[tuple[str, str], tuple[bytes | None, str, str]] | None = None,
+) -> dict[str, object]:
+    relative_path, anchor = split_source_reference(reference)
+    if evidence_revision is None or source_root is None:
+        return source_preview_record(
+            task_number,
+            relative_path,
+            anchor,
+            status="base-ref-unavailable",
+            message=base_ref_message or "base refを確認できません。",
+        )
+    if not anchor:
         return source_preview_record(
             task_number,
             relative_path,
             anchor,
             status="source-denied",
-            message="automation_read: falseのため本文を取得しません。",
+            message="source anchorまたはline rangeが未指定です。",
+            evidence_revision=evidence_revision,
         )
-
-    lines = text.splitlines()
-    range_match = LINE_RANGE_RE.fullmatch(anchor)
-    truncated = False
-    if range_match:
-        requested_start = int(range_match.group(1))
-        requested_end = int(range_match.group(2))
-        if requested_end < requested_start or requested_start > len(lines):
-            return source_preview_record(
-                task_number,
-                relative_path,
-                anchor,
-                status="anchor-missing",
-                message="指定されたline rangeが見つかりません。",
-            )
-        start_line = requested_start
-        end_line = min(requested_end, len(lines), start_line + MAX_PREVIEW_LINES - 1)
-        truncated = end_line < requested_end
-    else:
-        start_index = next(
-            (index for index, line in enumerate(lines) if anchor in line),
-            None,
-        )
-        if start_index is None:
-            return source_preview_record(
-                task_number,
-                relative_path,
-                anchor,
-                status="anchor-missing",
-                message="指定されたanchorが現在のsourceに見つかりません。",
-            )
-        start_line = start_index + 1
-        end_line = min(len(lines), start_line + MAX_PREVIEW_LINES - 1)
-        truncated = end_line < len(lines)
-
-    code = "\n".join(lines[start_line - 1 : end_line])
-    if contains_secret_content(code):
+    raw, status, message = read_git_blob(
+        source_root,
+        evidence_revision,
+        relative_path,
+        allowed_prefixes,
+        git_blob_cache,
+    )
+    if raw is None:
         return source_preview_record(
             task_number,
             relative_path,
             anchor,
-            status="secret-content",
-            message="秘密情報らしき内容を検出したため本文を表示しません。",
+            status=status,
+            message=message,
+            evidence_revision=evidence_revision,
         )
-
-    code, preview_truncated = truncate_utf8(code, MAX_PREVIEW_BYTES)
-    truncated = truncated or preview_truncated
-    if remaining_bytes <= 0:
+    if b"\0" in raw:
         return source_preview_record(
             task_number,
             relative_path,
             anchor,
-            status="budget-exhausted",
-            message="snapshotのsource preview上限に達したため本文を表示しません。",
+            status="source-denied",
+            message="binary fileは表示対象にできません。",
+            evidence_revision=evidence_revision,
         )
-    code, total_truncated = truncate_utf8(code, remaining_bytes)
-    truncated = truncated or total_truncated
-    return source_preview_record(
+    try:
+        text = raw.decode("utf-8")
+    except UnicodeDecodeError:
+        return source_preview_record(
+            task_number,
+            relative_path,
+            anchor,
+            status="source-denied",
+            message="UTF-8ではないsource fileは表示できません。",
+            evidence_revision=evidence_revision,
+        )
+    return preview_text_record(
         task_number,
         relative_path,
         anchor,
-        status="resolved",
-        message="",
-        start_line=start_line,
-        end_line=end_line,
-        code=code,
-        truncated=truncated,
+        text,
+        remaining_bytes=remaining_bytes,
+        evidence_revision=evidence_revision,
     )
 
 
@@ -650,6 +901,10 @@ def collect_source_previews(
     *,
     source_root: Path | None,
     source_allow_prefixes: list[str] | None,
+    base_ref: str | None = None,
+    base_revision: str | None = None,
+    base_ref_message: str = "",
+    git_blob_cache: dict[tuple[str, str], tuple[bytes | None, str, str]] | None = None,
 ) -> list[dict[str, object]]:
     references = parse_source_preview_references(plan)
     if not references:
@@ -664,15 +919,304 @@ def collect_source_previews(
     previews: list[dict[str, object]] = []
     used_bytes = 0
     for task_number, reference in references:
-        preview = extract_source_preview(
-            task_number,
-            reference,
-            source_root=normalized_root,
-            allowed_prefixes=allowed_prefixes,
-            remaining_bytes=MAX_TOTAL_PREVIEW_BYTES - used_bytes,
-        )
+        if len(previews) >= MAX_SOURCE_PREVIEW_COUNT or used_bytes >= MAX_TOTAL_PREVIEW_BYTES:
+            break
+        if base_ref:
+            preview = extract_git_source_preview(
+                task_number,
+                reference,
+                source_root=normalized_root,
+                allowed_prefixes=allowed_prefixes,
+                remaining_bytes=MAX_TOTAL_PREVIEW_BYTES - used_bytes,
+                evidence_revision=base_revision,
+                base_ref_message=base_ref_message,
+                git_blob_cache=git_blob_cache,
+            )
+        else:
+            preview = extract_source_preview(
+                task_number,
+                reference,
+                source_root=normalized_root,
+                allowed_prefixes=allowed_prefixes,
+                remaining_bytes=MAX_TOTAL_PREVIEW_BYTES - used_bytes,
+            )
         previews.append(preview)
         used_bytes += len(str(preview["code"]).encode("utf-8"))
+    return previews
+
+
+def invalid_ui_preview(task_number: str, message: str) -> dict[str, object]:
+    return {"taskNumber": task_number, "id": "invalid-ui-preview", "status": "invalid", "message": message, "before": {"items": []}, "after": {"items": []}, "uncertainty": []}
+
+
+def ensure_ui_keys(value: object, keys: set[str], path: str) -> dict[str, object]:
+    if not isinstance(value, dict):
+        raise ValueError(f"{path} must be an object")
+    unknown = sorted(set(value) - keys)
+    if unknown:
+        raise ValueError(f"{path} has unknown key")
+    return value
+
+
+def ui_text(value: object, path: str, *, allow_empty: bool = False) -> str:
+    if not isinstance(value, str):
+        raise ValueError(f"{path} must be a string")
+    text = value.strip()
+    if not text and not allow_empty:
+        raise ValueError(f"{path} must not be empty")
+    if len(text) > MAX_UI_TEXT_CHARS:
+        raise ValueError(f"{path} exceeds {MAX_UI_TEXT_CHARS} chars")
+    if RAW_HTML_RE.search(text) or EXTERNAL_URL_RE.search(text):
+        raise ValueError(f"{path} contains raw HTML or external URL")
+    return text
+
+
+def ui_id(value: object, path: str) -> str:
+    text = ui_text(value, path)
+    if not STABLE_UI_ID_RE.fullmatch(text):
+        raise ValueError(f"{path} must be a stable id")
+    return text
+
+
+def normalize_ui_items(value: object, path: str) -> list[dict[str, object]]:
+    if not isinstance(value, list) or len(value) > MAX_UI_ITEMS_PER_SIDE:
+        raise ValueError(f"{path} must contain at most {MAX_UI_ITEMS_PER_SIDE} items")
+    seen: set[str] = set()
+    items: list[dict[str, object]] = []
+    for index, raw_item in enumerate(value):
+        item = ensure_ui_keys(
+            raw_item,
+            {"id", "label", "kind", "state", "change"},
+            f"{path}[{index}]",
+        )
+        item_id = ui_id(item.get("id"), f"{path}[{index}].id")
+        if item_id in seen:
+            raise ValueError(f"{path}[{index}].id duplicates another item")
+        seen.add(item_id)
+        kind = ui_text(item.get("kind"), f"{path}[{index}].kind")
+        change = ui_text(item.get("change"), f"{path}[{index}].change")
+        if kind not in ALLOWED_UI_ITEM_KINDS:
+            raise ValueError(f"{path}[{index}].kind is not allowed")
+        if change not in ALLOWED_UI_CHANGES:
+            raise ValueError(f"{path}[{index}].change is not allowed")
+        clean: dict[str, object] = {
+            "id": item_id,
+            "label": ui_text(item.get("label"), f"{path}[{index}].label"),
+            "kind": kind,
+            "change": change,
+        }
+        if "state" in item:
+            clean["state"] = ui_text(item["state"], f"{path}[{index}].state", allow_empty=True)
+        items.append(clean)
+    return items
+
+
+def normalize_ui_side(value: object, path: str) -> dict[str, object]:
+    side = ensure_ui_keys(value, {"items"}, path)
+    return {"items": normalize_ui_items(side.get("items"), f"{path}.items")}
+
+
+def normalize_ui_provenance(value: object, path: str) -> dict[str, object]:
+    provenance = ensure_ui_keys(value, {"before", "after"}, path)
+    before = ensure_ui_keys(
+        provenance.get("before", {}),
+        {"source", "baseRef", "observedLabels"},
+        f"{path}.before",
+    )
+    after = ensure_ui_keys(provenance.get("after", {}), {"source"}, f"{path}.after")
+    clean_before: dict[str, object] = {}
+    if "source" in before:
+        clean_before["source"] = ui_text(before["source"], f"{path}.before.source")
+    if "baseRef" in before:
+        clean_before["baseRef"] = ui_text(before["baseRef"], f"{path}.before.baseRef")
+    labels = before.get("observedLabels", [])
+    if not isinstance(labels, list) or len(labels) > MAX_UI_ITEMS_PER_SIDE:
+        raise ValueError(f"{path}.before.observedLabels must be a bounded list")
+    clean_before["observedLabels"] = [
+        ui_text(label, f"{path}.before.observedLabels[{index}]")
+        for index, label in enumerate(labels)
+    ]
+    clean_after = {"source": ui_text(after.get("source"), f"{path}.after.source")}
+    return {"before": clean_before, "after": clean_after}
+
+
+def normalize_ui_uncertainty(value: object, path: str) -> list[str]:
+    if value is None:
+        return []
+    if not isinstance(value, list) or len(value) > MAX_UI_ITEMS_PER_SIDE:
+        raise ValueError(f"{path} must be a bounded list")
+    return [ui_text(item, f"{path}[{index}]") for index, item in enumerate(value)]
+
+
+def normalize_ui_preview_block(
+    task_number: str,
+    block: str,
+    *,
+    source_root: Path | None,
+    allowed_prefixes: tuple[tuple[str, ...], ...],
+    base_ref: str | None,
+    base_revision: str | None,
+    base_ref_message: str,
+    git_blob_cache: dict[tuple[str, str], tuple[bytes | None, str, str]] | None,
+) -> list[dict[str, object]]:
+    if len(block.encode("utf-8")) > MAX_UI_PREVIEW_BLOCK_BYTES:
+        raise ValueError("ui-preview-json block exceeds 16KiB")
+    root = ensure_ui_keys(
+        json.loads(block),
+        {"version", "taskNumber", "previews"},
+        "ui-preview-json",
+    )
+    if root.get("version") != 1 or str(root.get("taskNumber")) != task_number:
+        raise ValueError("ui-preview-json version or taskNumber mismatch")
+    previews = root.get("previews")
+    if not isinstance(previews, list) or not previews or len(previews) > MAX_UI_PREVIEWS_PER_TASK:
+        raise ValueError("ui-preview-json previews limit exceeded")
+
+    clean_previews: list[dict[str, object]] = []
+    seen_previews: set[str] = set()
+    for index, raw_preview in enumerate(previews):
+        preview = ensure_ui_keys(
+            raw_preview,
+            {"id", "title", "layout", "provenance", "before", "after", "uncertainty"},
+            f"previews[{index}]",
+        )
+        preview_id = ui_id(preview.get("id"), f"previews[{index}].id")
+        if preview_id in seen_previews:
+            raise ValueError(f"previews[{index}].id duplicates another preview")
+        seen_previews.add(preview_id)
+        layout = ui_text(preview.get("layout"), f"previews[{index}].layout")
+        if layout not in ALLOWED_UI_LAYOUTS:
+            raise ValueError(f"previews[{index}].layout is not allowed")
+        provenance = normalize_ui_provenance(preview.get("provenance"), f"previews[{index}].provenance")
+        before = normalize_ui_side(preview.get("before"), f"previews[{index}].before")
+        after = normalize_ui_side(preview.get("after"), f"previews[{index}].after")
+        before_source = str(provenance["before"].get("source", ""))
+        before_items = before["items"]
+        if before_items and not before_source:
+            raise ValueError(f"previews[{index}].before requires source provenance")
+        if before_source and not before_source.startswith("repo:"):
+            raise ValueError(f"previews[{index}].provenance.before.source must use repo:")
+        declared_ref = str(provenance["before"].get("baseRef", ""))
+        source = extract_git_source_preview(
+            task_number,
+            before_source,
+            source_root=source_root,
+            allowed_prefixes=allowed_prefixes,
+            remaining_bytes=MAX_PREVIEW_BYTES,
+            evidence_revision=base_revision,
+            base_ref_message=base_ref_message,
+            git_blob_cache=git_blob_cache,
+        ) if before_source else source_preview_record(
+            task_number,
+            "",
+            "",
+            status="not-applicable",
+            message="Before sourceは未指定です。",
+        )
+        labels = [
+            str(item["label"]) for item in before_items
+        ] + [str(label) for label in provenance["before"].get("observedLabels", [])]
+        code = str(source.get("code", ""))
+        status = "resolved"
+        message = ""
+        if before_items and not base_ref:
+            status = "unverified"
+            message = "base refが未指定のためBeforeを確認できません。"
+        elif declared_ref and base_ref and declared_ref != base_ref:
+            status = "unverified"
+            message = "planのbaseRefとCLI --base-refが一致しません。"
+        elif before_items and (source.get("status") != "resolved" or not all(label in code for label in labels)):
+            status = "unverified"
+            message = str(source.get("message") or "Before labelをbase refのsourceで確認できません。")
+        clean_previews.append(
+            {
+                "taskNumber": task_number,
+                "id": preview_id,
+                "title": ui_text(preview.get("title"), f"previews[{index}].title"),
+                "layout": layout,
+                "status": status,
+                "message": message,
+                "evidenceRevision": base_revision or "",
+                "provenance": provenance,
+                "source": source,
+                "before": before if status == "resolved" else {"items": []},
+                "after": after,
+                "uncertainty": normalize_ui_uncertainty(
+                    preview.get("uncertainty", []),
+                    f"previews[{index}].uncertainty",
+                ),
+            }
+        )
+    return clean_previews
+
+
+def collect_ui_previews(
+    plan: str,
+    *,
+    source_root: Path | None,
+    source_allow_prefixes: list[str] | None,
+    base_ref: str | None,
+    base_revision: str | None,
+    base_ref_message: str,
+    git_blob_cache: dict[tuple[str, str], tuple[bytes | None, str, str]] | None = None,
+) -> list[dict[str, object]]:
+    task_sections = iter_task_sections(plan)
+    if not task_sections and not UI_PREVIEW_BLOCK_RE.search(plan):
+        return []
+    normalized_root = (
+        source_root.expanduser().resolve(strict=False)
+        if source_root is not None
+        else None
+    )
+    allowed_prefixes = normalize_source_prefixes(source_allow_prefixes)
+    previews: list[dict[str, object]] = []
+    used_bytes = 0
+    covered: set[tuple[int, int]] = set()
+    for task_number, start, end, body in task_sections:
+        if len(previews) >= MAX_UI_PREVIEW_COUNT or used_bytes >= MAX_TOTAL_UI_PREVIEW_BYTES:
+            break
+        blocks = list(UI_PREVIEW_BLOCK_RE.finditer(body))
+        for block in blocks:
+            covered.add((start + block.start(), start + block.end()))
+        if len(blocks) > 1:
+            preview = invalid_ui_preview(task_number, "Task内のui-preview-jsonは1件だけ許可されています。")
+            previews.append(preview)
+            used_bytes += len(json.dumps(preview, ensure_ascii=False).encode("utf-8"))
+            continue
+        if not blocks:
+            continue
+        try:
+            candidates = (
+                normalize_ui_preview_block(
+                    task_number,
+                    blocks[0].group(1),
+                    source_root=normalized_root,
+                    allowed_prefixes=allowed_prefixes,
+                    base_ref=base_ref,
+                    base_revision=base_revision,
+                    base_ref_message=base_ref_message,
+                    git_blob_cache=git_blob_cache,
+                )
+            )
+        except (ValueError, json.JSONDecodeError) as error:
+            candidates = [invalid_ui_preview(task_number, str(error))]
+        for preview in candidates:
+            preview_bytes = len(json.dumps(preview, ensure_ascii=False).encode("utf-8"))
+            if len(previews) >= MAX_UI_PREVIEW_COUNT or used_bytes + preview_bytes > MAX_TOTAL_UI_PREVIEW_BYTES:
+                break
+            previews.append(preview)
+            used_bytes += preview_bytes
+    for block in UI_PREVIEW_BLOCK_RE.finditer(plan):
+        if len(previews) >= MAX_UI_PREVIEW_COUNT or used_bytes >= MAX_TOTAL_UI_PREVIEW_BYTES:
+            break
+        span = (block.start(), block.end())
+        if not any(start <= span[0] and span[1] <= end for start, end in covered):
+            preview = invalid_ui_preview("", "Task外のui-preview-jsonは許可されていません。")
+            preview_bytes = len(json.dumps(preview, ensure_ascii=False).encode("utf-8"))
+            if used_bytes + preview_bytes > MAX_TOTAL_UI_PREVIEW_BYTES:
+                break
+            previews.append(preview)
+            used_bytes += preview_bytes
     return previews
 
 
@@ -730,12 +1274,14 @@ def build_fingerprint(
     files: dict[str, str],
     artifacts: list[dict[str, object]],
     source_previews: list[dict[str, object]] | None = None,
+    ui_previews: list[dict[str, object]] | None = None,
     codemap_state: dict[str, object] | None = None,
 ) -> str:
     payload = {
         "files": files,
         "artifacts": artifacts,
         "sourcePreviews": source_previews or [],
+        "uiPreviews": ui_previews or [],
         "codemap": codemap_state or {},
     }
     canonical = json.dumps(
@@ -826,16 +1372,35 @@ def build_snapshot(
     *,
     source_root: Path | None = None,
     source_allow_prefixes: list[str] | None = None,
+    base_ref: str | None = None,
 ) -> dict[str, object]:
     files, sources = read_files(task_dir)
     if not files:
         raise ValueError(f"no roadmap source files found in {task_dir}")
     artifacts = collect_artifacts(task_dir, output)
     effective_source_root = source_root or infer_source_root(task_dir) or task_dir.parent
+    base_revision, base_ref_message = resolve_git_commit(
+        effective_source_root,
+        base_ref,
+    ) if base_ref else (None, "")
+    git_blob_cache: dict[tuple[str, str], tuple[bytes | None, str, str]] = {}
     source_previews = collect_source_previews(
         files.get("30_plan.md", ""),
         source_root=effective_source_root,
         source_allow_prefixes=source_allow_prefixes,
+        base_ref=base_ref,
+        base_revision=base_revision,
+        base_ref_message=base_ref_message,
+        git_blob_cache=git_blob_cache,
+    )
+    ui_previews = collect_ui_previews(
+        files.get("30_plan.md", ""),
+        source_root=effective_source_root,
+        source_allow_prefixes=source_allow_prefixes,
+        base_ref=base_ref,
+        base_revision=base_revision,
+        base_ref_message=base_ref_message,
+        git_blob_cache=git_blob_cache,
     )
     codemap_state = load_codemap_state(task_dir, effective_source_root)
     snapshot: dict[str, object] = {
@@ -844,12 +1409,13 @@ def build_snapshot(
         "taskDir": str(task_dir),
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "fingerprint": build_fingerprint(
-            files, artifacts, source_previews, codemap_state
+            files, artifacts, source_previews, ui_previews, codemap_state
         ),
         "files": files,
         "sources": sources,
         "artifacts": artifacts,
         "sourcePreviews": source_previews,
+        "uiPreviews": ui_previews,
         "codemapStatus": codemap_state["status"],
     }
     codemap_snapshot = codemap_state.get("snapshot")
@@ -945,6 +1511,7 @@ def write_outputs(
     *,
     source_root: Path | None = None,
     source_allow_prefixes: list[str] | None = None,
+    base_ref: str | None = None,
     thread_id: str | None = None,
     session_id: str | None = None,
     task_state: str | None = None,
@@ -963,6 +1530,7 @@ def write_outputs(
         output=output,
         source_root=source_root,
         source_allow_prefixes=source_allow_prefixes,
+        base_ref=base_ref,
     )
     previous_timestamp = previous_generated_at(
         str(snapshot["fingerprint"]),
@@ -995,6 +1563,7 @@ def watch_outputs(
     *,
     source_root: Path | None = None,
     source_allow_prefixes: list[str] | None = None,
+    base_ref: str | None = None,
 ) -> None:
     while not stop.is_set():
         try:
@@ -1004,6 +1573,7 @@ def watch_outputs(
                 write_json=True,
                 source_root=source_root,
                 source_allow_prefixes=source_allow_prefixes,
+                base_ref=base_ref,
             )
         except Exception as exc:  # pragma: no cover - visible operator feedback
             print(f"watch update failed: {exc}", file=sys.stderr, flush=True)
@@ -1097,6 +1667,13 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
             "May be repeated."
         ),
     )
+    parser.add_argument(
+        "--base-ref",
+        help=(
+            "Git ref used for source-backed UI Before previews and source previews. "
+            "Resolved to a commit SHA without fetching or checkout."
+        ),
+    )
     parser.add_argument("--thread-id", help="Bind task-meta.json to a Codex thread ID.")
     parser.add_argument("--session-id", help="Bind task-meta.json to a runtime session ID.")
     parser.add_argument(
@@ -1167,6 +1744,7 @@ def main(argv: list[str]) -> int:
         write_json=write_json,
         source_root=source_root,
         source_allow_prefixes=args.source_allow_prefix,
+        base_ref=args.base_ref,
         thread_id=args.thread_id,
         session_id=args.session_id,
         task_state=args.task_state,
@@ -1183,6 +1761,7 @@ def main(argv: list[str]) -> int:
                 kwargs={
                     "source_root": source_root,
                     "source_allow_prefixes": args.source_allow_prefix,
+                    "base_ref": args.base_ref,
                 },
                 daemon=True,
             )
@@ -1204,6 +1783,7 @@ def main(argv: list[str]) -> int:
                 stop,
                 source_root=source_root,
                 source_allow_prefixes=args.source_allow_prefix,
+                base_ref=args.base_ref,
             )
         except KeyboardInterrupt:
             print("\nstopping roadmap watch", file=sys.stderr)

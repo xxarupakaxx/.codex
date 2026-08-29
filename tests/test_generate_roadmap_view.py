@@ -3,6 +3,7 @@ from __future__ import annotations
 import importlib.util
 import json
 import os
+import subprocess
 import tempfile
 import time
 import unittest
@@ -96,6 +97,109 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
             self.task_dir,
             source_root=source_root or self.root,
             source_allow_prefixes=source_allow_prefixes,
+        )
+
+    def run_git(self, *args: str) -> str:
+        result = subprocess.run(
+            ["git", *args],
+            cwd=self.root,
+            check=True,
+            capture_output=True,
+            text=True,
+        )
+        return result.stdout.strip()
+
+    def init_git_source(self, text: str) -> str:
+        self.run_git("init")
+        self.run_git("config", "user.email", "codex@example.test")
+        self.run_git("config", "user.name", "Codex Test")
+        source = self.root / "src" / "Nav.tsx"
+        source.parent.mkdir(exist_ok=True)
+        source.write_text(text)
+        self.run_git("add", "src/Nav.tsx")
+        self.run_git("commit", "-m", "base")
+        return self.run_git("rev-parse", "HEAD")
+
+    def commit_git_source(self, text: str) -> str:
+        source = self.root / "src" / "Nav.tsx"
+        source.write_text(text)
+        self.run_git("add", "src/Nav.tsx")
+        self.run_git("commit", "-m", "update")
+        return self.run_git("rev-parse", "HEAD")
+
+    def valid_ui_payload(
+        self,
+        *,
+        task_number: int = 1,
+        source: str = "repo:src/Nav.tsx#function Nav",
+        base_ref: str | None = None,
+    ) -> dict[str, object]:
+        before_provenance: dict[str, object] = {
+            "source": source,
+            "observedLabels": ["Home", "Settings"],
+        }
+        if base_ref:
+            before_provenance["baseRef"] = base_ref
+        return {
+            "version": 1,
+            "taskNumber": str(task_number),
+            "previews": [
+                {
+                    "id": "main-nav",
+                    "title": "Main navigation",
+                    "layout": "topnav",
+                    "provenance": {
+                        "before": before_provenance,
+                        "after": {"source": f"30_plan.md#Task {task_number}"},
+                    },
+                    "before": {
+                        "items": [
+                            {"id": "home", "label": "Home", "kind": "label", "state": "active", "change": "same"},
+                            {"id": "settings", "label": "Settings", "kind": "label", "state": "", "change": "same"},
+                        ]
+                    },
+                    "after": {
+                        "items": [
+                            {"id": "home", "label": "Home", "kind": "label", "state": "active", "change": "same"},
+                            {"id": "reports", "label": "Reports", "kind": "action", "state": "", "change": "added"},
+                            {"id": "settings", "label": "Settings", "kind": "label", "state": "", "change": "same"},
+                        ]
+                    },
+                    "uncertainty": ["role visibility is unchanged"],
+                }
+            ],
+        }
+
+    def write_ui_plan(
+        self,
+        payload: dict[str, object] | str,
+        *,
+        task_number: int = 1,
+    ) -> None:
+        block = payload if isinstance(payload, str) else json.dumps(payload, ensure_ascii=False)
+        (self.task_dir / "30_plan.md").write_text(
+            "\n".join(
+                [
+                    "# Plan",
+                    "",
+                    f"### Task {task_number}: UI preview",
+                    "",
+                    "#### 実装根拠",
+                    "",
+                    "- `repo:src/Nav.tsx#function Nav`",
+                    "",
+                    "#### UI差分",
+                    "",
+                    "```ui-preview-json",
+                    block,
+                    "```",
+                    "",
+                    "#### 実装",
+                    "",
+                    "- UI差分を確認する。",
+                    "",
+                ]
+            )
         )
 
     def test_hub_mode_does_not_require_task_dir(self) -> None:
@@ -636,6 +740,309 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
 
         self.assertNotEqual(first["fingerprint"], second["fingerprint"])
         self.assertEqual(second["sourcePreviews"][0]["code"].strip(), "value = 2")
+
+    def test_ui_preview_is_optional_and_valid_block_resolves_base_ref(self) -> None:
+        base_sha = self.init_git_source(
+            "export function Nav() {\n"
+            "  return ['Home', 'Settings'].join(' ');\n"
+            "}\n"
+        )
+        (self.root / "src" / "Nav.tsx").write_text(
+            "export function Nav() {\n"
+            "  return ['Danger', 'Working tree only'].join(' ');\n"
+            "}\n"
+        )
+        self.write_ui_plan(self.valid_ui_payload(base_ref=base_sha))
+
+        snapshot = roadmap.build_snapshot(
+            self.task_dir,
+            source_root=self.root,
+            base_ref=base_sha,
+        )
+        preview = snapshot["uiPreviews"][0]
+
+        self.assertEqual(preview["taskNumber"], "1")
+        self.assertEqual(preview["id"], "main-nav")
+        self.assertEqual(preview["layout"], "topnav")
+        self.assertEqual(preview["status"], "resolved")
+        self.assertEqual(preview["evidenceRevision"], base_sha)
+        self.assertEqual(preview["source"]["evidenceRevision"], base_sha)
+        self.assertIn("Home", preview["source"]["code"])
+        self.assertNotIn("Danger", preview["source"]["code"])
+        self.assertEqual(preview["before"]["items"][0]["label"], "Home")
+        self.assertEqual(preview["after"]["items"][1]["change"], "added")
+
+        source_preview = snapshot["sourcePreviews"][0]
+        self.assertEqual(source_preview["evidenceRevision"], base_sha)
+        self.assertIn("Home", source_preview["code"])
+
+        legacy = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+        self.assertEqual(legacy["uiPreviews"][0]["status"], "unverified")
+        self.assertEqual(legacy["uiPreviews"][0]["before"]["items"], [])
+
+    def test_ui_preview_rejects_invalid_blocks_without_building_model(self) -> None:
+        valid = self.valid_ui_payload()
+        cases: dict[str, str] = {
+            "unknown_key": json.dumps({**valid, "secretInternalKey": "<button>Bad</button>"}),
+            "empty_previews": json.dumps({**valid, "previews": []}),
+            "unknown_layout": json.dumps(
+                {
+                    **valid,
+                    "previews": [{**valid["previews"][0], "layout": "canvas"}],
+                }
+            ),
+            "unknown_kind": json.dumps(
+                {
+                    **valid,
+                    "previews": [
+                        {
+                            **valid["previews"][0],
+                            "after": {
+                                "items": [
+                                    {**valid["previews"][0]["after"]["items"][0], "kind": "widget"}
+                                ]
+                            },
+                        }
+                    ],
+                }
+            ),
+            "raw_html": json.dumps(
+                {
+                    **valid,
+                    "previews": [{**valid["previews"][0], "title": "<button>Bad</button>"}],
+                }
+            ),
+            "external_url": json.dumps(
+                {
+                    **valid,
+                    "previews": [{**valid["previews"][0], "title": "https://example.com"}],
+                }
+            ),
+            "too_many_previews": json.dumps(
+                {
+                    **valid,
+                    "previews": [
+                        {**valid["previews"][0], "id": f"preview-{index}"}
+                        for index in range(4)
+                    ],
+                }
+            ),
+            "too_many_items": json.dumps(
+                {
+                    **valid,
+                    "previews": [
+                        {
+                            **valid["previews"][0],
+                            "after": {
+                                "items": [
+                                    {"id": f"item-{index}", "label": "Item", "kind": "item", "change": "same"}
+                                    for index in range(25)
+                                ]
+                            },
+                        }
+                    ],
+                }
+            ),
+            "long_string": json.dumps(
+                {
+                    **valid,
+                    "previews": [{**valid["previews"][0], "title": "x" * 121}],
+                }
+            ),
+            "before_without_source": json.dumps(
+                {
+                    **valid,
+                    "previews": [
+                        {
+                            **valid["previews"][0],
+                            "provenance": {"before": {}, "after": {"source": "30_plan.md#Task 1"}},
+                        }
+                    ],
+                }
+            ),
+            "task_mismatch": json.dumps({**valid, "taskNumber": "2"}),
+        }
+
+        for label, block in cases.items():
+            with self.subTest(case=label):
+                self.write_ui_plan(block)
+                snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+                previews_json = json.dumps(snapshot["uiPreviews"], ensure_ascii=False)
+
+                self.assertEqual(snapshot["uiPreviews"][0]["status"], "invalid")
+                self.assertEqual(snapshot["uiPreviews"][0]["before"]["items"], [])
+                self.assertNotIn("<button>Bad</button>", previews_json)
+                self.assertNotIn("secretInternalKey", snapshot["uiPreviews"][0]["message"])
+                self.assertNotIn("https://example.com", previews_json)
+
+    def test_ui_preview_rejects_multiple_blocks_task_outside_block_and_oversized_block(self) -> None:
+        block = json.dumps(self.valid_ui_payload())
+        self.write_ui_plan(f"{block}\n```\n\n```ui-preview-json\n{block}")
+        multiple = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+        self.assertEqual(multiple["uiPreviews"][0]["status"], "invalid")
+        self.assertIn("1件だけ", multiple["uiPreviews"][0]["message"])
+
+        (self.task_dir / "30_plan.md").write_text(
+            "# Plan\n\n```ui-preview-json\n{}\n```\n"
+        )
+        outside = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+        self.assertEqual(outside["uiPreviews"][0]["status"], "invalid")
+        self.assertEqual(outside["uiPreviews"][0]["taskNumber"], "")
+
+        self.write_ui_plan('{"version":1,"taskNumber":"1","previews":[],"pad":"' + ("x" * 17000) + '"}')
+        oversized = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+        self.assertEqual(oversized["uiPreviews"][0]["status"], "invalid")
+        self.assertIn("16KiB", oversized["uiPreviews"][0]["message"])
+
+    def test_ui_preview_unverified_for_invalid_ref_and_anchor_drift(self) -> None:
+        base_sha = self.init_git_source(
+            "export function Nav() {\n"
+            "  return ['Home', 'Settings'].join(' ');\n"
+            "}\n"
+        )
+        self.write_ui_plan(self.valid_ui_payload())
+        injected = "HEAD; touch injected-marker"
+        invalid_ref = roadmap.build_snapshot(
+            self.task_dir,
+            source_root=self.root,
+            base_ref=injected,
+        )
+
+        self.assertFalse((self.root / "injected-marker").exists())
+        self.assertEqual(invalid_ref["sourcePreviews"][0]["status"], "base-ref-unavailable")
+        self.assertEqual(invalid_ref["uiPreviews"][0]["status"], "unverified")
+        self.assertEqual(invalid_ref["uiPreviews"][0]["before"]["items"], [])
+
+        self.write_ui_plan(
+            self.valid_ui_payload(source="repo:src/Nav.tsx#MissingAnchor")
+        )
+        drift = roadmap.build_snapshot(
+            self.task_dir,
+            source_root=self.root,
+            base_ref=base_sha,
+        )
+
+        self.assertEqual(drift["uiPreviews"][0]["status"], "unverified")
+        self.assertEqual(drift["uiPreviews"][0]["source"]["status"], "anchor-missing")
+        self.assertEqual(drift["uiPreviews"][0]["before"]["items"], [])
+
+    def test_ui_preview_fingerprint_tracks_base_ref_blob_content(self) -> None:
+        base_sha = self.init_git_source(
+            "export function Nav() {\n"
+            "  return ['Home', 'Settings'].join(' ');\n"
+            "}\n"
+        )
+        head_sha = self.commit_git_source(
+            "export function Nav() {\n"
+            "  return ['Home', 'Settings', 'Reports'].join(' ');\n"
+            "}\n"
+        )
+        self.write_ui_plan(self.valid_ui_payload())
+
+        base = roadmap.build_snapshot(
+            self.task_dir,
+            source_root=self.root,
+            base_ref=base_sha,
+        )
+        head = roadmap.build_snapshot(
+            self.task_dir,
+            source_root=self.root,
+            base_ref=head_sha,
+        )
+
+        self.assertNotEqual(base["fingerprint"], head["fingerprint"])
+        self.assertEqual(base["uiPreviews"][0]["evidenceRevision"], base_sha)
+        self.assertEqual(head["uiPreviews"][0]["evidenceRevision"], head_sha)
+        self.assertNotIn("Reports", base["uiPreviews"][0]["source"]["code"])
+        self.assertIn("Reports", head["uiPreviews"][0]["source"]["code"])
+
+    def test_base_ref_cli_and_watch_paths_pass_through_to_writes(self) -> None:
+        args = roadmap.parse_args([str(self.task_dir), "--base-ref", "HEAD"])
+        self.assertEqual(args.base_ref, "HEAD")
+
+        with mock.patch.object(roadmap, "write_outputs", return_value={}) as write_outputs:
+            result = roadmap.main([str(self.task_dir), "--base-ref", "HEAD"])
+
+        self.assertEqual(result, 0)
+        self.assertEqual(write_outputs.call_args.kwargs["base_ref"], "HEAD")
+
+        stop = roadmap.threading.Event()
+
+        def stop_after_write(*_args: object, **_kwargs: object) -> dict[str, object]:
+            stop.set()
+            return {}
+
+        with mock.patch.object(roadmap, "write_outputs", side_effect=stop_after_write) as watched:
+            roadmap.watch_outputs(
+                self.task_dir,
+                self.task_dir / "roadmap.html",
+                0.01,
+                stop,
+                source_root=self.root,
+                base_ref="HEAD",
+            )
+
+        self.assertEqual(watched.call_args.kwargs["base_ref"], "HEAD")
+
+    def test_git_ui_preview_respects_current_automation_read_false(self) -> None:
+        self.run_git("init")
+        self.run_git("config", "user.email", "codex@example.test")
+        self.run_git("config", "user.name", "Codex Test")
+        source = self.root / "docs" / "ui.md"
+        source.parent.mkdir()
+        source.write_text("---\ntitle: ui\n---\nVisible Home Settings LEAK_AUTOMATION\n")
+        self.run_git("add", "docs/ui.md")
+        self.run_git("commit", "-m", "base")
+        base_sha = self.run_git("rev-parse", "HEAD")
+        source.write_text("---\nautomation_read: false\n---\nVisible Home Settings LEAK_AUTOMATION\n")
+        self.write_ui_plan(self.valid_ui_payload(source="repo:docs/ui.md#Visible"))
+
+        snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root, base_ref=base_sha)
+        preview = snapshot["uiPreviews"][0]
+
+        self.assertEqual(preview["status"], "unverified")
+        self.assertEqual(preview["source"]["status"], "source-denied")
+        self.assertEqual(preview["before"]["items"], [])
+        self.assertNotIn("LEAK_AUTOMATION", json.dumps(preview))
+
+    def test_preview_caps_cache_and_git_timeout_bound_large_plans(self) -> None:
+        base_sha = "1" * 40
+        sections = ["# Plan"]
+        for number in range(1, 10001):
+            payload = self.valid_ui_payload(task_number=number)
+            sections += [
+                f"### Task {number}: UI",
+                "",
+                "#### 実装根拠",
+                "",
+                "- `repo:src/Nav.tsx#function Nav`",
+                "",
+                "```ui-preview-json",
+                json.dumps(payload),
+                "```",
+                "",
+            ]
+        (self.task_dir / "30_plan.md").write_text("\n".join(sections))
+        calls = []
+
+        def fake_run(command: list[str], **kwargs: object) -> subprocess.CompletedProcess[object]:
+            calls.append(command)
+            self.assertEqual(kwargs.get("timeout"), roadmap.GIT_SUBPROCESS_TIMEOUT)
+            if "rev-parse" in command:
+                return subprocess.CompletedProcess(command, 0, stdout=base_sha + "\n")
+            if "ls-tree" in command:
+                return subprocess.CompletedProcess(command, 0, stdout=b"100644 blob abc\tsrc/Nav.tsx\0")
+            if "-s" in command:
+                return subprocess.CompletedProcess(command, 0, stdout="64\n")
+            return subprocess.CompletedProcess(command, 0, stdout=b"export function Nav() { return 'Home Settings'; }\n")
+
+        with mock.patch.object(roadmap.subprocess, "run", side_effect=fake_run):
+            snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root, base_ref="HEAD")
+
+        self.assertLessEqual(len(snapshot["sourcePreviews"]), roadmap.MAX_SOURCE_PREVIEW_COUNT)
+        self.assertLessEqual(len(snapshot["uiPreviews"]), roadmap.MAX_UI_PREVIEW_COUNT)
+        self.assertLessEqual(len(json.dumps(snapshot["uiPreviews"]).encode()), roadmap.MAX_TOTAL_UI_PREVIEW_BYTES)
+        self.assertLessEqual(len(calls), 4)
 
     def test_source_preview_requires_repo_prefix_and_supports_explicit_allow_prefix(self) -> None:
         source = self.root / "custom" / "feature.py"

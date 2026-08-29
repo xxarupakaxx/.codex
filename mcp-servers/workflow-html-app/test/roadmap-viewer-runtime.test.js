@@ -199,6 +199,73 @@ function buildImplementationSnapshot() {
       message: "",
     },
   ];
+  snapshot.uiPreviews = [
+    {
+      taskNumber: "1",
+      version: 1,
+      screen: "Detail drawer actions",
+      title: "Evidence action wording",
+      layout: "topnav",
+      status: "unverified",
+      message: "base refのanchor確認待ち",
+      source: {
+        path: ".codex/tools/roadmap_viewer.html",
+        anchor: "data-detail-open=\"sources\"",
+        status: "anchor-missing",
+        message: "source anchor drift",
+        evidenceRevision: "feed1234",
+      },
+      provenance: {
+        before: {
+          source: "repo:.codex/tools/roadmap_viewer.html#data-detail-open=\"sources\"",
+          baseRef: "origin/main",
+          observedLabels: ["Detailを開く", "Sources"],
+        },
+        after: {
+          source: "30_plan.md#Task 1",
+        },
+      },
+      before: {
+        items: [
+          { id: "detail", label: "Detailを開く", kind: "button", state: "primary", change: "same" },
+          { id: "sources", label: "Sources", kind: "tab", state: "secondary", change: "modified" },
+          { id: "legacy", label: "旧導線", kind: "link", state: "visible", change: "removed" },
+          { id: "help", label: "Help", kind: "link", state: "secondary", change: "same" },
+        ],
+      },
+      after: {
+        status: "planned",
+        items: [
+          { id: "detail", label: "Detailを開く", kind: "button", state: "primary", change: "same" },
+          { id: "help", label: "Help", kind: "link", state: "secondary", change: "same" },
+          { id: "sources", label: "Evidence", kind: "tab", state: "secondary", change: "modified" },
+          { id: "diff", label: "UI差分", kind: "section", state: "new", change: "added" },
+        ],
+      },
+      uncertainty: ["hover stateは実ブラウザ確認で確定する。"],
+    },
+    {
+      taskNumber: "2",
+      version: 1,
+      screen: "UI Preview panel",
+      title: "新規UI差分panel",
+      layout: "list",
+      status: "planned",
+      message: "new screen has no before source",
+      before: { status: "source-unavailable", items: [] },
+      after: {
+        items: [
+          { id: "summary", label: "要約", kind: "region", state: "visible", change: "added" },
+          { id: "preview", label: "Before / After", kind: "region", state: "planned", change: "added" },
+        ],
+      },
+      provenance: {
+        before: { baseRef: "origin/main", observedLabels: [] },
+        after: { source: "30_plan.md#Task 2" },
+      },
+      uncertainty: ["generator統合後にbase ref statusを再確認する。"],
+    },
+  ];
   return snapshot;
 }
 
@@ -379,13 +446,13 @@ test("motion system keeps transitions brief, stateful, and reduced-motion aware"
       document.querySelector('[data-implementation-task="2"]').click();
       return {
         title: document.querySelector("#implementation-task-title")?.textContent,
-        departing: document.querySelectorAll("body > [aria-hidden='true'][inert]").length,
+        departing: document.querySelectorAll("body > .brief-task-detail[aria-hidden='true'][inert]").length,
       };
     });
     assert.equal(changed.title, "brief UIを実装する");
     assert.equal(changed.departing, 1);
     assert.equal(await page.locator('[data-implementation-task="2"]').getAttribute("aria-selected"), "true");
-    await page.waitForFunction(() => document.querySelectorAll("body > [aria-hidden='true'][inert]").length === 0);
+    await page.waitForFunction(() => document.querySelectorAll("body > .brief-task-detail[aria-hidden='true'][inert]").length === 0);
 
     const fallbackTitle = await page.evaluate(() => {
       const animate = Element.prototype.animate;
@@ -648,6 +715,153 @@ test("implementation workspace keeps every task visible and binds selection to p
   }, buildImplementationSnapshot());
 });
 
+test("UI preview shows existing before after and new-screen after-only states", async (t) => {
+  await withPage(t, { width: 1440, height: 1000 }, async (page) => {
+    await page.locator("#open-detail-drawer").click();
+    await page.waitForFunction(() => !document.querySelector("#detail-drawer")?.hidden);
+
+    assert.equal(await page.locator("#brief-ui-preview").isVisible(), true);
+    assert.equal(
+      await page.locator('[data-ui-preview-layout="topnav"] .ui-preview-item').evaluateAll((nodes) => nodes.every((node) => node.getBoundingClientRect().width >= 150)),
+      true,
+    );
+    assert.equal(await page.locator(".ui-preview-side.before h6").textContent(), "現状・base refから確認Before未確認");
+    assert.equal(await page.locator(".ui-preview-side.after h6").textContent(), "計画案・未実装計画案");
+    assert.doesNotMatch(await page.locator("#brief-ui-preview").textContent(), /anchor-missing|secondary|topnav/);
+    assert.deepEqual(
+      await page.locator(".ui-preview-item").evaluateAll((nodes) => nodes.map((node) => ({
+        text: (node.textContent || "").replace(/\s+/g, " ").trim(),
+        aria: node.getAttribute("aria-label"),
+        className: node.className,
+      })).filter((item) => /Sources|Evidence|UI差分|現状なし/.test(`${item.text} ${item.aria}`))),
+      [
+        {
+          text: "~ Sourcesタブ · 補助 · 内容と順序を変更 順序変更",
+          aria: "Before Sources: 変更、順序変更あり",
+          className: "ui-preview-item change-modified",
+        },
+        {
+          text: "+ 現状なしセクション · 計画側で追加",
+          aria: "Before 現状なし: 追加",
+          className: "ui-preview-item change-added placeholder",
+        },
+        {
+          text: "~ Evidenceタブ · 補助 · 内容と順序を変更 順序変更",
+          aria: "After Evidence: 変更、順序変更あり",
+          className: "ui-preview-item change-modified",
+        },
+        {
+          text: "+ UI差分セクション · 新規 · 追加予定",
+          aria: "After UI差分: 追加",
+          className: "ui-preview-item change-added",
+        },
+      ],
+    );
+    assert.equal(await page.locator(".ui-preview-item.change-added:not(.placeholder) .ui-preview-change-badge").count(), 0);
+
+    const contrast = await page.evaluate(() => {
+      const parse = (color) => color.match(/\d+(?:\.\d+)?/g).slice(0, 3).map(Number);
+      const linear = (value) => {
+        const channel = value / 255;
+        return channel <= 0.03928 ? channel / 12.92 : ((channel + 0.055) / 1.055) ** 2.4;
+      };
+      const luminance = (color) => {
+        const [r, g, b] = parse(color).map(linear);
+        return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+      };
+      const ratio = (a, b) => {
+        const [light, dark] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+        return (light + 0.05) / (dark + 0.05);
+      };
+      const sample = () => ["added", "modified", "removed"].map((change) => {
+        const symbol = document.querySelector(`.change-${change} .ui-preview-symbol`);
+        const style = getComputedStyle(symbol);
+        return { change, ratio: ratio(style.color, style.backgroundColor) };
+      });
+      const light = sample();
+      document.body.dataset.theme = "dark";
+      return { light, dark: sample() };
+    });
+    for (const item of [...contrast.light, ...contrast.dark]) {
+      assert.ok(item.ratio >= 4.5, `${item.change} symbol contrast ${item.ratio}`);
+    }
+
+    await page.locator('[data-implementation-task="2"]').click();
+    await page.waitForFunction(() => document.querySelector('[data-implementation-task="2"]')?.getAttribute("aria-selected") === "true");
+    assert.equal(await page.locator(".ui-preview-new-badge").textContent(), "新規画面");
+    assert.equal(
+      await page.locator('[data-ui-preview-task="2"]').first().getAttribute("data-ui-preview-layout"),
+      "list",
+    );
+    await page.waitForFunction(() => Array.from(document.querySelectorAll(".ui-preview-side.before")).filter((node) => node.getClientRects().length).length === 0);
+    assert.match(await page.locator(".ui-preview-side.after").textContent(), /計画案・未実装/);
+    assert.match(await page.locator(".ui-preview-side.after").textContent(), /Before \/ After/);
+  }, buildImplementationSnapshot());
+});
+
+test("UI preview evidence opens on demand and restores focus when closed", async (t) => {
+  await withPage(t, { width: 1440, height: 1000 }, async (page) => {
+    await page.locator("#open-detail-drawer").click();
+    await page.waitForFunction(() => !document.querySelector("#detail-drawer")?.hidden);
+    assert.equal(await page.locator("#ui-preview-evidence").isHidden(), true);
+    await page.locator("#ui-preview-evidence-toggle").click();
+    await page.waitForFunction(() => !document.querySelector("#ui-preview-evidence")?.hidden);
+
+    const evidence = (await page.locator("#ui-preview-evidence-list").textContent()).replace(/\s+/g, "");
+    assert.match(evidence, /BeforesourceBefore未確認·feed1234/);
+    assert.match(evidence, /sourceanchordrift/);
+    assert.match(evidence, /\.codex\/tools\/roadmap_viewer\.html#data-detail-open="sources"/);
+    assert.match(evidence, /Afterplansource30_plan\.md#Task1/);
+    assert.match(evidence, /hoverstate/);
+
+    await page.locator("#ui-preview-evidence-close").focus();
+    await page.locator("#ui-preview-evidence-close").click();
+    await page.waitForFunction(() => document.querySelector("#ui-preview-evidence")?.hidden);
+    await page.waitForFunction(() => document.activeElement?.id === "ui-preview-evidence-toggle");
+    assert.equal(await page.evaluate(() => document.activeElement?.id), "ui-preview-evidence-toggle");
+  }, buildImplementationSnapshot());
+});
+
+test("UI preview evidence controls keep 44px target and modal hides page background at 375px", async (t) => {
+  await withPage(t, { width: 375, height: 812 }, async (page) => {
+    await page.locator("#open-detail-drawer").click();
+    await page.waitForFunction(() => !document.querySelector("#detail-drawer")?.hidden);
+
+    assert.deepEqual(await page.evaluate(() => ({
+      headerInert: document.querySelector(".app-header")?.inert,
+      headerHidden: document.querySelector(".app-header")?.getAttribute("aria-hidden"),
+      mainInert: document.querySelector("#main-content")?.inert,
+      mainHidden: document.querySelector("#main-content")?.getAttribute("aria-hidden"),
+    })), {
+      headerInert: true,
+      headerHidden: "true",
+      mainInert: true,
+      mainHidden: "true",
+    });
+
+    const toggleBox = await page.locator("#ui-preview-evidence-toggle").boundingBox();
+    assert.ok(toggleBox && toggleBox.height >= 44, `toggle height ${toggleBox?.height}`);
+    await page.locator("#ui-preview-evidence-toggle").click();
+    await page.waitForFunction(() => !document.querySelector("#ui-preview-evidence")?.hidden);
+    const closeBox = await page.locator("#ui-preview-evidence-close").boundingBox();
+    assert.ok(closeBox && closeBox.height >= 44, `close height ${closeBox?.height}`);
+
+    await page.locator("#close-detail-drawer").click();
+    await page.waitForFunction(() => document.querySelector("#detail-drawer")?.hidden);
+    assert.deepEqual(await page.evaluate(() => ({
+      headerInert: document.querySelector(".app-header")?.inert,
+      headerHidden: document.querySelector(".app-header")?.getAttribute("aria-hidden"),
+      mainInert: document.querySelector("#main-content")?.inert,
+      mainHidden: document.querySelector("#main-content")?.getAttribute("aria-hidden"),
+    })), {
+      headerInert: false,
+      headerHidden: null,
+      mainInert: false,
+      mainHidden: null,
+    });
+  }, buildImplementationSnapshot());
+});
+
 test("implementation workspace renders syntax color and only the selected task explicit diagram", async (t) => {
   await withPage(t, { width: 1440, height: 1000 }, async (page) => {
     await page.locator("#open-detail-drawer").click();
@@ -678,6 +892,8 @@ test("implementation workspace splits on desktop and stacks without page overflo
     await withPage(t, viewport, async (page) => {
       await page.locator("#open-detail-drawer").click();
       await page.waitForFunction(() => !document.querySelector("#detail-drawer")?.hidden);
+      await page.locator("#ui-preview-evidence-toggle").click();
+      await page.waitForFunction(() => !document.querySelector("#ui-preview-evidence")?.hidden);
       const state = await page.locator("#implementation-workspace").evaluate((workspace) => {
         const code = document.querySelector("#implementation-code");
         return {
@@ -727,6 +943,8 @@ test("live source refresh replaces resolved code with an explicit missing-anchor
     await page.waitForFunction(() => document.querySelector("#live-status-text")?.textContent === "Live");
     await page.locator("#open-detail-drawer").click();
     await page.waitForFunction(() => !document.querySelector("#detail-drawer")?.hidden);
+    await page.locator("#ui-preview-evidence-toggle").click();
+    await page.waitForFunction(() => !document.querySelector("#ui-preview-evidence")?.hidden);
     assert.match(await page.locator("#implementation-code").textContent(), /boundedSourceLine/);
     await page.locator("#implementation-code").focus();
 
@@ -750,6 +968,55 @@ test("live source refresh replaces resolved code with an explicit missing-anchor
     await page.waitForFunction(() => document.activeElement?.id === "brief-source-preview");
     assert.equal(await page.evaluate(() => document.activeElement?.id), "brief-source-preview");
     assert.match(await page.locator("#state-announcer").textContent(), /実コード.*anchor not found/);
+  }, initial);
+});
+
+test("live UI preview refresh keeps drawer tab task evidence scroll and focus", async (t) => {
+  const initial = buildImplementationSnapshot();
+  await withLivePage(t, { width: 1280, height: 900 }, async (page, setSnapshot) => {
+    await page.waitForFunction(() => document.querySelector("#live-status-text")?.textContent === "Live");
+    await page.locator("#open-detail-drawer").click();
+    await page.waitForFunction(() => !document.querySelector("#detail-drawer")?.hidden);
+    await page.locator("#ui-preview-evidence-toggle").click();
+    await page.waitForFunction(() => !document.querySelector("#ui-preview-evidence")?.hidden);
+    await page.evaluate(() => {
+      document.querySelector(".detail-drawer-body").scrollTop = 90;
+      document.querySelector("#ui-preview-evidence-close").focus();
+    });
+
+    const changed = structuredClone(initial);
+    changed.fingerprint = "ui-preview-v2";
+    changed.uiPreviews[0] = {
+      ...changed.uiPreviews[0],
+      after: {
+        ...changed.uiPreviews[0].after,
+        items: changed.uiPreviews[0].after.items.map((item) => item.id === "diff"
+          ? { ...item, label: "UI差分詳細" }
+          : item),
+      },
+    };
+    setSnapshot(changed);
+    await page.evaluate(() => pollSnapshot(pollGeneration));
+
+    const state = await page.evaluate(() => ({
+      drawerOpen: !document.querySelector("#detail-drawer")?.hidden,
+      activeTab: document.querySelector('[data-detail-tab][aria-selected="true"]')?.dataset.detailTab,
+      selectedTask: document.querySelector('[data-implementation-task][aria-selected="true"]')?.dataset.implementationTask,
+      evidenceOpen: !document.querySelector("#ui-preview-evidence")?.hidden,
+      focused: document.activeElement?.id,
+      scrollTop: document.querySelector(".detail-drawer-body")?.scrollTop || 0,
+      previewText: document.querySelector("#brief-ui-preview")?.textContent || "",
+      announcement: document.querySelector("#state-announcer")?.textContent || "",
+    }));
+
+    assert.equal(state.drawerOpen, true);
+    assert.equal(state.activeTab, "change");
+    assert.equal(state.selectedTask, "1");
+    assert.equal(state.evidenceOpen, true);
+    assert.equal(state.focused, "ui-preview-evidence-close");
+    assert.ok(state.scrollTop >= 40, `scroll should be preserved, got ${state.scrollTop}`);
+    assert.match(state.previewText, /UI差分詳細/);
+    assert.match(state.announcement, /UI差分プレビューを更新/);
   }, initial);
 });
 

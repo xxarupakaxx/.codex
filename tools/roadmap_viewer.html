@@ -26,6 +26,7 @@
       --warn: #996c18;
       --warn-text: #6f4800;
       --danger: #a4473e;
+      --ui-change-added: #237a4b; --ui-change-added-bg: #eef8f2; --ui-change-modified: #805300; --ui-change-modified-bg: #fff4df; --ui-change-removed: #aa3d2c; --ui-change-removed-bg: #fff1ef;
       --focus: #2f70c9;
       --radius: 8px;
       --radius-lg: 12px;
@@ -61,6 +62,7 @@
       --warn: #e0b867;
       --warn-text: #f0c978;
       --danger: #e18c82;
+      --ui-change-added: #83d29d; --ui-change-added-bg: #183325; --ui-change-modified: #f0c978; --ui-change-modified-bg: #342817; --ui-change-removed: #f09a90; --ui-change-removed-bg: #3a221f;
       --focus: #8bbcff;
       --shadow: none;
       color-scheme: dark;
@@ -800,6 +802,160 @@
     }
     .implementation-diagram-message { margin: 9px 0 0; color: var(--faint); font-size: 11px; }
     .implementation-diagram-message:empty { display: none; }
+    .brief-ui-preview {
+      margin-top: 14px;
+      padding: 13px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+    .brief-ui-preview[hidden] { display: none; }
+    .ui-preview-list { display: grid; gap: 12px; }
+    .ui-preview-card {
+      min-width: 0;
+      padding: 12px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface-soft);
+    }
+    .ui-preview-head {
+      display: flex;
+      align-items: start;
+      justify-content: space-between;
+      gap: 10px;
+    }
+    .ui-preview-head h5 { margin: 2px 0 0; color: var(--ink); font-size: 13px; }
+    .ui-preview-meta { margin: 4px 0 0; color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
+    .ui-preview-new-badge,
+    .ui-preview-change-badge {
+      width: fit-content;
+      padding: 2px 7px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      color: var(--accent-strong);
+      background: var(--surface);
+      font-size: 10px;
+      font-weight: 780;
+      white-space: nowrap;
+    }
+    .ui-preview-sides {
+      margin-top: 11px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 10px;
+      align-items: start;
+    }
+    .ui-preview-sides.after-only { grid-template-columns: minmax(0, 1fr); }
+    .ui-preview-card[data-ui-preview-layout="topnav"] .ui-preview-items { grid-template-columns: repeat(auto-fit, minmax(160px, 1fr)); }
+    .ui-preview-card[data-ui-preview-layout="sidebar"] .ui-preview-side { border-left: 4px solid var(--line-strong); }
+    .ui-preview-card[data-ui-preview-layout="settings"] .ui-preview-item { grid-template-columns: auto minmax(112px, .65fr) auto; }
+    .ui-preview-card[data-ui-preview-layout="list"] .ui-preview-items { gap: 5px; }
+    .ui-preview-card[data-ui-preview-layout="form"] .ui-preview-item { min-height: 50px; border-radius: var(--radius); }
+    .ui-preview-side {
+      min-width: 0;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .ui-preview-side h6 {
+      margin: 0;
+      padding: 9px 10px;
+      border-bottom: 1px solid var(--line);
+      color: var(--ink);
+      font-size: 11px;
+    }
+    .ui-preview-side h6 span {
+      display: block;
+      margin-top: 2px;
+      color: var(--faint);
+      font-weight: 620;
+    }
+    .ui-preview-items {
+      margin: 0;
+      padding: 8px;
+      display: grid;
+      gap: 7px;
+      list-style: none;
+    }
+    .ui-preview-item {
+      min-height: 42px;
+      padding: 8px 9px;
+      display: grid;
+      grid-template-columns: auto minmax(0, 1fr) auto;
+      gap: 8px;
+      align-items: center;
+      border: 1px solid var(--line);
+      border-left-width: 4px;
+      border-radius: 6px;
+      background: var(--surface);
+    }
+    .ui-preview-item.change-same { border-left-color: var(--line-strong); }
+    .ui-preview-item.change-added { border-left-color: var(--ui-change-added); }
+    .ui-preview-item.change-modified { border-left-color: var(--ui-change-modified); }
+    .ui-preview-item.change-removed { border-left-color: var(--ui-change-removed); text-decoration: line-through; text-decoration-thickness: 1px; }
+    .ui-preview-item.placeholder {
+      border-style: dashed;
+      color: var(--faint);
+      background: color-mix(in srgb, var(--surface-soft) 72%, var(--surface));
+      text-decoration: none;
+    }
+    .ui-preview-symbol {
+      width: 20px;
+      height: 20px;
+      display: inline-grid;
+      place-items: center;
+      border: 1px solid var(--line);
+      border-radius: 50%;
+      font: 800 12px/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+    }
+    .change-added .ui-preview-symbol { border-color: var(--ui-change-added); background: var(--ui-change-added-bg); color: var(--ui-change-added); }
+    .change-modified .ui-preview-symbol { border-color: var(--ui-change-modified); background: var(--ui-change-modified-bg); color: var(--ui-change-modified); }
+    .change-removed .ui-preview-symbol { border-color: var(--ui-change-removed); background: var(--ui-change-removed-bg); color: var(--ui-change-removed); }
+    .ui-preview-copy { min-width: 0; display: grid; gap: 2px; }
+    .ui-preview-copy strong { color: var(--ink); font-size: 12px; overflow-wrap: anywhere; }
+    .ui-preview-copy span { color: var(--muted); font-size: 10px; overflow-wrap: anywhere; }
+    .ui-preview-change-badge { color: var(--ink); }
+    #ui-preview-evidence-toggle,
+    #ui-preview-evidence-close { min-height: 44px; }
+    .brief-change-evidence {
+      margin-top: 14px;
+      border: 1px solid var(--line);
+      border-radius: var(--radius);
+      background: var(--surface);
+      overflow: hidden;
+    }
+    .brief-change-evidence-head {
+      padding: 11px 12px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      border-bottom: 1px solid var(--line);
+    }
+    .brief-change-evidence-head h5 { margin: 0; color: var(--ink); font-size: 13px; }
+    .brief-change-evidence-head p { margin: 3px 0 0; color: var(--muted); font-size: 10px; }
+    .brief-change-evidence-body { padding: 12px; }
+    .brief-change-evidence-body[hidden] { display: none; }
+    .ui-preview-evidence-grid {
+      margin-bottom: 12px;
+      display: grid;
+      grid-template-columns: repeat(2, minmax(0, 1fr));
+      gap: 8px;
+    }
+    .ui-preview-evidence-grid:empty { display: none; }
+    .ui-preview-evidence-item {
+      min-width: 0;
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface-soft);
+      font-size: 10px;
+      line-height: 1.45;
+    }
+    .ui-preview-evidence-item strong { display: block; color: var(--ink); font-size: 11px; }
+    .ui-preview-evidence-item span { display: block; margin-top: 3px; color: var(--muted); overflow-wrap: anywhere; }
+    .ui-preview-evidence-close { margin-top: 10px; }
     .brief-source-preview {
       min-width: 0;
       margin-top: 12px;
@@ -1020,6 +1176,7 @@
       .design-summary-card + .design-summary-card { border-top: 1px solid var(--line); border-left: 0; }
       .claim-grid { grid-template-columns: 1fr; }
       .brief-artifact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+      .ui-preview-evidence-grid { grid-template-columns: 1fr; }
     }
     @media (max-width: 720px) {
       .brief-header,
@@ -1086,6 +1243,7 @@
       .brief-section-heading { align-items: start; flex-direction: column; gap: 4px; }
       .design-summary-grid,
       .claim-grid { grid-template-columns: 1fr; }
+      .ui-preview-sides { grid-template-columns: 1fr; }
       .brief-flow { grid-auto-columns: minmax(240px, 82vw); }
       .route-task-title { display: none; }
       .implementation-diagram-flow {
@@ -3077,21 +3235,41 @@
                         <ol class="implementation-diagram-relations" id="implementation-diagram-relations" aria-label="実装図の関係"></ol>
                         <p class="implementation-diagram-message" id="implementation-diagram-message"></p>
                       </section>
-                      <section class="brief-source-preview" id="brief-source-preview" aria-labelledby="implementation-source-heading" tabindex="-1">
-                        <div class="brief-source-heading">
-                          <div>
-                            <h5 id="implementation-source-heading">現在の実コード <span>生成時点の事実</span></h5>
-                            <p class="brief-source-location" id="brief-source-location">
-                              <code id="implementation-source-path">実コード参照が未記録</code>
-                              <span id="implementation-source-range"></span>
-                            </p>
-                          </div>
-                          <code class="brief-source-anchor" id="implementation-source-anchor"></code>
-                        </div>
-                        <p class="brief-source-message" id="implementation-source-message"></p>
-                        <pre class="brief-source-code" id="brief-source-code"><code class="brief-source-code" id="implementation-code" tabindex="0" aria-label="現在の実コード抜粋"></code></pre>
-                      </section>
                       <dl class="brief-task-contract" id="implementation-contract"></dl>
+                      <section class="brief-ui-preview" id="brief-ui-preview" aria-labelledby="ui-preview-heading" hidden>
+                        <div class="brief-section-heading">
+                          <div><p class="brief-kicker">UI DIFF</p><h5 id="ui-preview-heading">Before / After</h5></div>
+                          <p>計画に明示されたUI変更だけを表示</p>
+                        </div>
+                        <div class="ui-preview-list" id="ui-preview-list"></div>
+                      </section>
+                      <section class="brief-change-evidence" id="brief-change-evidence" aria-labelledby="ui-preview-evidence-heading">
+                        <div class="brief-change-evidence-head">
+                          <div>
+                            <h5 id="ui-preview-evidence-heading">Evidence</h5>
+                            <p id="ui-preview-evidence-summary">source、provenance、uncertaintyを確認します。</p>
+                          </div>
+                          <button class="brief-source-link" type="button" id="ui-preview-evidence-toggle" aria-expanded="false" aria-controls="ui-preview-evidence">UI evidenceを開く</button>
+                        </div>
+                        <div class="brief-change-evidence-body" id="ui-preview-evidence" hidden>
+                          <div class="ui-preview-evidence-grid" id="ui-preview-evidence-list"></div>
+                          <section class="brief-source-preview" id="brief-source-preview" aria-labelledby="implementation-source-heading" tabindex="-1">
+                            <div class="brief-source-heading">
+                              <div>
+                                <h5 id="implementation-source-heading">現在の実コード <span>生成時点の事実</span></h5>
+                                <p class="brief-source-location" id="brief-source-location">
+                                  <code id="implementation-source-path">実コード参照が未記録</code>
+                                  <span id="implementation-source-range"></span>
+                                </p>
+                              </div>
+                              <code class="brief-source-anchor" id="implementation-source-anchor"></code>
+                            </div>
+                            <p class="brief-source-message" id="implementation-source-message"></p>
+                            <pre class="brief-source-code" id="brief-source-code"><code class="brief-source-code" id="implementation-code" tabindex="0" aria-label="現在の実コード抜粋"></code></pre>
+                          </section>
+                          <button class="brief-source-link ui-preview-evidence-close" type="button" id="ui-preview-evidence-close">Evidenceを閉じる</button>
+                        </div>
+                      </section>
                       <button class="brief-source-link" type="button" data-artifact="30_plan.md">30_plan.md で計画を確認</button>
                     </div>
                   </article>
@@ -3306,6 +3484,137 @@
       'checkpoint.md', 'team-journal.md', 'graph-map.md'
     ];
     function asText(value) { return typeof value === 'string' ? value : ''; }
+    const UI_PREVIEW_LAYOUTS = new Set(['topnav', 'sidebar', 'settings', 'list', 'form']);
+    const UI_PREVIEW_CHANGES = new Set(['same', 'added', 'modified', 'removed']);
+    const UI_PREVIEW_STATUSES = new Set(['verified', 'resolved', 'planned', 'partial', 'unverified', 'source-unavailable', 'anchor-missing', 'secret-content']);
+    function boundedUiText(value, limit = 120) {
+      return asText(value).replace(/\s+/g, ' ').trim().slice(0, limit);
+    }
+    function normalizeUiItems(value) {
+      const items = Array.isArray(value) ? value : Array.isArray(value?.items) ? value.items : [];
+      return items
+        .filter(item => item && typeof item === 'object')
+        .slice(0, 24)
+        .map(item => {
+          const change = boundedUiText(item.change, 24);
+          return {
+            id: boundedUiText(item.id),
+            label: boundedUiText(item.label || item.title || item.text),
+            kind: boundedUiText(item.kind || item.type, 32),
+            state: boundedUiText(item.state || item.status, 48),
+            change: UI_PREVIEW_CHANGES.has(change) ? change : 'same'
+          };
+        })
+        .filter(item => item.id && item.label);
+    }
+    function normalizeUiSide(value, fallbackStatus) {
+      const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+      const safeFallback = UI_PREVIEW_STATUSES.has(fallbackStatus) ? fallbackStatus : 'unverified';
+      const status = boundedUiText(source.status || fallbackStatus, 40);
+      return {
+        status: UI_PREVIEW_STATUSES.has(status) ? status : safeFallback,
+        message: boundedUiText(source.message, 160),
+        items: normalizeUiItems(value)
+      };
+    }
+    function normalizeUiSourceObject(value) {
+      const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
+      return {
+        path: boundedUiText(source.path),
+        anchor: boundedUiText(source.anchor),
+        status: boundedUiText(source.status, 40),
+        message: boundedUiText(source.message, 160),
+        evidenceRevision: boundedUiText(source.evidenceRevision || source.evidence_revision, 120)
+      };
+    }
+    function parseUiSourceReference(value) {
+      const reference = boundedUiText(value, 240);
+      if (!reference.startsWith('repo:')) return { path: '', anchor: '' };
+      const withoutPrefix = reference.slice(5);
+      const index = withoutPrefix.indexOf('#');
+      return {
+        path: boundedUiText(index >= 0 ? withoutPrefix.slice(0, index) : withoutPrefix),
+        anchor: boundedUiText(index >= 0 ? withoutPrefix.slice(index + 1) : '')
+      };
+    }
+    function normalizeUiProvenance(value, fallbackRevision = '', sourceInput = {}) {
+      const source = value && typeof value === 'object' ? value : {};
+      const before = source.before && typeof source.before === 'object' ? source.before : source;
+      const after = source.after && typeof source.after === 'object' ? source.after : source;
+      const sourceReference = parseUiSourceReference(before.source);
+      const itemSource = normalizeUiSourceObject(sourceInput);
+      const revision = boundedUiText(
+        itemSource.evidenceRevision || source.evidenceRevision || source.evidence_revision || before.evidenceRevision || fallbackRevision,
+        120
+      );
+      return {
+        evidenceRevision: revision,
+        baseRef: boundedUiText(source.baseRef || source.base_ref || before.baseRef || before.base_ref),
+        path: boundedUiText(itemSource.path || source.path || before.path || sourceReference.path),
+        anchor: boundedUiText(itemSource.anchor || source.anchor || before.anchor || sourceReference.anchor),
+        planSource: boundedUiText(source.planSource || source.plan_source || after.planSource || after.source || '30_plan.md')
+      };
+    }
+    function normalizeUiUncertainty(value) {
+      const items = Array.isArray(value) ? value : asText(value) ? [value] : Array.isArray(value?.items) ? value.items : [];
+      return items.map(item => boundedUiText(item, 160)).filter(Boolean).slice(0, 8);
+    }
+    function normalizeUiPreview(item) {
+      if (!item || typeof item !== 'object') return null;
+      const taskNumber = String(item.taskNumber ?? '').trim();
+      const layout = boundedUiText(item.layout, 32);
+      const version = Number(item.version ?? 1);
+      if (!taskNumber || version !== 1 || !UI_PREVIEW_LAYOUTS.has(layout)) return null;
+      const itemSource = normalizeUiSourceObject(item.source);
+      const evidenceRevision = boundedUiText(item.evidenceRevision || item.evidence_revision || itemSource.evidenceRevision, 120);
+      const status = boundedUiText(item.status, 40);
+      const before = normalizeUiSide(item.before, itemSource.status || status || 'unverified');
+      if (!before.message) before.message = boundedUiText(itemSource.message || item.message, 160);
+      const after = normalizeUiSide(item.after, 'planned');
+      const beforeReference = item.provenance && typeof item.provenance === 'object' && item.provenance.before && typeof item.provenance.before === 'object'
+        ? boundedUiText(item.provenance.before.source, 240)
+        : '';
+      const hasBeforeSource = Boolean(itemSource.path || beforeReference);
+      return {
+        taskNumber,
+        version: 1,
+        screen: boundedUiText(item.screen, 120),
+        title: boundedUiText(item.title, 120),
+        layout,
+        isNewScreen: Boolean(item.isNewScreen || item.newScreen || item.new_screen || (!hasBeforeSource && !before.items.length && after.items.length)),
+        before,
+        after,
+        provenance: normalizeUiProvenance(item.provenance, evidenceRevision, item.source),
+        evidenceRevision,
+        uncertainty: normalizeUiUncertainty(item.uncertainty),
+        status: UI_PREVIEW_STATUSES.has(status) ? status : 'unverified'
+      };
+    }
+    function buildUiPreviewPairs(preview) {
+      const beforeItems = preview.before.items;
+      const afterItems = preview.after.items;
+      const beforeById = new Map(beforeItems.map((item, index) => [item.id, { item, index }]));
+      const afterById = new Map(afterItems.map((item, index) => [item.id, { item, index }]));
+      const ids = [...beforeItems.map(item => item.id), ...afterItems.map(item => item.id).filter(id => !beforeById.has(id))];
+      return ids.map(id => {
+        const before = beforeById.get(id);
+        const after = afterById.get(id);
+        const declared = after?.item.change || before?.item.change || 'same';
+        const contentChanged = Boolean(before && after && (
+          before.item.label !== after.item.label
+          || before.item.kind !== after.item.kind
+          || before.item.state !== after.item.state
+        ));
+        const change = !before ? 'added' : !after ? 'removed' : contentChanged && declared === 'same' ? 'modified' : declared;
+        return {
+          id,
+          before: before?.item || null,
+          after: after?.item || null,
+          change: UI_PREVIEW_CHANGES.has(change) ? change : 'same',
+          orderChanged: Boolean(before && after && before.index !== after.index)
+        };
+      });
+    }
     function escapeSourceToken(value) {
       return asText(value)
         .replaceAll('&', '&amp;')
@@ -3470,6 +3779,10 @@
             truncated: Boolean(item.truncated)
           };
         });
+      const uiPreviews = (Array.isArray(snapshot.uiPreviews) ? snapshot.uiPreviews : [])
+        .map(normalizeUiPreview)
+        .filter(Boolean)
+        .slice(0, 72);
       const codemapItems = name => (Array.isArray(snapshot[name]) ? snapshot[name] : [])
         .filter(item => item && typeof item === 'object')
         .map(item => ({ ...item }));
@@ -3492,6 +3805,7 @@
         sources: sources.length ? sources : Object.keys(normalizedFiles).map(name => ({ name, size: normalizedFiles[name].length })),
         artifacts,
         sourcePreviews,
+        uiPreviews,
         lanes: codemapItems('lanes'),
         nodes: codemapItems('nodes'),
         edges: codemapItems('edges'),
@@ -3510,6 +3824,7 @@
         files: Object.keys(snapshot.files).sort().map(name => [name, snapshot.files[name]]),
         artifacts: stableArtifactValue(snapshot.artifacts),
         sourcePreviews: snapshot.sourcePreviews,
+        uiPreviews: snapshot.uiPreviews,
         codemapStatus: snapshot.codemapStatus,
         codemapMessage: snapshot.codemapMessage,
         codemap: snapshot.codemap,
@@ -4370,6 +4685,12 @@
             code: sourcePreview.status === 'resolved' ? sourcePreview.code : ''
           }
         : unavailableSourcePreview(selectedTask?.number || '');
+      const selectedUiPreviews = selectedTask
+        ? model.snapshot.uiPreviews
+            .filter(item => item.taskNumber === selectedTask.number)
+            .slice(0, 3)
+            .map(item => ({ ...item, pairs: buildUiPreviewPairs(item) }))
+        : [];
       return {
         currentTask,
         nextTask,
@@ -4377,6 +4698,7 @@
         selectedImplementation: selectedTask?.implementation || [],
         selectedImplementationDiagram: selectedTask?.implementationDiagram || null,
         selectedSourcePreview,
+        selectedUiPreviews,
         flow: model.tasks.slice(),
         design: buildDesignSummary(model.snapshot.files, purposeSection, approachSection),
         purpose: {
@@ -4932,13 +5254,16 @@
     let pollGeneration = 0;
     let taskExpansionInitialized = false;
     let selectedSource = '';
+    let uiPreviewEvidenceExpanded = false;
     let codemapQuery = '';
     let previewMode = storageGet('roadmapViewerPreviewMode') === 'raw' ? 'raw' : 'rendered';
     let previewSourceText = '';
     let lastImplementationAnnouncementKey = '';
+    let lastUiPreviewAnnouncementKey = '';
     let selectedGraphNodeId = '';
     let activeDetailTab = 'document';
     let detailDrawerRestoreFocus = null;
+    let detailDrawerSiblingState = null;
     let viewerNavRestoreFocus = null;
     let viewerNavScrollFrame = null;
     let viewerNavScrollLockUntil = 0;
@@ -5150,6 +5475,8 @@
     function render(snapshotInput, options = {}) {
       const previousModel = currentModel;
       const focusKey = captureFocusKey();
+      const detailDrawerBody = document.querySelector('.detail-drawer-body');
+      const detailDrawerScrollTop = detailDrawerBody?.scrollTop || 0;
       const normalizedRoot = ROADMAP_MODEL.normalizeSnapshot(snapshotInput);
       if (normalizedRoot.kind !== 'codemap') workspaceRootSnapshot = normalizedRoot;
       currentSnapshot = normalizedRoot;
@@ -5180,7 +5507,10 @@
       renderNowStrip(currentModel);
       renderGraph(currentModel);
       if (previousModel && options.announce !== false) announceMeaningfulChange(previousModel, currentModel);
-      requestAnimationFrame(() => restoreFocusKey(focusKey));
+      requestAnimationFrame(() => {
+        if (detailDrawerBody && detailDrawerOpen()) detailDrawerBody.scrollTop = detailDrawerScrollTop;
+        restoreFocusKey(focusKey);
+      });
     }
     function selectedGraphNode(tree) {
       if (!selectedGraphNodeId || !tree.nodes.some(node => node.id === selectedGraphNodeId)) {
@@ -5724,6 +6054,175 @@
           <span>${escapeHtml(value)}</span>
         </article>`).join('');
     }
+    function uiChangeLabel(change) {
+      return {
+        same: '同じ',
+        added: '追加',
+        modified: '変更',
+        removed: '削除'
+      }[change] || '同じ';
+    }
+    function uiPreviewStatusLabel(status, side = 'before') {
+      if (status === 'resolved' || status === 'verified') return '確認済み';
+      if (status === 'planned') return '計画案';
+      if (status === 'partial') return '一部確認';
+      return side === 'after' ? '計画案' : 'Before未確認';
+    }
+    function uiPreviewLayoutLabel(layout) {
+      return {
+        topnav: '上部ナビ',
+        sidebar: 'サイドバー',
+        settings: '設定画面',
+        list: '一覧',
+        form: 'フォーム'
+      }[layout] || '';
+    }
+    function uiPreviewKindLabel(kind) {
+      return {
+        button: 'ボタン',
+        tab: 'タブ',
+        link: 'リンク',
+        section: 'セクション',
+        region: '領域',
+        input: '入力',
+        field: '入力欄',
+        card: 'カード',
+        nav: 'ナビ'
+      }[kind] || '';
+    }
+    function uiPreviewStateLabel(state) {
+      return {
+        primary: '主要',
+        secondary: '補助',
+        visible: '表示中',
+        active: '選択中',
+        disabled: '無効',
+        hidden: '非表示',
+        new: '新規',
+        planned: '計画案'
+      }[state] || '';
+    }
+    function uiPreviewChangeNote(pair, side, placeholder) {
+      if (pair.change === 'added') return side === 'before' && placeholder ? '計画側で追加' : '追加予定';
+      if (pair.change === 'modified') return pair.orderChanged ? '内容と順序を変更' : '変更あり';
+      if (pair.change === 'removed') return side === 'after' && placeholder ? '計画側で削除' : '削除予定';
+      return pair.orderChanged ? '順序変更' : '';
+    }
+    function uiPreviewChangeBadge(pair) {
+      if (pair.change !== 'removed' && !pair.orderChanged) return '';
+      return [pair.change === 'removed' ? '削除' : '', pair.orderChanged ? '順序変更' : ''].filter(Boolean).join('・');
+    }
+    function uiChangeSymbol(change) {
+      return {
+        same: '=',
+        added: '+',
+        modified: '~',
+        removed: '-'
+      }[change] || '=';
+    }
+    function uiPreviewSideItem(pair, side) {
+      const item = side === 'before' ? pair.before : pair.after;
+      const opposite = side === 'before' ? pair.after : pair.before;
+      const placeholder = !item;
+      const label = item?.label || (side === 'before' ? '現状なし' : '削除予定');
+      const meta = item
+        ? [uiPreviewKindLabel(item.kind), uiPreviewStateLabel(item.state), uiPreviewChangeNote(pair, side, placeholder)].filter(Boolean).join(' · ')
+        : opposite ? [uiPreviewKindLabel(opposite.kind) || '要素', uiPreviewChangeNote(pair, side, placeholder)].filter(Boolean).join(' · ') : '未記録';
+      const aria = `${side === 'before' ? 'Before' : 'After'} ${label}: ${uiChangeLabel(pair.change)}${pair.orderChanged ? '、順序変更あり' : ''}`;
+      const badge = uiPreviewChangeBadge(pair);
+      return `<li class="ui-preview-item change-${escapeHtml(pair.change)}${placeholder ? ' placeholder' : ''}" aria-label="${escapeHtml(aria)}">
+        <span class="ui-preview-symbol" aria-hidden="true">${escapeHtml(uiChangeSymbol(pair.change))}</span>
+        <span class="ui-preview-copy"><strong>${escapeHtml(label)}</strong><span>${escapeHtml(meta)}</span></span>
+        ${badge ? `<span class="ui-preview-change-badge">${escapeHtml(badge)}</span>` : ''}
+      </li>`;
+    }
+    function renderUiPreviewSide(preview, side) {
+      const heading = side === 'before' ? '現状・base refから確認' : '計画案・未実装';
+      const status = side === 'before' ? preview.before.status : preview.after.status;
+      const items = preview.pairs
+        .filter(pair => side === 'before' || pair.after || pair.change === 'removed')
+        .map(pair => uiPreviewSideItem(pair, side))
+        .join('');
+      return `<section class="ui-preview-side ${escapeHtml(side)}" aria-label="${escapeHtml(heading)}">
+        <h6>${escapeHtml(heading)}<span>${escapeHtml(uiPreviewStatusLabel(status, side))}</span></h6>
+        <ul class="ui-preview-items">${items || '<li class="brief-missing">表示項目が未記録</li>'}</ul>
+      </section>`;
+    }
+    function renderUiPreviews(previews) {
+      const host = byId('brief-ui-preview');
+      const list = byId('ui-preview-list');
+      host.hidden = !previews.length;
+      if (!previews.length) {
+        list.innerHTML = '';
+        return;
+      }
+      list.innerHTML = previews.map(preview => {
+        const title = preview.title || preview.screen || 'UI preview';
+        const meta = [preview.screen, uiPreviewLayoutLabel(preview.layout), uiPreviewStatusLabel(preview.status, 'preview')].filter(Boolean).join(' · ');
+        const beforeSide = preview.isNewScreen ? '' : renderUiPreviewSide(preview, 'before');
+        const afterSide = renderUiPreviewSide(preview, 'after');
+        return `<article class="ui-preview-card" data-ui-preview-task="${escapeHtml(preview.taskNumber)}" data-ui-preview-layout="${escapeHtml(preview.layout)}">
+          <div class="ui-preview-head">
+            <div>
+              <p class="brief-kicker">TASK ${escapeHtml(preview.taskNumber)}</p>
+              <h5>${escapeHtml(title)}</h5>
+              <p class="ui-preview-meta">${escapeHtml(meta || 'preview metadata未記録')}</p>
+            </div>
+            ${preview.isNewScreen ? '<span class="ui-preview-new-badge">新規画面</span>' : ''}
+          </div>
+          <div class="ui-preview-sides${preview.isNewScreen ? ' after-only' : ''}">
+            ${beforeSide}${afterSide}
+          </div>
+        </article>`;
+      }).join('');
+    }
+    function renderUiPreviewEvidence(brief, sourcePreview) {
+      const hasUiPreview = brief.selectedUiPreviews.length > 0;
+      const toggle = byId('ui-preview-evidence-toggle');
+      const close = byId('ui-preview-evidence-close');
+      const panel = byId('ui-preview-evidence');
+      const summary = byId('ui-preview-evidence-summary');
+      const evidenceList = byId('ui-preview-evidence-list');
+      toggle.hidden = !hasUiPreview;
+      close.hidden = !hasUiPreview;
+      panel.hidden = hasUiPreview ? !uiPreviewEvidenceExpanded : false;
+      toggle.setAttribute('aria-expanded', String(!panel.hidden));
+      toggle.textContent = panel.hidden ? 'UI evidenceを開く' : 'UI evidenceを閉じる';
+      summary.textContent = hasUiPreview
+        ? 'source、provenance、uncertaintyを必要な時だけ開きます。'
+        : 'UI previewがないTaskでは、既存の実コードEvidenceをそのまま表示します。';
+      const rows = brief.selectedUiPreviews.flatMap(preview => {
+        const provenance = preview.provenance || {};
+        const uncertainty = preview.uncertainty.length ? preview.uncertainty.join(' / ') : '未確認事項なし';
+        const items = [
+          ['Before source', `${uiPreviewStatusLabel(preview.before.status || preview.status, 'before')} · ${provenance.evidenceRevision || preview.evidenceRevision || 'revision未記録'}`],
+          ['Before path', [provenance.path, provenance.anchor].filter(Boolean).join('#') || 'path / anchor未記録'],
+          ['After plan source', provenance.planSource || '30_plan.md'],
+          ['Uncertainty', uncertainty]
+        ];
+        if (preview.before.message) items.splice(2, 0, ['Before message', preview.before.message]);
+        return items;
+      });
+      if (!hasUiPreview && sourcePreview?.message) rows.push(['Source status', sourcePreview.message]);
+      evidenceList.innerHTML = rows.map(([label, value]) => `
+        <article class="ui-preview-evidence-item">
+          <strong>${escapeHtml(label)}</strong>
+          <span>${escapeHtml(value)}</span>
+        </article>`).join('');
+    }
+    function setUiPreviewEvidenceExpanded(expanded, restoreTarget = null) {
+      uiPreviewEvidenceExpanded = Boolean(expanded);
+      const panel = byId('ui-preview-evidence');
+      const toggle = byId('ui-preview-evidence-toggle');
+      if (!panel || !toggle || toggle.hidden) return;
+      panel.hidden = !uiPreviewEvidenceExpanded;
+      toggle.setAttribute('aria-expanded', String(uiPreviewEvidenceExpanded));
+      toggle.textContent = uiPreviewEvidenceExpanded ? 'UI evidenceを閉じる' : 'UI evidenceを開く';
+      byId('state-announcer').textContent = uiPreviewEvidenceExpanded ? 'UI evidenceを開きました。' : 'UI evidenceを閉じました。';
+      if (!uiPreviewEvidenceExpanded && canReceiveRestoredFocus(restoreTarget || toggle)) {
+        requestAnimationFrame(() => (restoreTarget || toggle).focus({ preventScroll: true }));
+      }
+    }
     function renderExecutionBrief(model) {
       const hadCodeFocus = document.activeElement?.id === 'implementation-code';
       const brief = ROADMAP_MODEL.buildExecutionBrief(model, selectedImplementationTaskNumber);
@@ -5830,6 +6329,19 @@
         <div><dt>変更対象</dt><dd>${escapeHtml(selectedTask?.target || '未記録')}</dd></div>
         <div><dt>成果物</dt><dd>${escapeHtml(output)}</dd></div>
         <div><dt>検証</dt><dd>${escapeHtml(verification)}</dd></div>`;
+      renderUiPreviews(brief.selectedUiPreviews);
+      renderUiPreviewEvidence(brief, preview);
+      const uiPreviewAnnouncementKey = JSON.stringify(brief.selectedUiPreviews.map(item => [
+        item.taskNumber,
+        item.title,
+        item.status,
+        item.evidenceRevision || item.provenance?.evidenceRevision || '',
+        item.pairs.map(pair => [pair.id, pair.change, pair.orderChanged, pair.before?.label || '', pair.after?.label || ''])
+      ]));
+      if (brief.selectedUiPreviews.length && lastUiPreviewAnnouncementKey && uiPreviewAnnouncementKey !== lastUiPreviewAnnouncementKey) {
+        byId('state-announcer').textContent = `UI差分プレビューを更新しました。Task ${selectedTask?.number || ''}`;
+      }
+      lastUiPreviewAnnouncementKey = uiPreviewAnnouncementKey;
       const claimList = items => items.length
         ? `<ul>${items.slice(0, 4).map(item => `<li><span>${escapeHtml(item.text)}</span><button type="button" data-artifact="${escapeHtml(item.source)}">${escapeHtml(item.source)}</button></li>`).join('')}</ul>`
         : '<p class="brief-missing">明示分類なし</p>';
@@ -6246,6 +6758,39 @@
     function detailDrawerOpen() {
       return !byId('detail-drawer').hidden;
     }
+    function ensureDetailDrawerTopLayer() {
+      const drawer = byId('detail-drawer');
+      if (drawer?.parentElement?.id === 'main-content') {
+        document.body.insertBefore(drawer, byId('state-announcer'));
+      }
+    }
+    function detailDrawerSiblings() {
+      return [document.querySelector('.app-header'), byId('main-content')].filter(Boolean);
+    }
+    function setDetailDrawerSiblingsHidden(hidden) {
+      const siblings = detailDrawerSiblings();
+      if (hidden) {
+        if (!detailDrawerSiblingState) {
+          detailDrawerSiblingState = new Map(siblings.map(element => [element, {
+            inert: Boolean(element.inert),
+            ariaHidden: element.getAttribute('aria-hidden')
+          }]));
+        }
+        siblings.forEach(element => {
+          element.inert = true;
+          element.setAttribute('aria-hidden', 'true');
+        });
+        return;
+      }
+      const previous = detailDrawerSiblingState;
+      siblings.forEach(element => {
+        const state = previous?.get(element);
+        element.inert = state?.inert || false;
+        if (state?.ariaHidden == null) element.removeAttribute('aria-hidden');
+        else element.setAttribute('aria-hidden', state.ariaHidden);
+      });
+      detailDrawerSiblingState = null;
+    }
     function detailTabs() {
       return Array.from(document.querySelectorAll('[data-detail-tab]'));
     }
@@ -6272,7 +6817,9 @@
     function openDetailDrawer(tab = 'document', trigger = document.activeElement) {
       detailDrawerRestoreFocus = trigger;
       selectDetailTab(tab);
+      ensureDetailDrawerTopLayer();
       byId('detail-drawer').hidden = false;
+      setDetailDrawerSiblingsHidden(true);
       document.body.classList.add('detail-drawer-open');
       byId('state-announcer').textContent = `${tab === 'impact' ? 'Impact Code Map' : 'Detail drawer'}を開きました。`;
       requestAnimationFrame(() => (byId(`detail-tab-${activeDetailTab}`) || byId('close-detail-drawer'))?.focus({ preventScroll: true }));
@@ -6280,6 +6827,7 @@
     function closeDetailDrawer({ restoreFocus = true } = {}) {
       byId('detail-drawer').hidden = true;
       document.body.classList.remove('detail-drawer-open');
+      setDetailDrawerSiblingsHidden(false);
       byId('state-announcer').textContent = 'Detail drawerを閉じました。';
       if (restoreFocus && canReceiveRestoredFocus(detailDrawerRestoreFocus)) {
         detailDrawerRestoreFocus.focus({ preventScroll: true });
@@ -6419,6 +6967,12 @@
       byId('close-detail-drawer').addEventListener('click', () => closeDetailDrawer());
       byId('detail-drawer').addEventListener('click', event => {
         if (event.target === byId('detail-drawer')) closeDetailDrawer();
+      });
+      byId('ui-preview-evidence-toggle').addEventListener('click', event => {
+        setUiPreviewEvidenceExpanded(!uiPreviewEvidenceExpanded, event.currentTarget);
+      });
+      byId('ui-preview-evidence-close').addEventListener('click', () => {
+        setUiPreviewEvidenceExpanded(false, byId('ui-preview-evidence-toggle'));
       });
       document.addEventListener('keydown', event => {
         if (detailDrawerOpen()) {
