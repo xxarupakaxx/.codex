@@ -128,7 +128,7 @@ Roadmap generatorが参照できるsourceは次に限定する。欠落してい
 - 実装: `30_plan.md`、`40_progress.md`、task directory内の実artifact metadata
 - 検証: `checkpoint.md` / `80_review.md` / `90_verification.md`
 - Code Map: freshな`codemap.json` / `codemap.lock`
-- UI preview: UI変更Task内の任意 `ui-preview-json` 1ブロック。rootは `{version, taskNumber, previews:[最大3]}`、`taskNumber` はTask見出しから抽出した数値文字列、Beforeは `provenance.before` のbase ref実装source、Afterは `provenance.after.source` の仕様・計画、未決事項は`uncertainty`へ分離する
+- UI preview: UI変更TaskではLLMが`UI変更: yes`と`ui-preview-json` 1ブロックを必ず自動記録する。rootは `{version, taskNumber, previews:[最大3]}`、`taskNumber` はTask見出しから抽出した数値文字列、Beforeは `provenance.before` の固定commit SHA実装source、Afterは `provenance.after.source` の仕様・計画、未決事項は`uncertainty`へ分離する。ユーザーによるmetadata入力は不要
 
 HTMLやSVGを成果物として追加した場合も、長期正本はMarkdown、SVG、Codemap、task memoryである。HTMLはmanifest登録済みproducerからの派生配布物として扱い、invalid renderで既存配布物を上書きしない。
 
@@ -419,9 +419,9 @@ Roadmap ViewerはProject Map + Focusで各Taskの `目的`、`変更対象`、`�
 
 `実装図` は任意fieldであり、最初の `diagram-json` ブロックを選択Taskの実装フローへ使う。`direction`、`nodes`、`edges`の明示値だけを読み、Roadmap HTMLでは自己完結したinline SVGとして描画する。対応する形は矩形と判断node、関係は有向edgeとedge labelに限定する。Viewerは実装手順、変更対象、実コードからnodeやedgeを補作しない。図と同じ関係をテキスト一覧でも表示する。
 
-`ui-preview-json` はUI変更Taskだけに置ける任意fieldであり、各Task内の最初の1ブロックだけを候補にする。rootは `{version, taskNumber, previews:[最大3]}` とし、`taskNumber` はTask見出しから抽出した数値文字列、各previewは `{id,title,layout,provenance,before,after,uncertainty}` を持つ。複数block、Task外block、Task番号不一致、version不一致はinvalidにする。authoring規則、5 layout preset、5 common primitive、省略規則は `skills/viewing-plans/references/ui-change-preview.md` を正本にする。
+`ui-preview-json` はUI変更Taskだけに置くfieldである。計画を作るLLMがsourceと仕様を読み、該当Taskへ`UI変更: yes`と1ブロックを自動記録する。rootは `{version, taskNumber, previews:[最大3]}` とし、`taskNumber` はTask見出しから抽出した数値文字列、各previewは `{id,title,layout,provenance,before,after,uncertainty}` を持つ。複数block、Task外block、Task番号不一致、version不一致はinvalidにする。`UI変更: yes`なのにblockがない計画はPhase 2同期で失敗する。authoring規則、5 layout preset、5 common primitive、省略規則は `skills/viewing-plans/references/ui-change-preview.md` を正本にする。
 
-UI previewのBeforeは `provenance.before.source=repo:...`、`baseRef`、`observedLabels` で確認した事実であり、Afterは `provenance.after.source` が指す仕様・計画上の未実装案である。generatorはReact / Next.jsなどrepository codeを実行せず、ASTから見た目を断定せず、生HTMLを受け付けない。base ref未指定、plan宣言refとCLI refの不一致、Roadmap Task Hub経由、source拒否、anchor driftではBeforeを補作せず、`unverified`と理由をsnapshotへ残す。
+UI previewのBeforeは `provenance.before.source=repo:...`、40桁commit SHAの`baseRef`、`observedLabels` で確認した事実であり、Afterは `provenance.after.source` が指す仕様・計画上の未実装案である。generatorはplan内の単一SHAを通常生成時に自動利用する。React / Next.jsなどrepository codeを実行せず、生HTMLを受け付けない。LLMはJSX / TSXを意味として読んで簡略模型へ編集できるが、pixel-perfectな見た目を断定しない。複数SHA、plan宣言refとCLI refの不一致、Roadmap Task Hub経由、source拒否、anchor driftではBeforeを補作せず、`unverified`と理由をsnapshotへ残す。
 
 snapshot v1の `uiPreviews` はoptional additive fieldである。legacy snapshotまたはUI previewのないTaskでは空配列相当として扱い、既存のProject Map + Focus、source preview、Task Hub表示を変えない。Viewerは選択Task番号と完全一致するpreviewだけをChange詳細へ結び付け、別Taskや変更対象pathからfallbackしない。
 

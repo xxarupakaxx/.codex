@@ -111,6 +111,60 @@ class SyncRoadmapTest(unittest.TestCase):
         self.assertNotEqual(code, 0)
         self.assertEqual(result["reason"], "plan_missing")
 
+    def test_phase_2_requires_preview_for_llm_declared_ui_task(self) -> None:
+        task = self.write_task("roadmap")
+        (task / "30_plan.md").write_text(
+            "# Plan\n\n## Task 2: UIを変更する\n\nUI変更: yes\n",
+            encoding="utf-8",
+        )
+
+        code, result = MODULE.synchronize(
+            task, self.generator, "2", self.workspace, "run-1", dry_run=True
+        )
+
+        self.assertNotEqual(code, 0)
+        self.assertEqual(result["reason"], "ui_preview_authoring_incomplete")
+        self.assertEqual(result["missing_task_numbers"], ["2"])
+
+    def test_phase_2_accepts_valid_preview_and_behavior_only_plan(self) -> None:
+        task = self.write_task("roadmap")
+        payload = (
+            '{"version":1,"taskNumber":"2","previews":['
+            '{"id":"nav","title":"Nav","layout":"topnav"}]}'
+        )
+        (task / "30_plan.md").write_text(
+            "# Plan\n\n## Task 1: API変更\n\nUI変更: no\n"
+            "\n## Task 2: UIを変更する\n\nUI変更: yes\n\n"
+            f"```ui-preview-json\n{payload}\n```\n",
+            encoding="utf-8",
+        )
+
+        code, result = MODULE.synchronize(
+            task, self.generator, "2", self.workspace, "run-1", dry_run=True
+        )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "dry_run")
+
+    def test_ui_preview_gate_rejects_invalid_block_only_in_phase_2(self) -> None:
+        task = self.write_task("roadmap")
+        (task / "30_plan.md").write_text(
+            "# Plan\n\n## Task 3: UIを変更する\n\nUI変更: yes\n\n"
+            "```ui-preview-json\n{}\n```\n",
+            encoding="utf-8",
+        )
+
+        code, result = MODULE.synchronize(
+            task, self.generator, "2", self.workspace, "run-1", dry_run=True
+        )
+        self.assertNotEqual(code, 0)
+        self.assertEqual(result["invalid_task_numbers"], ["3"])
+
+        code, result = MODULE.synchronize(
+            task, self.generator, "3", self.workspace, "run-1", dry_run=True
+        )
+        self.assertEqual(code, 0)
+
     def test_delegation_decision_required_only_for_phase_2(self) -> None:
         task = self.write_task("roadmap", delegation=None)
         code, result = MODULE.synchronize(task, self.generator, "2", self.workspace, "run-1")

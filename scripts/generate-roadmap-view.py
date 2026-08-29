@@ -184,6 +184,9 @@ UI_PREVIEW_BLOCK_RE = re.compile(
     r"```[ \t]*ui-preview-json[ \t]*\r?\n([\s\S]*?)\r?\n```",
     re.IGNORECASE,
 )
+UI_CHANGE_MARKER_RE = re.compile(
+    r"(?mi)^\s*(?:[-*]\s*)?UI変更\s*[:：]\s*(?:yes|true|あり|対象)\s*$"
+)
 STABLE_UI_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]{0,63}$")
 GIT_SHA_RE = re.compile(r"^[0-9a-f]{40,64}$")
 RAW_HTML_RE = re.compile(r"</?[A-Za-z][^>]*>")
@@ -949,6 +952,35 @@ def invalid_ui_preview(task_number: str, message: str) -> dict[str, object]:
     return {"taskNumber": task_number, "id": "invalid-ui-preview", "status": "invalid", "message": message, "before": {"items": []}, "after": {"items": []}, "uncertainty": []}
 
 
+def infer_ui_preview_base_ref(plan: str) -> tuple[str | None, str]:
+    """Use one LLM-recorded immutable SHA when the CLI did not supply a ref."""
+    declared_refs: set[str] = set()
+    for _task_number, _start, _end, body in iter_task_sections(plan):
+        for block in UI_PREVIEW_BLOCK_RE.finditer(body):
+            try:
+                root = json.loads(block.group(1))
+            except json.JSONDecodeError:
+                continue
+            previews = root.get("previews") if isinstance(root, dict) else None
+            if not isinstance(previews, list):
+                continue
+            for preview in previews:
+                if not isinstance(preview, dict):
+                    continue
+                provenance = preview.get("provenance")
+                before = provenance.get("before") if isinstance(provenance, dict) else None
+                source = before.get("source") if isinstance(before, dict) else None
+                if not isinstance(source, str) or not source.strip():
+                    continue
+                declared = before.get("baseRef")
+                if not isinstance(declared, str) or not re.fullmatch(r"[0-9a-f]{40}", declared.strip()):
+                    return None, "planのbaseRefは固定40桁commit SHAで記録してください。"
+                declared_refs.add(declared.strip())
+    if len(declared_refs) > 1:
+        return None, "planに複数のbaseRefがあるため自動選択できません。"
+    return (next(iter(declared_refs)), "") if declared_refs else (None, "")
+
+
 def ensure_ui_keys(value: object, keys: set[str], path: str) -> dict[str, object]:
     if not isinstance(value, dict):
         raise ValueError(f"{path} must be an object")
@@ -1121,7 +1153,7 @@ def normalize_ui_preview_block(
         message = ""
         if before_items and not base_ref:
             status = "unverified"
-            message = "base refが未指定のためBeforeを確認できません。"
+            message = base_ref_message or "base refが未指定のためBeforeを確認できません。"
         elif declared_ref and base_ref and declared_ref != base_ref:
             status = "unverified"
             message = "planのbaseRefとCLI --base-refが一致しません。"
@@ -1218,6 +1250,35 @@ def collect_ui_previews(
             previews.append(preview)
             used_bytes += preview_bytes
     return previews
+
+
+def validate_declared_ui_previews(
+    plan: str,
+    previews: list[dict[str, object]],
+) -> None:
+    declared = {
+        task_number
+        for task_number, _start, _end, body in iter_task_sections(plan)
+        if UI_CHANGE_MARKER_RE.search(body)
+    }
+    if not declared:
+        return
+    _inferred_ref, inferred_message = infer_ui_preview_base_ref(plan)
+    if inferred_message:
+        raise ValueError(inferred_message)
+    previews_by_task: dict[str, list[dict[str, object]]] = {}
+    for preview in previews:
+        previews_by_task.setdefault(str(preview.get("taskNumber", "")), []).append(preview)
+    invalid = sorted(
+        task_number
+        for task_number in declared
+        if not previews_by_task.get(task_number)
+        or any(item.get("status") == "invalid" for item in previews_by_task[task_number])
+    )
+    if invalid:
+        raise ValueError(
+            "UI変更Taskのui-preview-jsonが未作成または不正です: " + ", ".join(invalid)
+        )
 
 
 def artifact_type(path: Path) -> str:
@@ -1379,29 +1440,34 @@ def build_snapshot(
         raise ValueError(f"no roadmap source files found in {task_dir}")
     artifacts = collect_artifacts(task_dir, output)
     effective_source_root = source_root or infer_source_root(task_dir) or task_dir.parent
-    base_revision, base_ref_message = resolve_git_commit(
+    plan = files.get("30_plan.md", "")
+    inferred_base_ref, inferred_base_ref_message = infer_ui_preview_base_ref(plan)
+    effective_base_ref = base_ref or inferred_base_ref
+    base_revision, resolved_base_ref_message = resolve_git_commit(
         effective_source_root,
-        base_ref,
-    ) if base_ref else (None, "")
+        effective_base_ref,
+    ) if effective_base_ref else (None, "")
+    base_ref_message = resolved_base_ref_message or inferred_base_ref_message
     git_blob_cache: dict[tuple[str, str], tuple[bytes | None, str, str]] = {}
     source_previews = collect_source_previews(
-        files.get("30_plan.md", ""),
+        plan,
         source_root=effective_source_root,
         source_allow_prefixes=source_allow_prefixes,
-        base_ref=base_ref,
+        base_ref=effective_base_ref,
         base_revision=base_revision,
         base_ref_message=base_ref_message,
         git_blob_cache=git_blob_cache,
     )
     ui_previews = collect_ui_previews(
-        files.get("30_plan.md", ""),
+        plan,
         source_root=effective_source_root,
         source_allow_prefixes=source_allow_prefixes,
-        base_ref=base_ref,
+        base_ref=effective_base_ref,
         base_revision=base_revision,
         base_ref_message=base_ref_message,
         git_blob_cache=git_blob_cache,
     )
+    validate_declared_ui_previews(plan, ui_previews)
     codemap_state = load_codemap_state(task_dir, effective_source_root)
     snapshot: dict[str, object] = {
         "version": 1,
@@ -1670,8 +1736,8 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--base-ref",
         help=(
-            "Git ref used for source-backed UI Before previews and source previews. "
-            "Resolved to a commit SHA without fetching or checkout."
+            "Optional Git ref override for source-backed UI Before previews and source previews. "
+            "Without it, one immutable SHA declared by the plan is used automatically."
         ),
     )
     parser.add_argument("--thread-id", help="Bind task-meta.json to a Codex thread ID.")

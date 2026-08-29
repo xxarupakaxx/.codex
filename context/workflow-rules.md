@@ -261,6 +261,8 @@ persistent Goal、`/team-run`、Goal tools を使う作業は、最小限の evi
 - 行数だけで要素を分割せず、コードゴルフ、テスト弱体化、必要な安全性の削除を禁止する。
 - 小規模なコード変更でも、計画表に `N/A` と理由を残す。文書のみの変更は `N/A (non-code)` とする。
 - `30_plan.md` の計画検証では、要素別targetが既存パターンと受入基準に対応しているかを直接確認する。
+- UI変更Taskでは、計画を作るLLMが対象のReact / Next.js等のsourceを固定commit SHAで読み、`UI変更: yes`と`ui-preview-json`を同じTaskへ自動記録する。ユーザーへmetadata入力やfile importを求めない。behavior-only Taskはpreview対象外とし、sourceから確定できない見た目は`uncertainty`へ分離する。詳細は`skills/viewing-plans/references/ui-change-preview.md`を正本とする。
+- Phase 2のRoadmap同期は、`UI変更: yes`のTaskにpreview blockがない、複数ある、JSONまたはTask番号が不正な場合に失敗させる。UI変更計画を`uiPreviews: []`のままPhase 3へ進めない。
 
 ### 計画の深掘り（Deepen Plan）
 

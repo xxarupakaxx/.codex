@@ -228,6 +228,17 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
         self.assertEqual(args.session_id, "session-1")
         self.assertEqual(args.task_state, "waiting")
 
+    def test_viewing_plans_requires_llm_authored_ui_preview_without_user_metadata(self) -> None:
+        skill = (ROOT / "skills" / "viewing-plans" / "SKILL.md").read_text()
+        runbook = (
+            ROOT / "skills" / "viewing-plans" / "references" / "ui-change-preview.md"
+        ).read_text()
+
+        for phrase in ("LLM自身", "UI変更: yes", "metadata入力", "40桁commit SHA"):
+            self.assertIn(phrase, skill)
+        for phrase in ("LLM Authoring Flow", "ユーザーへJSON", "JSX / TSX", "通常生成"):
+            self.assertIn(phrase, runbook)
+
     def test_hub_mode_rejects_task_dir(self) -> None:
         with self.assertRaises(SystemExit):
             roadmap.parse_args([str(self.task_dir), "--hub"])
@@ -741,7 +752,7 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
         self.assertNotEqual(first["fingerprint"], second["fingerprint"])
         self.assertEqual(second["sourcePreviews"][0]["code"].strip(), "value = 2")
 
-    def test_ui_preview_is_optional_and_valid_block_resolves_base_ref(self) -> None:
+    def test_valid_ui_preview_resolves_declared_base_ref_without_cli(self) -> None:
         base_sha = self.init_git_source(
             "export function Nav() {\n"
             "  return ['Home', 'Settings'].join(' ');\n"
@@ -776,9 +787,9 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
         self.assertEqual(source_preview["evidenceRevision"], base_sha)
         self.assertIn("Home", source_preview["code"])
 
-        legacy = roadmap.build_snapshot(self.task_dir, source_root=self.root)
-        self.assertEqual(legacy["uiPreviews"][0]["status"], "unverified")
-        self.assertEqual(legacy["uiPreviews"][0]["before"]["items"], [])
+        automatic = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+        self.assertEqual(automatic["uiPreviews"][0]["status"], "resolved")
+        self.assertEqual(automatic["uiPreviews"][0]["evidenceRevision"], base_sha)
 
     def test_ui_preview_rejects_invalid_blocks_without_building_model(self) -> None:
         valid = self.valid_ui_payload()
@@ -894,6 +905,33 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
         self.assertEqual(oversized["uiPreviews"][0]["status"], "invalid")
         self.assertIn("16KiB", oversized["uiPreviews"][0]["message"])
 
+    def test_declared_ui_task_fails_generation_when_preview_is_missing_or_invalid(self) -> None:
+        (self.task_dir / "30_plan.md").write_text(
+            "# Plan\n\n## Task 7: UI変更\n\nUI変更: yes\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "Taskのui-preview-json"):
+            roadmap.build_snapshot(self.task_dir, source_root=self.root)
+
+        mutable = self.valid_ui_payload(task_number=7, base_ref="main")
+        (self.task_dir / "30_plan.md").write_text(
+            "# Plan\n\n## Task 7: UI変更\n\nUI変更: yes\n\n"
+            "```ui-preview-json\n"
+            + json.dumps(mutable)
+            + "\n```\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "40桁commit SHA"):
+            roadmap.build_snapshot(self.task_dir, source_root=self.root)
+
+        (self.task_dir / "30_plan.md").write_text(
+            "# Plan\n\n## Task 7: UI変更\n\nUI変更: yes\n\n"
+            "```ui-preview-json\n{}\n```\n",
+            encoding="utf-8",
+        )
+        with self.assertRaisesRegex(ValueError, "Taskのui-preview-json"):
+            roadmap.build_snapshot(self.task_dir, source_root=self.root)
+
     def test_ui_preview_unverified_for_invalid_ref_and_anchor_drift(self) -> None:
         base_sha = self.init_git_source(
             "export function Nav() {\n"
@@ -925,6 +963,57 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
         self.assertEqual(drift["uiPreviews"][0]["status"], "unverified")
         self.assertEqual(drift["uiPreviews"][0]["source"]["status"], "anchor-missing")
         self.assertEqual(drift["uiPreviews"][0]["before"]["items"], [])
+
+    def test_ui_preview_uses_single_declared_commit_without_cli_base_ref(self) -> None:
+        base_sha = self.init_git_source(
+            "export function Nav() {\n"
+            "  return ['Home', 'Settings'].join(' ');\n"
+            "}\n"
+        )
+        self.write_ui_plan(self.valid_ui_payload(base_ref=base_sha))
+
+        snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+        preview = snapshot["uiPreviews"][0]
+
+        self.assertEqual(preview["status"], "resolved")
+        self.assertEqual(preview["evidenceRevision"], base_sha)
+        self.assertEqual(preview["before"]["items"][0]["label"], "Home")
+
+    def test_ui_preview_does_not_auto_use_mutable_or_multiple_declared_refs(self) -> None:
+        mutable = self.valid_ui_payload(base_ref="main")
+        self.write_ui_plan(mutable)
+        mutable_snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+        self.assertEqual(mutable_snapshot["uiPreviews"][0]["status"], "unverified")
+        self.assertIn("40桁commit SHA", mutable_snapshot["uiPreviews"][0]["message"])
+
+        first = self.valid_ui_payload(task_number=1, base_ref="1" * 40)
+        second = self.valid_ui_payload(task_number=2, base_ref="2" * 40)
+        plan = "\n".join([
+            "# Plan",
+            "## Task 1: first UI",
+            "```ui-preview-json",
+            json.dumps(first),
+            "```",
+            "## Task 2: second UI",
+            "```ui-preview-json",
+            json.dumps(second),
+            "```",
+        ])
+        (self.task_dir / "30_plan.md").write_text(plan)
+        multiple_snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+
+        self.assertTrue(multiple_snapshot["uiPreviews"])
+        self.assertTrue(all(item["status"] == "unverified" for item in multiple_snapshot["uiPreviews"]))
+        self.assertTrue(all("複数のbaseRef" in item["message"] for item in multiple_snapshot["uiPreviews"]))
+
+        outside = self.valid_ui_payload(base_ref="3" * 40)
+        inferred, message = roadmap.infer_ui_preview_base_ref(
+            "# Plan\n\n```ui-preview-json\n"
+            + json.dumps(outside)
+            + "\n```\n"
+        )
+        self.assertIsNone(inferred)
+        self.assertEqual(message, "")
 
     def test_ui_preview_fingerprint_tracks_base_ref_blob_content(self) -> None:
         base_sha = self.init_git_source(

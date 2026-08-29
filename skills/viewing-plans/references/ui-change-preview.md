@@ -4,17 +4,30 @@
 
 ## 使う場面
 
-`ui-preview-json` は、ユーザーが見た目や画面上の配置差分を確認する価値があるUI変更Taskだけに書く。
+`ui-preview-json` は、見た目や画面上の配置差分を含むUI変更Taskについて、計画を作るLLMが自動で書く。ユーザーへJSON、metadata、source pathの入力を求めない。
 
 - 使う: navigation項目追加、settings toggle追加、sidebar導線追加、listやformの構造変更、新規画面の追加。
 - 使わない: behavior-only変更、copyだけの変更、APIやjobだけの変更、source未確認の既存画面、UI変更か不明なTask。
-- 迷う場合: previewを補作せず、Task本文や`uncertainty`に「確認できていない」と書く。
+- 迷う場合: UI変更の有無はsourceと仕様を読んで判断する。既存画面のsourceを確認できなければBeforeを補作せず、Task本文や`uncertainty`に「確認できていない」と書く。
+
+## LLM Authoring Flow
+
+UI変更Taskでは、`30_plan.md`を完成させる前に次を行う。
+
+1. 計画開始時のrepository `HEAD`を40桁commit SHAへ解決し、baselineとして保持する。
+2. 仕様、変更対象、routeを確認し、対象componentを読む。直接importされ、変更対象の構造や表示labelを持つcomponentと局所styleも必要な範囲だけ読む。
+3. JSX / TSX / templateを意味として読み、表示label、group、並び、action、input、明示stateを抽出する。pixel、余白、色、runtime dataは推測しない。
+4. 変更対象周辺だけを5 layout / 5 primitiveへ簡略化し、Beforeを作る。実装sourceで確認できたlabelは`observedLabels`へ記録する。
+5. 仕様とTaskの実装手順からAfterを作り、追加・変更・削除をstable IDで対応付ける。
+6. role、feature flag、responsive、実データなど確定できない点を`uncertainty`へ分離する。
+7. Task本文へ`UI変更: yes`と`ui-preview-json`を1ブロック書く。behavior-only Taskは`UI変更: no`とし、blockを作らない。
+8. Roadmapを通常生成し、snapshotの該当previewが`resolved`または理由付き`unverified`であることを確認する。
 
 ## Authoring Source
 
 Before、After、uncertaintyを必ず分ける。
 
-- Before: `--base-ref`で解決したcommit SHA上の実装sourceを根拠にする。label、並び、存在するstate、role visibilityだけを確認する。
+- Before: 計画内に記録した40桁commit SHA上の実装sourceを根拠にする。通常生成ではgeneratorがこのSHAを自動利用する。label、並び、存在するstate、role visibilityだけを確認する。
 - After: `30_plan.md`の目的、変更対象、実装手順、仕様に明示された未実装案だけを根拠にする。
 - uncertainty: role別表示、feature flag、responsive差分、権限差分など、sourceまたは計画から確定できない事項を入れる。
 
@@ -49,7 +62,7 @@ previewで使えるkey:
 
 `provenance.after.source` は、Afterの根拠になったplan内の見出し、checkbox、または仕様参照である。Afterは未実装案なので、実装済みsourceとして扱わない。
 
-`baseRef`はauthoring意図であり、generator実行時のCLI `--base-ref`と一致しなければならない。不一致、CLI未指定、ref解決不能、anchor drift、Roadmap Task Hub経由の生成では、Beforeは補作せず`unverified`と理由を返す。
+`baseRef`は40桁の固定commit SHAとする。generatorはplan内に単一のSHAがある場合、CLI指定なしで自動利用する。CLI `--base-ref`を指定した場合はCLIを優先し、plan宣言refと一致しなければならない。複数SHA、mutable ref、ref解決不能、anchor drift、Roadmap Task Hub経由では、Beforeは補作せず`unverified`と理由を返す。
 
 ## Items
 
@@ -78,37 +91,37 @@ unknown keyとunknown kindはinvalidにする。値は表示前にescapeされ�
 `topnav`:
 
 ```ui-preview-json
-{"version":1,"taskNumber":"1","previews":[{"id":"app-shell-nav","title":"App shell navigation","layout":"topnav","provenance":{"before":{"source":"repo:app/layout.tsx#L10-L16","baseRef":"main","observedLabels":["Home"]},"after":{"source":"Task 1 実装"}},"before":{"items":[{"id":"nav-home","label":"Home","kind":"item","change":"same"}]},"after":{"items":[{"id":"nav-home","label":"Home","kind":"item","change":"same"},{"id":"nav-reports","label":"Reports","kind":"item","change":"added"}]},"uncertainty":[]}]}
+{"version":1,"taskNumber":"1","previews":[{"id":"app-shell-nav","title":"App shell navigation","layout":"topnav","provenance":{"before":{"source":"repo:app/layout.tsx#L10-L16","baseRef":"0123456789abcdef0123456789abcdef01234567","observedLabels":["Home"]},"after":{"source":"Task 1 実装"}},"before":{"items":[{"id":"nav-home","label":"Home","kind":"item","change":"same"}]},"after":{"items":[{"id":"nav-home","label":"Home","kind":"item","change":"same"},{"id":"nav-reports","label":"Reports","kind":"item","change":"added"}]},"uncertainty":[]}]}
 ```
 
 `sidebar`:
 
 ```ui-preview-json
-{"version":1,"taskNumber":"2","previews":[{"id":"project-sidebar","title":"Project sidebar","layout":"sidebar","provenance":{"before":{"source":"repo:src/sidebar.tsx#Overview","baseRef":"main","observedLabels":["Overview"]},"after":{"source":"Task 2 実装"}},"before":{"items":[{"id":"side-overview","label":"Overview","kind":"item","change":"same","state":"selected"}]},"after":{"items":[{"id":"side-overview","label":"Overview","kind":"item","change":"same"},{"id":"side-review","label":"Review","kind":"item","change":"added"}]},"uncertainty":["権限がないroleでReviewを隠すかは未決"]}]}
+{"version":1,"taskNumber":"2","previews":[{"id":"project-sidebar","title":"Project sidebar","layout":"sidebar","provenance":{"before":{"source":"repo:src/sidebar.tsx#Overview","baseRef":"0123456789abcdef0123456789abcdef01234567","observedLabels":["Overview"]},"after":{"source":"Task 2 実装"}},"before":{"items":[{"id":"side-overview","label":"Overview","kind":"item","change":"same","state":"selected"}]},"after":{"items":[{"id":"side-overview","label":"Overview","kind":"item","change":"same"},{"id":"side-review","label":"Review","kind":"item","change":"added"}]},"uncertainty":["権限がないroleでReviewを隠すかは未決"]}]}
 ```
 
 `settings`:
 
 ```ui-preview-json
-{"version":1,"taskNumber":"3","previews":[{"id":"notification-settings","title":"通知設定","layout":"settings","provenance":{"before":{"source":"repo:app/settings/page.tsx#email","baseRef":"main","observedLabels":["Email alerts"]},"after":{"source":"Task 3 実装"}},"before":{"items":[{"id":"email-toggle","label":"Email alerts","kind":"input","change":"same","state":"checked"}]},"after":{"items":[{"id":"email-toggle","label":"Email alerts","kind":"input","change":"same","state":"checked"},{"id":"weekly-digest","label":"Weekly digest","kind":"input","change":"added","state":"unchecked"}]},"uncertainty":[]}]}
+{"version":1,"taskNumber":"3","previews":[{"id":"notification-settings","title":"通知設定","layout":"settings","provenance":{"before":{"source":"repo:app/settings/page.tsx#email","baseRef":"0123456789abcdef0123456789abcdef01234567","observedLabels":["Email alerts"]},"after":{"source":"Task 3 実装"}},"before":{"items":[{"id":"email-toggle","label":"Email alerts","kind":"input","change":"same","state":"checked"}]},"after":{"items":[{"id":"email-toggle","label":"Email alerts","kind":"input","change":"same","state":"checked"},{"id":"weekly-digest","label":"Weekly digest","kind":"input","change":"added","state":"unchecked"}]},"uncertainty":[]}]}
 ```
 
 `list`:
 
 ```ui-preview-json
-{"version":1,"taskNumber":"4","previews":[{"id":"invoice-list","title":"Invoices list","layout":"list","provenance":{"before":{"source":"repo:src/invoices/List.tsx#statusHeader","baseRef":"main","observedLabels":["Status"]},"after":{"source":"Task 4 実装"}},"before":{"items":[{"id":"status-label","label":"Status","kind":"label","change":"same"}]},"after":{"items":[{"id":"status-label","label":"Status","kind":"label","change":"same"},{"id":"owner-label","label":"Owner","kind":"label","change":"added"}]},"uncertainty":[]}]}
+{"version":1,"taskNumber":"4","previews":[{"id":"invoice-list","title":"Invoices list","layout":"list","provenance":{"before":{"source":"repo:src/invoices/List.tsx#statusHeader","baseRef":"0123456789abcdef0123456789abcdef01234567","observedLabels":["Status"]},"after":{"source":"Task 4 実装"}},"before":{"items":[{"id":"status-label","label":"Status","kind":"label","change":"same"}]},"after":{"items":[{"id":"status-label","label":"Status","kind":"label","change":"same"},{"id":"owner-label","label":"Owner","kind":"label","change":"added"}]},"uncertainty":[]}]}
 ```
 
 `form`:
 
 ```ui-preview-json
-{"version":1,"taskNumber":"5","previews":[{"id":"profile-form","title":"Profile form","layout":"form","provenance":{"before":{"source":"repo:src/profile/Form.tsx#name","baseRef":"main","observedLabels":["Name"]},"after":{"source":"Task 5 実装"}},"before":{"items":[{"id":"name-input","label":"Name","kind":"input","change":"same"}]},"after":{"items":[{"id":"name-input","label":"Name","kind":"input","change":"same"},{"id":"team-input","label":"Team","kind":"input","change":"added"}]},"uncertainty":["Teamの候補値sourceは別Taskで決める"]}]}
+{"version":1,"taskNumber":"5","previews":[{"id":"profile-form","title":"Profile form","layout":"form","provenance":{"before":{"source":"repo:src/profile/Form.tsx#name","baseRef":"0123456789abcdef0123456789abcdef01234567","observedLabels":["Name"]},"after":{"source":"Task 5 実装"}},"before":{"items":[{"id":"name-input","label":"Name","kind":"input","change":"same"}]},"after":{"items":[{"id":"name-input","label":"Name","kind":"input","change":"same"},{"id":"team-input","label":"Team","kind":"input","change":"added"}]},"uncertainty":["Teamの候補値sourceは別Taskで決める"]}]}
 ```
 
 新規画面:
 
 ```ui-preview-json
-{"version":1,"taskNumber":"6","previews":[{"id":"audit-log-page","title":"Audit log page","layout":"list","provenance":{"before":{"baseRef":"main","observedLabels":[]},"after":{"source":"Task 6 実装"}},"before":{"items":[]},"after":{"items":[{"id":"page-title","label":"Audit log","kind":"label","change":"added"},{"id":"filter-user","label":"User filter","kind":"input","change":"added"},{"id":"export-action","label":"Export","kind":"action","change":"added"}]},"uncertainty":["表示対象event typeは仕様で未確定"]}]}
+{"version":1,"taskNumber":"6","previews":[{"id":"audit-log-page","title":"Audit log page","layout":"list","provenance":{"before":{"baseRef":"0123456789abcdef0123456789abcdef01234567","observedLabels":[]},"after":{"source":"Task 6 実装"}},"before":{"items":[]},"after":{"items":[{"id":"page-title","label":"Audit log","kind":"label","change":"added"},{"id":"filter-user","label":"User filter","kind":"input","change":"added"},{"id":"export-action","label":"Export","kind":"action","change":"added"}]},"uncertainty":["表示対象event typeは仕様で未確定"]}]}
 ```
 
 ## Omission And Limits

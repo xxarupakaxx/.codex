@@ -117,9 +117,9 @@ Currentはfreshなin-progress、なければ最初の未完了Taskから一意�
 
 Code Mapは常時toggleではない。Detail drawerのImpactから開き、閉じたら起点へfocusを戻す。`codemap.json` / `codemap.lock`は機械判定の正本であり、Roadmapの更新時刻でfreshnessを代用しない。
 
-UI変更Taskでは、Task内の `ui-preview-json` からoptionalな `uiPreviews` をsnapshot v1へ追加できる。rootは `{version, taskNumber, previews:[最大3]}`、`taskNumber` はTask見出しから抽出した数値文字列、各previewは `{id,title,layout,provenance,before,after,uncertainty}` である。これは既存snapshot versionを上げないadditive fieldであり、legacy snapshotやTask Hubの既存表示を変えない。Beforeは `provenance.before.source=repo:...`、`baseRef`、`observedLabels`、Afterは `provenance.after.source`、未確認事項は`uncertainty`として分け、sourceを確認できないBeforeをHTMLや推測で補作しない。
+UI変更Taskでは、計画を作るLLMが対象sourceを読み、`UI変更: yes`と`ui-preview-json`を同じTaskへ自動記録する。rootは `{version, taskNumber, previews:[最大3]}`、`taskNumber` はTask見出しから抽出した数値文字列、各previewは `{id,title,layout,provenance,before,after,uncertainty}` であり、generatorがoptionalな`uiPreviews`としてsnapshot v1へ加える。これは既存snapshot versionを上げないadditive fieldであり、legacy snapshotやTask Hubの既存表示を変えない。Beforeは `provenance.before.source=repo:...`、40桁commit SHAの`baseRef`、`observedLabels`、Afterは `provenance.after.source`、未確認事項は`uncertainty`として分ける。通常生成はplan内の単一SHAを自動利用し、ユーザーによるmetadata入力やCLI ref指定を要求しない。
 
-UI previewはRoadmap Change詳細の小さな比較模型であり、ページ全体captureや自由配置editorではない。`topnav`、`sidebar`、`settings`、`list`、`form`は表示presetとして扱い、itemは `{id,label,kind,change,state?}` で表す。`kind`は `label`、`item`、`group`、`action`、`input` の共通primitive、`change`は `same`、`added`、`modified`、`removed` の4値だけを許可し、色だけでなく文言、記号、badge、境界線、ARIA labelで示す。生HTML、外部URL、任意repository code実行、ASTからの見た目断定は禁止する。
+UI previewはRoadmap Change詳細の小さな比較模型であり、ページ全体captureや自由配置editorではない。`topnav`、`sidebar`、`settings`、`list`、`form`は表示presetとして扱い、itemは `{id,label,kind,change,state?}` で表す。`kind`は `label`、`item`、`group`、`action`、`input` の共通primitive、`change`は `same`、`added`、`modified`、`removed` の4値だけを許可し、色だけでなく文言、記号、badge、境界線、ARIA labelで示す。生HTML、外部URL、任意repository code実行は禁止する。LLMはJSX / TSX等のsourceを意味として読み取れるが、実行時dataやCSSからpixel-perfectな見た目を補作しない。
 
 reference HTMLから得た900px程度のeditorial canvas、小さいUI模型、新規画面のAfter-only表示は設計指針として扱う。Google Fonts、外部CSS、reference HTMLのtokenはコピーせず、Roadmap既存のdesign token、system font、CSP、self-contained契約を維持する。
 

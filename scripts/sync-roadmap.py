@@ -17,6 +17,16 @@ ELIGIBLE_ROUTES = {"explicit-roadmap", "roadmap"}
 ROUTE_PATTERN = re.compile(
     r"roadmap_route:\s*(explicit-roadmap|roadmap|log-only)(?=[：:\s`]|$)"
 )
+TASK_HEADING_PATTERN = re.compile(
+    r"(?m)^#{2,6}\s+Task\s+(\d+(?:\.\d+)*)\s*[:：]"
+)
+UI_CHANGE_MARKER_PATTERN = re.compile(
+    r"(?mi)^\s*(?:[-*]\s*)?UI変更\s*[:：]\s*(?:yes|true|あり|対象)\s*$"
+)
+UI_PREVIEW_BLOCK_PATTERN = re.compile(
+    r"```[ \t]*ui-preview-json[ \t]*\r?\n([\s\S]*?)\r?\n```",
+    re.IGNORECASE,
+)
 PHASE_STATES = {
     "2": "active",
     "3": "active",
@@ -97,6 +107,41 @@ def validate_delegation_decision(log_text: str) -> tuple[list[str] | None, list[
         field for field, choices in DELEGATION_DECISION_ENUMS.items()
         if fields.get(field) and fields[field] not in choices
     ]
+    return missing, invalid
+
+
+def validate_ui_preview_authoring(plan_text: str) -> tuple[list[str], list[str]]:
+    """Require one minimally valid preview block for each LLM-declared UI task."""
+    headings = list(TASK_HEADING_PATTERN.finditer(plan_text))
+    missing: list[str] = []
+    invalid: list[str] = []
+    for index, heading in enumerate(headings):
+        task_number = heading.group(1)
+        end = headings[index + 1].start() if index + 1 < len(headings) else len(plan_text)
+        body = plan_text[heading.end():end]
+        if not UI_CHANGE_MARKER_PATTERN.search(body):
+            continue
+        blocks = list(UI_PREVIEW_BLOCK_PATTERN.finditer(body))
+        if not blocks:
+            missing.append(task_number)
+            continue
+        if len(blocks) != 1:
+            invalid.append(task_number)
+            continue
+        try:
+            payload = json.loads(blocks[0].group(1))
+        except json.JSONDecodeError:
+            invalid.append(task_number)
+            continue
+        previews = payload.get("previews") if isinstance(payload, dict) else None
+        if (
+            not isinstance(payload, dict)
+            or payload.get("version") != 1
+            or str(payload.get("taskNumber")) != task_number
+            or not isinstance(previews, list)
+            or not previews
+        ):
+            invalid.append(task_number)
     return missing, invalid
 
 
@@ -185,6 +230,18 @@ def synchronize(
             "reason": "plan_missing",
             "path": str(plan_path),
         }
+    if phase == "2":
+        missing_ui, invalid_ui = validate_ui_preview_authoring(
+            plan_path.read_text(encoding="utf-8")
+        )
+        if missing_ui or invalid_ui:
+            return 2, {
+                "status": "failed",
+                "route": route,
+                "reason": "ui_preview_authoring_incomplete",
+                **({"missing_task_numbers": missing_ui} if missing_ui else {}),
+                **({"invalid_task_numbers": invalid_ui} if invalid_ui else {}),
+            }
     if not generator.is_file():
         return 2, {
             "status": "failed",

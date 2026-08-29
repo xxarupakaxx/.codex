@@ -18,7 +18,7 @@ task memory directoryにCodemapがある場合は、`roadmap.html`のDetail draw
 
 HTML route、lifecycle、static/browser gateは `context/html-artifact-contract.md` と `config/html-surfaces.json` を正本にする。`roadmap.html`は配布前にstatic gateと該当browser profileを通す対象であり、invalid renderで既存成果物を上書きしない。
 
-UI変更TaskでRoadmapのChange詳細にBefore / Afterを出す場合は、`references/ui-change-preview.md` を読む。UI previewは任意の補助情報であり、実コードのBefore、計画上のAfter、未確認事項を分離して記録する。UI変更ではないTask、behavior-only変更、source未確認のTaskでは、見た目を補作せずpreviewなしまたは`unverified`として扱う。
+UI変更Taskでは必ず`references/ui-change-preview.md`を読み、計画を作るLLM自身が対象のReact / Next.js等のsourceを確認して、Change詳細用のBefore / Afterを`30_plan.md`へ自動記録する。ユーザーへmetadata入力やfile importを求めない。UI previewは実コードのBefore、計画上のAfter、未確認事項を分離する。UI変更ではないTaskとbehavior-only変更ではpreviewを作らず、既存画面のsourceを確認できない場合はBeforeを補作せず`unverified`として扱う。
 
 ## Roadmap適格性ゲート
 
@@ -94,16 +94,19 @@ Plan / Log / VerificationのMCP toolが利用できない場合は個別Viewer�
 3. コード変更taskでは `scripts/generate-codemap.py check --root <workspace-root> --artifact-dir ${MEMORY_DIR}/memory/<task>` を実行し、Detail drawerのImpactで使う`codemap.json`からcaller / impact / guarding test / evidenceを確認
 4. 必要に応じて Read ツールで個別Markdownコンテンツを取得
 
-### 1.5 UI変更Preview（条件付き）
+### 1.5 UI変更Preview（LLM自動authoring）
 
-UI変更TaskでBefore / Afterの小さな模型を出す場合だけ、Task内に `ui-preview-json` を1ブロック置く。rootは `{version, taskNumber, previews:[最大3]}`、`taskNumber` はTask見出しから抽出した数値文字列、各previewは `{id, title, layout, provenance, before, after, uncertainty}` とし、authoring、schema、省略規則、5 layout presetと5 common primitiveの例は `references/ui-change-preview.md` を正本にする。
+各Taskの計画時に、画面上の配置・部品・表示状態が変わるかをLLMが判断する。該当Taskには`UI変更: yes`を記録し、同じTask内へ`ui-preview-json`を必ず1ブロック生成する。rootは `{version, taskNumber, previews:[最大3]}`、`taskNumber` はTask見出しから抽出した数値文字列、各previewは `{id, title, layout, provenance, before, after, uncertainty}` とし、authoring、schema、省略規則、5 layout presetと5 common primitiveの例は `references/ui-change-preview.md` を正本にする。
 
-- Beforeはbase refの実装sourceから確認した事実だけを使う。React / Next.jsなど任意repository codeをbuild・実行して描画せず、ASTから見た目を断定しない。
+- 計画を作るLLMが、計画開始時の`HEAD`を40桁commit SHAへ固定し、対象route / componentと直接関係するimport先・表示label・並び・stateを読む。機械的なAST変換やrepository codeのbuild・実行は行わない。
+- Beforeは固定SHAの実装sourceから確認した事実を、実画面のpixel再現ではない簡略模型へ編集する。source path、anchor、観察したlabelをprovenanceへ残す。
 - Afterは仕様・計画に書かれた未実装案だけを使い、未決事項は `uncertainty` へ分ける。
 - `topnav` / `sidebar` / `settings` / `list` / `form` の5 layoutは表示presetとして使い、item kindは `label` / `item` / `group` / `action` / `input` の5 common primitiveに限定する。
 - 同じ要素はBefore / Afterで同じstable item IDを使い、差分はitemの `change` に `same` / `added` / `modified` / `removed` の4値だけで書く。生HTML、外部URL、未知kind、上限超過は入力しない。
-- base ref未指定、plan宣言refとCLI refの不一致、Roadmap Task Hub経由の生成では、Beforeを推測せず`unverified`にする。
+- `provenance.before.baseRef`にはbranch名ではなく40桁commit SHAを書く。通常生成は計画内の単一SHAを自動利用し、CLI `--base-ref`は再現・override用途だけにする。複数SHA、ref不一致、Roadmap Task Hub経由ではBeforeを推測せず`unverified`にする。
 - 新規画面は空のBeforeカードを作らず、After-only wireframeと「新規画面」labelで表す。
+- UI変更を含まないTaskには`UI変更: no`を明示できる。copy・API・job・内部stateだけのbehavior-only変更はpreview対象外とする。
+- `UI変更: yes`なのにblockがない、複数ある、JSONまたはTask番号が不正な計画はPhase 2同期を通さない。
 
 ### 2. Roadmap Viewer生成
 
@@ -191,7 +194,7 @@ Phase 5では同じ入力形式で`mcp__workflow-html-app__view-log`へ`05_log.m
 - blocked、stale、missing、completedは色だけでなく、文言、記号、線種、状態labelでも区別する
 - `30_plan.md` の各Taskは `目的`、`変更対象`、`実装`、`成果物`、`検証`を持つ。欠落時はViewerが補作せず、`未記録`と表示する
 - 任意の `実装図` に `diagram-json` を記録すると、planに明示されたnodeとedgeだけを自己完結inline SVGで表示する
-- UI変更Taskでは、任意の `ui-preview-json` を1ブロックだけ記録すると、Change詳細でsource-backed Beforeとplan-backed Afterを比較できる。詳細なauthoring規則は `references/ui-change-preview.md` に従う
+- UI変更Taskでは、LLMが`UI変更: yes`と`ui-preview-json` 1ブロックを必ず記録し、Change詳細でsource-backed Beforeとplan-backed Afterを自動表示する。ユーザーによるmetadata入力は不要。詳細なauthoring規則は `references/ui-change-preview.md` に従う
 - 任意の `実装根拠` に `repo:<relative-path>#<anchor-or-Lx-Ly>` を1件記録すると、generatorが生成時点の実sourceを最大12行だけ取得する。bare pathや `変更対象` からsource参照を推測しない
 - source previewはcode/automation prefix allowlist内だけを対象とし、個人ノート領域、hidden state、secret file/content、`automation_read: false`、symlink、binary、非UTF-8、1MiB超のfileを拒否する
 - source previewの色付けは自己完結lexerで行い、tokenごとにescapeしてからclassを付ける。未対応言語は色なしのescape済み本文へ戻し、コードを欠落させない
