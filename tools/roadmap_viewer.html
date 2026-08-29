@@ -218,7 +218,6 @@
     .preview-mode:active,
     .brief-source-link:active,
     .brief-artifact-card:active { transform: scale(.985); }
-    .file-input { display: none; }
     .icon { width: 18px; height: 18px; flex: 0 0 auto; object-fit: contain; }
     .viewer-layout {
       width: min(100%, 1540px);
@@ -1322,20 +1321,6 @@
     .task-count span { color: var(--muted); font-size: 12px; }
     .count-track { height: 5px; margin-top: 6px; overflow: hidden; border-radius: 999px; background: var(--line); }
     .count-fill { width: 0; height: 100%; background: var(--accent); }
-    .artifact-jump {
-      display: inline-flex;
-      margin-top: 5px;
-      min-height: 44px;
-      padding: 8px 0;
-      border: 0;
-      background: transparent;
-      color: var(--accent);
-      cursor: pointer;
-      font-size: 12px;
-      font-weight: 720;
-      text-decoration: underline;
-      text-underline-offset: 2px;
-    }
     .wayfinder {
       margin-bottom: 12px;
       padding: 0;
@@ -2341,7 +2326,7 @@
     }
     .utility-support-grid {
       display: grid;
-      grid-template-columns: minmax(230px, .8fr) minmax(260px, 1fr) minmax(300px, 1.25fr);
+      grid-template-columns: minmax(230px, .8fr) minmax(300px, 1.25fr);
       gap: 12px;
     }
     .utility-card { min-width: 0; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius); background: var(--surface-soft); }
@@ -2399,25 +2384,8 @@
       text-overflow: ellipsis;
       white-space: nowrap;
     }
-    .drop-zone {
-      min-height: 86px;
-      padding: 14px;
-      display: grid;
-      place-items: center;
-      border: 1px dashed var(--line-strong);
-      border-radius: var(--radius);
-      background: var(--surface);
-      color: var(--muted);
-      text-align: center;
-      cursor: pointer;
-    }
-    .drop-zone.dragover { border-color: var(--accent); background: var(--surface-accent); color: var(--ink); }
-    .utility-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; margin-top: 8px; }
-    .utility-stat { padding: 7px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface); text-align: center; }
-    .utility-stat strong { display: block; font-size: 17px; }
-    .utility-stat span { color: var(--muted); font-size: 12px; }
     .risk-list, .source-list, .log-list { display: grid; gap: 6px; }
-    .risk-item, .source-button, .artifact-record, .log-item {
+    .risk-item, .source-button, .log-item {
       padding: 7px 8px;
       border: 1px solid var(--line);
       border-radius: 6px;
@@ -2429,7 +2397,7 @@
     @media (hover: hover) and (pointer: fine) {
       .source-button:hover { border-color: var(--accent); }
     }
-    .source-button strong, .artifact-record strong { display: block; color: var(--ink); }
+    .source-button strong { display: block; color: var(--ink); }
     .preview-modes { display: inline-flex; padding: 2px; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); }
     .preview-mode {
       min-height: 44px;
@@ -2549,7 +2517,6 @@
       .outcome-trace { order: 4; }
       .revision-panel { order: 5; }
       .utility-disclosure { order: 6; }
-      .artifact-jump { display: inline-flex; }
       .now-strip { grid-template-columns: 64px repeat(6, minmax(118px, 1fr)); overflow: hidden; }
       .now-cell { padding: 1px 10px; }
       .workspace { grid-template-columns: minmax(0, 1fr) 310px; }
@@ -2585,9 +2552,7 @@
       .history-button { margin-top: 0; }
       .artifact-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
       .utility-support-grid { grid-template-columns: 1fr 1fr; }
-      .utility-support-grid > :last-child { grid-column: 1 / -1; }
       .document-workspace { grid-template-columns: minmax(210px, 250px) minmax(0, 1fr); }
-      .utility-card:last-child { grid-column: 1 / -1; }
     }
     @media (max-width: 720px) {
       :root { --header-height: 104px; }
@@ -2596,7 +2561,6 @@
       .brand-copy p { max-width: calc(100vw - 80px); }
       .toolbar { width: 100%; justify-content: flex-start; overflow: hidden; }
       .toolbar .btn-label { display: none !important; }
-      #export-json .btn-label { display: inline; }
       .toolbar .btn { min-width: 44px; min-height: 44px; }
       .live-badge { min-height: 38px; }
       .shell { padding: 12px; }
@@ -2718,12 +2682,10 @@
       .artifact-card { min-height: 78px; }
       .utility-links { display: none; }
       .utility-support-grid { grid-template-columns: 1fr; }
-      .utility-support-grid > :last-child { grid-column: auto; }
       .document-workspace { grid-template-columns: 1fr; }
       .document-sidebar { border-right: 0; border-bottom: 1px solid var(--line); }
       .document-reader-header { padding: 10px 16px; }
       .source-preview { min-height: 0; padding: 28px 20px 44px; font-size: 16px; }
-      .utility-card:last-child { grid-column: auto; }
     }
     @media (prefers-reduced-motion: reduce) {
       :root {
@@ -2848,8 +2810,6 @@
     body:not(.task-hub-active) .app-sidebar,
     body:not(.task-hub-active) .nav-scrim,
     body:not(.task-hub-active) #open-viewer-nav,
-    body:not(.task-hub-active) #open-files,
-    body:not(.task-hub-active) #export-json,
     body:not(.task-hub-active) #open-utility,
     body:not(.task-hub-active) .inspector-actions,
     body:not(.task-hub-active) .outcome-trace,
@@ -3024,19 +2984,12 @@
           <span id="live-status-text">Static</span>
         </span>
         <span class="last-updated" id="header-updated">最終更新: —</span>
-        <button class="btn primary" type="button" id="open-files" aria-label="Roadmapファイルを開く" title="Roadmapファイルを開く">
-          <img class="icon" data-icon="folder" alt=""><span class="btn-label">ファイルを開く</span>
-        </button>
-        <button class="btn" type="button" id="export-json" aria-label="Roadmap JSONを書き出す" title="Roadmap JSONを書き出す">
-          <img class="icon" data-icon="download" alt=""><span class="btn-label">JSON</span>
-        </button>
         <button class="btn icon-only" type="button" id="theme-toggle" aria-label="ダークテーマに切り替える" aria-pressed="false" title="ダークテーマに切り替える">
           <img class="icon" data-icon="palette" alt="">
         </button>
         <button class="btn icon-only" type="button" id="open-utility" aria-label="診断と詳細を開く" aria-controls="utility-disclosure" aria-expanded="false" title="診断と詳細を開く">
           <img class="icon" data-icon="dots" alt="">
         </button>
-        <input class="file-input" id="file-input" type="file" multiple accept=".md,.markdown,.txt,.json" aria-label="Roadmapファイルを選択">
       </div>
     </div>
   </header>
@@ -3082,9 +3035,6 @@
         </button>
         <button class="viewer-nav-button" type="button" data-nav-artifact="80_review.md">
           <img class="icon" data-icon="file" alt=""><span>レポート</span><span class="nav-meta" id="nav-reports-meta">未</span>
-        </button>
-        <button class="viewer-nav-button" type="button" data-nav-utility="viewer-settings">
-          <img class="icon" data-icon="dots" alt=""><span>設定</span>
         </button>
       </nav>
       <div class="sidebar-status" id="sidebar-status">
@@ -3410,13 +3360,12 @@
           <span class="section-meta" id="artifact-meta">0件</span>
         </div>
         <div class="artifact-grid" id="artifact-grid"></div>
-        <div style="padding:0 16px 12px"><button class="artifact-jump" id="artifact-jump" type="button">全成果物を見る</button></div>
       </section>
 
     <details class="utility-disclosure" id="utility-disclosure">
       <summary>
         <h2 class="utility-title">詳細（Task・ログ・診断）</h2>
-        <span class="utility-links">Task一覧　/　手動ファイル読込　/　Markdownプレビュー　/　Review　/　リスク・不明点</span>
+        <span class="utility-links">Task一覧　/　Workflow documents　/　Review　/　リスク・不明点</span>
         <img class="icon summary-chevron" data-icon="chevron" alt="">
       </summary>
       <div class="utility-content">
@@ -3428,11 +3377,6 @@
               <strong>次の3ステップ:</strong><span class="next-step-sequence" id="next-step-sequence">計画を読み込む</span>
             </div>
           </section>
-          <section class="utility-card" id="viewer-settings" tabindex="-1">
-            <h3>表示と読込</h3>
-            <div class="drop-zone" id="drop-zone" tabindex="0" role="button" aria-label="Roadmapファイルを読み込む"><span>Markdownまたはroadmap JSONをドロップ</span></div>
-            <div class="utility-stats" id="review-stats"></div>
-          </section>
           <section class="utility-card"><h3>リスク・直近ログ</h3><div class="risk-list" id="risk-list"></div><div class="log-list" id="log-list" tabindex="-1"></div></section>
         </div>
         <section class="document-workspace" aria-label="Markdownワークスペース">
@@ -3440,10 +3384,6 @@
             <div class="document-sidebar-section">
               <h3>Workflow documents</h3>
               <div class="source-list" id="source-list"></div>
-            </div>
-            <div class="document-sidebar-section">
-              <h3>All artifacts</h3>
-              <div class="source-list" id="all-artifact-list" tabindex="-1"></div>
             </div>
           </aside>
           <article class="document-reader" aria-label="選択したMarkdown">
@@ -6397,7 +6337,6 @@
       byId('wayfinder-task-progress').textContent = `${progress.done} / ${progress.total} 完了`;
       const firstIssue = model.outcomes.find(outcome => outcome.state !== 'matched');
       byId('decision-evidence').dataset.artifact = firstIssue?.suggestedFile || 'team-journal.md';
-      byId('artifact-jump').textContent = `全${model.artifacts.length}件を見る`;
       byId('plan-meta').textContent = active
         ? `現在: ${active.title} / Task ${progress.done}/${progress.total}`
         : model.waiting.state === 'complete'
@@ -6575,9 +6514,6 @@
       byId('sidebar-status').innerHTML = `<strong>主要成果物 ${ready}/4</strong>${model.freshness.label}・Outcome ${model.traceSummary.matched}/${model.traceSummary.total} 接続`;
     }
     function renderUtility(model) {
-      const review = model.reviews;
-      byId('review-stats').innerHTML = [['Critical', review.critical], ['Important', review.important], ['Minor', review.minor]]
-        .map(([label, count]) => `<div class="utility-stat"><strong>${count}</strong><span>${label}</span></div>`).join('');
       byId('risk-list').innerHTML = model.risks.length
         ? model.risks.slice(0, 4).map(risk => `<div class="risk-item"><strong>${escapeHtml(risk.title)}</strong>${risk.mitigation ? `<div>${escapeHtml(risk.mitigation)}</div>` : ''}</div>`).join('')
         : '<div class="empty">openなリスクは抽出されていません。</div>';
@@ -6598,9 +6534,6 @@
         : '<div class="empty">ソースなし</div>';
       const previewText = selectedSource ? model.snapshot.files[selectedSource] : 'ソースを選択してください。';
       if (previewSourceText !== previewText) renderSourcePreview(previewText, selectedSource);
-      byId('all-artifact-list').innerHTML = model.artifacts.length
-        ? model.artifacts.map(artifact => `<div class="artifact-record"><strong>${escapeHtml(artifact.path)}</strong>${escapeHtml(artifactStateFor(artifact, model))}・${Number(artifact.size).toLocaleString()} bytes・更新 ${escapeHtml(formatRelative(artifact.modifiedAt))}</div>`).join('')
-        : '<div class="empty">成果物metadataなし</div>';
     }
     function announceMeaningfulChange(previous, next) {
       const messages = [];
@@ -6869,46 +6802,6 @@
         announceMeaningfulChange(previous, next);
       }
     }
-    async function loadFiles(fileList) {
-      const files = {};
-      if (!Array.from(fileList || []).length) return;
-      stopLivePolling();
-      setLiveStatus('static', 'Static');
-      for (const file of Array.from(fileList || [])) {
-        const text = await file.text();
-        if (file.name.toLowerCase().endsWith('.json')) {
-          try {
-            const parsed = JSON.parse(text);
-            render(parsed);
-            showToast(`${file.name}を読み込みました`);
-            return;
-          } catch {
-            showToast(`${file.name}は有効なJSONではありません`);
-            continue;
-          }
-        }
-        files[file.name] = text;
-      }
-      if (!Object.keys(files).length) return;
-      render({
-        version: 1,
-        title: ROADMAP_MODEL.inferTitle(files) || 'Manual Roadmap',
-        generatedAt: new Date().toISOString(),
-        files,
-        sources: Object.keys(files).map(name => ({ name, size: files[name].length }))
-      });
-      showToast(`${Object.keys(files).length}ファイルを読み込みました`);
-    }
-    function exportJson() {
-      const blob = new Blob([JSON.stringify(currentSnapshot, null, 2)], { type: 'application/json' });
-      const url = URL.createObjectURL(blob);
-      const link = document.createElement('a');
-      link.href = url;
-      link.download = 'roadmap-snapshot.json';
-      link.click();
-      URL.revokeObjectURL(url);
-      showToast('roadmap JSONを書き出しました');
-    }
     function showToast(message) {
       const toast = byId('toast');
       toast.textContent = message;
@@ -6944,7 +6837,6 @@
       liveTimer = window.setInterval(() => pollSnapshot(generation), 2000);
     }
     function setupInteractions() {
-      const fileInput = byId('file-input');
       byId('copy-codemap-path').addEventListener('click', async event => {
         const path = event.currentTarget.dataset.path || '';
         if (!path) return;
@@ -7082,13 +6974,6 @@
         if (viewerNavScrollFrame !== null) return;
         viewerNavScrollFrame = requestAnimationFrame(updateViewerNavFromScroll);
       }, { passive: true });
-      byId('open-files').addEventListener('click', () => fileInput.click());
-      fileInput.addEventListener('change', async () => {
-        try { await loadFiles(fileInput.files); }
-        catch { showToast('ファイルを読み込めませんでした'); }
-        finally { fileInput.value = ''; }
-      });
-      byId('export-json').addEventListener('click', exportJson);
       byId('theme-toggle').addEventListener('click', () => {
         const next = document.body.dataset.theme === 'dark' ? '' : 'dark';
         document.body.dataset.theme = next;
@@ -7104,7 +6989,6 @@
       });
       byId('open-utility').addEventListener('click', () => openUtility());
       byId('show-history').addEventListener('click', () => openUtility('log-list'));
-      byId('artifact-jump').addEventListener('click', () => openUtility('all-artifact-list'));
       byId('utility-disclosure').addEventListener('toggle', event => {
         const open = event.currentTarget.open;
         ['open-utility', 'show-history'].forEach(id => byId(id).setAttribute('aria-expanded', String(open)));
@@ -7113,17 +6997,6 @@
         if (!event.currentTarget.open || !currentModel) return;
         renderGraph(currentModel);
         requestAnimationFrame(() => renderGraph(currentModel));
-      });
-      const dropZone = byId('drop-zone');
-      ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(name => {
-        dropZone.addEventListener(name, event => { event.preventDefault(); event.stopPropagation(); });
-      });
-      ['dragenter', 'dragover'].forEach(name => dropZone.addEventListener(name, () => dropZone.classList.add('dragover')));
-      ['dragleave', 'drop'].forEach(name => dropZone.addEventListener(name, () => dropZone.classList.remove('dragover')));
-      dropZone.addEventListener('drop', event => loadFiles(event.dataTransfer.files).catch(() => showToast('ファイルを読み込めませんでした')));
-      dropZone.addEventListener('click', () => fileInput.click());
-      dropZone.addEventListener('keydown', event => {
-        if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); fileInput.click(); }
       });
       document.addEventListener('click', event => {
         const detailOpen = event.target.closest('[data-detail-open]');

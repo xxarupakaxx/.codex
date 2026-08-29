@@ -1982,7 +1982,11 @@ test('the tree-first roadmap information architecture remains in the HTML', () =
   assert.doesNotMatch(html, /\*, \*::before, \*::after\s*\{[^}]*transition:\s*none/);
   assert.match(html, /missing-implementation/);
   assert.match(html, /\.graph-edge-label\s*\{/);
-  assert.match(html, /body:not\(\.task-hub-active\) #open-files,[\s\S]*#export-json,[\s\S]*#open-utility,[\s\S]*\.inspector-actions/);
+  assert.match(html, /body:not\(\.task-hub-active\) #open-utility,[\s\S]*\.inspector-actions/);
+  assert.doesNotMatch(html, /id=["'](?:open-files|export-json|file-input|drop-zone|viewer-settings|review-stats|all-artifact-list|artifact-jump)["']/);
+  assert.doesNotMatch(html, /function (?:loadFiles|exportJson)\(|手動ファイル読込|表示と読込|成果物metadataなし/);
+  assert.match(html, /id=["']source-list["']/);
+  assert.match(html, /id=["']source-preview["']/);
   assert.doesNotMatch(html, /body:not\(\.task-hub-active\) \.utility-disclosure\s*\{[^}]*display:\s*none !important/);
   assert.match(html, /body:not\(\.task-hub-active\) \.outcome-trace,[\s\S]*\.revision-panel,[\s\S]*\.implementation-strip,[\s\S]*\.evidence-shortcuts/);
   assert.match(html, /function stopLivePolling\(/);
@@ -2003,12 +2007,11 @@ test('decision beacon navigation exposes first-class artifacts and an accessible
     'nav-artifacts-meta',
     'nav-outcomes-meta',
     'nav-verification-meta',
-    'nav-reports-meta',
-    'viewer-settings'
+    'nav-reports-meta'
   ]) {
     assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
   }
-  for (const label of ['ダッシュボード', 'ロードマップ', '成果物', 'アウトカム', '検証', 'レポート', '設定']) {
+  for (const label of ['ダッシュボード', 'ロードマップ', '成果物', 'アウトカム', '検証', 'レポート']) {
     assert.match(html, new RegExp(`<span>${label}</span>`));
   }
   assert.match(html, /data-nav-target="implementation-strip"/);
