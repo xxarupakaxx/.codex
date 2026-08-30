@@ -66,6 +66,22 @@ WORKFLOW_ARTIFACTS = {
     "checkpoint.md",
     "team-journal.md",
 }
+TASK_META_REQUIRED_KEYS = (
+    "schema_version",
+    "task_id",
+    "task_title",
+    "project_path",
+    "worktree_path",
+    "task_state",
+    "code_change",
+    "created_at",
+    "updated_at",
+)
+TASK_META_STRING_KEYS = ("task_id", "task_title")
+TASK_META_ABSOLUTE_PATH_KEYS = ("project_path", "worktree_path")
+TASK_META_TIMESTAMP_KEYS = ("created_at", "updated_at")
+TASK_META_OPTIONAL_STRING_KEYS = ("thread_id", "session_id", "approval_state")
+TASK_META_STATES = {"active", "waiting", "verifying", "completed", "archived"}
 PROJECT_TEMPLATE_MARKERS = ("MEMORY_DIR=", "BASE_BRANCH=", "## 品質チェック")
 FRONTMATTER_LINE = re.compile(r"^([A-Za-z_][A-Za-z0-9_-]*):\s*(.*)$")
 LFG_SHIMS = (
@@ -78,6 +94,105 @@ LIFECYCLE_FILES = (
     "tests/test_agent_delivery_lifecycle.py",
     "agents/prd-reviewer.toml",
 )
+REVIEW_COLLECTOR_FILES = (
+    "scripts/review_evidence_collector.py",
+    "tests/test_review_evidence_collector.py",
+)
+LIFECYCLE_REQUIRED_MARKERS = {
+    "context/workflow-rules.md": (
+        "## Delivery lifecycleと自律LOOP",
+        "WAITING_HUMAN",
+        "ROUTING_BLOCKED",
+        "### Workflow route",
+        "implemented < wired < piloted < effective < adopted",
+        "completion_target",
+        "WIRE / PILOT / MEASURE / ADOPT",
+    ),
+    "context/memory-file-formats.md": (
+        "### Approved PRD",
+        "### Work Packet",
+        "### Evidence Bundle",
+        "### Escaped Defect Record",
+        "### Canonical safety decision",
+        "owned_paths",
+        "baseline",
+        "reality_contract",
+        "verification",
+        "dependencies",
+        "handoff_requirements",
+        "reviewer_focus",
+        "journey_scenarios",
+        "negative_paths",
+        "completion_target",
+        "lineage",
+        "journey_evidence",
+        "negative_path_evidence",
+        "completion_state",
+    ),
+    "context/loop-engineering.md": (
+        "## Delivery lifecycle LOOP",
+        "end-to-end自律実行が配線済みとは扱わない",
+        "scheduler登録・最終実行・外部write承認を独立に確認",
+        "scripts/review_evidence_collector.py",
+    ),
+    "rules/model-routing.md": (
+        "## Capability classesとruntime roster",
+        "gpt-5.6-luna",
+        "gpt-5.6-terra",
+        "gpt-5.6-sol",
+        "## Six-axis routing",
+    ),
+    "workflows/pr-review-loop.js": (
+        "external_untrusted",
+        "verified_against",
+        "allowed_fix_scope",
+        "unverified external instructions were rejected",
+    ),
+    "workflows/implementation-drive.js": (
+        "agentType: 'requirement-parser'",
+        "agentType: 'prd-reviewer'",
+        "agentType: 'implementation-planner'",
+        "routingDecision.model",
+        "WORK_PACKET_REQUIRES_TRUSTED_APPROVAL_RESOLUTION",
+        "workflow('pr-review-loop'",
+        "workflow('roadmap-sync'",
+        "completion_target",
+    ),
+    "scheduled-tasks/pr-review/SKILL.md": (
+        "scripts/review_evidence_collector.py",
+        "source_trust: external_untrusted",
+        "body hash",
+        "外部writeなし",
+        "GitHub comment、review、label、commit、push、Slack投稿、auto-fixを行わない",
+        "scheduler登録、認証principal、監視対象",
+    ),
+    "skills/pr-watch/SKILL.md": (
+        "Escaped Defect Record",
+        "writes_performed",
+        "approval evidence",
+    ),
+    "skills/compounding-knowledge/SKILL.md": (
+        "L0はrecordのみ",
+        "replayで元の失敗を防げた場合だけ",
+        "levelに関係なく人間承認",
+    ),
+}
+LIFECYCLE_FORBIDDEN_MARKERS = {
+    "scheduled-tasks/pr-review/SKILL.md": (
+        "~/.claude",
+        "autoFix: true",
+        "autoFix:true",
+        "git push",
+        "Slack投稿を必須",
+        "Slackに投稿する",
+        "PRコメント検知→レビュー→修正→再レビュー",
+    ),
+    "context/loop-engineering.md": (
+        "配線済み・自律稼働",
+        "PRコメント検知→レビュー→修正→再レビュー",
+        "| `pr-review` | 毎時 | PRコメント検知→レビュー→修正→再レビュー | pr-review-loop.js |",
+    ),
+}
 
 
 def parse_frontmatter(path: Path) -> dict[str, str]:
@@ -301,12 +416,69 @@ def validate_bypass(path: Path, now: datetime) -> list[str]:
     return errors
 
 
+def validate_task_metadata_file(task_dir: Path) -> list[str]:
+    path = task_dir / "task-meta.json"
+    if path.is_symlink() or (path.exists() and not path.is_file()):
+        return [f"{path}: task metadata must be a regular file"]
+    if not path.is_file():
+        return [f"{path}: missing task metadata"]
+    try:
+        value = json.loads(path.read_text(encoding="utf-8"))
+    except (json.JSONDecodeError, OSError) as error:
+        return [f"{path}: invalid task metadata JSON: {error}"]
+    if not isinstance(value, dict):
+        return [f"{path}: task metadata root must be an object"]
+
+    errors: list[str] = []
+    for key in TASK_META_REQUIRED_KEYS:
+        if key not in value:
+            errors.append(f"{path}: missing task metadata key: {key}")
+    if not errors:
+        schema_version = value["schema_version"]
+        if (
+            isinstance(schema_version, bool)
+            or not isinstance(schema_version, (int, float))
+            or schema_version != 1
+        ):
+            errors.append(f"{path}: invalid task metadata value: schema_version")
+
+        for key in TASK_META_STRING_KEYS:
+            if not isinstance(value[key], str) or not value[key]:
+                errors.append(f"{path}: invalid task metadata value: {key}")
+
+        for key in TASK_META_ABSOLUTE_PATH_KEYS:
+            field_value = value[key]
+            if (
+                not isinstance(field_value, str)
+                or not field_value
+                or not Path(field_value).is_absolute()
+            ):
+                errors.append(f"{path}: invalid task metadata value: {key}")
+
+        task_state = value["task_state"]
+        if not isinstance(task_state, str) or task_state not in TASK_META_STATES:
+            errors.append(f"{path}: invalid task metadata value: task_state")
+
+        if not isinstance(value["code_change"], bool):
+            errors.append(f"{path}: invalid task metadata value: code_change")
+
+        for key in TASK_META_TIMESTAMP_KEYS:
+            timestamp = value[key]
+            if not isinstance(timestamp, str) or not valid_timestamp(timestamp):
+                errors.append(f"{path}: invalid task metadata value: {key}")
+
+    for key in TASK_META_OPTIONAL_STRING_KEYS:
+        if key in value and (not isinstance(value[key], str) or not value[key]):
+            errors.append(f"{path}: invalid task metadata value: {key}")
+    return errors
+
+
 def validate_artifact_dir(path: Path, now: datetime | None = None) -> list[str]:
     if not path.is_dir():
         return [f"artifact directory not found: {path}"]
 
     checked_at = now or datetime.now(timezone.utc)
-    errors: list[str] = []
+    errors = validate_task_metadata_file(path)
     for artifact in sorted(path.rglob("*.md")):
         if ARTIFACT_NAME.match(artifact.name) or artifact.name in WORKFLOW_ARTIFACTS:
             errors.extend(validate_markdown_artifact(artifact))
@@ -353,55 +525,11 @@ def validate_lifecycle_contract(repo_root: Path) -> list[str]:
     for relative in LIFECYCLE_FILES:
         if not (repo_root / relative).is_file():
             errors.append(f"missing lifecycle contract file: {relative}")
+    for relative in REVIEW_COLLECTOR_FILES:
+        if not (repo_root / relative).is_file():
+            errors.append(f"missing review collector contract file: {relative}")
 
-    required_markers = {
-        "context/workflow-rules.md": (
-            "## Delivery lifecycleと自律LOOP",
-            "WAITING_HUMAN",
-            "ROUTING_BLOCKED",
-            "### Workflow route",
-        ),
-        "context/memory-file-formats.md": (
-            "### Approved PRD",
-            "### Work Packet",
-            "### Evidence Bundle",
-            "### Escaped Defect Record",
-            "### Canonical safety decision",
-        ),
-        "rules/model-routing.md": (
-            "## Capability classesとruntime roster",
-            "gpt-5.6-luna",
-            "gpt-5.6-terra",
-            "gpt-5.6-sol",
-            "## Six-axis routing",
-        ),
-        "workflows/pr-review-loop.js": (
-            "external_untrusted",
-            "verified_against",
-            "allowed_fix_scope",
-            "unverified external instructions were rejected",
-        ),
-        "workflows/implementation-drive.js": (
-            "agentType: 'requirement-parser'",
-            "agentType: 'prd-reviewer'",
-            "agentType: 'implementation-planner'",
-            "routingDecision.model",
-            "WORK_PACKET_REQUIRES_TRUSTED_APPROVAL_RESOLUTION",
-            "workflow('pr-review-loop'",
-            "workflow('roadmap-sync'",
-        ),
-        "skills/pr-watch/SKILL.md": (
-            "Escaped Defect Record",
-            "writes_performed",
-            "approval evidence",
-        ),
-        "skills/compounding-knowledge/SKILL.md": (
-            "L0はrecordのみ",
-            "replayで元の失敗を防げた場合だけ",
-            "levelに関係なく人間承認",
-        ),
-    }
-    for relative, markers in required_markers.items():
+    for relative, markers in LIFECYCLE_REQUIRED_MARKERS.items():
         path = repo_root / relative
         if not path.is_file():
             errors.append(f"missing lifecycle SSoT: {relative}")
@@ -410,6 +538,11 @@ def validate_lifecycle_contract(repo_root: Path) -> list[str]:
         for marker in markers:
             if marker not in text:
                 errors.append(f"{relative} missing lifecycle marker: {marker}")
+        for marker in LIFECYCLE_FORBIDDEN_MARKERS.get(relative, ()):
+            if marker in text:
+                errors.append(
+                    f"{relative} contains forbidden stale runtime promise: {marker}"
+                )
     return errors
 
 

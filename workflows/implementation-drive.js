@@ -60,6 +60,136 @@ const validApprovalEvidence = (items) => Array.isArray(items)
   && items.length > 0
   && items.every((item) => typeof item === 'string'
     && /^(human-approved|user-validation):[A-Za-z0-9._/-]+#[a-f0-9]{8,64}$/.test(item))
+const nonEmptyText = (value) => typeof value === 'string' && value.trim().length > 0
+const listOfText = (value) => Array.isArray(value) && value.every(nonEmptyText)
+const requiredWorkPacketFields = [
+  'artifact_id', 'source_hash', 'objective', 'scope', 'out_of_scope', 'owned_paths',
+  'acceptance_ids', 'constraints', 'capability_class', 'safety_decision_id',
+  'side_effects_requested', 'external_write_targets', 'approval_required',
+  'approval_evidence', 'dry_run_required', 'baseline', 'reality_contract',
+  'verification', 'dependencies', 'handoff_requirements', 'reviewer_focus',
+  'journey_scenarios', 'negative_paths', 'completion_target',
+]
+const workPacketListFields = [
+  'scope', 'out_of_scope', 'owned_paths', 'acceptance_ids', 'constraints',
+  'side_effects_requested', 'external_write_targets', 'approval_evidence',
+  'baseline', 'reality_contract', 'verification', 'dependencies',
+  'handoff_requirements', 'reviewer_focus', 'journey_scenarios', 'negative_paths',
+]
+const nonEmptyContractLists = [
+  'scope', 'out_of_scope', 'owned_paths', 'acceptance_ids', 'baseline',
+  'reality_contract', 'verification', 'dependencies', 'handoff_requirements',
+  'reviewer_focus', 'journey_scenarios', 'negative_paths',
+]
+const completionTargets = new Set(['implemented', 'wired', 'piloted', 'effective', 'adopted'])
+const completionRank = new Map([
+  ['implemented', 0],
+  ['wired', 1],
+  ['piloted', 2],
+  ['effective', 3],
+  ['adopted', 4],
+])
+const completionTargetAction = new Map([
+  ['wired', 'WIRE'],
+  ['piloted', 'PILOT'],
+  ['effective', 'MEASURE'],
+  ['adopted', 'ADOPT'],
+])
+const highCompletionStates = new Set(['effective', 'adopted'])
+const normalizeRelativePath = (value) => String(value).replace(/^(\.\/)+/, '').replace(/\/+$/, '')
+const safeOwnedPath = (value) => {
+  if (!nonEmptyText(value) || value.includes('\\') || value.startsWith('/')) return false
+  const normalized = normalizeRelativePath(value)
+  if (!normalized || normalized === '.' || normalized.startsWith('../') || normalized.includes('/../')) return false
+  if (normalized.split('/').some((segment) => !segment || segment === '.' || segment === '..')) return false
+  return !/[*?[\]{}]/.test(normalized)
+}
+const escapeRegExp = (value) => value.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
+const globToRegExp = (pattern) => {
+  let regex = ''
+  const input = String(pattern)
+  for (let index = 0; index < input.length; index += 1) {
+    if (input[index] === '*' && input[index + 1] === '*') {
+      regex += '.*'
+      index += 1
+    } else if (input[index] === '*') {
+      regex += '[^/]*'
+    } else {
+      regex += escapeRegExp(input[index])
+    }
+  }
+  return new RegExp(`^${regex}$`)
+}
+const scopeCoversOwnedPath = (scopeEntry, ownedPath) => {
+  if (!nonEmptyText(scopeEntry)) return false
+  const scope = normalizeRelativePath(scopeEntry)
+  const owned = normalizeRelativePath(ownedPath)
+  if (scope === '*' || scope === '.') return true
+  if (scope.includes('*')) return globToRegExp(scope).test(owned)
+  return owned === scope || owned.startsWith(`${scope}/`)
+}
+const ownedPathsOverlap = (left, right) => {
+  const a = normalizeRelativePath(left)
+  const b = normalizeRelativePath(right)
+  return a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`)
+}
+const pathWithinOwnedPath = (ownedPath, writePath) => {
+  const owned = normalizeRelativePath(ownedPath)
+  const write = normalizeRelativePath(writePath)
+  return write === owned || write.startsWith(`${owned}/`)
+}
+const evidenceBundleFields = [
+  'artifact_id', 'source_hash', 'acceptance_evidence', 'tests', 'findings',
+  'residual_risks', 'writes_performed', 'safety_decision_id', 'policy_source',
+  'lineage', 'journey_evidence', 'negative_path_evidence', 'completion_state',
+]
+const evidenceBundleArrayFields = [
+  'acceptance_evidence', 'tests', 'findings', 'residual_risks',
+  'writes_performed', 'lineage', 'journey_evidence', 'negative_path_evidence',
+]
+const requiredEvidenceLists = [
+  'acceptance_evidence', 'tests', 'writes_performed',
+  'lineage', 'journey_evidence', 'negative_path_evidence',
+]
+const validCompletionEvidence = (evidence) => {
+  const completionEvidence = evidence?.completion_evidence
+  return completionEvidence
+    && completionEvidence.status === 'pass'
+    && completionEvidence.state === evidence.completion_state
+    && completionEvidence.source_hash === evidence.source_hash
+    && listOfText(completionEvidence.checks)
+    && completionEvidence.checks.length > 0
+}
+const validateEvidenceBundle = (packet, evidence) => {
+  const hasShape = evidence
+    && evidenceBundleFields.every((field) => Object.prototype.hasOwnProperty.call(evidence, field))
+    && ['artifact_id', 'source_hash', 'safety_decision_id', 'policy_source'].every((field) => nonEmptyText(evidence[field]))
+    && evidenceBundleArrayFields.every((field) => Array.isArray(evidence[field]))
+    && requiredEvidenceLists.every((field) => listOfText(evidence[field]) && evidence[field].length > 0)
+    && completionTargets.has(evidence.completion_state)
+  if (!hasShape) return { ok: false, reason: 'EVIDENCE_BUNDLE_INVALID' }
+  if (highCompletionStates.has(evidence.completion_state) && !validCompletionEvidence(evidence)) {
+    return { ok: false, reason: 'COMPLETION_EVIDENCE_REQUIRED' }
+  }
+  const sourceBound = evidence.source_hash === packet.source_hash
+    && evidence.safety_decision_id === packet.safety_decision_id
+    && evidence.lineage.includes(packet.artifact_id)
+    && packet.acceptance_ids.every((id) => (
+      evidence.acceptance_evidence.some((item) => item === id || item.startsWith(`${id}:`) || item.startsWith(`${id} `))
+    ))
+    && evidence.writes_performed.every((path) => (
+      safeOwnedPath(path)
+      && packet.owned_paths.some((ownedPath) => pathWithinOwnedPath(ownedPath, path))
+    ))
+  if (!sourceBound) return { ok: false, reason: 'EVIDENCE_BUNDLE_INVALID' }
+  if (completionRank.get(evidence.completion_state) < completionRank.get(packet.completion_target)) {
+    return {
+      ok: false,
+      reason: `COMPLETION_TARGET_UNMET_${completionTargetAction.get(packet.completion_target) ?? 'IMPLEMENT'}`,
+    }
+  }
+  return { ok: true }
+}
 const forceTournament = args?.useTournament ?? false
 
 // --- Phase 1: Analyze ---
@@ -155,8 +285,10 @@ const WORK_PACKET_PLAN_SCHEMA = {
         type: 'object',
         properties: {
           artifact_id: { type: 'string' }, source_hash: { type: 'string' }, objective: { type: 'string' },
-          scope: { type: 'array', items: { type: 'string' } },
-          acceptance_ids: { type: 'array', items: { type: 'string' } },
+          scope: { type: 'array', minItems: 1, items: { type: 'string' } },
+          out_of_scope: { type: 'array', minItems: 1, items: { type: 'string' } },
+          owned_paths: { type: 'array', minItems: 1, items: { type: 'string' } },
+          acceptance_ids: { type: 'array', minItems: 1, items: { type: 'string' } },
           constraints: { type: 'array', items: { type: 'string' } },
           capability_class: { type: 'string', enum: ['Fast', 'Standard', 'Heavy', 'Judgment'] },
           safety_decision_id: { type: 'string' },
@@ -165,11 +297,23 @@ const WORK_PACKET_PLAN_SCHEMA = {
           approval_required: { type: 'boolean' },
           approval_evidence: { type: 'array', items: { type: 'string' } },
           dry_run_required: { type: 'boolean' },
+          baseline: { type: 'array', minItems: 1, items: { type: 'string' } },
+          reality_contract: { type: 'array', minItems: 1, items: { type: 'string' } },
+          verification: { type: 'array', minItems: 1, items: { type: 'string' } },
+          dependencies: { type: 'array', minItems: 1, items: { type: 'string' } },
+          handoff_requirements: { type: 'array', minItems: 1, items: { type: 'string' } },
+          reviewer_focus: { type: 'array', minItems: 1, items: { type: 'string' } },
+          journey_scenarios: { type: 'array', minItems: 1, items: { type: 'string' } },
+          negative_paths: { type: 'array', minItems: 1, items: { type: 'string' } },
+          completion_target: { type: 'string', enum: ['implemented', 'wired', 'piloted', 'effective', 'adopted'] },
         },
         required: [
-          'artifact_id', 'source_hash', 'objective', 'scope', 'acceptance_ids', 'constraints',
-          'capability_class', 'safety_decision_id', 'side_effects_requested',
-          'external_write_targets', 'approval_required', 'approval_evidence', 'dry_run_required',
+          'artifact_id', 'source_hash', 'objective', 'scope', 'out_of_scope', 'owned_paths',
+          'acceptance_ids', 'constraints', 'capability_class', 'safety_decision_id',
+          'side_effects_requested', 'external_write_targets', 'approval_required',
+          'approval_evidence', 'dry_run_required', 'baseline', 'reality_contract',
+          'verification', 'dependencies', 'handoff_requirements', 'reviewer_focus',
+          'journey_scenarios', 'negative_paths', 'completion_target',
         ],
       },
     },
@@ -178,7 +322,12 @@ const WORK_PACKET_PLAN_SCHEMA = {
   required: ['packets', 'complexity_budget'],
 }
 const workPlan = await agent(`
-Approved PRDから、実装者へ渡すWork Packetを作成してください。各packetにartifact_id、source_hash、objective、scope、acceptance_ids、constraints、capability_class、safety_decision_id、side_effects_requested、external_write_targets、approval_required、approval_evidence、dry_run_requiredを含めてください。
+Approved PRDから、実装者へ渡すWork Packetを作成してください。
+
+各packetには次のfieldを必ず含めてください:
+artifact_id, source_hash, objective, scope, out_of_scope, owned_paths, acceptance_ids, constraints, capability_class, safety_decision_id, side_effects_requested, external_write_targets, approval_required, approval_evidence, dry_run_required, baseline, reality_contract, verification, dependencies, handoff_requirements, reviewer_focus, journey_scenarios, negative_paths, completion_target。
+
+scope / out_of_scope / owned_paths / acceptance_ids / baseline / reality_contract / verification / dependencies / handoff_requirements / reviewer_focus / journey_scenarios / negative_paths は非空listにしてください。依存がないpacketは dependencies: ["none"] と明示してください。dependency IDは別packetのartifact_idだけを参照し、owned_pathsはscopeのsubsetかつpacket間で重複しない安全なrepo相対pathにしてください。
 
 ## Approved PRD
 ${JSON.stringify(prdReview)}
@@ -189,35 +338,58 @@ ${JSON.stringify(routingDecision)}
   label: 'work-packet-plan', phase: 'Spec', agentType: 'implementation-planner', schema: WORK_PACKET_PLAN_SCHEMA,
 })
 
-if (!workPlan?.packets?.length) {
+if (!Array.isArray(workPlan?.packets) || !workPlan.packets.length) {
   return { success: false, reason: 'WORK_PACKET_MISSING' }
 }
 const approvalGatedEffects = new Set([
   'external_write', 'permission_change', 'billing_change', 'authentication_change',
   'destructive_action', 'runtime_policy_change', 'go_nogo_decision',
 ])
-const invalidPacket = workPlan.packets.find((packet) => {
-  const hasContractShape = packet
-    && typeof packet.artifact_id === 'string'
-    && typeof packet.source_hash === 'string'
-    && typeof packet.objective === 'string'
-    && Array.isArray(packet.scope)
-    && Array.isArray(packet.acceptance_ids)
-    && Array.isArray(packet.constraints)
-    && typeof packet.safety_decision_id === 'string'
-    && Array.isArray(packet.side_effects_requested)
-    && Array.isArray(packet.external_write_targets)
-    && typeof packet.approval_required === 'boolean'
-    && Array.isArray(packet.approval_evidence)
-    && typeof packet.dry_run_required === 'boolean'
-  if (!hasContractShape) return true
-  const requiresApproval = packet.external_write_targets.length > 0
-    || packet.side_effects_requested.some((effect) => approvalGatedEffects.has(effect))
-  return packet.capability_class !== routingDecision.capability_class
-    || (requiresApproval && (
+const artifactIds = new Set()
+let invalidPacket
+for (const packet of workPlan.packets) {
+  if (!nonEmptyText(packet?.artifact_id) || artifactIds.has(packet.artifact_id)) {
+    invalidPacket = packet
+    break
+  }
+  artifactIds.add(packet.artifact_id)
+}
+const artifactOrder = new Map(workPlan.packets.map((packet, index) => [packet.artifact_id, index]))
+const ownedPaths = []
+if (!invalidPacket) {
+  invalidPacket = workPlan.packets.find((packet, packetIndex) => {
+    const hasContractShape = packet
+      && requiredWorkPacketFields.every((field) => Object.prototype.hasOwnProperty.call(packet, field))
+      && ['artifact_id', 'source_hash', 'objective', 'safety_decision_id'].every((field) => nonEmptyText(packet[field]))
+      && workPacketListFields.every((field) => listOfText(packet[field]))
+      && typeof packet.approval_required === 'boolean'
+      && typeof packet.dry_run_required === 'boolean'
+      && completionTargets.has(packet.completion_target)
+    if (!hasContractShape) return true
+    if (nonEmptyContractLists.some((field) => packet[field].length === 0)) return true
+    if (packet.capability_class !== routingDecision.capability_class) return true
+    if (packet.side_effects_requested.some((effect) => !approvalGatedEffects.has(effect))) return true
+    if (!packet.owned_paths.every(safeOwnedPath)) return true
+    if (!packet.owned_paths.every((path) => packet.scope.some((scope) => scopeCoversOwnedPath(scope, path)))) return true
+    if (!packet.owned_paths.every((path) => prdReview.scope.some((scope) => scopeCoversOwnedPath(scope, path)))) return true
+    if (packet.owned_paths.some((path) => prdReview.out_of_scope.some((scope) => scopeCoversOwnedPath(scope, path)))) return true
+    const dependencyIds = packet.dependencies.filter((dependency) => dependency !== 'none')
+    if (packet.dependencies.includes('none') && packet.dependencies.length > 1) return true
+    if (dependencyIds.some((dependency) => (
+      dependency === packet.artifact_id
+      || !artifactIds.has(dependency)
+      || artifactOrder.get(dependency) >= packetIndex
+    ))) return true
+    if (packet.owned_paths.some((path) => ownedPaths.some((existing) => ownedPathsOverlap(existing, path)))) return true
+    ownedPaths.push(...packet.owned_paths)
+    const requiresApproval = packet.external_write_targets.length > 0
+      || packet.side_effects_requested.length > 0
+      || packet.approval_required
+    return requiresApproval && (
       packet.approval_required !== true || !validApprovalEvidence(packet.approval_evidence)
-    ))
-})
+    )
+  })
+}
 if (invalidPacket) {
   return { success: false, reason: 'WORK_PACKET_INVALID', artifact_id: invalidPacket.artifact_id }
 }
@@ -255,80 +427,89 @@ phase('Implement')
 let implResult
 
 if (analysis.useTournament) {
-  log('A/Bトーナメントモードで実装')
-  implResult = await workflow('tournament-ab', {
-    task: `${ticketKey}: ${analysis.title}`,
-    spec: JSON.stringify({ approved_prd: prdReview, work_packets: workPlan.packets }),
-  })
-  // セキュリティ下限割れ等で勝者なしなら、下流に流さず失敗扱い
-  if (implResult && implResult.winner === null) {
-    log(`トーナメント勝者なし: ${implResult.reason ?? 'no winner'}`)
-    return { success: false, reason: implResult.reason ?? 'tournament: no winner', tournament: implResult }
+  log(`A/BトーナメントモードでWork Packet単位実装: ${workPlan.packets.length}件`)
+  implResult = []
+  for (let idx = 0; idx < workPlan.packets.length; idx += 1) {
+    const packet = workPlan.packets[idx]
+    implResult.push(await workflow('tournament-ab', {
+      task: `${ticketKey}: ${analysis.title} / Work Packet ${idx + 1}: ${packet.artifact_id}`,
+      spec: JSON.stringify({ approved_prd: prdReview, work_packet: packet }),
+    }))
   }
-} else if (analysis.complexity === 'simple' || !analysis.subtasks?.length) {
-  log('シンプル実装モード')
-  implResult = await agent(`
-以下の仕様に基づいてコードを実装してください。
-
-## チケット: ${ticketKey} — ${analysis.title}
-
-## 仕様
-${JSON.stringify({ approved_prd: prdReview, work_packets: workPlan.packets })}
-
-## サブタスク
-${analysis.subtasks.map((s, i) => `${i + 1}. ${s.title}: ${s.description ?? ''}`).join('\n')}
-
-## ルール
-- テストも一緒に書く
-- 既存パターンに合わせる
-- YAGNI: 依頼にない機能は追加しない
-- commit / push / external commentはこのworkflow内では行わない
-`, {
-    label: 'implement-simple', phase: 'Implement', agentType: 'implementer',
-    model: routingDecision.model, reasoning_effort: routingDecision.reasoning_effort, service_tier: 'priority',
-  })
+  const failedTournament = implResult.find((result) => result && result.winner === null)
+  if (failedTournament) {
+    log(`トーナメント勝者なし: ${failedTournament.reason ?? 'no winner'}`)
+    return { success: false, reason: failedTournament.reason ?? 'tournament: no winner', tournament: failedTournament }
+  }
 } else {
-  log('パイプライン実装モード')
-  implResult = await pipeline(
-    analysis.subtasks,
-    (subtask, _, idx) => agent(`
-サブタスク ${idx + 1}/${analysis.subtasks.length} を実装してください。
+  log(`Work Packet単位の実装モード: ${workPlan.packets.length}件`)
+  implResult = []
+  for (let idx = 0; idx < workPlan.packets.length; idx += 1) {
+    const packet = workPlan.packets[idx]
+    implResult.push(await agent(`
+Work Packet ${idx + 1}/${workPlan.packets.length} を実装してください。このpromptの実装契約は次の1packetだけです。
 
-## 親チケット: ${ticketKey} — ${analysis.title}
-## サブタスク: ${subtask.title}
-${subtask.description ? `## 説明\n${subtask.description}` : ''}
+## 親チケット
+${ticketKey} — ${analysis.title}
 
-## 仕様コンテキスト
-${JSON.stringify({ approved_prd: prdReview, work_packet: workPlan.packets[idx] ?? workPlan.packets[0] })}
+## Approved PRD context
+${JSON.stringify({
+  artifact_id: prdReview.artifact_id,
+  source_hash: prdReview.source_hash,
+  objective: prdReview.objective,
+  acceptance_ids: prdReview.acceptance_ids,
+})}
+
+## Work Packet contract
+${JSON.stringify(packet, null, 2)}
+
+## 必ず読むcold-start fields
+artifact_id, source_hash, objective, scope, out_of_scope, owned_paths, acceptance_ids, constraints, capability_class, safety_decision_id, side_effects_requested, external_write_targets, approval_required, approval_evidence, dry_run_required, baseline, reality_contract, verification, dependencies, handoff_requirements, reviewer_focus, journey_scenarios, negative_paths, completion_target
 
 ## ルール
-- このサブタスクの範囲のみ実装
-- 直前のサブタスクの変更の上に積み増す（同一ブランチ/作業ツリー）
-- テストも書く
+- owned_paths内だけを変更し、scope外や他packetのowned_pathsへ書かない
+- baselineとreality_contractを現在のsourceで確認してから実装する
+- verificationに記載された検証を実行する
+- acceptance evidence、journey evidence、negative path evidence、writes_performedをpacket-specificに報告する
+- handoff_requirementsに従い、残課題とreviewer_focus向けの確認点を返す
 - commit / push / external commentはこのworkflow内では行わない
     `, {
-      label: `impl-${idx}`,
+      label: `impl-${packet.artifact_id}`,
       phase: 'Implement',
       agentType: 'implementer',
       model: routingDecision.model,
       reasoning_effort: routingDecision.reasoning_effort,
       service_tier: 'priority',
-      // 逐次サブタスクは互いの変更を前提に積み増すため worktree 隔離しない
-      // （隔離すると後続サブタスクが前の成果を見られず、かつメイン未統合になる）
-    }),
-  )
+      // Work Packetは親workflowの同一作業ツリー上で順序どおり統合する。
+    }))
+  }
 }
 
-// --- Phase 4: Verify（共通review→fix→re-review LOOP）---
+if (
+  !Array.isArray(implResult)
+  || implResult.length !== workPlan.packets.length
+  || implResult.some((result) => !result)
+) {
+  return { success: false, reason: 'IMPLEMENTATION_RESULT_MISSING' }
+}
+for (let idx = 0; idx < workPlan.packets.length; idx += 1) {
+  const packet = workPlan.packets[idx]
+  const evidence = analysis.useTournament ? implResult[idx]?.evidence_bundle : implResult[idx]
+  const evidenceCheck = validateEvidenceBundle(packet, evidence)
+  if (!evidenceCheck.ok) {
+    return { success: false, reason: evidenceCheck.reason, artifact_id: packet.artifact_id, evidence }
+  }
+}
+
+// --- Phase 4: Verify（read-only reviewとfix packet routing）---
 phase('Verify')
-log('検証＋自動修正ループ実行中（CRITICAL/IMPORTANTが0になるまで最大3ラウンド）')
+log('検証＋read-only reviewを実行中（findingはfix用Work Packetへ戻す）')
 const verifyResult = await workflow('pr-review-loop', {
   baseBranch: args?.baseBranch ?? '',
-  maxRounds: 3,
-  autoFix: true,
+  autoFix: false,
   reviewDimensions: args?.reviewDimensions,
   safetyTriggers: args?.safetyTriggers ?? [],
-  changedPaths: args?.changedPaths ?? [],
+  changedPaths: args?.changedPaths ?? workPlan.packets.flatMap((packet) => packet.owned_paths),
   externalEvidence: [],
 })
 

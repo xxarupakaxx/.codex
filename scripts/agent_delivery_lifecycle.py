@@ -27,6 +27,7 @@ MODEL_ROSTER = {
     "Heavy": ("gpt-5.6-sol", "high"),
     "Judgment": ("gpt-5.6-sol", "max"),
 }
+CAPABILITY_CLASSES = ("Local", *MODEL_ROSTER)
 SAFETY_TRIGGERS = {
     "external_write",
     "permission_change",
@@ -36,6 +37,17 @@ SAFETY_TRIGGERS = {
     "runtime_policy_change",
     "go_nogo_decision",
 }
+COMPLETION_STATES = ("implemented", "wired", "piloted", "effective", "adopted")
+COMPLETION_ORDER = {state: index for index, state in enumerate(COMPLETION_STATES)}
+HIGH_COMPLETION_STATES = {"effective", "adopted"}
+NEXT_COMPLETION_ACTION = {
+    "implemented": "WIRE",
+    "wired": "PILOT",
+    "piloted": "MEASURE",
+    "effective": "ADOPT",
+}
+REVIEW_FINDING_SEVERITIES = {"CRITICAL", "IMPORTANT", "MINOR", "INFO"}
+REVIEW_HIGH_FINDING_SEVERITIES = {"CRITICAL", "IMPORTANT"}
 ARTIFACT_REQUIRED_FIELDS = {
     "delivery_draft_input": (
         "draft_id",
@@ -71,6 +83,8 @@ ARTIFACT_REQUIRED_FIELDS = {
         "source_hash",
         "objective",
         "scope",
+        "out_of_scope",
+        "owned_paths",
         "acceptance_ids",
         "constraints",
         "capability_class",
@@ -80,6 +94,15 @@ ARTIFACT_REQUIRED_FIELDS = {
         "approval_required",
         "approval_evidence",
         "dry_run_required",
+        "baseline",
+        "reality_contract",
+        "verification",
+        "dependencies",
+        "handoff_requirements",
+        "reviewer_focus",
+        "journey_scenarios",
+        "negative_paths",
+        "completion_target",
     ),
     "evidence_bundle": (
         "artifact_id",
@@ -91,6 +114,10 @@ ARTIFACT_REQUIRED_FIELDS = {
         "writes_performed",
         "safety_decision_id",
         "policy_source",
+        "lineage",
+        "journey_evidence",
+        "negative_path_evidence",
+        "completion_state",
     ),
     "escaped_defect_record": (
         "record_id",
@@ -119,8 +146,17 @@ LIST_FIELDS = {
     "claim_references",
     "scope",
     "out_of_scope",
+    "owned_paths",
     "acceptance_ids",
     "constraints",
+    "baseline",
+    "reality_contract",
+    "verification",
+    "dependencies",
+    "handoff_requirements",
+    "reviewer_focus",
+    "journey_scenarios",
+    "negative_paths",
     "side_effects_requested",
     "external_write_targets",
     "approval_evidence",
@@ -129,11 +165,36 @@ LIST_FIELDS = {
     "findings",
     "residual_risks",
     "writes_performed",
+    "lineage",
+    "journey_evidence",
+    "negative_path_evidence",
     "failure_classes",
     "earliest_preventable_gates",
     "verified_against",
     "allowed_fix_scope",
     "promotion_targets",
+}
+WORK_PACKET_NON_EMPTY_LIST_FIELDS = {
+    "scope",
+    "out_of_scope",
+    "owned_paths",
+    "acceptance_ids",
+    "baseline",
+    "reality_contract",
+    "verification",
+    "dependencies",
+    "handoff_requirements",
+    "reviewer_focus",
+    "journey_scenarios",
+    "negative_paths",
+}
+EVIDENCE_BUNDLE_NON_EMPTY_LIST_FIELDS = {
+    "acceptance_evidence",
+    "tests",
+    "writes_performed",
+    "lineage",
+    "journey_evidence",
+    "negative_path_evidence",
 }
 
 POLICY_PROMOTION_PREFIXES = (
@@ -153,6 +214,7 @@ DRAFT_PRIVILEGED_KEYS = {
     re.sub(r"[^a-z]", "", key.lower())
     for key in DRAFT_PRIVILEGED_FIELDS
 } | {"tool", "command", "approval", "sideeffect", "externalwritetarget"}
+COMPLETION_STATES_MESSAGE = ", ".join(COMPLETION_STATES)
 
 
 @dataclass(frozen=True)
@@ -279,6 +341,101 @@ def route_delivery_draft(
     return DraftRoutingDecision("READY", "FAST_WORKER", model, effort, ("summary_required",))
 
 
+def _non_empty_list_errors(
+    payload: Mapping[str, Any],
+    fields: set[str],
+) -> list[str]:
+    return [
+        f"{field} must be a non-empty list"
+        for field in sorted(fields)
+        if isinstance(payload.get(field), list) and not payload[field]
+    ]
+
+
+def _list_item_errors(payload: Mapping[str, Any], fields: set[str]) -> list[str]:
+    return [
+        f"{field} items must be non-empty strings"
+        for field in sorted(fields)
+        if isinstance(payload.get(field), list)
+        and any(not isinstance(item, str) or not item.strip() for item in payload[field])
+    ]
+
+
+def _normalize_artifact_path(path: str) -> str:
+    return path.removeprefix("./").rstrip("/")
+
+
+def _unsafe_relative_paths(payload: Mapping[str, Any], field: str) -> list[str]:
+    from pathlib import PurePosixPath
+
+    value = payload.get(field)
+    if not isinstance(value, list):
+        return []
+    unsafe: list[str] = []
+    for item in value:
+        if not isinstance(item, str) or not item.strip():
+            continue
+        path = item.strip()
+        relative = PurePosixPath(path)
+        if (
+            "\x00" in path
+            or "\\" in path
+            or relative.is_absolute()
+            or ".." in relative.parts
+            or (field == "owned_paths" and path in {".", "*"})
+        ):
+            unsafe.append(item)
+    return unsafe
+
+
+def _scope_entry_covers_owned_path(scope_entry: str, owned_path: str) -> bool:
+    import fnmatch
+
+    scope_entry = _normalize_artifact_path(scope_entry)
+    owned_path = _normalize_artifact_path(owned_path)
+    if scope_entry in {".", "*"} or fnmatch.fnmatch(owned_path, scope_entry):
+        return True
+    return owned_path == scope_entry or owned_path.startswith(f"{scope_entry}/")
+
+
+def _owned_paths_outside_scope(payload: Mapping[str, Any]) -> list[str]:
+    scope = payload.get("scope")
+    owned_paths = payload.get("owned_paths")
+    if not isinstance(scope, list) or not isinstance(owned_paths, list):
+        return []
+    scope_entries = [item for item in scope if isinstance(item, str) and item.strip()]
+    return sorted(
+        item
+        for item in owned_paths
+        if isinstance(item, str)
+        and item.strip()
+        and not any(
+            _scope_entry_covers_owned_path(scope_entry, item)
+            for scope_entry in scope_entries
+        )
+    )
+
+
+def _completion_value_error(field: str, value: Any) -> str | None:
+    if value not in COMPLETION_STATES:
+        return f"{field} must be one of: {COMPLETION_STATES_MESSAGE}"
+    return None
+
+
+def _valid_completion_evidence(payload: Mapping[str, Any]) -> bool:
+    evidence = payload.get("completion_evidence")
+    checks = evidence.get("checks") if isinstance(evidence, Mapping) else None
+    return (
+        isinstance(evidence, Mapping)
+        and evidence.get("status") == "pass"
+        and evidence.get("state") == payload.get("completion_state")
+        and evidence.get("source_hash") == payload.get("source_hash")
+        and isinstance(checks, list)
+        and bool(checks)
+        and all(isinstance(item, str) and item.strip() for item in checks)
+    )
+
+
 def validate_artifact(
     kind: str,
     payload: Mapping[str, Any],
@@ -292,6 +449,7 @@ def validate_artifact(
     for field in LIST_FIELDS.intersection(payload):
         if not isinstance(payload[field], list):
             errors.append(f"{field} must be a list")
+    errors.extend(_list_item_errors(payload, LIST_FIELDS))
     if kind in {"delivery_draft_input", "delivery_draft_output"} and payload.get(
         "draft_kind"
     ) not in {"commit", "pull_request"}:
@@ -317,6 +475,25 @@ def validate_artifact(
         ):
             errors.append("approval_evidence is required for policy promotion")
     if kind == "work_packet":
+        errors.extend(_non_empty_list_errors(payload, WORK_PACKET_NON_EMPTY_LIST_FIELDS))
+        if payload.get("capability_class") not in CAPABILITY_CLASSES:
+            errors.append(
+                "capability_class must be one of: "
+                f"{', '.join(CAPABILITY_CLASSES)}"
+            )
+        for field in ("scope", "owned_paths"):
+            if _unsafe_relative_paths(payload, field):
+                errors.append(f"{field} must contain safe relative paths")
+        completion_target_error = _completion_value_error(
+            "completion_target", payload.get("completion_target")
+        )
+        if completion_target_error:
+            errors.append(completion_target_error)
+        owned_paths_outside_scope = _owned_paths_outside_scope(payload)
+        if owned_paths_outside_scope:
+            errors.append(
+                f"owned_paths must be within scope: {', '.join(owned_paths_outside_scope)}"
+            )
         side_effects = payload.get("side_effects_requested", [])
         external_targets = payload.get("external_write_targets", [])
         side_effects = side_effects if isinstance(side_effects, list) else []
@@ -341,6 +518,20 @@ def validate_artifact(
             ],
         ):
             errors.append("approval_evidence is required for approval-gated work")
+    if kind == "evidence_bundle":
+        errors.extend(_non_empty_list_errors(payload, EVIDENCE_BUNDLE_NON_EMPTY_LIST_FIELDS))
+        completion_state_error = _completion_value_error(
+            "completion_state", payload.get("completion_state")
+        )
+        if completion_state_error:
+            errors.append(completion_state_error)
+        if (
+            payload.get("completion_state") in HIGH_COMPLETION_STATES
+            and not _valid_completion_evidence(payload)
+        ):
+            errors.append(
+                "completion_evidence is required for effective or adopted completion_state"
+            )
     return errors
 
 
@@ -558,6 +749,46 @@ def _is_policy_target(target: Any) -> bool:
     return normalized.startswith(POLICY_PROMOTION_PREFIXES)
 
 
+def _completion_gap_action(current_state: Any, target_state: Any) -> str | None:
+    if (
+        current_state not in COMPLETION_ORDER
+        or target_state not in COMPLETION_ORDER
+        or COMPLETION_ORDER[current_state] >= COMPLETION_ORDER[target_state]
+    ):
+        return None
+    return NEXT_COMPLETION_ACTION[current_state]
+
+
+def _review_high_finding_count(snapshot: Mapping[str, Any]) -> tuple[int | None, str | None]:
+    count: int | None = None
+    if "high_findings" in snapshot:
+        value = snapshot.get("high_findings")
+        if isinstance(value, bool) or not isinstance(value, int) or value < 0:
+            return None, "review findings count is invalid"
+        count = value
+
+    if "review_findings" in snapshot:
+        findings = snapshot.get("review_findings")
+        if not isinstance(findings, list):
+            return None, "review_findings must be a list"
+        derived = 0
+        for finding in findings:
+            if not isinstance(finding, Mapping):
+                return None, "review_findings items must be objects"
+            severity = finding.get("severity")
+            if not isinstance(severity, str) or severity.upper() not in REVIEW_FINDING_SEVERITIES:
+                return None, "review_findings severity is invalid"
+            if severity.upper() in REVIEW_HIGH_FINDING_SEVERITIES:
+                derived += 1
+        if count is not None and count != derived:
+            return None, "review findings count does not match structured findings"
+        count = derived
+
+    if count is None:
+        return None, "review findings are required"
+    return count, None
+
+
 def next_action(
     snapshot: Mapping[str, Any],
     *,
@@ -613,11 +844,38 @@ def next_action(
     if state == "IMPLEMENTED":
         return TransitionDecision("RUNNING", "REVIEW", "independent review is required")
     if state == "REVIEWED":
-        high = int(snapshot.get("high_findings", 0))
+        high, review_error = _review_high_finding_count(snapshot)
+        if review_error is not None or high is None:
+            return TransitionDecision("RUNNING", "REVIEW", review_error or "review findings are required")
         if high:
             return TransitionDecision("RUNNING", "FIX", "critical or important findings remain")
         if not _validated_artifact(snapshot, "evidence_bundle", verified_approval_evidence):
             return TransitionDecision("RUNNING", "BUILD_EVIDENCE_BUNDLE", "delivery evidence is incomplete")
+        if not _validated_artifact(snapshot, "work_packet", verified_approval_evidence):
+            return TransitionDecision("RUNNING", "CREATE_WORK_PACKET", "implementation contract is missing")
+        payloads = snapshot.get("artifact_payloads", {})
+        work_packet = payloads.get("work_packet") if isinstance(payloads, Mapping) else {}
+        evidence_bundle = payloads.get("evidence_bundle") if isinstance(payloads, Mapping) else {}
+        if isinstance(work_packet, Mapping) and isinstance(evidence_bundle, Mapping):
+            if work_packet.get("source_hash") != evidence_bundle.get("source_hash"):
+                return TransitionDecision(
+                    "RUNNING",
+                    "BUILD_EVIDENCE_BUNDLE",
+                    "work_packet and evidence_bundle source_hash mismatch",
+                )
+            completion_action = _completion_gap_action(
+                evidence_bundle.get("completion_state"),
+                work_packet.get("completion_target"),
+            )
+            if completion_action:
+                return TransitionDecision(
+                    "RUNNING",
+                    completion_action,
+                    (
+                        f"completion target {work_packet.get('completion_target')} "
+                        f"is not met by {evidence_bundle.get('completion_state')}"
+                    ),
+                )
         return TransitionDecision("RUNNING", "DELIVER", "review and evidence gates passed")
     if state == "DELIVERED":
         if snapshot.get("escaped_defects"):

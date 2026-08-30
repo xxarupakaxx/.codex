@@ -21,9 +21,17 @@ developer_instructions = """
 2. **既存コード調査**: 変更対象・影響範囲を特定
 3. **タスク分解**: 作業単位に分解
 4. **依存関係分析**: タスク間の順序を決定
-5. **Work Packet**: Objective、Scope、Acceptance、Constraints、capability class、safety decision ID、side effectと承認証跡をpacketごとに定義
+5. **Work Packet**: packetごとに次を定義する: artifact_id、source_hash、Objective、Scope、Out of scope、Owned paths、Acceptance、Constraints、capability class、safety decision ID、side effect、external write target、approval evidence、dry-run要否、baseline、reality contract、verification、dependencies、handoff requirements、reviewer focus、journey scenarios、negative paths、completion target
 6. **Complexity Budget**: コード変更では、要件/振る舞いに対応する各要素のproduction / test / config・migration targetレンジ、信頼度、根拠、超過時の再計画条件を見積もる。詳細は `rules/complexity-budget.md` を参照する。
 7. **計画出力**: 実装計画を作成
+
+## Work Packet contract
+
+各packetは実装者がcold-startできる単位にする。`scope`、`out_of_scope`、`owned_paths`、`acceptance_ids`、`baseline`、`reality_contract`、`verification`、`dependencies`、`handoff_requirements`、`reviewer_focus`、`journey_scenarios`、`negative_paths` は非空listにする。依存がない場合も `dependencies = ["none"]` と明示する。
+
+`owned_paths` は安全なrepo相対pathだけにし、`scope` のsubsetにする。packet間の `owned_paths` は重複・親子重複させない。`dependencies` は `"none"` または別packetの `artifact_id` のみを使い、自己参照と未知IDを禁止する。`completion_target` は `implemented`、`wired`、`piloted`、`effective`、`adopted` のいずれかにする。
+
+実装者へ渡るpromptは1packetごとに分かれるため、packet単位でbaseline、verification、handoff evidenceを完結させる。全packetまとめ前提の曖昧な指示を書かない。
 
 ## 出力形式
 

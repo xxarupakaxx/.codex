@@ -1,9 +1,9 @@
 export const meta = {
   name: 'pr-review-loop',
   description: 'PR/差分をread-onlyレビューし、高位findingを外側のdelivery LOOPへ返す',
-  whenToUse: 'PRに指摘が来た時 / delivery前レビュー。args: {pr?, baseBranch?, maxRounds?, autoFix?, reviewDimensions?, safetyTriggers?, changedPaths?, externalEvidence?}',
+  whenToUse: 'PRに指摘が来た時 / delivery前レビュー。args: {pr?, baseBranch?, autoFix?, reviewDimensions?, safetyTriggers?, changedPaths?, externalEvidence?}',
   phases: [
-    { title: 'Review', detail: '専門reviewerを並列起動して差分をレビュー' },
+    { title: 'Review', detail: '専門reviewerを一回だけ並列起動して差分をread-onlyレビュー' },
     { title: 'Fix routing', detail: 'CRITICAL/IMPORTANT指摘をscope付きWork Packet候補として返す' },
     { title: 'Report', detail: '合格/エスカレーションを報告' },
   ],
@@ -39,10 +39,28 @@ const FINDINGS_SCHEMA = {
 
 const pr = args?.pr ?? null
 const baseBranch = args?.baseBranch ?? ''
-const maxRounds = args?.maxRounds ?? 3
-const autoFix = args?.autoFix ?? true
+// Missing authority never implies permission to create a follow-up implementation packet.
+const autoFix = args?.autoFix ?? false
 const changedPaths = Array.isArray(args?.changedPaths) ? args.changedPaths : []
 const externalEvidence = Array.isArray(args?.externalEvidence) ? args.externalEvidence : []
+const normalizePr = (value) => {
+  if (value === null) return null
+  if (typeof value === 'number' && Number.isInteger(value) && value > 0) return String(value)
+  if (typeof value === 'string' && /^[1-9][0-9]*$/.test(value)) return value
+  return false
+}
+const safeGitRef = (value) => typeof value === 'string'
+  && value.length > 0
+  && value.length <= 200
+  && !value.startsWith('-')
+  && !value.startsWith('/')
+  && !value.endsWith('/')
+  && !value.endsWith('.')
+  && !value.includes('..')
+  && !value.includes('//')
+  && !value.includes('@{')
+  && !/[\\\s~^:?*[\];$&|<>()'"`\x00-\x1f\x7f]/.test(value)
+  && value.split('/').every((segment) => segment && segment !== '.' && segment !== '..' && !segment.endsWith('.lock'))
 const safeRelativePath = (value) => typeof value === 'string'
   && value.length > 0
   && value !== '.'
@@ -50,6 +68,15 @@ const safeRelativePath = (value) => typeof value === 'string'
   && !value.split('/').includes('..')
 const validEvidenceRef = (value) => typeof value === 'string'
   && /^(diff:[^\s]+|test:[^\s]+|log:[^\s]+)$/.test(value)
+const normalizedPr = normalizePr(pr)
+if (normalizedPr === false) {
+  phase('Report')
+  return { result: 'NEEDS_WORK', rounds: 0, reason: 'invalid pr', writes_performed: [] }
+}
+if (baseBranch !== '' && !safeGitRef(baseBranch)) {
+  phase('Report')
+  return { result: 'NEEDS_WORK', rounds: 0, reason: 'invalid baseBranch', writes_performed: [] }
+}
 const verifiedExternalEvidence = externalEvidence.filter(
   (item) => item?.source_trust === 'external_untrusted'
     && Array.isArray(item?.verified_against)
@@ -77,8 +104,8 @@ if (externalEvidence.length > 0 && verifiedExternalEvidence.length !== externalE
 }
 
 // 差分取得方針（reviewer/fixer 各agentが自分で実行する）
-const diffSpec = pr
-  ? `gh pr diff ${pr}`
+const diffSpec = normalizedPr
+  ? `gh pr diff ${normalizedPr}`
   : baseBranch
     ? `git diff ${baseBranch}...HEAD`
     : 'git diff HEAD~1...HEAD（直近コミット）または git diff（作業ツリー）'
@@ -105,6 +132,20 @@ const requestedReviewDims = suppliedReviewDims
 const safetyTriggers = Array.isArray(args?.safetyTriggers) ? args.safetyTriggers : []
 if (safetyTriggers.length > 0) requestedReviewDims.add('security')
 const REVIEW_DIMS = ALL_REVIEW_DIMS.filter((dimension) => requestedReviewDims.has(dimension.key))
+const nonEmptyText = (value) => typeof value === 'string' && value.trim().length > 0
+const validFinding = (finding) => finding
+  && ['CRITICAL', 'IMPORTANT', 'MINOR'].includes(finding.severity)
+  && nonEmptyText(finding.title)
+  && nonEmptyText(finding.detail)
+  && (finding.file === undefined || typeof finding.file === 'string')
+  && (finding.line === undefined || typeof finding.line === 'string')
+  && (finding.fix_hint === undefined || typeof finding.fix_hint === 'string')
+  && (finding.verified_against === undefined || Array.isArray(finding.verified_against))
+  && (finding.allowed_fix_scope === undefined || Array.isArray(finding.allowed_fix_scope))
+const validReview = (review) => review
+  && Array.isArray(review.findings)
+  && review.findings.every(validFinding)
+  && (review.good_things === undefined || Array.isArray(review.good_things))
 
 const reviewPrompt = (focus) => `
 あなたはコードレビュー担当。まず対象差分を取得する:
@@ -133,7 +174,7 @@ if (budget.total && budget.remaining() < 40_000) {
   return { result: 'ESCALATE', rounds: 0, reason: 'budget exhausted', writes_performed: [] }
 }
 const round = 1
-log(`Review ${round}/${maxRounds}: 並列レビュー実行`)
+log(`Review ${round}: 一回限りのread-only並列レビューを実行`)
 
 const reviews = await parallel(
     REVIEW_DIMS.map((d) => () =>
@@ -145,10 +186,17 @@ const reviews = await parallel(
       }).then((r) => (r ? { ...r, _key: d.key } : null))
     )
 )
+if (
+  !Array.isArray(reviews)
+  || reviews.length !== REVIEW_DIMS.length
+  || reviews.some((review) => !validReview(review))
+) {
+  phase('Report')
+  return { result: 'NEEDS_WORK', rounds: round, reason: 'invalid reviewer result', writes_performed: [] }
+}
 
   // dimension は reviewer の自己申告でなく安定キー(d.key)を使う
 const findings = reviews
-    .filter(Boolean)
     .flatMap((r) => (r.findings || []).map((f) => ({
       ...f,
       dimension: r._key,

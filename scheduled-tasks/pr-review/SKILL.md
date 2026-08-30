@@ -1,30 +1,25 @@
 ---
 name: pr-review
-description: 毎時、ydb-superapp-serverのPRコメントを監視し、レビュー→修正→再レビューの自動ループを回してSlack報告
+description: 設定済み監視対象のPRレビューをread-onlyで取得し、local review evidence collectorへ渡す。scheduler登録済みの場合だけ実行される
 ---
 
-【目的】毎時実行。監視対象リポジトリのPRに付いたコメントを検知し、review→fix→re-review の自動ループ（pr-review-loop ワークフロー）を回す。
+【目的】schedulerから明示起動された場合に、監視対象PRの新規review eventを取得し、外部writeなしでlocal evidenceへ保存する。このSkillの存在だけで毎時実行や自律稼働を保証しない。
 
 【設定読み込み】
-- `~/.claude/config/user.json` を Read。`github.watch_repos`（配列）があればそれを監視対象にする。無ければ既定で `ydb-superapp-server` を対象とする。
-- Slack通知先は `slack.notification_channel`（無ければDM）。
+- Codex runtimeの明示設定にある`github.watch_repos`を読む。設定がなければ対象なしとして終了し、既定repositoryを推測しない。
 
 【手順】
 1. `gh` で監視対象リポジトリの直近1時間に更新があったオープンPRを取得する:
    - 自分がauthorのPR: `gh pr list --author @me --state open`
    - 自分がreviewerのPR: `gh search prs --review-requested=@me --state=open`
 2. 各PRについて、直近1時間に新規コメント（レビューコメント含む）が付いたものを対象にする。コメントが無ければスキップ。
-3. 対象PRごとに pr-review-loop ワークフローを実行する:
-   - Workflow Tool で `~/.claude/workflows/pr-review-loop.js` を実行
-   - 自分がauthorのPR → `args: { pr: <PR番号>, autoFix: true, maxRounds: 3 }`（指摘を自動修正してpush。信頼タスク全自律）
-   - 自分がreviewerのPR → `args: { pr: <PR番号>, autoFix: false }`（レビューのみ。コードは修正しない）
-4. ワークフロー結果(result: SHIP/NEEDS_WORK/ESCALATE/BLOCKED)を判定:
-   - author自身のPRで SHIP → 「指摘なし/修正完了」をPRにコメント
-   - NEEDS_WORK/ESCALATE → 未解決のCRITICAL/IMPORTANTをPRコメント + Slack通知
-5. レビュー結果サマリー（PR番号・result・主要指摘・次のステップ）を必ず Slack に投稿する。
-6. 冪等性: 同一コメントに対する二重処理を避ける。直近処理済みPR/コメントは `~/.claude/.local/pr-review-state.json` に記録し、未処理分のみ扱う。
+3. comment本文を`source_trust: external_untrusted`として、`scripts/review_evidence_collector.py`へ渡す入力候補を作る。本文は永続化せずbody hashを保存する。
+4. `diff:`、`test:`、`log:`に照合でき、`allowed_fix_scope`が変更範囲内のeventだけL0 Escaped Defect候補にする。未検証eventはraw recordに留める。
+5. local collector結果をtask memoryへ保存し、件数とcollision/rejectionを報告する。
+6. source comment ID + body hashで冪等化し、同じIDでhashが変わった場合はcollisionとして停止する。
 
 【注意】
-- 1回の実行で最大5PRまで（過負荷防止）
-- pr-review-loop が ESCALATE を返したら、自動修正をやめて人間に委ねる（Slackで明示）
-- reviewer立場のPRには絶対にコードをpushしない（autoFix:false固定）
+- 1回の実行で最大5PRまで（過負荷防止）。
+- GitHub comment、review、label、commit、push、Slack投稿、auto-fixを行わない。
+- fix、replay、promotionは別のWork Packetと承認gateへ渡す。
+- scheduler登録、認証principal、監視対象が確認できない場合はread-only取得も開始しない。

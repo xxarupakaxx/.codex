@@ -29,6 +29,24 @@ class ValidateAgentHarnessTest(unittest.TestCase):
         path.write_text(content, encoding="utf-8")
         return path
 
+    def write_valid_task_meta(self, relative: str = "artifacts/task-meta.json") -> Path:
+        return self.write(
+            relative,
+            json.dumps(
+                {
+                    "schema_version": 1,
+                    "task_id": "task",
+                    "task_title": "Task",
+                    "project_path": str(self.root),
+                    "worktree_path": str(self.root),
+                    "task_state": "active",
+                    "code_change": False,
+                    "created_at": "2026-08-07T17:00:00+00:00",
+                    "updated_at": "2026-08-07T17:00:00+00:00",
+                }
+            ),
+        )
+
     def make_valid_repo(self) -> None:
         references = "\n".join(MODULE.REQUIRED_REFERENCES)
         self.write("AGENTS.md", f"# Hub\n{references}\n")
@@ -56,6 +74,30 @@ class ValidateAgentHarnessTest(unittest.TestCase):
             "config.toml",
             "[skills]\ninclude_instructions = false\n",
         )
+
+    def make_valid_lifecycle_repo(self) -> None:
+        self.write(
+            "skills/lfg/SKILL.md",
+            "\n".join(
+                (
+                    "context/workflow-rules.md",
+                    "context/memory-file-formats.md",
+                    "context/agent-team-routing.md",
+                    "rules/model-routing.md",
+                    "scripts/agent_delivery_lifecycle.py",
+                    "scripts/sync-roadmap.py",
+                )
+            ),
+        )
+        for relative in MODULE.LFG_SHIMS:
+            target = "../lfg/SKILL.md" if relative.startswith("skills/") else "skills/lfg/SKILL.md"
+            self.write(relative, f"Compatibility shim: {target}\n")
+        for relative in MODULE.LIFECYCLE_FILES:
+            self.write(relative, "# lifecycle file\n")
+        for relative in MODULE.REVIEW_COLLECTOR_FILES:
+            self.write(relative, "# review collector file\n")
+        for relative, markers in MODULE.LIFECYCLE_REQUIRED_MARKERS.items():
+            self.write(relative, "\n".join(markers))
 
     def test_valid_entrypoint_passes(self) -> None:
         self.make_valid_repo()
@@ -140,6 +182,7 @@ class ValidateAgentHarnessTest(unittest.TestCase):
         )
 
     def test_phase_artifact_requires_frontmatter_contract(self) -> None:
+        self.write_valid_task_meta()
         self.write(
             "artifacts/10-plan.md",
             "---\ntask: demo\nphase_or_step: phase-2\ncreated_at: 2026-08-07T17:00:00+09:00\n---\n",
@@ -154,8 +197,88 @@ class ValidateAgentHarnessTest(unittest.TestCase):
         errors = MODULE.validate_artifact_dir(self.root / "artifacts")
         self.assertEqual(sum("checkpoint.md" in error for error in errors), 3)
 
+    def test_artifact_dir_requires_task_metadata_at_task_root(self) -> None:
+        self.write(
+            "artifacts/10-plan.md",
+            "---\ntask: demo\nphase_or_step: phase-2\ncreated_at: 2026-08-07T17:00:00+09:00\n---\n",
+        )
+        self.write_valid_task_meta("artifacts/nested/task-meta.json")
+
+        errors = MODULE.validate_artifact_dir(self.root / "artifacts")
+
+        self.assertIn(
+            f"{self.root / 'artifacts' / 'task-meta.json'}: missing task metadata",
+            errors,
+        )
+
+    def test_artifact_dir_rejects_invalid_task_metadata_file(self) -> None:
+        artifacts = self.root / "artifacts"
+        artifacts.mkdir()
+        target = self.write("task-meta-target.json", "{}")
+        (artifacts / "task-meta.json").symlink_to(target)
+
+        errors = MODULE.validate_artifact_dir(artifacts)
+
+        self.assertIn(
+            f"{artifacts / 'task-meta.json'}: task metadata must be a regular file",
+            errors,
+        )
+
+        (artifacts / "task-meta.json").unlink()
+        self.write("artifacts/task-meta.json", "[]")
+        errors = MODULE.validate_artifact_dir(artifacts)
+
+        self.assertIn(
+            f"{artifacts / 'task-meta.json'}: task metadata root must be an object",
+            errors,
+        )
+
+    def test_artifact_dir_requires_current_task_metadata_keys(self) -> None:
+        self.write_valid_task_meta()
+        metadata_path = self.root / "artifacts" / "task-meta.json"
+        metadata = json.loads(metadata_path.read_text())
+        del metadata["worktree_path"]
+        metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+
+        errors = MODULE.validate_artifact_dir(self.root / "artifacts")
+
+        self.assertIn(
+            f"{metadata_path}: missing task metadata key: worktree_path",
+            errors,
+        )
+
+    def test_artifact_dir_rejects_malformed_task_metadata_values(self) -> None:
+        malformed_values = {
+            "schema_version": "1",
+            "task_id": "",
+            "task_title": 123,
+            "project_path": "relative/project",
+            "worktree_path": "",
+            "task_state": "done",
+            "code_change": "false",
+            "created_at": "2026-08-07T17:00:00",
+            "updated_at": "not-a-time",
+            "thread_id": 7,
+            "session_id": False,
+            "approval_state": [],
+        }
+        for key, value in malformed_values.items():
+            with self.subTest(key=key):
+                metadata_path = self.write_valid_task_meta()
+                metadata = json.loads(metadata_path.read_text())
+                metadata[key] = value
+                metadata_path.write_text(json.dumps(metadata), encoding="utf-8")
+
+                errors = MODULE.validate_artifact_dir(self.root / "artifacts")
+
+                self.assertTrue(
+                    any(f"invalid task metadata value: {key}" in error for error in errors),
+                    errors,
+                )
+
     def test_single_step_bypass_must_be_complete_and_unexpired(self) -> None:
         now = datetime(2026, 8, 7, 8, 0, tzinfo=timezone.utc)
+        self.write_valid_task_meta()
         self.write(
             "artifacts/single-step/valid.json",
             json.dumps(
@@ -186,6 +309,7 @@ class ValidateAgentHarnessTest(unittest.TestCase):
         self.assertTrue(any("bypass expired" in error for error in errors))
 
     def test_invalid_timestamp_is_rejected(self) -> None:
+        self.write_valid_task_meta()
         self.write(
             "artifacts/10-plan.md",
             "---\ntask: demo\nphase_or_step: phase-2\ncreated_at: someday\n---\n",
@@ -225,6 +349,72 @@ class ValidateAgentHarnessTest(unittest.TestCase):
 
     def test_full_replay_contract_passes(self) -> None:
         self.assertEqual(MODULE.validate_full_replay(), [])
+
+    def test_lifecycle_contract_requires_runtime_truth_and_review_collector(self) -> None:
+        self.make_valid_lifecycle_repo()
+
+        self.assertEqual(MODULE.validate_lifecycle_contract(self.root), [])
+
+        (self.root / "scripts/review_evidence_collector.py").unlink()
+        errors = MODULE.validate_lifecycle_contract(self.root)
+
+        self.assertIn(
+            "missing review collector contract file: scripts/review_evidence_collector.py",
+            errors,
+        )
+
+    def test_lifecycle_contract_rejects_stale_runtime_promises(self) -> None:
+        self.make_valid_lifecycle_repo()
+        self.write(
+            "scheduled-tasks/pr-review/SKILL.md",
+            (
+                "scripts/review_evidence_collector.py\n"
+                "external_writeなし\n"
+                "autoFix: true\n"
+                "git push\n"
+                "Slack投稿を必須にする\n"
+                "~/.claude/config/user.json\n"
+            ),
+        )
+        self.write(
+            "context/loop-engineering.md",
+            (
+                "## Delivery lifecycle LOOP\n"
+                "scripts/review_evidence_collector.py\n"
+                "配線済み・自律稼働\n"
+            ),
+        )
+
+        errors = MODULE.validate_lifecycle_contract(self.root)
+
+        self.assertTrue(any("forbidden stale runtime promise" in error for error in errors))
+        self.assertTrue(any("autoFix: true" in error for error in errors))
+        self.assertTrue(any("配線済み・自律稼働" in error for error in errors))
+
+    def test_lifecycle_marker_in_wrong_file_does_not_satisfy_contract(self) -> None:
+        self.make_valid_lifecycle_repo()
+        workflow_markers = [
+            marker
+            for marker in MODULE.LIFECYCLE_REQUIRED_MARKERS["context/workflow-rules.md"]
+            if marker != "completion_target"
+        ]
+        self.write("context/workflow-rules.md", "\n".join(workflow_markers))
+        self.write(
+            "rules/model-routing.md",
+            "\n".join(
+                (
+                    *MODULE.LIFECYCLE_REQUIRED_MARKERS["rules/model-routing.md"],
+                    "completion_target",
+                )
+            ),
+        )
+
+        errors = MODULE.validate_lifecycle_contract(self.root)
+
+        self.assertIn(
+            "context/workflow-rules.md missing lifecycle marker: completion_target",
+            errors,
+        )
 
 
 if __name__ == "__main__":

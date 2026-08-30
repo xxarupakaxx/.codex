@@ -33,12 +33,14 @@ bounded retry、active run lock、idempotency keyにより同じwriteと同じco
 
 停止は失敗の握りつぶしではなく、task stateと再開条件を保存した正常なLOOP結果である。
 
-現時点ではLFGと`implementation-drive`がこの契約へ接続済みである。scheduled taskを含む全入口の自動再開と常駐実行はpilot後の拡張対象であり、human stopを除去する意味ではない。
+現時点で`agent_delivery_lifecycle.py`はartifact/state契約を実装している。LFGと`implementation-drive`は契約を参照するが、`implementation-drive`内のRoadmap adapterはtrusted local executorを直接呼べずfail-closedで停止するため、end-to-end自律実行が配線済みとは扱わない。scheduled taskを含む全入口の自動再開と常駐実行はpilot後の拡張対象であり、human stopを除去する意味ではない。
 
-## 現状ステータス（2026-06-17 時点）
+## 現状ステータス（2026-08-30確認）
 
-- **配線済み・自律稼働**: `hour-calendar`(毎時) / `morning-kickoff`(09:00) / `jira-spec-poll`(毎時) / `evening-review`(18:00) / `pr-review`(毎時, pr-review-loop経由) / `security-audit`(毎朝) / `slack-to-jira`(毎時) / `generate-diagram-pr`(毎時) / `daily-news`(09:10)
-- **スケジューラの制約（重要）**: これらは Codex アプリ/ランタイム起動中のみ発火する**ベストエフォート**。OSレベルの cron/launchd ではないため「毎時」は保証されない（アプリ未起動時はスキップ、次回起動時に実行）。24/7 が必要なループは launchd 等でCLIをヘッドレス起動する構成が別途必要。
+- **確認済みactive hook**: `hooks.json`に登録された`SessionStart`の`herdr-agent-state.sh`のみ。fileが存在するだけのStop/Worktree hookをactiveと扱わない。
+- **memory runtime**: `config.toml`の`generate_memories`と`use_memories`はfalse。SQLite/embeddingの自動保存・注入は現在のactive contractではない。
+- **scheduled task**: directoryと説明は存在するが、scheduler登録・最終実行・外部write承認を独立に確認するまで「自律稼働」と呼ばない。
+- **Roadmap**: `sync-roadmap.py`はtrusted local executorから実行可能だが、model-controlled workflow adapterは意図的にfail-closedである。
 - **dead/未配線**: `orchestrator` agent は現状どの実行系からも `agent_type` 起動されない（このファイルが定義する Conductor パターンの**参照仕様**であり、実際の指揮者役は Codex メインセッションが担う）。`implementer`/`ab-judge`/`minutes-classifier` も互換 workflow 内では inline プロンプトで代替している。
 
 ## アーキテクチャ概要
@@ -229,7 +231,7 @@ Summary ──→ Slack日次サマリー投稿
 | `hour-calendar` | 毎時 | 議事録要約→dailyノート追記 + アクション分類→自律実行 | 直接実行（config駆動: notes.daily_dir） |
 | `jira-spec-poll` | 毎時 | 新規チケット検出→仕様書ドラフト生成 | 直接実行 |
 | `evening-review` | 毎夕18:00 | コスト/失敗分析→改善提案→Slackサマリー | evening-review.js |
-| `pr-review` | 毎時 | PRコメント検知→レビュー→修正→再レビュー | pr-review-loop.js |
+| `pr-review` | scheduler設定時 | PR review eventをread-only取得し、`scripts/review_evidence_collector.py`へlocal保存 | review_evidence_collector.py / pr-review-loop.js |
 | `security-audit` | 毎朝 | Security Audit Criticalメール→調査→冪等にJira起票+PR | 直接実行（冪等性ガードあり） |
 | `slack-to-jira` | 毎時 | 直近1hの自投稿→チームタスクを冪等にJira起票 | 直接実行（dedup+時間窓） |
 | `generate-diagram-pr` | 毎時 | オープンPRに状態図を冪等に投稿/更新 | generate-state-diagram スキル |

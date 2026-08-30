@@ -29,6 +29,42 @@ ZERO_FACTORS = {
 ALL_MODELS = ["gpt-5.6-luna", "gpt-5.6-terra", "gpt-5.6-sol"]
 
 
+def valid_work_packet() -> dict[str, object]:
+    return {
+        "artifact_id": "wp-1", "source_hash": "abc", "objective": "edit",
+        "scope": ["core"], "out_of_scope": ["docs"], "owned_paths": ["core"],
+        "acceptance_ids": ["A1"], "constraints": [],
+        "capability_class": "Fast", "safety_decision_id": "safe-1",
+        "side_effects_requested": [], "external_write_targets": [],
+        "approval_required": False, "approval_evidence": [], "dry_run_required": False,
+        "baseline": ["current behavior captured"],
+        "reality_contract": ["validate against current source"],
+        "verification": ["unit test"],
+        "dependencies": ["none"],
+        "handoff_requirements": ["report files and tests"],
+        "reviewer_focus": ["contract transitions"],
+        "journey_scenarios": ["happy path"],
+        "negative_paths": ["invalid artifact"],
+        "completion_target": "implemented",
+    }
+
+
+def valid_evidence_bundle() -> dict[str, object]:
+    return {
+        "artifact_id": "eb-1", "source_hash": "abc",
+        "acceptance_evidence": ["A1:unit-test"],
+        "tests": ["python3 -m unittest tests.test_agent_delivery_lifecycle"],
+        "findings": [], "residual_risks": [],
+        "writes_performed": ["core"],
+        "safety_decision_id": "safe-1",
+        "policy_source": "AGENTS.md",
+        "lineage": ["wp-1"],
+        "journey_evidence": ["happy path covered"],
+        "negative_path_evidence": ["invalid artifact covered"],
+        "completion_state": "implemented",
+    }
+
+
 class RoutingTest(unittest.TestCase):
     def test_nontrivial_delivery_draft_routes_to_luna_without_tools(self) -> None:
         decision = route_delivery_draft(
@@ -461,6 +497,192 @@ class ArtifactContractTest(unittest.TestCase):
             validate_artifact("work_packet", payload),
         )
 
+    def test_work_packet_requires_cold_start_contract_fields(self) -> None:
+        payload = {
+            "artifact_id": "wp-cold-start",
+            "source_hash": "abc",
+            "objective": "edit",
+            "scope": ["scripts/agent_delivery_lifecycle.py"],
+            "acceptance_ids": ["A1"],
+            "constraints": [],
+            "capability_class": "Fast",
+            "safety_decision_id": "safe-cold-start",
+            "side_effects_requested": [],
+            "external_write_targets": [],
+            "approval_required": False,
+            "approval_evidence": [],
+            "dry_run_required": False,
+        }
+
+        errors = validate_artifact("work_packet", payload)
+
+        for field in (
+            "out_of_scope",
+            "owned_paths",
+            "baseline",
+            "reality_contract",
+            "verification",
+            "dependencies",
+            "handoff_requirements",
+            "reviewer_focus",
+            "journey_scenarios",
+            "negative_paths",
+            "completion_target",
+        ):
+            self.assertIn(f"missing required field: {field}", errors)
+
+    def test_work_packet_requires_non_empty_cold_start_lists(self) -> None:
+        payload = {
+            **valid_work_packet(),
+            "out_of_scope": [],
+            "owned_paths": [],
+            "baseline": [],
+            "reality_contract": [],
+            "verification": [],
+            "dependencies": [],
+            "handoff_requirements": [],
+            "reviewer_focus": [],
+            "journey_scenarios": [],
+            "negative_paths": [],
+        }
+
+        errors = validate_artifact("work_packet", payload)
+
+        for field in (
+            "out_of_scope",
+            "owned_paths",
+            "baseline",
+            "reality_contract",
+            "verification",
+            "dependencies",
+            "handoff_requirements",
+            "reviewer_focus",
+            "journey_scenarios",
+            "negative_paths",
+        ):
+            self.assertIn(f"{field} must be a non-empty list", errors)
+
+    def test_work_packet_owned_paths_must_be_within_scope(self) -> None:
+        payload = {
+            **valid_work_packet(),
+            "scope": ["scripts/"],
+            "owned_paths": [
+                "scripts/agent_delivery_lifecycle.py",
+                "tests/test_agent_delivery_lifecycle.py",
+            ],
+        }
+
+        self.assertIn(
+            "owned_paths must be within scope: tests/test_agent_delivery_lifecycle.py",
+            validate_artifact("work_packet", payload),
+        )
+
+    def test_work_packet_rejects_unsafe_relative_paths(self) -> None:
+        for field, value in (
+            ("scope", ["../outside"]),
+            ("owned_paths", ["../outside"]),
+            ("owned_paths", ["/absolute/path"]),
+        ):
+            with self.subTest(field=field, value=value):
+                payload = {**valid_work_packet(), field: value}
+                self.assertIn(
+                    f"{field} must contain safe relative paths",
+                    validate_artifact("work_packet", payload),
+                )
+
+    def test_work_packet_rejects_unknown_completion_target(self) -> None:
+        payload = {**valid_work_packet(), "completion_target": "demoed"}
+
+        self.assertIn(
+            "completion_target must be one of: implemented, wired, piloted, effective, adopted",
+            validate_artifact("work_packet", payload),
+        )
+
+    def test_work_packet_rejects_unknown_capability_class(self) -> None:
+        payload = {**valid_work_packet(), "capability_class": "Automatic"}
+
+        self.assertIn(
+            "capability_class must be one of: Local, Fast, Standard, Heavy, Judgment",
+            validate_artifact("work_packet", payload),
+        )
+
+    def test_contract_list_fields_reject_non_string_or_empty_entries(self) -> None:
+        cases = (
+            ("work_packet", {**valid_work_packet(), "scope": ["core", ""]}, "scope"),
+            ("work_packet", {**valid_work_packet(), "owned_paths": ["core", 123]}, "owned_paths"),
+            ("work_packet", {**valid_work_packet(), "approval_evidence": ["ok", "   "]}, "approval_evidence"),
+            ("evidence_bundle", {**valid_evidence_bundle(), "acceptance_evidence": ["A1", None]}, "acceptance_evidence"),
+            ("evidence_bundle", {**valid_evidence_bundle(), "findings": ["F1", {"severity": "IMPORTANT"}]}, "findings"),
+        )
+
+        for kind, payload, field in cases:
+            with self.subTest(kind=kind, field=field):
+                self.assertIn(
+                    f"{field} items must be non-empty strings",
+                    validate_artifact(kind, payload),
+                )
+
+    def test_high_completion_state_requires_bound_machine_evidence(self) -> None:
+        payload = {**valid_evidence_bundle(), "completion_state": "effective"}
+
+        self.assertIn(
+            "completion_evidence is required for effective or adopted completion_state",
+            validate_artifact("evidence_bundle", payload),
+        )
+
+    def test_high_completion_state_accepts_bound_machine_evidence(self) -> None:
+        payload = {
+            **valid_evidence_bundle(),
+            "completion_state": "effective",
+            "completion_evidence": {
+                "status": "pass",
+                "state": "effective",
+                "source_hash": "abc",
+                "checks": ["measurement:test-pass"],
+            },
+        }
+
+        self.assertEqual(validate_artifact("evidence_bundle", payload), [])
+
+    def test_work_packet_and_evidence_bundle_source_hash_must_match(self) -> None:
+        decision = next_action({
+            "state": "REVIEWED",
+            "high_findings": 0,
+            "artifact_payloads": {
+                "work_packet": valid_work_packet(),
+                "evidence_bundle": {**valid_evidence_bundle(), "source_hash": "def"},
+            },
+        })
+
+        self.assertEqual((decision.action, decision.reason), ("BUILD_EVIDENCE_BUNDLE", "work_packet and evidence_bundle source_hash mismatch"))
+
+    def test_evidence_bundle_requires_lineage_and_completion_state(self) -> None:
+        payload = {
+            "artifact_id": "eb-1",
+            "source_hash": "abc",
+            "acceptance_evidence": ["A1:test-pass"],
+            "tests": ["python3 -m unittest tests.test_agent_delivery_lifecycle"],
+            "findings": [],
+            "residual_risks": [],
+            "writes_performed": ["scripts/agent_delivery_lifecycle.py"],
+            "safety_decision_id": "safe-1",
+            "policy_source": "AGENTS.md",
+            "lineage": [],
+            "journey_evidence": [],
+            "negative_path_evidence": [],
+            "completion_state": "demoed",
+        }
+
+        errors = validate_artifact("evidence_bundle", payload)
+
+        self.assertIn("lineage must be a non-empty list", errors)
+        self.assertIn("journey_evidence must be a non-empty list", errors)
+        self.assertIn("negative_path_evidence must be a non-empty list", errors)
+        self.assertIn(
+            "completion_state must be one of: implemented, wired, piloted, effective, adopted",
+            errors,
+        )
+
     def test_work_packet_cannot_disable_external_write_approval(self) -> None:
         payload = {
             "artifact_id": "wp-2", "source_hash": "abc", "objective": "publish",
@@ -508,6 +730,17 @@ class ArtifactContractTest(unittest.TestCase):
             "capability_class": "Judgment", "safety_decision_id": "safe-4",
             "side_effects_requested": ["external_write"], "external_write_targets": ["GitHub"],
             "approval_required": True, "approval_evidence": [evidence], "dry_run_required": True,
+            "out_of_scope": ["unapproved targets"],
+            "owned_paths": ["docs"],
+            "baseline": ["current docs inspected"],
+            "reality_contract": ["verify target exists before write"],
+            "verification": ["dry run"],
+            "dependencies": ["none"],
+            "handoff_requirements": ["report approval evidence"],
+            "reviewer_focus": ["approval gate"],
+            "journey_scenarios": ["approved publish path"],
+            "negative_paths": ["missing approval"],
+            "completion_target": "implemented",
         }
         self.assertTrue(validate_artifact("work_packet", payload))
         self.assertEqual(
@@ -579,13 +812,11 @@ class ArtifactContractTest(unittest.TestCase):
 class LoopTransitionTest(unittest.TestCase):
     @staticmethod
     def valid_work_packet() -> dict[str, object]:
-        return {
-            "artifact_id": "wp-1", "source_hash": "abc", "objective": "edit",
-            "scope": ["core"], "acceptance_ids": ["A1"], "constraints": [],
-            "capability_class": "Fast", "safety_decision_id": "safe-1",
-            "side_effects_requested": [], "external_write_targets": [],
-            "approval_required": False, "approval_evidence": [], "dry_run_required": False,
-        }
+        return valid_work_packet()
+
+    @staticmethod
+    def valid_evidence_bundle() -> dict[str, object]:
+        return valid_evidence_bundle()
 
     @staticmethod
     def valid_prd() -> dict[str, object]:
@@ -664,6 +895,126 @@ class LoopTransitionTest(unittest.TestCase):
     def test_review_findings_loop_back_to_fix(self) -> None:
         decision = next_action({"state": "REVIEWED", "high_findings": 2})
         self.assertEqual(decision.action, "FIX")
+
+    def test_reviewed_fails_closed_without_review_findings_or_trusted_count(self) -> None:
+        decision = next_action({
+            "state": "REVIEWED",
+            "artifact_payloads": {
+                "work_packet": self.valid_work_packet(),
+                "evidence_bundle": self.valid_evidence_bundle(),
+            },
+        })
+
+        self.assertEqual((decision.status, decision.action), ("RUNNING", "REVIEW"))
+
+    def test_reviewed_derives_high_findings_from_structured_review(self) -> None:
+        decision = next_action({
+            "state": "REVIEWED",
+            "review_findings": [
+                {"id": "R1", "severity": "MINOR"},
+                {"id": "R2", "severity": "IMPORTANT"},
+            ],
+            "artifact_payloads": {
+                "work_packet": self.valid_work_packet(),
+                "evidence_bundle": self.valid_evidence_bundle(),
+            },
+        })
+
+        self.assertEqual(decision.action, "FIX")
+
+    def test_reviewed_fails_closed_when_review_count_mismatches_structure(self) -> None:
+        decision = next_action({
+            "state": "REVIEWED",
+            "high_findings": 0,
+            "review_findings": [{"id": "R1", "severity": "CRITICAL"}],
+            "artifact_payloads": {
+                "work_packet": self.valid_work_packet(),
+                "evidence_bundle": self.valid_evidence_bundle(),
+            },
+        })
+
+        self.assertEqual((decision.status, decision.action), ("RUNNING", "REVIEW"))
+
+    def test_reviewed_delivers_when_completion_target_is_met(self) -> None:
+        decision = next_action({
+            "state": "REVIEWED",
+            "high_findings": 0,
+            "artifact_payloads": {
+                "work_packet": {**self.valid_work_packet(), "completion_target": "piloted"},
+                "evidence_bundle": {**self.valid_evidence_bundle(), "completion_state": "piloted"},
+            },
+        })
+
+        self.assertEqual(decision.action, "DELIVER")
+
+    def test_reviewed_wires_before_delivery_when_target_is_unmet(self) -> None:
+        decision = next_action({
+            "state": "REVIEWED",
+            "high_findings": 0,
+            "artifact_payloads": {
+                "work_packet": {**self.valid_work_packet(), "completion_target": "piloted"},
+                "evidence_bundle": {**self.valid_evidence_bundle(), "completion_state": "implemented"},
+            },
+        })
+
+        self.assertEqual((decision.status, decision.action), ("RUNNING", "WIRE"))
+
+    def test_reviewed_pilots_before_delivery_when_pilot_target_is_unmet(self) -> None:
+        decision = next_action({
+            "state": "REVIEWED",
+            "high_findings": 0,
+            "artifact_payloads": {
+                "work_packet": {**self.valid_work_packet(), "completion_target": "piloted"},
+                "evidence_bundle": {**self.valid_evidence_bundle(), "completion_state": "wired"},
+            },
+        })
+
+        self.assertEqual((decision.status, decision.action), ("RUNNING", "PILOT"))
+
+    def test_reviewed_measures_before_delivery_when_effectiveness_is_unmet(self) -> None:
+        decision = next_action({
+            "state": "REVIEWED",
+            "high_findings": 0,
+            "artifact_payloads": {
+                "work_packet": {**self.valid_work_packet(), "completion_target": "effective"},
+                "evidence_bundle": {**self.valid_evidence_bundle(), "completion_state": "piloted"},
+            },
+        })
+
+        self.assertEqual((decision.status, decision.action), ("RUNNING", "MEASURE"))
+
+    def test_reviewed_adopts_before_delivery_when_adoption_is_unmet(self) -> None:
+        decision = next_action({
+            "state": "REVIEWED",
+            "high_findings": 0,
+            "artifact_payloads": {
+                "work_packet": {**self.valid_work_packet(), "completion_target": "adopted"},
+                "evidence_bundle": {
+                    **self.valid_evidence_bundle(),
+                    "completion_state": "effective",
+                    "completion_evidence": {
+                        "status": "pass",
+                        "state": "effective",
+                        "source_hash": "abc",
+                        "checks": ["measurement:test-pass"],
+                    },
+                },
+            },
+        })
+
+        self.assertEqual((decision.status, decision.action), ("RUNNING", "ADOPT"))
+
+    def test_reviewed_refuses_effective_label_without_machine_evidence(self) -> None:
+        decision = next_action({
+            "state": "REVIEWED",
+            "high_findings": 0,
+            "artifact_payloads": {
+                "work_packet": {**self.valid_work_packet(), "completion_target": "effective"},
+                "evidence_bundle": {**self.valid_evidence_bundle(), "completion_state": "effective"},
+            },
+        })
+
+        self.assertEqual((decision.status, decision.action), ("RUNNING", "BUILD_EVIDENCE_BUNDLE"))
 
     def test_retry_limit_stops_loop(self) -> None:
         decision = next_action({"state": "REVIEWED", "retry_count": 3, "max_retries": 3})

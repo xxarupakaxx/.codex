@@ -158,12 +158,14 @@ Phase 0-5.5の順序を、自律実行時のstate machineとして次の契約�
 | `RECEIVED` | taskと`05_log.md` | `SURVEY` | 調査不能なら`WAITING_HUMAN` |
 | `SURVEYED` | route decision | PRDまたはWork Packet作成 | model未解決なら`ROUTING_BLOCKED` |
 | `IMPLEMENTED` | Work Packet | `REVIEW` | 実装失敗はbounded retry |
-| `REVIEWED` | CRITICAL / IMPORTANTが0 | Evidence Bundle作成とdelivery | findingがあれば`FIX`へ戻る |
+| `REVIEWED` | CRITICAL / IMPORTANTが0 | Evidence Bundleとcompletion targetを照合 | findingは`FIX`、maturity不足は`WIRE / PILOT / MEASURE / ADOPT`へ戻る |
 | `DELIVERED` | delivery evidence | 完了またはEscaped Defect記録 | 新しい漏れは学習LOOPへ入る |
 | `DEFECT_RECORDED` | 検証済みrecord | `REPLAY` | 再現不能ならL0のまま停止 |
 | `REPLAYED` | replay PASS | `COMPLETE` | 防止不能なら`WAITING_HUMAN` |
 
 `scripts/agent_delivery_lifecycle.py`は、この表、artifact必須field、model routingを決定的に検査する実行adapterである。
+
+completionは単一booleanに縮退させず、`implemented < wired < piloted < effective < adopted`の順で扱う。unit test成功だけで`wired`、sample 0件で`piloted`、baselineなしで`effective`、owner・承認・rollbackなしで`adopted`とは判定しない。依頼されたoutcomeに対応する`completion_target`へ届くまで完了報告を行わない。
 
 同scriptをPhase本文の第二の正本にせず、本文とtestの不一致は`--contracts`検証で失敗させる。
 

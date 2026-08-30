@@ -1,0 +1,101 @@
+{
+  "operation": "next",
+  "input": {
+    "state": "REVIEWED",
+    "high_findings": 0,
+    "artifact_payloads": {
+      "work_packet": {
+        "artifact_id": "wp-runtime-truth",
+        "source_hash": "abc",
+        "objective": "keep runtime truth markers current",
+        "scope": [
+          "scripts/validate-agent-harness.py",
+          "tests/test_validate_agent_harness.py",
+          "tests/fixtures/delivery-lifecycle"
+        ],
+        "out_of_scope": [
+          "external writes and policy promotion"
+        ],
+        "owned_paths": [
+          "scripts/validate-agent-harness.py",
+          "tests/test_validate_agent_harness.py",
+          "tests/fixtures/delivery-lifecycle"
+        ],
+        "acceptance_ids": [
+          "A1"
+        ],
+        "constraints": [
+          "no network",
+          "no external writes"
+        ],
+        "capability_class": "Fast",
+        "safety_decision_id": "local-readonly",
+        "side_effects_requested": [],
+        "external_write_targets": [],
+        "approval_required": false,
+        "approval_evidence": [],
+        "dry_run_required": false,
+        "baseline": [
+          "validator contract and fixture replay inspected"
+        ],
+        "reality_contract": [
+          "markers must reflect current runtime truth rather than aspirational automation"
+        ],
+        "verification": [
+          "python3 -m unittest discover -s tests -p test_validate_agent_harness.py"
+        ],
+        "dependencies": [
+          "scripts/agent_delivery_lifecycle.py"
+        ],
+        "handoff_requirements": [
+          "report changed files and validation commands"
+        ],
+        "reviewer_focus": [
+          "stale automation promise canaries"
+        ],
+        "journey_scenarios": [
+          "reviewed work with matching completion evidence delivers"
+        ],
+        "negative_paths": [
+          "forbidden stale runtime promises fail contract validation"
+        ],
+        "completion_target": "implemented"
+      },
+      "evidence_bundle": {
+        "artifact_id": "eb-runtime-truth",
+        "source_hash": "abc",
+        "acceptance_evidence": [
+          "A1:fixture replay passes"
+        ],
+        "tests": [
+          "python3 -m unittest discover -s tests -p test_validate_agent_harness.py"
+        ],
+        "findings": [],
+        "residual_risks": [
+          "non-owned docs must be updated by their owning work packet before --contracts can pass"
+        ],
+        "writes_performed": [
+          "scripts/validate-agent-harness.py",
+          "tests/test_validate_agent_harness.py",
+          "tests/fixtures/delivery-lifecycle/06_reviewed_completion_delivers.json"
+        ],
+        "safety_decision_id": "local-readonly",
+        "policy_source": "AGENTS.md",
+        "lineage": [
+          "wp-runtime-truth"
+        ],
+        "journey_evidence": [
+          "completion_state equals completion_target"
+        ],
+        "negative_path_evidence": [
+          "missing marker and forbidden marker tests cover drift"
+        ],
+        "completion_state": "implemented"
+      }
+    }
+  },
+  "expected": {
+    "status": "RUNNING",
+    "action": "DELIVER"
+  }
+}

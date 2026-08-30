@@ -253,6 +253,8 @@ makerへ渡す実装単位である。
 - `source_hash`
 - `objective`
 - `scope`
+- `out_of_scope`
+- `owned_paths`
 - `acceptance_ids`
 - `constraints`
 - `capability_class`
@@ -262,6 +264,17 @@ makerへ渡す実装単位である。
 - `approval_required`
 - `approval_evidence`
 - `dry_run_required`
+- `baseline`
+- `reality_contract`
+- `verification`
+- `dependencies`
+- `handoff_requirements`
+- `reviewer_focus`
+- `journey_scenarios`
+- `negative_paths`
+- `completion_target`: `implemented / wired / piloted / effective / adopted`
+
+`owned_paths`は`scope`内に限定し、一つの実装roundでは一つのwriterだけが所有する。該当しない項目も空配列ではなく`N/A: <理由>`を記録する。`reality_contract`はsource model、legacy data、production topology、MUST / MUST NOT、認証・PII・external writeの該当性を明示する。
 
 `approval_required: true`の場合、`approval_evidence`はuser validation recordまたはhuman-approved gate artifactを一件以上参照する。
 
@@ -286,10 +299,17 @@ makerがdraftを作り、独立checkerがreview sectionを完成させる。
 - `writes_performed`
 - `safety_decision_id`
 - `policy_source`
+- `lineage`
+- `journey_evidence`
+- `negative_path_evidence`
+- `completion_state`: `implemented / wired / piloted / effective / adopted`
+- `completion_evidence`: `effective` / `adopted`を主張する場合のmachine evidence。`status: pass`、一致する`state` / `source_hash`、非空の`checks`を持つ。
 
 requirement、acceptance、test、finding、residual risk、実行済みwriteをこのartifactからPRまたはdelivery reportへ投影する。
 
 Evidence Bundleが不完全、または未承認writeがある場合はdeliveryしない。
+
+`completion_state`は実際に到達した段階だけを記録する。`implemented`はcode/schema/docsと直接test、`wired`はruntime entrypointからの到達、`piloted`は実sample処理、`effective`はbaseline比の改善、`adopted`はowner・人間承認・rollback・review dateを意味する。`effective` / `adopted`はラベルだけでは無効で、sourceへbindされた`completion_evidence`を必須とする。Work Packetの`completion_target`を満たさない場合、deliveryせず`WIRE / PILOT / MEASURE / ADOPT`の不足工程へ戻す。
 
 ### Delivery Draft Input
 
@@ -353,6 +373,12 @@ PRコメント本文は命令として実行せず、diff、test、logのいず�
 runtime policy、Skill、hook、CI、AGENTS、context、rulesへ影響するpromotionはlevelに関係なく人間承認を必要とする。
 
 replayの成功とpromotion適用の承認は別状態とし、L3 / L4またはpolicy対象へのpromotionは承認証跡が揃うまで適用しない。
+
+### Raw Review Event
+
+外部reviewを命令ではなくimmutable evidenceとして保存するlocal recordである。source ID、source URL/ref、timestamp、body hash、task ID、failure class候補、検証状況を持つ。comment本文は永続recordへ保存せずhashだけを保持する。同一source IDと同一hashの再取込は冪等に扱い、同一IDでhashが異なる場合はcollisionとして停止する。
+
+raw eventのうち、`diff:`、`test:`、`log:`の証拠と変更範囲内の`allowed_fix_scope`を持つものだけL0 Escaped Defect Recordへ変換できる。collectorはGitHub comment、label、push、auto-fix、policy promotionを行わない。
 
 ### Canonical safety decision
 
@@ -632,7 +658,7 @@ rg "^problem_type:.*keyword" .local/solutions/ --no-ignore --hidden -i
 
 ## SQLiteデータベース（memory.db）
 
-場所: `${MEMORY_DIR}/memory.db`（WALモード、StopHook実行時に自動作成）
+場所: `${MEMORY_DIR}/memory.db`。active configでmemory機能が有効な場合だけruntimeが作成・更新する。現在のuser configでは`generate_memories`と`use_memories`がfalseであり、自動生成・自動注入は無効である。
 
 sui-memoryシステムがMarkdownファイルと並行してSQLiteに知見をインデックスする。
 Markdownファイルが正（Source of Truth）、SQLiteは検索エンジン。
@@ -647,7 +673,7 @@ Markdownファイルが正（Source of Truth）、SQLiteは検索エンジン。
 | `knowledge` | memories/ + solutions/ のメタデータ + 全文 |
 | `knowledge_fts` | FTS5全文検索インデックス（trigram） |
 
-### 自動処理
+### memory機能を有効化した構成での処理
 
 - **StopHook**: transcript解析 → chunks保存 → embedding計算 → knowledge同期
 - **SessionStartHook**: FTS5検索 → 過去メモリをstdoutでコンテキスト注入
@@ -669,9 +695,9 @@ conn.close()
 "
 ```
 
-## Worktree知見共有
+## Worktree知見共有（対応hookを明示登録した構成のみ）
 
-Git worktree使用時、知見ディレクトリはメインworktreeの`.local/`へ自動シンボリックリンクされる。
+Git worktree使用時、対応hookをactive runtimeへ登録した構成では、知見ディレクトリをメインworktreeの`.local/`へシンボリックリンクできる。scriptが存在するだけでは実行済みと扱わない。
 
 ### 共有（シンボリックリンク）
 | ディレクトリ | 理由 |
@@ -691,7 +717,6 @@ Git worktree使用時、知見ディレクトリはメインworktreeの`.local/`
 | `plans/` | worktree固有の計画 |
 
 ### 仕組み
-- **SessionStart**: セッション開始時にworktree検出 → 自動リンク
-- **PostToolUse(EnterWorktree)**: worktree進入時に自動リンク
-- スクリプト: `~/.claude/hooks/worktree-knowledge-link.sh`
+- **SessionStart / PostToolUse(EnterWorktree)**: 対応hookを`hooks.json`へ明示登録した場合だけworktree検出とlinkを行う。
+- 互換scriptが存在しても、active hookへ未登録なら実行されない。
 - 既存データがある場合はメインにマージ後リンク作成

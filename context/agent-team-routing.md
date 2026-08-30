@@ -62,12 +62,15 @@ sub-agent へ委任する前に、次の条件をすべて確認する。満た�
 
 実装単位、acceptance、write scope、routeのいずれかがmaterialに変わった場合は、最新判断を`supersedes`で参照してDelegation Decisionを再記録する。旧判断のままwriteを再開しない。Roadmap routeはPhase 2同期時の機械検査を通過しなければPhase 3へ進めない。
 
-workerへはobjective、背景、scope、触らない境界、制約、副作用、成果物、acceptance、検証方法を渡す。leadはtask分解、writerの一意性、統合、一次資料と実結果の確認、freshな検証、最終判断、commit / push、外部writeを保持する。
+workerへ渡す正規単位はWork Packetとする。cold startでも会話履歴なしに判断できるよう、`objective`、`scope`、`out_of_scope`、`owned_paths`、`acceptance_ids`、`baseline`、`reality_contract`、`verification`、`dependencies`、`handoff_requirements`、`reviewer_focus`、`journey_scenarios`、`negative_paths`、`completion_target`を必須にする。該当しない現実条件はfieldを空にせず、`N/A: <理由>`を明示する。leadはtask分解、writerの一意性、統合、一次資料と実結果の確認、freshな検証、最終判断、commit / push、外部writeを保持する。
+
+`reality_contract`は少なくともsource model、legacy data、production topology、MUST / MUST NOT、認証・PII・external writeの該当性を判断する。`journey_scenarios`と`negative_paths`は画面操作に限らず、empty、partial、cancel、retry、timeout、rollback、migrationなど利用者または運用者が通る状態遷移を含む。
 
 次はDelegation Decisionの代替にならない。
 
 - read-only調査だけをagentへ渡し、その後の独立可能な実装を再評価せずleadが始める。
 - workerへtask全体を無境界で渡し、write scopeやacceptanceを定義しない。
+- 複数packetで同じ`owned_paths`を曖昧に共有する、またはpacketとsubtaskを配列indexだけで対応させる。
 - 最初のwrite後に、事後的に委譲理由またはlead実装理由を記録する。
 - 単純作業まで件数合わせでspawnする。
 
