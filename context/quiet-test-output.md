@@ -4,10 +4,10 @@
 
 ```bash
 python3 ~/.codex/scripts/quiet-run.py -- uv run pytest
-python3 ~/.claude/scripts/quiet-run.py -- pnpm test -- --runInBand
+python3 ~/.codex/scripts/quiet-run.py -- python3 -m unittest discover
 ```
 
-`--` より後には、そのプロジェクトで確認した実際のコマンドと引数を渡す。上記の引数を別のtest runnerへ流用しない。Claude側はCodex側の同じ実装を起動する薄い入口であり、`~/.codex/scripts/quiet-run.py`が必要。
+上記は標準配置での使用例。配置先が異なる場合はスクリプトのpathを読み替える。`--` より後には、そのプロジェクトで確認した実際のコマンドと引数を渡す。別のtest runnerの引数を流用しない。
 
 ## 出力と終了状態
 
@@ -19,7 +19,7 @@ python3 ~/.claude/scripts/quiet-run.py -- pnpm test -- --runInBand
 
 ## 保存と安全性
 
-stdoutとstderrを合わせた全文を、既定で `~/.codex/.local/test-logs/` に実行ごとに別ファイルとして保存する。新しいログは本人のみ読書きできる。`--log-dir <directory>`で保存先を変えられるが、Vault、同期領域、Git管理対象への保存は避ける。既存の保存先ディレクトリの権限は変更しないため、本人だけが管理できる場所を選ぶ。
+stdoutとstderrを合わせた全文を、既定で `~/.codex/.local/test-logs/` に実行ごとに別ファイルとして保存する。新しいログは本人のみ読書きできる。`--log-dir <directory>`で保存先を変えられるが、同期領域やGit管理対象への保存は避ける。既存の保存先ディレクトリの権限は変更しないため、本人だけが管理できる場所を選ぶ。
 
 ログは自動削除しない。不要になったものは保存方針に従って整理する。全文をチャットへ戻したり、commit・共有したりしない。このラッパーはsecretを検出・除去しないため、secretや実データを出力するコマンドには使わず、先にテスト側の出力を修正する。
 
@@ -27,8 +27,8 @@ watchモード、対話入力、常駐サーバー、TTY必須の処理には使
 
 `cmd | tail`や`cmd || true`で代用しない。複合コマンドはできるだけ分け、shellが必要なら明示的に `bash -o pipefail -c '...'`を渡し、途中の失敗が消えないようにする。
 
-## ai-president-mt と今後のプロジェクト
+## 適用範囲
 
-MTではリポジトリ内の `apps/mt` を作業ディレクトリにして `python3 ~/.codex/scripts/quiet-run.py -- uv run pytest` を使う。Claudeでも同じコマンド、またはClaude側の入口を使える。Dashboardは `apps/dashboard` で、package.jsonで確認した有限のテストコマンドを包む。
+プロジェクト固有の作業ディレクトリ、テストコマンド、tool間の接続設定は、そのプロジェクトの文書またはローカル設定に置く。この共通文書には、特定のプロジェクト構成や導入環境を含めない。
 
-このPCではuser-scopeのAGENTS.md / CLAUDE.mdから利用を指示するため、新しいプロジェクトごとの導入は不要。既存taskが変更前の指示を読込済みなら、指示を再読するか新しいtaskを開く。これはAIへの実行規則であり、すべてのshellコマンドを強制的に書き換える仕組みではない。既に実行中のコマンド、手動のターミナル操作、CI、別PC・cloudの実行には自動適用されない。
+共通指示を読み込んだtaskで利用する。既存taskが変更前の指示を読込済みなら、指示を再読するか新しいtaskを開く。これはAIへの実行規則であり、すべてのshellコマンドを強制的に書き換える仕組みではない。既に実行中のコマンド、手動のターミナル操作、CI、共通指示を読み込まない実行環境には自動適用されない。
