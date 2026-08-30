@@ -108,6 +108,52 @@ Live Activityはmemory fileへ複製しない。Codex app-serverが返すsession
 
 Code Mapは常時toggleではなく、Detail drawerのImpactから開く。freshnessの正本は`codemap.lock`であり、Roadmapの更新時刻やsnapshot生成時刻で代用しない。
 
+### Roadmap Plan snapshot v2（計画・時系列の機械投影）
+
+`30_plan.md` は人とLLMが読む計画の正本であり、`roadmap.html` と `roadmap-snapshot.json` はその派生viewである。JSONやHTMLを手で編集して計画を補正してはならない。計画を変更したら、正本Markdownを更新し、同じ入力からsnapshotとHTMLを再生成する。
+
+Planの解釈は `scripts/roadmap_plan_contract.py` という単一parserに限定する。generator、sync、ViewerがそれぞれTask見出しを再解釈してはならない。parserは`30_plan.md`と任意の`40_progress.md`を読み、snapshotの`plan`へ次のschemaVersion 2モデルを出力する。
+
+```json
+{
+  "schemaVersion": 2,
+  "parserVersion": "2.0.0",
+  "sourceHash": "<sha256>",
+  "sourceHashes": {"30_plan.md": "<sha256>", "40_progress.md": "<sha256>"},
+  "tasks": [{
+    "number": "1",
+    "title": "安定したTask名",
+    "purpose": "目的",
+    "targets": ["変更対象"],
+    "implementation": ["実装手順"],
+    "outputs": ["成果物"],
+    "verification": ["検証"],
+    "blockedBy": "",
+    "steps": [{"label": "手順", "complete": false}],
+    "done": 0,
+    "total": 1,
+    "status": "planned",
+    "source": {"file": "30_plan.md", "lineStart": 1, "lineEnd": 20}
+  }],
+  "edges": [{"from": "1", "to": "2", "kind": "blockedBy"}],
+  "progress": {"done": 0, "total": 1, "globalComplete": false, "signals": {}},
+  "diagnostics": [],
+  "sources": {"plan": "30_plan.md", "progress": "40_progress.md"}
+}
+```
+
+Taskのcanonical記法は`##`または`### Task <number>: <title>`（`タスク`と全角コロンも可）で、numberは一意な整数または一段の小数（例: `6.1`）とする。各Taskは少なくとも`目的`、`変更対象`、`実装`、`成果物`、`検証`を持つ。依存関係はTask本文の`blockedBy`へ明記し、既知Task間の`edges`だけを生成する。見出し階層、空タイトル、重複ID、自己依存、未知依存などの構文・意味エラーは補作せず停止する。
+
+計画の時系列はTask順序と混ぜない。generatorは正本の`05_log.md`と進捗記録から、snapshotの`timeline`へsource line付きのイベントを投影する。Task graph（何が何をblockするか）、progress（どこまで完了したか）、timeline（いつ何が起きたか）は別の関係として表示し、本文にない因果関係、完了、担当、期限を推測してedgeやeventへ追加しない。Taskの`source`とtimeline eventのsourceから正本の該当箇所を開けるようにすることで、Codemapと同じく「関係を辿る」ことと「根拠へ戻る」ことを両立する。
+
+snapshotの責務と互換境界は次の通りである。
+
+- `plan.schemaVersion: 2` が存在する場合、Viewerとsyncは構造化された`tasks`、`edges`、`progress`を使う。task countが0、必須field欠落、source hash不一致、diagnostics付きの不正modelを成功扱いにしない。
+- `plan`自体が存在しない古いsnapshotに限り、v1のlegacy parserをfallbackとして使える。v2が存在して壊れている場合にv1へ黙ってfallbackしてはならず、Roadmapはエラー、未確認、または同期停止を明示する。
+- `timeline`が欠落した場合は、時系列を補作せず「未記録」と表示する。古いsnapshotのlegacy log表示は互換表示であり、v2のstructured timelineとは区別する。
+- `sourceHash`は表示時点の正本との対応を検査するために使う。generatedAtやHTMLのmtimeをfreshnessの代用にしない。Codemapのfreshnessは引き続き`codemap.lock`を正本とする。
+- `roadmap.html`はこのsnapshotを埋め込む配布物であり、snapshotのschemaを変更する場合も、先にparserと検証を更新してから生成する。invalid renderで既存配布物を上書きしない。
+
 Codex app の横で開きっぱなしにして進捗を見たい場合は次を使う:
 
 ```bash

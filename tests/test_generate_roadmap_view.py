@@ -84,6 +84,189 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
             )
         )
 
+    def test_task_parser_matches_viewer_heading_contract(self) -> None:
+        plan = "\n".join(
+            [
+                "## Task 1: valid",
+                "- [ ] one",
+                "### タスク 1.5： 有効",
+                "- [ ] two",
+            ]
+        )
+
+        sections = roadmap.iter_task_sections(plan)
+
+        self.assertEqual([section[0] for section in sections], ["1", "1.5"])
+
+    def test_structured_plan_and_timeline_are_generated_from_canonical_contract(self) -> None:
+        plan = "\n".join(
+            [
+                "# Plan",
+                "",
+                "## Task 1: foundation",
+                "",
+                "#### 目的",
+                "基礎を作る。",
+                "",
+                "#### 変更対象",
+                "- `scripts/foundation.py`",
+                "",
+                "#### 実装",
+                "- [x] 実装する",
+                "",
+                "#### 成果物",
+                "- Foundation",
+                "",
+                "#### 検証",
+                "- `pytest`",
+                "",
+                "## Task 2: integration",
+                "",
+                "**blockedBy:** Task 1",
+                "",
+                "#### 目的",
+                "統合する。",
+                "",
+                "#### 変更対象",
+                "- `scripts/integration.py`",
+                "",
+                "#### 実装",
+                "- [ ] 統合する",
+                "",
+                "#### 成果物",
+                "- Integration",
+                "",
+                "#### 検証",
+                "- `pytest`",
+            ]
+        )
+        (self.task_dir / "30_plan.md").write_text(plan, encoding="utf-8")
+        (self.task_dir / "40_progress.md").write_text(
+            "| Task | Status | Progress |\n|---|---|---|\n| Task 2 | in-progress | 1/2 |\n",
+            encoding="utf-8",
+        )
+        (self.task_dir / "05_log.md").write_text(
+            "\n".join(
+                [
+                    "# 作業ログ",
+                    "",
+                    "## 2026-08-30 23:20 - Plan started",
+                    "- Phase 2へ遷移した。",
+                    "",
+                    "## 2026-08-31 - Follow-up",
+                    "- 次の検証を記録した。",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+
+        self.assertEqual(snapshot["plan"]["schemaVersion"], 2)
+        self.assertEqual(
+            [task["number"] for task in snapshot["plan"]["tasks"]],
+            ["1", "2"],
+        )
+        self.assertEqual(
+            snapshot["plan"]["edges"],
+            [{"from": "1", "to": "2", "kind": "blockedBy"}],
+        )
+        self.assertEqual(snapshot["plan"]["tasks"][1]["status"], "in-progress")
+        self.assertEqual(snapshot["timeline"][0]["timestamp"], "2026-08-30T23:20")
+        self.assertEqual(snapshot["timeline"][0]["time"], "2026-08-30T23:20")
+        self.assertEqual(snapshot["timeline"][0]["phase"], "2")
+        self.assertTrue(snapshot["timeline"][0]["id"].startswith("timeline-"))
+        self.assertEqual(snapshot["timeline"][0]["source"]["file"], str(self.task_dir / "05_log.md"))
+        self.assertIn("Phase 2", snapshot["timeline"][0]["body"])
+
+    def test_plan_parser_is_called_once_and_generation_id_is_deterministic(self) -> None:
+        with mock.patch.object(
+            roadmap,
+            "parse_plan_model",
+            wraps=roadmap.parse_plan_model,
+        ) as parse_plan:
+            first = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+
+        second = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+
+        self.assertEqual(parse_plan.call_count, 1)
+        self.assertEqual(first["generationId"], second["generationId"])
+        self.assertEqual(first["plan"]["sourceHash"], second["plan"]["sourceHash"])
+        self.assertEqual(first["timeline"], second["timeline"])
+
+    def test_invalid_plan_does_not_overwrite_existing_generated_outputs(self) -> None:
+        output = self.task_dir / "roadmap.html"
+        json_output = self.task_dir / "roadmap-snapshot.json"
+        output.write_text("previous valid html", encoding="utf-8")
+        json_output.write_text('{"previous": true}', encoding="utf-8")
+        (self.task_dir / "30_plan.md").write_text(
+            "# Plan\n\n#### Task 1: too deep\nbody\n",
+            encoding="utf-8",
+        )
+
+        with self.assertRaisesRegex(ValueError, "H2 or H3"):
+            roadmap.write_outputs(
+                self.task_dir,
+                output,
+                write_json=True,
+                source_root=self.root,
+            )
+
+        self.assertEqual(output.read_text(encoding="utf-8"), "previous valid html")
+        self.assertEqual(json_output.read_text(encoding="utf-8"), '{"previous": true}')
+
+    def test_pair_publish_rolls_back_when_json_publish_fails(self) -> None:
+        output = self.task_dir / "roadmap.html"
+        json_output = self.task_dir / "roadmap-snapshot.json"
+        output.write_text("previous valid html", encoding="utf-8")
+        json_output.write_text('{"previous": true}', encoding="utf-8")
+        failed = False
+
+        def fail_json_once(stage: Path, destination: Path) -> object:
+            nonlocal failed
+            if destination == json_output and not failed:
+                failed = True
+                raise OSError("injected JSON publish failure")
+            return real_replace(stage, destination)
+
+        real_replace = getattr(roadmap, "_replace_staged", None)
+        with mock.patch.object(
+            roadmap,
+            "_replace_staged",
+            side_effect=fail_json_once,
+            create=True,
+        ):
+            with self.assertRaisesRegex(OSError, "injected JSON publish failure"):
+                roadmap.write_outputs(
+                    self.task_dir,
+                    output,
+                    write_json=True,
+                    source_root=self.root,
+                )
+
+        self.assertTrue(failed)
+        self.assertEqual(output.read_text(encoding="utf-8"), "previous valid html")
+        self.assertEqual(json_output.read_text(encoding="utf-8"), '{"previous": true}')
+        self.assertEqual(
+            [path for path in self.task_dir.iterdir() if path.name.endswith(".tmp")],
+            [],
+        )
+
+    def test_write_outputs_without_json_keeps_json_output_untouched(self) -> None:
+        output = self.task_dir / "roadmap.html"
+        json_output = self.task_dir / "roadmap-snapshot.json"
+        json_output.write_text('{"previous": true}', encoding="utf-8")
+
+        roadmap.write_outputs(
+            self.task_dir,
+            output,
+            write_json=False,
+            source_root=self.root,
+        )
+
+        self.assertTrue(output.is_file())
+        self.assertEqual(json_output.read_text(encoding="utf-8"), '{"previous": true}')
+
     def build_source_snapshot(
         self,
         reference: str,

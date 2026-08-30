@@ -39,6 +39,7 @@ DEFAULT_FILES = [
 ]
 
 OUTPUT_NAMES = {"roadmap.html", "roadmap-snapshot.json"}
+PLAN_CONTRACT = ROOT / "scripts" / "roadmap_plan_contract.py"
 EMBEDDED_SNAPSHOT_RE = re.compile(
     r'<script\b(?=[^>]*\bid=["\']embedded-snapshot["\'])[^>]*>(.*?)</script\s*>',
     re.IGNORECASE | re.DOTALL,
@@ -52,10 +53,6 @@ CSP_META_RE = re.compile(
     r'<meta\b[^>]*\bhttp-equiv=["\']Content-Security-Policy["\']',
     re.IGNORECASE,
 )
-TASK_HEADING_RE = re.compile(
-    r"^(#{2,3})\s+(?:Task|タスク)\s+(\d+(?:\.\d+)?)\s*[:：]",
-    re.IGNORECASE | re.MULTILINE,
-)
 ROADMAP_CSP = (
     "default-src 'none'; "
     "script-src 'unsafe-inline'; "
@@ -65,7 +62,6 @@ ROADMAP_CSP = (
     "base-uri 'none'; "
     "form-action 'none'"
 )
-MARKDOWN_HEADING_RE = re.compile(r"^(#{1,6})\s+\S", re.MULTILINE)
 IMPLEMENTATION_EVIDENCE_RE = re.compile(
     r"^#### 実装根拠\s*$([\s\S]*?)(?=^####\s|\Z)",
     re.MULTILINE,
@@ -191,6 +187,14 @@ STABLE_UI_ID_RE = re.compile(r"^[A-Za-z][A-Za-z0-9._-]{0,63}$")
 GIT_SHA_RE = re.compile(r"^[0-9a-f]{40,64}$")
 RAW_HTML_RE = re.compile(r"</?[A-Za-z][^>]*>")
 EXTERNAL_URL_RE = re.compile(r"(?i)(?:https?:)?//")
+LOG_HEADING_RE = re.compile(r"^(#{1,6})[ \t]+(.+?)\s*$", re.MULTILINE)
+LOG_ISO_DATE_RE = re.compile(
+    r"^(?P<date>\d{4}-\d{2}-\d{2})(?:[ T]+(?P<time>\d{2}:\d{2}(?::\d{2}(?:\.\d+)?)?))?"
+)
+LOG_JP_DATE_RE = re.compile(
+    r"^(?P<year>\d{4})年(?P<month>\d{1,2})月(?P<day>\d{1,2})日"
+    r"(?:[ T]+(?P<hour>\d{1,2}):(?P<minute>\d{2})(?::(?P<second>\d{2}))?)?"
+)
 ALLOWED_UI_LAYOUTS = {"topnav", "sidebar", "settings", "list", "form"}
 ALLOWED_UI_ITEM_KINDS = {"label", "item", "group", "action", "input"}
 ALLOWED_UI_CHANGES = {"same", "added", "modified", "removed"}
@@ -220,6 +224,140 @@ def write_text_if_changed(path: Path, text: str) -> bool:
         pass
     atomic_write_text(path, text)
     return True
+
+
+def _publish_stage_path(path: Path) -> Path:
+    token = f"{os.getpid()}.{threading.get_ident()}.{time.time_ns()}"
+    return path.with_name(f".{path.name}.{token}.tmp")
+
+
+def _replace_staged(stage: Path, destination: Path) -> None:
+    """Replace one published output; kept injectable for failure testing."""
+    stage.replace(destination)
+
+
+def _read_publish_target(path: Path) -> tuple[bool, str | None]:
+    if not path.exists():
+        return False, None
+    try:
+        return True, path.read_text()
+    except OSError as error:
+        raise OSError(f"cannot read existing Roadmap output {path}: {error}") from error
+
+
+def _cleanup_publish_stage(path: Path) -> None:
+    try:
+        path.unlink()
+    except FileNotFoundError:
+        return
+    except OSError:
+        # The original publish error is more useful than cleanup noise. The
+        # next generation will still use a fresh unique stage path.
+        return
+
+
+def publish_output_pair(
+    html_path: Path,
+    html_text: str,
+    json_path: Path,
+    json_text: str,
+) -> None:
+    """Publish HTML and JSON as one recoverable pair.
+
+    Both payloads are staged and read back before either destination changes.
+    The destinations are then replaced in sequence; if a later replacement
+    fails, already replaced destinations are restored from their private
+    backups. This preserves the old pair for ordinary write failures while
+    keeping ``write_json=False`` on the historical single-file path.
+    """
+    if html_path.resolve(strict=False) == json_path.resolve(strict=False):
+        raise ValueError("HTML and JSON Roadmap outputs must be different files")
+    try:
+        parsed_json = json.loads(json_text)
+    except (TypeError, json.JSONDecodeError) as error:
+        raise ValueError(f"Roadmap snapshot JSON is invalid: {error}") from error
+    if not isinstance(parsed_json, dict):
+        raise ValueError("Roadmap snapshot JSON must contain an object")
+
+    targets = [(html_path, html_text), (json_path, json_text)]
+    states: list[dict[str, object]] = []
+    staged: list[Path] = []
+    backups: list[Path] = []
+    replaced: list[dict[str, object]] = []
+    try:
+        # Read both old destinations first. A read error therefore occurs
+        # before either new payload can become visible.
+        for path, text in targets:
+            existed, previous = _read_publish_target(path)
+            stage = _publish_stage_path(path)
+            atomic_write_text(stage, text)
+            if stage.read_text() != text:
+                raise OSError(f"staged Roadmap output was not verified: {stage}")
+            staged.append(stage)
+            states.append(
+                {
+                    "path": path,
+                    "text": text,
+                    "existed": existed,
+                    "previous": previous,
+                    "stage": stage,
+                    "changed": not existed or previous != text,
+                    "backup": None,
+                }
+            )
+
+        # Back up only destinations that will change. Backups are prepared
+        # before the first replacement, so rollback does not depend on the
+        # old destination remaining readable after publication starts.
+        for state in states:
+            if not state["changed"] or not state["existed"]:
+                continue
+            path = state["path"]
+            previous = state["previous"]
+            if not isinstance(path, Path) or not isinstance(previous, str):
+                raise OSError("invalid Roadmap output backup state")
+            backup = _publish_stage_path(path)
+            atomic_write_text(backup, previous)
+            if backup.read_text() != previous:
+                raise OSError(f"Roadmap output backup was not verified: {backup}")
+            backups.append(backup)
+            state["backup"] = backup
+
+        # Preserve the historical HTML-then-JSON order. Any failure in the
+        # second replacement is covered by the rollback below.
+        for state in states:
+            if not state["changed"]:
+                continue
+            replaced.append(state)
+            stage = state["stage"]
+            path = state["path"]
+            if not isinstance(stage, Path) or not isinstance(path, Path):
+                raise OSError("invalid Roadmap output publish state")
+            _replace_staged(stage, path)
+    except BaseException as error:
+        rollback_errors: list[str] = []
+        for state in reversed(replaced):
+            path = state.get("path")
+            existed = state.get("existed")
+            backup = state.get("backup")
+            if not isinstance(path, Path):
+                rollback_errors.append("invalid Roadmap rollback path")
+                continue
+            try:
+                if existed is True:
+                    if not isinstance(backup, Path):
+                        raise OSError("missing Roadmap rollback backup")
+                    _replace_staged(backup, path)
+                else:
+                    path.unlink(missing_ok=True)
+            except OSError as rollback_error:
+                rollback_errors.append(f"{path}: {rollback_error}")
+        if rollback_errors and hasattr(error, "add_note"):
+            error.add_note("Roadmap output rollback failed: " + "; ".join(rollback_errors))
+        raise
+    finally:
+        for path in staged + backups:
+            _cleanup_publish_stage(path)
 
 
 def ensure_task_meta(
@@ -314,45 +452,101 @@ def infer_source_root(task_dir: Path) -> Path | None:
     return None
 
 
-def iter_task_sections(plan: str) -> list[tuple[str, int, int, str]]:
+_PLAN_CONTRACT_MODULE: object | None = None
+
+
+def load_plan_contract_module() -> object:
+    """Load the one canonical Markdown-to-Plan parser used by Roadmap generation."""
+    global _PLAN_CONTRACT_MODULE
+    if _PLAN_CONTRACT_MODULE is not None:
+        return _PLAN_CONTRACT_MODULE
+    spec = importlib.util.spec_from_file_location("roadmap_plan_contract", PLAN_CONTRACT)
+    if spec is None or spec.loader is None:
+        raise ValueError(f"cannot load Roadmap Plan contract: {PLAN_CONTRACT}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(spec.name, module)
+    spec.loader.exec_module(module)
+    _PLAN_CONTRACT_MODULE = module
+    return module
+
+
+def parse_plan_model(
+    plan: str,
+    progress: str = "",
+    *,
+    plan_source: str = "30_plan.md",
+    progress_source: str = "40_progress.md",
+) -> dict[str, object]:
+    """Return the canonical Plan model without reinterpreting Task headings here."""
+    module = load_plan_contract_module()
+    return module.parse_plan_contract(
+        plan,
+        progress,
+        plan_source=plan_source,
+        progress_source=progress_source,
+    )
+
+
+def _line_offsets(text: str) -> list[int]:
+    offsets = [0]
+    offsets.extend(match.end() for match in re.finditer(r"\n", text))
+    return offsets
+
+
+def iter_task_sections(
+    plan: str,
+    plan_model: dict[str, object] | None = None,
+) -> list[tuple[str, int, int, str]]:
+    """Compatibility adapter backed by the canonical Plan model.
+
+    The source-preview/UI code historically consumed offsets and raw sections.
+    Keep that tuple shape while taking Task identity and section boundaries from
+    ``roadmap_plan_contract`` so this generator has no second Task parser.
+    """
+    model = plan_model or parse_plan_model(plan)
+    offsets = _line_offsets(plan)
     sections: list[tuple[str, int, int, str]] = []
-    task_matches = list(TASK_HEADING_RE.finditer(plan))
-    for index, task_match in enumerate(task_matches):
-        section_start = task_match.end()
-        task_level = len(task_match.group(1))
-        section_end = (
-            task_matches[index + 1].start()
-            if index + 1 < len(task_matches)
-            else len(plan)
+    tasks = model.get("tasks", [])
+    if not isinstance(tasks, list):
+        return sections
+    for task in tasks:
+        if not isinstance(task, dict):
+            continue
+        number = task.get("number")
+        body = task.get("body")
+        source = task.get("source")
+        if not isinstance(number, str) or not isinstance(body, str):
+            continue
+        line_start = source.get("lineStart") if isinstance(source, dict) else None
+        line_end = source.get("lineEnd") if isinstance(source, dict) else None
+        start_offset = (
+            offsets[int(line_start) - 1]
+            if isinstance(line_start, int) and 1 <= line_start <= len(offsets)
+            else 0
         )
-        peer_heading = next(
-            (
-                heading
-                for heading in MARKDOWN_HEADING_RE.finditer(
-                    plan,
-                    section_start,
-                    section_end,
-                )
-                if len(heading.group(1)) <= task_level
-            ),
-            None,
-        )
-        if peer_heading is not None:
-            section_end = peer_heading.start()
-        sections.append(
-            (
-                task_match.group(2),
-                section_start,
-                section_end,
-                plan[section_start:section_end],
+        # ``body`` is preserved by the canonical parser. Locating that exact
+        # slice keeps legacy preview span arithmetic compatible without
+        # introducing another heading parser in this generator.
+        body_offset = plan.find(body, start_offset)
+        if body_offset >= 0:
+            start_offset = body_offset
+            end_offset = body_offset + len(body)
+        else:
+            end_offset = (
+                offsets[int(line_end)]
+                if isinstance(line_end, int) and 0 <= line_end < len(offsets)
+                else len(plan)
             )
-        )
+        sections.append((number, start_offset, end_offset, body))
     return sections
 
 
-def parse_source_preview_references(plan: str) -> list[tuple[str, str]]:
+def parse_source_preview_references(
+    plan: str,
+    plan_model: dict[str, object] | None = None,
+) -> list[tuple[str, str]]:
     references: list[tuple[str, str]] = []
-    for task_number, _, _, task_section in iter_task_sections(plan):
+    for task_number, _, _, task_section in iter_task_sections(plan, plan_model):
         evidence = IMPLEMENTATION_EVIDENCE_RE.search(task_section)
         if not evidence:
             continue
@@ -908,8 +1102,9 @@ def collect_source_previews(
     base_revision: str | None = None,
     base_ref_message: str = "",
     git_blob_cache: dict[tuple[str, str], tuple[bytes | None, str, str]] | None = None,
+    plan_model: dict[str, object] | None = None,
 ) -> list[dict[str, object]]:
-    references = parse_source_preview_references(plan)
+    references = parse_source_preview_references(plan, plan_model)
     if not references:
         return []
 
@@ -952,10 +1147,13 @@ def invalid_ui_preview(task_number: str, message: str) -> dict[str, object]:
     return {"taskNumber": task_number, "id": "invalid-ui-preview", "status": "invalid", "message": message, "before": {"items": []}, "after": {"items": []}, "uncertainty": []}
 
 
-def infer_ui_preview_base_ref(plan: str) -> tuple[str | None, str]:
+def infer_ui_preview_base_ref(
+    plan: str,
+    plan_model: dict[str, object] | None = None,
+) -> tuple[str | None, str]:
     """Use one LLM-recorded immutable SHA when the CLI did not supply a ref."""
     declared_refs: set[str] = set()
-    for _task_number, _start, _end, body in iter_task_sections(plan):
+    for _task_number, _start, _end, body in iter_task_sections(plan, plan_model):
         for block in UI_PREVIEW_BLOCK_RE.finditer(body):
             try:
                 root = json.loads(block.group(1))
@@ -1191,8 +1389,9 @@ def collect_ui_previews(
     base_revision: str | None,
     base_ref_message: str,
     git_blob_cache: dict[tuple[str, str], tuple[bytes | None, str, str]] | None = None,
+    plan_model: dict[str, object] | None = None,
 ) -> list[dict[str, object]]:
-    task_sections = iter_task_sections(plan)
+    task_sections = iter_task_sections(plan, plan_model)
     if not task_sections and not UI_PREVIEW_BLOCK_RE.search(plan):
         return []
     normalized_root = (
@@ -1255,15 +1454,16 @@ def collect_ui_previews(
 def validate_declared_ui_previews(
     plan: str,
     previews: list[dict[str, object]],
+    plan_model: dict[str, object] | None = None,
 ) -> None:
     declared = {
         task_number
-        for task_number, _start, _end, body in iter_task_sections(plan)
+        for task_number, _start, _end, body in iter_task_sections(plan, plan_model)
         if UI_CHANGE_MARKER_RE.search(body)
     }
     if not declared:
         return
-    _inferred_ref, inferred_message = infer_ui_preview_base_ref(plan)
+    _inferred_ref, inferred_message = infer_ui_preview_base_ref(plan, plan_model)
     if inferred_message:
         raise ValueError(inferred_message)
     previews_by_task: dict[str, list[dict[str, object]]] = {}
@@ -1337,6 +1537,8 @@ def build_fingerprint(
     source_previews: list[dict[str, object]] | None = None,
     ui_previews: list[dict[str, object]] | None = None,
     codemap_state: dict[str, object] | None = None,
+    plan_model: dict[str, object] | None = None,
+    timeline: list[dict[str, object]] | None = None,
 ) -> str:
     payload = {
         "files": files,
@@ -1344,6 +1546,8 @@ def build_fingerprint(
         "sourcePreviews": source_previews or [],
         "uiPreviews": ui_previews or [],
         "codemap": codemap_state or {},
+        "plan": plan_model or {},
+        "timeline": timeline or [],
     }
     canonical = json.dumps(
         payload,
@@ -1352,6 +1556,112 @@ def build_fingerprint(
         separators=(",", ":"),
     )
     return hashlib.sha256(canonical.encode()).hexdigest()
+
+
+def _log_timestamp_and_title(raw_title: str) -> tuple[str | None, str]:
+    """Extract a sortable timestamp from a dated log heading."""
+    title = raw_title.strip()
+    iso_match = LOG_ISO_DATE_RE.match(title)
+    if iso_match:
+        timestamp = iso_match.group("date")
+        if iso_match.group("time"):
+            timestamp += "T" + iso_match.group("time")
+        remainder = title[iso_match.end() :].lstrip(" -–—:：")
+        return timestamp, remainder or title
+
+    jp_match = LOG_JP_DATE_RE.match(title)
+    if jp_match:
+        timestamp = (
+            f"{jp_match.group('year')}-{int(jp_match.group('month')):02d}-"
+            f"{int(jp_match.group('day')):02d}"
+        )
+        if jp_match.group("hour"):
+            timestamp += (
+                f"T{int(jp_match.group('hour')):02d}:{jp_match.group('minute')}"
+            )
+            if jp_match.group("second"):
+                timestamp += f":{jp_match.group('second')}"
+        remainder = title[jp_match.end() :].lstrip(" -–—:：")
+        return timestamp, remainder or title
+    return None, title
+
+
+def _timeline_summary(body: str, title: str, *, limit: int = 320) -> str:
+    compact = " ".join(
+        re.sub(r"```[\s\S]*?```", " ", body).split()
+    ).strip()
+    summary = compact or title
+    if len(summary) <= limit:
+        return summary
+    return summary[: limit - 1].rstrip() + "…"
+
+
+def parse_log_timeline(log_text: str, *, log_source: str = "05_log.md") -> list[dict[str, object]]:
+    """Turn dated headings in 05_log.md into stable, source-addressable events.
+
+    This is intentionally a log parser, not a second Plan/Task parser. Plan
+    headings are handled exclusively by ``roadmap_plan_contract``.
+    """
+    headings = list(LOG_HEADING_RE.finditer(log_text))
+    events: list[dict[str, object]] = []
+    occurrence: dict[tuple[str, str], int] = {}
+    for index, heading in enumerate(headings):
+        timestamp, title = _log_timestamp_and_title(heading.group(2))
+        if timestamp is None:
+            continue
+        level = len(heading.group(1))
+        next_heading = next(
+            (
+                candidate
+                for candidate in headings[index + 1 :]
+                if len(candidate.group(1)) <= level
+            ),
+            None,
+        )
+        end = next_heading.start() if next_heading else len(log_text)
+        body = log_text[heading.end() : end].strip()
+        line_start = log_text.count("\n", 0, heading.start()) + 1
+        line_end = max(
+            line_start,
+            log_text.count("\n", 0, max(heading.start(), end - 1)) + 1,
+        )
+        key = (timestamp, title)
+        ordinal = occurrence.get(key, 0)
+        occurrence[key] = ordinal + 1
+        event_key = "\0".join((log_source, timestamp, title, str(ordinal)))
+        phase_match = re.search(
+            r"(?:Phase|フェーズ)\s*([0-9]+(?:\.[0-9]+)?)",
+            " ".join((title, body[:512])),
+            re.IGNORECASE,
+        )
+        event: dict[str, object] = {
+            "id": "timeline-" + hashlib.sha256(event_key.encode("utf-8")).hexdigest()[:16],
+            "timestamp": timestamp,
+            "time": timestamp,
+            "title": title,
+            "summary": _timeline_summary(body, title),
+            "body": body,
+            "phase": phase_match.group(1) if phase_match else "",
+            "source": {
+                "file": log_source,
+                "lineStart": line_start,
+                "lineEnd": line_end,
+            },
+        }
+        events.append(event)
+
+    # Keep chronological order while preserving source order for identical or
+    # undated values. Dated events are the only entries emitted today, but the
+    # key remains explicit for a future optional log event type.
+    events.sort(
+        key=lambda event: (
+            str(event.get("timestamp") or "9999-99-99"),
+            int(event.get("source", {}).get("lineStart", 0))
+            if isinstance(event.get("source"), dict)
+            else 0,
+        )
+    )
+    return events
 
 
 def infer_title(files: dict[str, str], task_dir: Path) -> str:
@@ -1441,7 +1751,18 @@ def build_snapshot(
     artifacts = collect_artifacts(task_dir, output)
     effective_source_root = source_root or infer_source_root(task_dir) or task_dir.parent
     plan = files.get("30_plan.md", "")
-    inferred_base_ref, inferred_base_ref_message = infer_ui_preview_base_ref(plan)
+    plan_model = parse_plan_model(
+        plan,
+        files.get("40_progress.md", ""),
+        plan_source=str(task_dir / "30_plan.md"),
+        progress_source=str(task_dir / "40_progress.md"),
+    )
+    log_source = str(task_dir / "05_log.md")
+    timeline = parse_log_timeline(files.get("05_log.md", ""), log_source=log_source)
+    inferred_base_ref, inferred_base_ref_message = infer_ui_preview_base_ref(
+        plan,
+        plan_model,
+    )
     effective_base_ref = base_ref or inferred_base_ref
     base_revision, resolved_base_ref_message = resolve_git_commit(
         effective_source_root,
@@ -1457,6 +1778,7 @@ def build_snapshot(
         base_revision=base_revision,
         base_ref_message=base_ref_message,
         git_blob_cache=git_blob_cache,
+        plan_model=plan_model,
     )
     ui_previews = collect_ui_previews(
         plan,
@@ -1466,23 +1788,43 @@ def build_snapshot(
         base_revision=base_revision,
         base_ref_message=base_ref_message,
         git_blob_cache=git_blob_cache,
+        plan_model=plan_model,
     )
-    validate_declared_ui_previews(plan, ui_previews)
+    validate_declared_ui_previews(plan, ui_previews, plan_model)
     codemap_state = load_codemap_state(task_dir, effective_source_root)
+    fingerprint = build_fingerprint(
+        files,
+        artifacts,
+        source_previews,
+        ui_previews,
+        codemap_state,
+        plan_model,
+        timeline,
+    )
     snapshot: dict[str, object] = {
         "version": 1,
         "title": infer_title(files, task_dir),
         "taskDir": str(task_dir),
         "generatedAt": datetime.now(timezone.utc).isoformat(),
-        "fingerprint": build_fingerprint(
-            files, artifacts, source_previews, ui_previews, codemap_state
-        ),
+        "fingerprint": fingerprint,
+        "planSourceHash": plan_model.get("sourceHash", ""),
+        "generationId": "roadmap-" + hashlib.sha256(
+            ("v2\0" + fingerprint).encode("utf-8")
+        ).hexdigest()[:20],
         "files": files,
         "sources": sources,
         "artifacts": artifacts,
         "sourcePreviews": source_previews,
         "uiPreviews": ui_previews,
         "codemapStatus": codemap_state["status"],
+        "plan": plan_model,
+        "timeline": timeline,
+        "timelineSource": {
+            "file": log_source,
+            "sourceHash": hashlib.sha256(
+                files.get("05_log.md", "").encode("utf-8")
+            ).hexdigest(),
+        },
     }
     codemap_snapshot = codemap_state.get("snapshot")
     if isinstance(codemap_snapshot, dict):
@@ -1610,13 +1952,16 @@ def write_outputs(
 
     rendered_html = render_html(snapshot)
     validate_roadmap_html(rendered_html, output)
-    write_text_if_changed(output, rendered_html)
-
     if write_json:
-        write_text_if_changed(
+        json_text = json.dumps(snapshot, ensure_ascii=False, indent=2)
+        publish_output_pair(
+            output,
+            rendered_html,
             json_path,
-            json.dumps(snapshot, ensure_ascii=False, indent=2),
+            json_text,
         )
+    else:
+        write_text_if_changed(output, rendered_html)
 
     return snapshot
 

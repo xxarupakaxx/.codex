@@ -90,6 +90,50 @@ const files = {
   '05_log.md': '## Phase 2: 計画完了\n\n案3を選択した。'
 };
 
+const structuredPlanFixture = () => ({
+  schemaVersion: 2,
+  parserVersion: '2.0.0',
+  sourceHash: 'plan-v2-fixture',
+  tasks: [
+    {
+      number: '1',
+      title: '構造化Task',
+      purpose: '構造化された目的',
+      targets: ['src/structured.js'],
+      implementation: ['parserの結果を使う'],
+      outputs: ['structured output'],
+      verification: ['独立checker'],
+      blockedBy: '',
+      steps: [{ label: '構造化step', complete: false }],
+      done: 0,
+      total: 1,
+      status: 'in-progress',
+      body: 'このbodyは表示用の根拠',
+      source: { file: '30_plan.md', lineStart: 2, lineEnd: 16 }
+    },
+    {
+      number: '2',
+      title: '依存Task',
+      purpose: '依存関係を表示する',
+      targets: ['src/dependent.js'],
+      implementation: ['依存edgeを描画する'],
+      outputs: ['dependent output'],
+      verification: ['edgeを検証する'],
+      blockedBy: '',
+      steps: [],
+      done: 0,
+      total: 0,
+      status: 'planned',
+      body: '依存Taskのbody',
+      source: { file: '30_plan.md', lineStart: 17, lineEnd: 28 }
+    }
+  ],
+  edges: [{ id: 'edge-1', from: '1', to: '2', kind: 'blockedBy', relation: 'blockedBy' }],
+  progress: { done: 0, total: 2, globalComplete: false, signals: {} },
+  diagnostics: [],
+  sources: { plan: '30_plan.md', progress: '40_progress.md' }
+});
+
 const generatedAt = '2026-07-12T02:59:30.000Z';
 const nowMs = Date.parse('2026-07-12T03:00:00.000Z');
 const graphMap = `# View Plan Graph
@@ -506,6 +550,151 @@ test('normalizes heading, colon, decimal task, Japanese checklist and progress t
   assert.deepEqual(Array.from(result.nextSteps, task => task.number), ['1.5', '2']);
 });
 
+test('structured plan is the task and progress source even when Markdown uses different headings', () => {
+  const structured = structuredPlanFixture();
+  const normalized = model.normalizeSnapshot({
+    generatedAt,
+    files: {
+      '30_plan.md': '# Legacy text\n\n## Task 99: MarkdownだけのTask\n\n- [x] これは使わない',
+      '40_progress.md': '| Task | Status | Progress |\n| --- | --- | --- |\n| Task 99 | complete | 1/1 |'
+    },
+    plan: structured,
+    timeline: []
+  });
+  const result = model.buildModel(normalized, { nowMs });
+
+  assert.equal(result.taskSource, 'structured');
+  assert.deepEqual(Array.from(result.tasks, task => task.number), ['1', '2']);
+  assert.equal(result.tasks[0].title, '構造化Task');
+  assert.deepEqual(JSON.parse(JSON.stringify(result.fixedProgress)), { done: 0, total: 2 });
+  assert.equal(result.plan.valid, true);
+  assert.equal(result.timelineSource, 'structured');
+});
+
+test('structured dependency edges drive the graph independently of blockedBy Markdown text', () => {
+  const structured = structuredPlanFixture();
+  structured.tasks[1].blockedBy = 'Task 99（Markdown由来なら無効）';
+  const result = model.buildModel(model.normalizeSnapshot({
+    generatedAt,
+    files: { '30_plan.md': '## Task 99: legacy dependency' },
+    plan: structured
+  }), { nowMs });
+  const tree = model.buildTreeViewModel(result);
+
+  assert.ok(tree.edges.some(edge => edge.from === 'task-1' && edge.to === 'task-2' && edge.kind === 'dependency'));
+  assert.equal(tree.edges.some(edge => edge.to === 'task-2' && edge.from === 'task-99'), false);
+  assert.deepEqual(result.plan.edges.map(edge => [edge.from, edge.to]), [['1', '2']]);
+});
+
+test('malformed structured plan is an explicit error and never falls back to Markdown Task parsing', () => {
+  const normalized = model.normalizeSnapshot({
+    generatedAt,
+    files: { '30_plan.md': '## Task 99: legacy Task\n\n- [x] hidden fallback' },
+    plan: { schemaVersion: 2, tasks: 'not-an-array', edges: [], progress: { done: 0, total: 0 } }
+  });
+  const result = model.buildModel(normalized, { nowMs });
+  const tree = model.buildTreeViewModel(result);
+
+  assert.equal(result.taskSource, 'structured');
+  assert.deepEqual(Array.from(result.tasks), []);
+  assert.equal(result.plan.valid, false);
+  assert.match(result.planState.errors.join(' '), /tasks must be an array/);
+  assert.equal(tree.planError, true);
+  assert.match(tree.propositions.join(' '), /Plan error/);
+  assert.doesNotMatch(tree.propositions.join(' '), /Task 99/);
+});
+
+test('structured timeline remains chronological and does not use legacy log headings', () => {
+  const structured = structuredPlanFixture();
+  const normalized = model.normalizeSnapshot({
+    generatedAt,
+    files: {
+      '30_plan.md': '## Task 99: legacy Task',
+      '05_log.md': '## 2026-01-01 Legacy heading\n\nこれは表示しない'
+    },
+    plan: structured,
+    timeline: [
+      { id: 'event-2', title: '実装', phase: '2', time: '2026-08-30T02:00:00.000Z', tasks: ['2'], summary: '後のevent', source: '05_log.md' },
+      { id: 'event-1', title: '調査', phase: '1', time: '2026-08-30T01:00:00.000Z', tasks: ['1'], summary: '先のevent', source: '05_log.md' }
+    ]
+  });
+  const result = model.buildModel(normalized, { nowMs });
+
+  assert.equal(result.timelineSource, 'structured');
+  assert.deepEqual(Array.from(result.entries, event => event.id), ['event-2', 'event-1']);
+  assert.deepEqual(Array.from(result.timeline, event => event.id), ['event-2', 'event-1']);
+  assert.equal(result.entries.some(event => event.title.includes('Legacy heading')), false);
+});
+
+test('structured timeline preserves source provenance and exposes error status in the model', () => {
+  const structured = structuredPlanFixture();
+  const normalized = model.normalizeSnapshot({
+    generatedAt,
+    files: { '30_plan.md': '## Task 1: structured' },
+    plan: structured,
+    timeline: [
+      {
+        id: 'timeline-error-kind',
+        title: 'source validation',
+        kind: 'error',
+        time: '2026-08-30T01:00:00.000Z',
+        source: { file: '.codex/scripts/generate-roadmap-view.py', lineStart: 118, lineEnd: 124 },
+        summary: 'source validation failed'
+      },
+      {
+        id: 'timeline-error-status',
+        title: 'independent check',
+        kind: 'verification',
+        status: 'failed',
+        source: { file: '90_verification.md', lineStart: 7, lineEnd: 7 },
+        summary: 'check failed'
+      }
+    ]
+  });
+  const result = model.buildModel(normalized, { nowMs });
+
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(result.timeline.map(event => [event.id, event.source, event.status, event.error]))),
+    [
+      ['timeline-error-kind', { file: '.codex/scripts/generate-roadmap-view.py', lineStart: 118, lineEnd: 124 }, 'error', true],
+      ['timeline-error-status', { file: '90_verification.md', lineStart: 7, lineEnd: 7 }, 'failed', true]
+    ]
+  );
+  assert.match(html, /function timelineSourceLabel\(source\)/);
+  assert.match(html, /出典: \$\{escapeHtml\(sourceLabel\)\}/);
+  assert.match(html, /plan-timeline-event\$\{eventStatus\?\.className === 'error' \? ' error' : ''\}/);
+  assert.match(html, /aria-live="polite" aria-atomic="false"/);
+  assert.match(html, /計画timelineを読み込めません/);
+});
+
+test('invalid structured timeline is explicit and never keeps a successful plan status', () => {
+  const normalized = model.normalizeSnapshot({
+    generatedAt,
+    files: { '30_plan.md': '## Task 99: legacy Task' },
+    plan: structuredPlanFixture(),
+    timeline: { event: 'not-an-array' }
+  });
+  const result = model.buildModel(normalized, { nowMs });
+
+  assert.equal(result.plan.valid, true);
+  assert.equal(result.timelineState.valid, false);
+  assert.match(result.timelineState.errors.join(' '), /snapshot\.timeline must be an array/);
+  assert.match(html, /if \(planErrors\.length \|\| timelineErrors\.length\)/);
+  assert.match(html, /構造化timelineエラー（legacy fallbackなし）/);
+  assert.match(html, /role="alert"/);
+});
+
+test('first screen exposes structured plan status and human-readable timeline', () => {
+  for (const id of ['plan-contract-status', 'plan-timeline', 'plan-timeline-meta', 'plan-timeline-list']) {
+    assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
+  }
+  assert.match(html, /function renderPlanTimeline\(model\)/);
+  assert.match(html, /構造化Planエラー（legacy fallbackなし）/);
+  assert.match(html, /snapshot\.timelineに時系列が未記録です/);
+  assert.match(html, /model\.plan\.edges\.forEach/);
+  assert.match(html, /if \(model\.plan && !model\.plan\.valid\)/);
+});
+
 test('sourcePreviewsはsnapshot v1のoptional additive fieldとして正規化されるべき', () => {
   const normalized = model.normalizeSnapshot({
     version: 1,
@@ -704,7 +893,7 @@ test('active Taskがなければ最初の未完了Task、全完了なら最後�
     }
   }), { nowMs });
   const completeBrief = model.buildExecutionBrief(allComplete);
-  assert.equal(completeBrief.currentTask.number, '2');
+  assert.equal(completeBrief.currentTask, null, 'unknown freshness must not promote a recorded Task to Current');
   assert.equal(completeBrief.selectedTask.number, '2');
 });
 
@@ -1218,6 +1407,25 @@ test('unknown snapshot freshness does not claim recorded work is active', () => 
   assert.equal(result.freshness.state, 'unknown');
   assert.equal(result.activeTask, null);
   assert.equal(result.recordedActiveTask.number, '1.5');
+});
+
+test('stale and unknown freshness keep the recorded Task secondary in the execution brief', () => {
+  const stale = model.buildModel(model.normalizeSnapshot({ generatedAt, files }), { nowMs: Date.parse('2026-07-12T04:00:00.000Z') });
+  const staleBrief = model.buildExecutionBrief(stale);
+  assert.equal(staleBrief.currentTask, null);
+  assert.equal(staleBrief.nextTask, null);
+  assert.equal(staleBrief.recordedTask.number, '1.5');
+  assert.match(staleBrief.waitingReason, /古い/);
+  assert.equal(model.buildRoadmapRoute(staleBrief).tasks.some(task => task.isCurrent), false);
+
+  const unknown = model.buildModel(model.normalizeSnapshot({ files }), { nowMs });
+  const unknownBrief = model.buildExecutionBrief(unknown);
+  assert.equal(unknownBrief.currentTask, null);
+  assert.equal(unknownBrief.nextTask, null);
+  assert.equal(unknownBrief.recordedTask.number, '1.5');
+  assert.match(unknownBrief.waitingReason, /不明/);
+  assert.equal(model.buildRoadmapRoute(unknownBrief).tasks.some(task => task.isCurrent), false);
+  assert.match(html, /現在未確認/);
 });
 
 test('artifact completion labels require phase evidence instead of file existence', () => {

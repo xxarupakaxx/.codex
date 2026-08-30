@@ -184,6 +184,18 @@ class MemoryDiscoveryTest(unittest.TestCase):
         self.assertEqual([memory.path.name for memory in memories], ["a", "b"])
         self.assertIn("metadataError", memories[1].detail)
 
+    def test_discovery_preserves_invalid_updated_at_for_explicit_hub_warning(self):
+        task_dir = self.root / "memory/legacy-task"
+        task_dir.mkdir(parents=True)
+        (task_dir / "00_spec.md").write_text("# Legacy\n")
+        (task_dir / "task-meta.json").write_text(
+            '{"updated_at":"not-a-timestamp","task_title":"Legacy"}'
+        )
+
+        memories = hub.discover_memory_tasks([task_dir.parent])
+
+        self.assertEqual(memories[0].updated_at, "not-a-timestamp")
+
     def test_candidates_require_score_three_and_include_fifteen_minute_boundary(self):
         base = datetime(2026, 7, 12, 12, 0, tzinfo=timezone.utc)
 
@@ -308,6 +320,72 @@ class UnifiedTaskIndexTest(unittest.TestCase):
         )
         self.assertEqual(index["archivedCount"], 1)
 
+    def test_invalid_timestamp_degrades_matched_provider_task_and_keeps_indexing(self):
+        invalid = hub.MemoryTask(
+            path=Path("/memory/legacy"),
+            title="Legacy",
+            thread_id="legacy-thread",
+            project_path="/repo",
+            task_state="waiting",
+            approval_state=None,
+            updated_at="not-a-timestamp",
+            summary={"artifactCount": 1},
+            detail={"metadata": {"updated_at": "not-a-timestamp"}},
+        )
+        healthy = self.memory("healthy", "Healthy", 5, "waiting")
+        snapshot = hub.ProviderSnapshot(
+            (
+                hub.CodexThread(
+                    "legacy-thread", "Legacy", "/repo", "idle", 0,
+                    int(self.NOW.timestamp() - 2 * 60),
+                ),
+            ),
+            True,
+            self.NOW.isoformat(),
+        )
+
+        index = hub.build_task_index(snapshot, [invalid, healthy], now=self.NOW)
+
+        by_id = {task.id: task for task in index["tasks"]}
+        self.assertIn("legacy-thread", by_id)
+        self.assertEqual(
+            by_id["legacy-thread"].updated_at,
+            datetime.fromtimestamp(
+                snapshot.threads[0].updated_at, timezone.utc
+            ).isoformat(),
+        )
+        self.assertEqual(by_id["legacy-thread"].summary["dataQuality"], "degraded")
+        self.assertEqual(
+            by_id["legacy-thread"].summary["dataWarnings"][0]["code"],
+            "invalid_updated_at",
+        )
+        self.assertIn("memory:/memory/healthy", by_id)
+        self.assertEqual(index["warnings"][0]["state"], "degraded")
+
+    def test_invalid_memory_only_timestamp_is_skipped_with_migration_warning(self):
+        invalid = hub.MemoryTask(
+            path=Path("/memory/legacy"),
+            title="Legacy",
+            thread_id=None,
+            project_path="/repo",
+            task_state="waiting",
+            approval_state=None,
+            updated_at="not-a-timestamp",
+            summary={"artifactCount": 1},
+            detail={"metadata": {"updated_at": "not-a-timestamp"}},
+        )
+
+        index = hub.build_task_index(
+            hub.ProviderSnapshot((), True, self.NOW.isoformat()),
+            [invalid],
+            now=self.NOW,
+        )
+
+        self.assertEqual(index["tasks"], ())
+        self.assertEqual(index["skippedTasks"][0]["state"], "skipped")
+        self.assertEqual(index["skippedTasks"][0]["reason"], "invalid_updated_at")
+        self.assertEqual(index["warnings"][0]["state"], "skipped")
+
 
 class FakeClock:
     def __init__(self):
@@ -427,6 +505,23 @@ class TaskHubSessionTest(unittest.TestCase):
         self.assertTrue(session.refresh())
         self.assertTrue(session.payload()["connected"])
         self.assertEqual(session.payload()["tasks"], [])
+
+    def test_refresh_exposes_index_warnings_and_skipped_tasks(self):
+        session = hub.TaskHubSession(index_builder=lambda: {
+            "provider": hub.ProviderSnapshot((), True, "2026-07-12T00:00:00+00:00"),
+            "index": {
+                "tasks": (),
+                "archivedCount": 0,
+                "warnings": ({"code": "invalid_updated_at", "state": "skipped"},),
+                "skippedTasks": ({"id": "memory:/legacy", "state": "skipped"},),
+            },
+        })
+
+        self.assertTrue(session.refresh())
+        payload = session.payload()
+
+        self.assertEqual(payload["warnings"][0]["code"], "invalid_updated_at")
+        self.assertEqual(payload["skippedTasks"][0]["id"], "memory:/legacy")
 
     def test_routes_return_detail_404_heartbeat_and_open_fallback(self):
         task = hub.UnifiedTask(

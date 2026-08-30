@@ -253,7 +253,17 @@ persistent Goal、`/team-run`、Goal tools を使う作業は、最小限の evi
 
 ## Phase 2: 計画
 
-各タスクを4ステップ構造で作成（調査→計画→実行→レビュー）。変更対象ファイルを明記。
+各タスクを4ステップ構造で作成（調査→計画→実行→レビュー）。変更対象ファイルを明記する。Roadmap対象では、Taskを単なるチェックリストではなく、目的・変更対象・実装・成果物・検証と依存関係を持つ追跡可能な単位として記録する。
+
+### Roadmap v2契約（正本と派生view）
+
+`30_plan.md`がHuman / LLM-readableな計画のSingle Source of Truthであり、HTMLとJSONは確認用の派生viewである。実装者はHTMLやsnapshotを直接編集せず、正本Markdownを変更して再生成する。詳細なschemaと互換境界は`context/memory-file-formats.md`の「Roadmap Plan snapshot v2」を参照し、ここではPhaseのgateだけを定める。
+
+- `scripts/roadmap_plan_contract.py`をPlan解釈の単一parserとする。generator、sync、ViewerがTask見出し・checkbox・`blockedBy`を個別に再解釈しない。
+- parserの`schemaVersion: 2` modelを、Task graph（`tasks` / `edges`）、progress、source line付きの根拠としてsnapshotへ格納する。`05_log.md`から得られるchronological eventは`timeline`へ分離し、Task順序・依存関係・出来事の時刻を混同しない。
+- Phase 2のsyncは、canonical Taskが0件、必須sectionが不在、重複・未知依存・自己依存、schema / source hash不整合などを成功扱いにしない。エラーを修正してからPhase 3へ進む。
+- v2 `plan`が存在するsnapshotでは構造modelを必ず使う。v1 fallbackは`plan`が存在しない古いsnapshotに限り、v2のmalformedをlegacy parserで隠さない。malformedはRoadmapとログへvisible errorとして残す。
+- Task graphとtimelineのedge / eventは正本に明記されたものだけを生成する。Viewerが進捗、完了、担当、期限、因果関係を推測して補作しない。
 
 ### 実装複雑さのソフト予算（Complexity Budget）
 
@@ -693,7 +703,7 @@ Phase直結でないユーティリティスキル。**状況が発生したら*
 ## HTML Viewer Tools
 
 計画ファイル・ログ・レビュー結果をブラウザでインタラクティブに閲覧するためのHTMLビューア。
-Task Workspaceは`html-plan` routeのcanonical outputとして`roadmap.html`を生成する。初期画面はProject Map + Focusで、全体像、Current Task、唯一のprimary action、NextまたはBlocker、Evidenceをsource-backedに示す。Code Mapは常時切替ではなくDetail drawerのImpactから開く。`--serve --watch`で起動すると、Codex appの横で開いたブラウザが`roadmap-snapshot.json`をpollingし、Roadmap source、artifact metadata、または検証済みCodemap payloadが変化したときだけ自動更新される。Plan Viewer / Log Viewer / Verification Viewerは個別ファイル本文の補助確認に使う。
+Task Workspaceは`html-plan` routeのcanonical outputとして`roadmap.html`を生成する。初期画面はProject Map + Focusで、全体像、Current Task、唯一のprimary action、NextまたはBlocker、Evidenceをsource-backedに示す。Roadmap対象では、単一parserが生成したv2のTask graph / progress / timelineを表示し、各関係から30_plan.md / 05_log.mdの根拠へ戻れるようにする。Code Mapは常時切替ではなくDetail drawerのImpactから開く。`--serve --watch`で起動すると、Codex appの横で開いたブラウザが`roadmap-snapshot.json`をpollingし、Roadmap source、artifact metadata、または検証済みCodemap payloadが変化したときだけ自動更新される。Plan Viewer / Log Viewer / Verification Viewerは個別ファイル本文の補助確認に使う。
 
 HTML出力のroute、lifecycle、static/browser profileは `context/html-artifact-contract.md` と `config/html-surfaces.json` を正本とする。新規HTMLやMCP Apps UIは、manifest登録、static gate、該当browser gateを通すまで配布完了にしない。
 
@@ -720,7 +730,7 @@ Task Hubは各sessionの計画全文よりLive Activityを優先する。session
 
 以下のタイミングで`viewing-plans`スキルが**自動的に**発動：
 
-1. **Phase 2完了時**: 30_plan.md作成後、code変更taskはCodemap checkを通し、`scripts/generate-roadmap-view.py <memory_dir>`でProject Map + FocusのTask Workspaceを生成・表示してから、`mcp__workflow-html-app__view-plan`でPlan Viewerを表示
+1. **Phase 2完了時**: 30_plan.md作成後、Delegation Decisionと`sync-roadmap.py`のv2構造gateを通し、code変更taskはCodemap checkも通す。その後`generate-roadmap-view.py <memory_dir>`でProject Map + FocusのTask Workspaceを生成・表示してから、`mcp__workflow-html-app__view-plan`でPlan Viewerを表示
 2. **横で見たい場合**: `scripts/generate-roadmap-view.py <memory_dir> --serve --watch` を起動し、表示URLを案内
 3. **Phase 3/4更新時**: `40_progress.md` / `80_review.md` / `05_log.md` / `team-journal.md` / `90_verification.md` または成果物metadataの変更後、watch中なら `roadmap-snapshot.json` が更新され、ブラウザが自動再描画
 4. **Phase 5完了時**: 最終 `roadmap.html` を生成・表示し、`mcp__workflow-html-app__view-log`で05_log.mdをLog Viewerへ表示。`90_verification.md`がある場合は`mcp__workflow-html-app__view-verification`でVerification Viewerへ表示

@@ -16,6 +16,16 @@ Plan Viewer / Log Viewer / Verification Viewer は個別本文を確認する補
 
 task memory directoryにCodemapがある場合は、`roadmap.html`のDetail drawerにあるImpactからCode Mapを開けるようにする。Roadmap generatorはCodemap checkerがfreshと判定したpayloadだけを埋め込む。Code Mapを別HTMLや常時toggleへ戻さず、Plan / Log / Verificationの個別本文は各MCP Viewerで開く。コード変更taskでは`context/codemap.md`のpreflightを先に成立させ、Roadmapの更新時刻をCodemap freshnessとして扱わない。
 
+### Roadmap v2 data contract
+
+`30_plan.md`はHuman / LLM-readableな計画の正本であり、`roadmap.html`と`roadmap-snapshot.json`は確認用の派生viewである。Planの解釈は`scripts/roadmap_plan_contract.py`に一本化し、generatorとViewerが別々のTask parserを持たない。詳細なfield定義は`context/memory-file-formats.md`の「Roadmap Plan snapshot v2」を参照する。
+
+- v2 snapshotの`plan`を、Taskの目的・実装・成果物・検証、`blockedBy`から生成した`edges`、`progress`、source line付きの根拠として扱う。
+- `timeline`は`05_log.md`等の明示された時系列イベントをTask graphから分離して表示する。Task順序を時刻として扱わず、本文にない因果・完了・担当・期限を補作しない。
+- Project Mapはgraph、Current Focusは進行中のTask、Timelineは出来事の順序という三つの問いに答える。各node / edge / eventから正本Markdownの該当箇所へ戻れることを完了条件とする。
+- `plan`がある場合は必ずv2 modelを使う。v1 fallbackは`plan`が存在しない古いsnapshotだけに限定し、malformed v2をlegacy表示で隠さず、エラー・未確認・同期停止を可視化する。
+- JSONやHTMLの手編集、表示側での不足情報の推測、snapshotだけの状態更新は行わない。正本を更新してから、検証済みsnapshotとHTMLを再生成する。
+
 HTML route、lifecycle、static/browser gateは `context/html-artifact-contract.md` と `config/html-surfaces.json` を正本にする。`roadmap.html`は配布前にstatic gateと該当browser profileを通す対象であり、invalid renderで既存成果物を上書きしない。
 
 UI変更Taskでは必ず`references/ui-change-preview.md`を読み、計画を作るLLM自身が対象のReact / Next.js等のsourceを確認して、Change詳細用のBefore / Afterを`30_plan.md`へ自動記録する。ユーザーへmetadata入力やfile importを求めない。UI previewは実コードのBefore、計画上のAfter、未確認事項を分離する。UI変更ではないTaskとbehavior-only変更ではpreviewを作らず、既存画面のsourceを確認できない場合はBeforeを補作せず`unverified`として扱う。
@@ -74,7 +84,7 @@ Plan / Log / VerificationのMCP toolが利用できない場合は個別Viewer�
 
 ## ワークフロー
 
-最初にRoadmap適格性ゲートを実行する。`log-only`なら`05_log.md`へ判定を記録し、Phase 2でDelegation Decision保存後に`scripts/sync-roadmap.py`の検査・skip証跡を取得して、このスキルのRoadmap生成手順を終了する。
+最初にRoadmap適格性ゲートを実行する。`log-only`なら`05_log.md`へ判定を記録し、Phase 2でDelegation Decision保存後に`scripts/sync-roadmap.py`の検査・skip証跡を取得して、このスキルのRoadmap生成手順を終了する。`roadmap`または`explicit-roadmap`では、v2 parserとsync gateを通過してからRoadmapを生成する。
 
 ### 1. ファイル読み込み
 
@@ -90,7 +100,7 @@ Plan / Log / VerificationのMCP toolが利用できない場合は個別Viewer�
 ```
 
 1. 対象メモリディレクトリを特定
-2. `scripts/generate-roadmap-view.py <memory_dir>` を実行してProject Map + Focusの `roadmap.html` を生成
+2. `scripts/generate-roadmap-view.py <memory_dir>` を実行して、v2のTask graph / progress / timelineを含むProject Map + Focusの `roadmap.html` を生成
 3. コード変更taskでは `scripts/generate-codemap.py check --root <workspace-root> --artifact-dir ${MEMORY_DIR}/memory/<task>` を実行し、Detail drawerのImpactで使う`codemap.json`からcaller / impact / guarding test / evidenceを確認
 4. 必要に応じて Read ツールで個別Markdownコンテンツを取得
 
@@ -186,7 +196,8 @@ Phase 5では同じ入力形式で`mcp__workflow-html-app__view-log`へ`05_log.m
 ### Task Workspace（Project Map + Focus）
 - `00_spec.md` / `20_survey.md` / `30_plan.md` / `40_progress.md` / `checkpoint.md` / `80_review.md` / `90_verification.md` とfreshなCodemapだけをsourceにする
 - 初期画面はProject Map、Current Task、primary action、NextまたはBlocker、Evidenceを同時に示す
-- Project Mapは企画、設計、実装、検証をsource-backed nodeだけで表示し、Outcome Trace、実装根拠、明示Task参照、明示`blockedBy`以外からedgeを補作しない
+- Project Mapは企画、設計、実装、検証をsource-backed nodeだけで表示し、v2 `edges`、Outcome Trace、実装根拠、明示Task参照、明示`blockedBy`以外からedgeを補作しない
+- v2 `timeline`がある場合は、source line付きの出来事をTask graphとは別の時系列として表示する。timelineがない場合は「未記録」とし、Task順序や更新時刻から補作しない
 - Currentはfreshなin-progress、なければ最初の未完了Taskとして一意に決める。選択操作でCurrentを変えない
 - unresolved `blockedBy`があればBlockerを優先し、解除条件がなければ「Blocker未記録」と表示する
 - primary actionは対象Taskの`実装`sectionにある最初の未完了checkboxだけを使う。欠落時は「未記録」と表示する
@@ -204,6 +215,7 @@ Phase 5では同じ入力形式で`mcp__workflow-html-app__view-log`へ`05_log.m
 - `--serve --watch` では `roadmap-snapshot.json` をpollingし、source内容または表示対象artifact metadataが変化したときだけ自動更新する
 - 単一task表示では手動のMarkdown/JSON読込やJSON出力を提供しない
 - Markdown全文は第一画面へ表示しない。source-boundの要約と正本への導線は隠さない
+- v2 snapshotがmalformedの場合はlegacy parserへ黙ってfallbackせず、Roadmap上で「構造化データ不正」と根拠を示す
 
 ### Impact Code Map（taskコード地図）
 - freshな`codemap.json` payloadを同じ`roadmap.html`のDetail drawer内Impactから開く

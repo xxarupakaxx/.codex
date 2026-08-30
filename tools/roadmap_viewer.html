@@ -350,6 +350,19 @@
       line-height: 1.2;
     }
     .brief-design-context { max-width: 880px; margin: 7px 0 0; color: var(--muted); font-size: 13px; line-height: 1.5; }
+    .plan-contract-status {
+      max-width: 880px;
+      margin: 10px 0 0;
+      padding: 9px 11px;
+      border: 1px solid color-mix(in srgb, var(--danger) 42%, var(--line));
+      border-left: 3px solid var(--danger);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+      color: var(--danger);
+      font-size: 12px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
     .brief-header-kicker { margin-bottom: 5px; text-align: left; }
     .brief-quick-links {
       margin-top: 8px;
@@ -471,6 +484,82 @@
     .route-tag { fill: var(--muted); font-size: 9px; font-weight: 760; text-anchor: middle; }
     .route-next-tag { fill: var(--accent-blue); font-size: 9px; font-weight: 820; text-anchor: middle; }
     .brief-route-summary { margin: 6px 0 0; color: var(--muted); font-size: 11px; }
+    .plan-timeline {
+      padding: 14px 18px 16px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-soft);
+    }
+    .plan-timeline-list {
+      margin-top: 9px;
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(210px, 1fr));
+      gap: 8px;
+    }
+    .plan-timeline-event {
+      min-width: 0;
+      padding: 10px 11px;
+      border: 1px solid var(--line);
+      border-left: 3px solid var(--accent);
+      border-radius: var(--radius);
+      background: var(--surface);
+    }
+    .plan-timeline-event.error { border-left-color: var(--danger); }
+    .plan-timeline-event header {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 8px;
+    }
+    .plan-timeline-event header small,
+    .plan-timeline-event time {
+      color: var(--muted);
+      font-size: 10px;
+    }
+    .plan-timeline-event-state {
+      display: inline-flex;
+      align-items: center;
+      margin-left: 5px;
+      padding: 2px 5px;
+      border: 1px solid var(--line-strong);
+      border-radius: 999px;
+      color: var(--muted);
+      font-size: 9px;
+      font-weight: 800;
+      letter-spacing: .03em;
+    }
+    .plan-timeline-event-state.error {
+      border-color: color-mix(in srgb, var(--danger) 42%, var(--line));
+      color: var(--danger);
+    }
+    .plan-timeline-event-state.warning {
+      border-color: color-mix(in srgb, var(--warn-text) 42%, var(--line));
+      color: var(--warn-text);
+    }
+    .plan-timeline-event h4 {
+      margin: 5px 0 0;
+      color: var(--ink);
+      font-size: 12px;
+      line-height: 1.35;
+      overflow-wrap: anywhere;
+    }
+    .plan-timeline-event p {
+      margin: 5px 0 0;
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+      overflow-wrap: anywhere;
+    }
+    .plan-timeline-event footer {
+      margin-top: 7px;
+      color: var(--faint);
+      font: 10px/1.3 ui-monospace, SFMono-Regular, Menlo, monospace;
+      overflow-wrap: anywhere;
+    }
+    .plan-timeline-empty {
+      margin: 0;
+      color: var(--muted);
+      font-size: 11px;
+    }
     .current-focus {
       padding: 24px 28px;
       display: grid;
@@ -1182,6 +1271,7 @@
       .design-summary,
       .current-focus,
       .brief-route,
+      .plan-timeline,
       .brief-flow-section,
       .brief-claims-section,
       .brief-artifact-section { padding: 18px 16px; }
@@ -1215,6 +1305,8 @@
       .brief-route-legend { display: none; }
       .brief-route-map { margin-top: 5px; overflow-x: hidden; }
       .brief-route-summary { margin-top: 4px; line-height: 1.3; }
+      .plan-timeline { padding: 14px 16px; }
+      .plan-timeline-list { grid-template-columns: 1fr; }
       .project-map-grid { gap: 5px; }
       .project-map-stage { gap: 4px; }
       .project-map-stage h4 { font-size: 8px; letter-spacing: .04em; }
@@ -3051,6 +3143,7 @@
           <p class="brief-eyebrow"><span id="brief-phase">Phase —</span><span id="brief-status">状態確認待ち</span></p>
           <h2 class="brief-title" id="execution-brief-title">計画全体を読み込み中です。</h2>
           <p class="brief-design-context" id="brief-design-context"></p>
+          <p class="plan-contract-status" id="plan-contract-status" role="status" hidden></p>
           <div class="brief-quick-links" id="brief-quick-links" aria-label="計画の正本">
             <button class="brief-source-link" type="button" data-artifact="00_spec.md">仕様を開く</button>
             <button class="brief-source-link" type="button" data-artifact="30_plan.md">実装計画を開く</button>
@@ -3069,6 +3162,14 @@
         </div>
         <div class="brief-route-map" id="brief-route-map"></div>
         <p class="brief-route-summary" id="brief-route-summary">現在地を確認中</p>
+      </section>
+
+      <section class="plan-timeline" id="plan-timeline" aria-labelledby="plan-timeline-title">
+        <div class="brief-section-heading">
+          <div><p class="brief-kicker">PLAN TIMELINE</p><h3 id="plan-timeline-title">計画の時系列</h3></div>
+          <span class="section-meta" id="plan-timeline-meta">0 events</span>
+        </div>
+        <div class="plan-timeline-list" id="plan-timeline-list" role="list" aria-live="polite" aria-atomic="false"></div>
       </section>
 
       <section class="current-focus" id="current-focus" aria-labelledby="current-focus-title">
@@ -3674,6 +3775,203 @@
       }
       return output;
     }
+    function normalizeStringList(value) {
+      const values = Array.isArray(value) ? value : value == null ? [] : [value];
+      return values.map(item => asText(item).trim()).filter(Boolean);
+    }
+    function normalizePlanTask(item, index) {
+      if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
+      const number = asText(item.number || item.id).trim();
+      const title = asText(item.title || item.name).trim();
+      const targets = normalizeStringList(item.targets ?? item.target);
+      const implementation = normalizeStringList(item.implementation);
+      const outputs = normalizeStringList(item.outputs ?? item.deliverables);
+      const verification = normalizeStringList(item.verification ?? item.verify);
+      const steps = (Array.isArray(item.steps) ? item.steps : [])
+        .filter(step => step && typeof step === 'object')
+        .map(step => ({ label: asText(step.label || step.title).trim(), complete: Boolean(step.complete) }))
+        .filter(step => step.label);
+      const source = item.source && typeof item.source === 'object' && !Array.isArray(item.source)
+        ? {
+            file: asText(item.source.file || item.source.path),
+            lineStart: Number.isFinite(Number(item.source.lineStart)) ? Number(item.source.lineStart) : null,
+            lineEnd: Number.isFinite(Number(item.source.lineEnd)) ? Number(item.source.lineEnd) : null
+          }
+        : null;
+      const totalValue = Number(item.total);
+      const doneValue = Number(item.done);
+      const total = Number.isFinite(totalValue) && totalValue >= 0 ? totalValue : steps.length;
+      const done = Number.isFinite(doneValue) && doneValue >= 0 ? Math.min(doneValue, total || doneValue) : steps.filter(step => step.complete).length;
+      const status = ['complete', 'in-progress', 'blocked', 'planned'].includes(asText(item.status))
+        ? asText(item.status)
+        : total > 0 && done >= total ? 'complete' : done > 0 ? 'in-progress' : 'planned';
+      const blockedBy = asText(item.blockedBy || item.blocked_by).trim().replace(/[。.]+$/, '');
+      const body = asText(item.body);
+      const normalizedDone = status === 'complete' && total > 0 ? total : done;
+      const ratio = total ? Math.max(0, Math.min(1, normalizedDone / total)) : status === 'complete' ? 1 : 0;
+      return {
+        number,
+        title,
+        target: targets.join('、'),
+        targets,
+        note: asText(item.note),
+        body,
+        purpose: asText(item.purpose),
+        implementation,
+        implementationDiagram: item.implementationDiagram && typeof item.implementationDiagram === 'object' ? item.implementationDiagram : null,
+        outputs,
+        verification,
+        blockedBy,
+        steps,
+        total,
+        done: normalizedDone,
+        ratio,
+        status,
+        source,
+        _index: index
+      };
+    }
+    function normalizePlanContract(value) {
+      const inheritedErrors = value && typeof value === 'object' && !Array.isArray(value) && value.valid === false && Array.isArray(value.errors)
+        ? value.errors.map(error => asText(error)).filter(Boolean)
+        : [];
+      const errors = inheritedErrors.slice();
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return {
+          present: true, valid: false, schemaVersion: 0, parserVersion: '', sourceHash: '', sourceHashes: {},
+          tasks: [], edges: [], progress: { done: 0, total: 0, globalComplete: false, signals: {} }, diagnostics: [], sources: {}, errors: ['snapshot.plan must be an object']
+        };
+      }
+      const schemaVersion = Number(value.schemaVersion);
+      if (schemaVersion !== 2) errors.push(`unsupported plan schemaVersion: ${asText(value.schemaVersion) || 'missing'}`);
+      if (!Array.isArray(value.tasks)) errors.push('snapshot.plan.tasks must be an array');
+      else if (value.tasks.length === 0) errors.push('snapshot.plan.tasks must contain at least one Task');
+      if (!Array.isArray(value.edges)) errors.push('snapshot.plan.edges must be an array');
+      if (!value.progress || typeof value.progress !== 'object' || Array.isArray(value.progress)) errors.push('snapshot.plan.progress must be an object');
+      const tasks = (Array.isArray(value.tasks) ? value.tasks : [])
+        .map((item, index) => normalizePlanTask(item, index));
+      tasks.forEach((task, index) => {
+        if (!task) errors.push(`snapshot.plan.tasks[${index}] must be an object`);
+        else {
+          if (!task.number) errors.push(`snapshot.plan.tasks[${index}].number is required`);
+          if (!task.title) errors.push(`snapshot.plan.tasks[${index}].title is required`);
+        }
+      });
+      const taskNumbers = new Set();
+      tasks.filter(Boolean).forEach(task => {
+        if (taskNumbers.has(task.number)) errors.push(`duplicate structured Task: ${task.number}`);
+        taskNumbers.add(task.number);
+      });
+      const edges = (Array.isArray(value.edges) ? value.edges : [])
+        .filter(edge => edge && typeof edge === 'object' && !Array.isArray(edge))
+        .map((edge, index) => ({
+          id: asText(edge.id) || `blockedBy-${index + 1}`,
+          from: asText(edge.from || edge.source).trim(),
+          to: asText(edge.to || edge.target).trim(),
+          kind: asText(edge.kind || edge.type) || 'blockedBy',
+          relation: asText(edge.relation || edge.label) || 'blockedBy'
+        }));
+      if (Array.isArray(value.edges)) {
+        value.edges.forEach((edge, index) => {
+          if (!edge || typeof edge !== 'object' || Array.isArray(edge)) errors.push(`snapshot.plan.edges[${index}] must be an object`);
+        });
+      }
+      edges.forEach(edge => {
+        if (!edge.from || !edge.to) errors.push('structured plan edge requires from and to');
+        else if (!taskNumbers.has(edge.from) || !taskNumbers.has(edge.to)) errors.push(`structured plan edge references unknown Task: ${edge.from} -> ${edge.to}`);
+        else if (edge.from === edge.to) errors.push(`structured plan edge is self-referential: ${edge.from}`);
+      });
+      const incomingDependencies = new Map();
+      edges.forEach(edge => {
+        if (!incomingDependencies.has(edge.to)) incomingDependencies.set(edge.to, []);
+        incomingDependencies.get(edge.to).push(edge.from);
+      });
+      tasks.filter(Boolean).forEach(task => {
+        if (!task.blockedBy && incomingDependencies.has(task.number)) {
+          task.blockedBy = incomingDependencies.get(task.number).map(number => `Task ${number}`).join('、');
+        }
+      });
+      const progressInput = value.progress && typeof value.progress === 'object' && !Array.isArray(value.progress) ? value.progress : {};
+      const progressDone = Number(progressInput.done);
+      const progressTotal = Number(progressInput.total);
+      const progress = {
+        done: Number.isFinite(progressDone) && progressDone >= 0 ? progressDone : tasks.filter(task => task?.status === 'complete').length,
+        total: Number.isFinite(progressTotal) && progressTotal >= 0 ? progressTotal : tasks.length,
+        globalComplete: Boolean(progressInput.globalComplete ?? progressInput.global_complete),
+        signals: progressInput.signals && typeof progressInput.signals === 'object' ? { ...progressInput.signals } : {}
+      };
+      const diagnostics = (Array.isArray(value.diagnostics) ? value.diagnostics : [])
+        .filter(item => item && typeof item === 'object')
+        .map(item => ({
+          code: asText(item.code), task: asText(item.task), field: asText(item.field), message: asText(item.message) || 'plan診断を確認してください。'
+        }));
+      const sources = value.sources && typeof value.sources === 'object' && !Array.isArray(value.sources)
+        ? { plan: asText(value.sources.plan), progress: asText(value.sources.progress) }
+        : {};
+      const uniqueErrors = Array.from(new Set(errors));
+      return {
+        present: true,
+        valid: uniqueErrors.length === 0,
+        schemaVersion: Number.isFinite(schemaVersion) ? schemaVersion : 0,
+        parserVersion: asText(value.parserVersion),
+        sourceHash: asText(value.sourceHash),
+        sourceHashes: value.sourceHashes && typeof value.sourceHashes === 'object' ? { ...value.sourceHashes } : {},
+        tasks: tasks.filter(Boolean),
+        edges,
+        progress,
+        diagnostics,
+        sources,
+        errors: uniqueErrors
+      };
+    }
+    function normalizeTimeline(value, present = false) {
+      if (!present) return { present: false, valid: true, events: [], errors: [] };
+      if (!Array.isArray(value)) return { present: true, valid: false, events: [], errors: ['snapshot.timeline must be an array'] };
+      const errors = [];
+      const errorTokens = new Set(['error', 'failed', 'failure', 'invalid', 'blocked', 'ng', 'エラー', '失敗', '不正']);
+      const normalizeSource = sourceValue => {
+        if (sourceValue && typeof sourceValue === 'object' && !Array.isArray(sourceValue)) {
+          const lineStartValue = Number(sourceValue.lineStart ?? sourceValue.line_start ?? sourceValue.line);
+          const lineEndValue = Number(sourceValue.lineEnd ?? sourceValue.line_end ?? sourceValue.line);
+          return {
+            file: asText(sourceValue.file || sourceValue.path).trim(),
+            lineStart: Number.isFinite(lineStartValue) ? lineStartValue : null,
+            lineEnd: Number.isFinite(lineEndValue) ? lineEndValue : null
+          };
+        }
+        return asText(sourceValue).trim();
+      };
+      const events = value.map((item, index) => {
+        if (!item || typeof item !== 'object' || Array.isArray(item)) {
+          errors.push(`snapshot.timeline[${index}] must be an object`);
+          return null;
+        }
+        const title = asText(item.title || item.label || item.kind).trim();
+        if (!title) errors.push(`snapshot.timeline[${index}].title is required`);
+        const taskNumbers = normalizeStringList(item.tasks ?? item.taskNumbers ?? item.task_numbers);
+        const summary = asText(item.summary).trim() || summarize(item.body || item.description || '');
+        const kind = asText(item.kind).trim() || 'event';
+        const rawStatus = asText(item.status || item.state).trim().toLowerCase();
+        const kindIsError = errorTokens.has(kind.toLowerCase());
+        const statusIsError = errorTokens.has(rawStatus);
+        const error = Boolean(item.error) || kindIsError || statusIsError;
+        return {
+          id: asText(item.id).trim() || `timeline-${index + 1}`,
+          title: title || '無題のtimeline event',
+          body: asText(item.body || item.description),
+          summary,
+          phase: asText(item.phase).trim(),
+          time: asText(item.time || item.at || item.timestamp || item.createdAt || item.created_at).trim(),
+          kind,
+          status: error && !rawStatus ? 'error' : rawStatus,
+          error,
+          tasks: taskNumbers,
+          source: normalizeSource(item.source ?? item.file),
+          _index: index
+        };
+      }).filter(Boolean);
+      return { present: true, valid: errors.length === 0, events, errors };
+    }
     function normalizeSnapshot(snapshotInput) {
       const snapshot = snapshotInput && typeof snapshotInput === 'object' ? snapshotInput : {};
       const files = snapshot.files && typeof snapshot.files === 'object' ? snapshot.files : {};
@@ -3729,6 +4027,15 @@
       const embeddedCodemap = snapshot.codemap && typeof snapshot.codemap === 'object'
         ? normalizeSnapshot({ ...snapshot.codemap, codemap: null })
         : null;
+      const hasStructuredPlan = Object.prototype.hasOwnProperty.call(snapshot, 'plan');
+      const plan = hasStructuredPlan ? normalizePlanContract(snapshot.plan) : null;
+      const timelineState = snapshot.timelineState && typeof snapshot.timelineState === 'object' && snapshot.timelineState.valid === false
+        ? {
+            ...normalizeTimeline(snapshot.timeline, Object.prototype.hasOwnProperty.call(snapshot, 'timeline')),
+            valid: false,
+            errors: normalizeStringList(snapshot.timelineState.errors)
+          }
+        : normalizeTimeline(snapshot.timeline, Object.prototype.hasOwnProperty.call(snapshot, 'timeline'));
       return {
         version: Number(snapshot.version) || 1,
         schemaVersion: Number(snapshot.schemaVersion) || 0,
@@ -3741,6 +4048,9 @@
         codemapStatus: asText(snapshot.codemapStatus || snapshot.codemap_status) || (embeddedCodemap ? 'fresh' : 'not-applicable'),
         codemapMessage: asText(snapshot.codemapMessage || snapshot.codemap_message),
         codemap: embeddedCodemap,
+        ...(plan ? { plan } : {}),
+        timeline: timelineState.events,
+        timelineState,
         files: normalizedFiles,
         sources: sources.length ? sources : Object.keys(normalizedFiles).map(name => ({ name, size: normalizedFiles[name].length })),
         artifacts,
@@ -3768,6 +4078,8 @@
         codemapStatus: snapshot.codemapStatus,
         codemapMessage: snapshot.codemapMessage,
         codemap: snapshot.codemap,
+        plan: snapshot.plan,
+        timeline: snapshot.timeline,
         lanes: snapshot.lanes,
         nodes: snapshot.nodes,
         edges: snapshot.edges
@@ -4428,8 +4740,9 @@
     function buildModel(snapshotInput, options = {}) {
       const snapshot = normalizeSnapshot(snapshotInput);
       const nowMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
-      const tasks = extractTasks(snapshot.files);
-      const entries = extractLogEntries(snapshot.files);
+      const usesStructuredPlan = Boolean(snapshot.plan);
+      const tasks = usesStructuredPlan ? snapshot.plan.tasks : extractTasks(snapshot.files);
+      const entries = usesStructuredPlan ? snapshot.timeline.slice() : extractLogEntries(snapshot.files);
       const reviews = extractReviewCounts(snapshot.files);
       const risks = extractRisks(snapshot.files);
       const phases = extractPhaseSignals(snapshot.files, entries);
@@ -4441,10 +4754,18 @@
       const nextSteps = tasks.filter(task => task.status !== 'complete').slice(0, 3);
       const trace = buildOutcomeTrace(snapshot.files, reviews);
       const revisions = extractRevisionLog(snapshot.files);
+      const structuredDependencies = usesStructuredPlan
+        ? snapshot.plan.edges.filter(edge => edge.kind === 'blockedBy' || edge.relation === 'blockedBy' || !edge.kind)
+        : [];
       const unresolvedDependencies = recordedActiveTask
-        ? Array.from(recordedActiveTask.blockedBy.matchAll(/(?:Task|タスク)\s+(\d+(?:\.\d+)?)/gi))
-            .map(match => match[1])
-            .filter(number => tasks.find(task => task.number === number)?.status !== 'complete')
+        ? usesStructuredPlan
+          ? structuredDependencies
+              .filter(edge => edge.to === recordedActiveTask.number)
+              .map(edge => edge.from)
+              .filter(number => tasks.find(task => task.number === number)?.status !== 'complete')
+          : Array.from(recordedActiveTask.blockedBy.matchAll(/(?:Task|タスク)\s+(\d+(?:\.\d+)?)/gi))
+              .map(match => match[1])
+              .filter(number => tasks.find(task => task.number === number)?.status !== 'complete')
         : [];
       const waiting = freshness.state === 'stale'
         ? { state: 'waiting', reason: '最終更新が古いため、実行状態の更新を待っています。' }
@@ -4456,16 +4777,31 @@
             : { state: 'active', reason: `ブロッカーなし。「${activeTask.title}」を進行中です。` }
           : nextSteps[0]
             ? { state: 'waiting', reason: `${nextSteps[0].title}の開始を待っています。` }
-            : { state: 'complete', reason: '計画内のTaskは完了しています。' };
+          : { state: 'complete', reason: '計画内のTaskは完了しています。' };
+      const structuredProgress = usesStructuredPlan ? snapshot.plan.progress : null;
+      const fixedProgress = structuredProgress
+        ? { done: structuredProgress.done, total: structuredProgress.total }
+        : { done: completedTasks.length, total: tasks.length };
       return {
         snapshot, tasks, entries, reviews, risks, phases, freshness, recordedActiveTask,
         activeTask, activePhase, nextSteps, waiting, artifacts: snapshot.artifacts,
-        completedTasks, fixedProgress: { done: completedTasks.length, total: tasks.length },
+        completedTasks, fixedProgress,
         outcomes: trace.outcomes,
         traceSummary: trace.traceSummary,
         artifactWarnings: trace.artifactWarnings,
         nextDecision: trace.nextDecision,
-        revisions
+        revisions,
+        timeline: snapshot.timeline,
+        timelineState: snapshot.timelineState,
+        plan: snapshot.plan,
+        planState: snapshot.plan ? {
+          source: 'structured',
+          valid: snapshot.plan.valid,
+          errors: snapshot.plan.errors.slice(),
+          diagnostics: snapshot.plan.diagnostics.slice()
+        } : { source: 'legacy', valid: true, errors: [], diagnostics: [] },
+        taskSource: usesStructuredPlan ? 'structured' : 'legacy',
+        timelineSource: usesStructuredPlan ? 'structured' : 'legacy'
       };
     }
     function sectionStatements(markdown, headingPattern, source) {
@@ -4604,16 +4940,21 @@
       const completedFallback = selectedCandidate?.status === 'complete'
         ? selectedCandidate
         : model.completedTasks[model.completedTasks.length - 1] || model.tasks[model.tasks.length - 1] || null;
-      const currentTask = model.activeTask || model.recordedActiveTask || model.nextSteps[0] || completedFallback;
+      const recordedTask = model.recordedActiveTask || null;
+      const isFresh = model.freshness.state === 'fresh';
+      const currentTask = isFresh
+        ? model.activeTask || recordedTask || model.nextSteps[0] || completedFallback
+        : null;
       const currentIndex = currentTask
         ? model.tasks.findIndex(task => task.number === currentTask.number)
         : -1;
-      const nextTask = currentIndex >= 0
+      const nextTask = isFresh && currentIndex >= 0
         ? model.tasks.slice(currentIndex + 1).find(task => task.status !== 'complete') || null
-        : model.tasks.find(task => task.status !== 'complete') || null;
+        : isFresh ? model.tasks.find(task => task.status !== 'complete') || null : null;
       const selectedTask = selectedCandidate
         || currentTask
         || model.tasks.find(task => task.status !== 'complete')
+        || completedFallback
         || model.tasks[0]
         || null;
       const sourcePreview = selectedTask
@@ -4633,6 +4974,8 @@
         : [];
       return {
         currentTask,
+        recordedTask,
+        waitingReason: model.waiting?.reason || '',
         nextTask,
         selectedTask,
         selectedImplementation: selectedTask?.implementation || [],
@@ -4905,8 +5248,49 @@
         })
       };
     }
+    function buildPlanContractErrorTreeViewModel(model) {
+      const errors = model.planState.errors.length
+        ? model.planState.errors
+        : ['構造化Planの検証に失敗しました。'];
+      const goal = {
+        id: 'plan-contract-goal',
+        kind: 'goal',
+        column: 'outcome',
+        title: model.snapshot.title || 'Roadmap',
+        displayTitle: model.snapshot.title || 'Roadmap',
+        status: 'attention',
+        meta: 'Plan contract error',
+        summary: 'snapshot.planを表示できません。legacy Markdownへはfallbackしていません。',
+        artifact: '30_plan.md',
+        facts: [['source', 'snapshot.plan'], ['状態', '明示的エラー'], ['Task', `${model.tasks.length}件（構造化入力）`]]
+      };
+      const issue = {
+        id: 'plan-contract-error',
+        kind: 'outcome',
+        column: 'outcome',
+        cluster: 'guardrail',
+        title: 'Plan contractを修正してください',
+        displayTitle: 'Plan contract error',
+        status: 'failed-holistic',
+        meta: `${errors.length} error${errors.length === 1 ? '' : 's'}`,
+        summary: errors.join(' / '),
+        artifact: '30_plan.md',
+        order: 1,
+        facts: errors.map((error, index) => [`Error ${index + 1}`, error])
+      };
+      return {
+        planError: true,
+        nodes: [goal, issue],
+        edges: [{ from: goal.id, to: issue.id, kind: 'outcome', active: true, verb: 'requires' }],
+        columns: { outcome: [goal, issue], task: [], artifact: [] },
+        activeNodeId: issue.id,
+        nextNodeId: issue.id,
+        propositions: [`${goal.title} requires ${issue.title}`, ...errors.map(error => `Plan error: ${error}`)]
+      };
+    }
     function buildTreeViewModel(model) {
       if (model.snapshot.kind === 'codemap') return buildCodemapViewModel(model.snapshot);
+      if (model.plan && !model.plan.valid) return buildPlanContractErrorTreeViewModel(model);
       const explicitGraph = parseSvgDiagramSpec(model.snapshot.files['graph-map.md']);
       if (explicitGraph) {
         const nodeById = new Map(explicitGraph.nodes.map(node => [node.id, node]));
@@ -5129,11 +5513,20 @@
         const targetPaths = Array.from(task.target.matchAll(/[\w./-]+\.md/g)).map(match => match[0]);
         const linked = targetPaths.filter(path => artifactIds.has(path));
         linked.forEach(path => addEdge(taskId, artifactIds.get(path), 'artifact', model.freshness.state === 'fresh' && model.activeTask?.number === task.number));
-        for (const match of task.blockedBy.matchAll(/(?:Task|タスク)\s+(\d+(?:\.\d+)?)/gi)) {
-          const dependency = taskIds.get(match[1]);
-          addEdge(dependency, taskId, 'dependency', false);
-        }
       });
+      if (model.plan) {
+        model.plan.edges.forEach(edge => {
+          addEdge(taskIds.get(edge.from), taskIds.get(edge.to), 'dependency', false);
+        });
+      } else {
+        model.tasks.forEach(task => {
+          const taskId = taskIds.get(task.number);
+          for (const match of task.blockedBy.matchAll(/(?:Task|タスク)\s+(\d+(?:\.\d+)?)/gi)) {
+            const dependency = taskIds.get(match[1]);
+            addEdge(dependency, taskId, 'dependency', false);
+          }
+        });
+      }
       model.outcomes.forEach(outcome => {
         const taskNumbers = outcomeTaskNumbers(outcome);
         const evidencePaths = Array.from(`${outcome.evidence} ${outcome.acceptance}`.matchAll(/[\w./-]+\.md/gi))
@@ -5166,17 +5559,22 @@
           artifact: sorted(nodes.filter(node => node.column === 'artifact'))
         },
         activeNodeId,
-        nextNodeId: activeNodeId || nodes[0]?.id || ''
+        nextNodeId: activeNodeId || nodes[0]?.id || '',
+        propositions: edges.map(edge => {
+          const from = nodes.find(node => node.id === edge.from)?.title || edge.from;
+          const to = nodes.find(node => node.id === edge.to)?.title || edge.to;
+          return `${from} ${edge.verb} ${to}`;
+        })
       };
     }
     globalThis.__ROADMAP_MODEL__ = {
       PHASES, MODEL_KNOWN_FILES, normalizeSnapshot, snapshotSignature, inferTitle,
-      checkboxStats, extractTasks, extractLogEntries, extractReviewCounts,
+      checkboxStats, extractTasks, extractLogEntries, extractReviewCounts, normalizePlanContract, normalizeTimeline,
       extractRisks, extractPhaseSignals, buildModel, artifactStateFor,
       renderInlineMarkdown, renderWorkflowMarkdown, groupTaskSections,
       extractPlanSections, taskHubSettings, extractExplicitOutcomeTrace,
       extractRevisionLog, buildOutcomeTrace, stateLabel, parseSvgDiagramSpec,
-      codemapEvidenceLabel, buildCodemapViewModel, buildTreeViewModel, buildExecutionBrief, buildDesignSummary, buildRoadmapRoute, highlightSourceCode
+      codemapEvidenceLabel, buildCodemapViewModel, buildPlanContractErrorTreeViewModel, buildTreeViewModel, buildExecutionBrief, buildDesignSummary, buildRoadmapRoute, highlightSourceCode
     };
     /* ROADMAP_MODEL_END */
 
@@ -5200,6 +5598,7 @@
     let previewSourceText = '';
     let lastImplementationAnnouncementKey = '';
     let lastUiPreviewAnnouncementKey = '';
+    let lastPlanTimelineAnnouncementKey = '';
     let selectedGraphNodeId = '';
     let activeDetailTab = 'document';
     let detailDrawerRestoreFocus = null;
@@ -5852,7 +6251,8 @@
         host.innerHTML = '<p class="brief-empty">30_plan.mdにTaskが未記録です。</p>';
         return;
       }
-      const currentTask = route.tasks.find(task => task.isCurrent) || route.tasks.find(task => task.status !== 'complete') || route.tasks[0];
+      const currentTask = route.tasks.find(task => task.isCurrent) || null;
+      const waitingTask = route.tasks.find(task => task.status !== 'complete') || route.tasks[0] || null;
       const done = route.tasks.filter(task => task.status === 'complete').length;
       const verificationState = done === route.tasks.length ? '完了' : '未作成';
       byId('brief-route-legend').textContent = `企画 → 設計 → 実装 → 検証 · CurrentとSelectedは別状態`;
@@ -5861,10 +6261,10 @@
         { stage: '設計', glyph: 'D', title: '計画', state: `${route.tasks.length} Task`, tone: 'complete' },
         {
           stage: '実装',
-          glyph: currentTask?.status === 'blocked' ? '!' : currentTask?.number || 'T',
-          title: currentTask ? `Task ${currentTask.number}` : 'Task未記録',
-          state: currentTask ? `現在・${statusLabel(currentTask.status)}` : '未記録',
-          tone: currentTask?.isCurrent ? 'current' : currentTask?.status || 'planned'
+          glyph: (currentTask || waitingTask)?.status === 'blocked' ? '!' : (currentTask || waitingTask)?.number || 'T',
+          title: currentTask ? `Task ${currentTask.number}` : waitingTask ? `Task ${waitingTask.number}` : 'Task未記録',
+          state: currentTask ? `現在・${statusLabel(currentTask.status)}` : waitingTask ? `待機・${statusLabel(waitingTask.status)}` : '未記録',
+          tone: currentTask ? 'current' : waitingTask?.status || 'planned'
         },
         { stage: '検証', glyph: 'V', title: '検証', state: verificationState, tone: verificationState === '完了' ? 'complete' : 'missing' }
       ];
@@ -5917,20 +6317,31 @@
     }
     function renderCurrentFocus(brief, model) {
       const current = brief.currentTask;
+      const recorded = brief.recordedTask;
       const next = brief.nextTask;
-      const action = primaryActionFor(current, model);
+      const action = current
+        ? primaryActionFor(current, model)
+        : { label: model.waiting.reason, state: 'waiting' };
       const done = doneConditionsFor(current);
       byId('current-focus-meta').textContent = current
         ? `TASK ${current.number} · ${statusLabel(current.status)}`
-        : 'TASK未記録';
-      byId('current-focus-task-title').textContent = current?.title || 'Taskを選択してください';
-      byId('current-focus-purpose').textContent = current?.purpose || 'Taskの目的が未記録';
-      byId('current-focus-output').textContent = `成果物: ${current?.outputs?.length ? current.outputs.join('、') : '未記録'}`;
+        : recorded
+          ? `TASK ${recorded.number} · 記録上の進行中（現在未確認）`
+          : 'TASK未記録';
+      byId('current-focus-task-title').textContent = current?.title || 'Current Taskを確認できません';
+      byId('current-focus-purpose').textContent = current?.purpose || model.waiting.reason;
+      byId('current-focus-output').textContent = current
+        ? `成果物: ${current.outputs?.length ? current.outputs.join('、') : '未記録'}`
+        : recorded
+          ? `記録上のTask: Task ${recorded.number}「${recorded.title}」`
+          : '成果物: 未記録';
       byId('current-primary-action').textContent = action.label;
       byId('current-primary-action').dataset.state = action.state;
       byId('current-done-preview').textContent = done.join(' / ');
       byId('current-next-line').textContent = action.state === 'blocked'
         ? `Blocker: ${action.label}`
+        : !current
+          ? `待機: ${model.waiting.reason}`
         : next
           ? `Next: Task ${next.number}「${next.title}」`
           : model.fixedProgress.total > 0 && model.fixedProgress.done === model.fixedProgress.total
@@ -5938,10 +6349,14 @@
             : 'Next: 未記録';
       byId('detail-drawer-title').textContent = current
         ? `Task ${current.number}: ${current.title}`
-        : 'Current Taskの詳細';
+        : recorded
+          ? `Current Taskの詳細（記録上: Task ${recorded.number}）`
+          : 'Current Taskの詳細';
       byId('detail-drawer-summary').textContent = current
         ? `CurrentはTask ${current.number}、Selectedはdrawer内で別に保持します。`
-        : 'Document、Change、Impact、Test、Sourcesを必要な時だけ開きます。';
+        : recorded
+          ? `更新が確認できるまでTask ${recorded.number}はCurrentとして扱いません。`
+          : 'Document、Change、Impact、Test、Sourcesを必要な時だけ開きます。';
     }
     function renderDetailDocument(brief, model) {
       byId('detail-document-summary').textContent = brief.design.goal.text || '計画全体の目的が未記録です。';
@@ -6163,6 +6578,122 @@
         requestAnimationFrame(() => (restoreTarget || toggle).focus({ preventScroll: true }));
       }
     }
+    function timelineEventTimeLabel(event) {
+      if (!event?.time) return '時刻未記録';
+      const parsed = Date.parse(event.time);
+      return Number.isFinite(parsed) ? formatAbsolute(event.time) : event.time;
+    }
+    function timelineSourceLabel(source) {
+      if (!source) return '';
+      if (typeof source === 'string') return source;
+      if (typeof source !== 'object' || Array.isArray(source)) return '';
+      const file = asText(source.file || source.path).trim();
+      const lineStart = Number(source.lineStart ?? source.line_start ?? source.line);
+      const lineEnd = Number(source.lineEnd ?? source.line_end ?? source.line);
+      const lineLabel = Number.isFinite(lineStart) && lineStart > 0
+        ? `L${lineStart}${Number.isFinite(lineEnd) && lineEnd > lineStart ? `–L${lineEnd}` : ''}`
+        : '';
+      return [file, lineLabel].filter(Boolean).join('#');
+    }
+    function timelineEventStatus(event) {
+      const status = asText(event?.status).trim().toLowerCase();
+      const kind = asText(event?.kind).trim().toLowerCase();
+      const isError = Boolean(event?.error)
+        || /^(error|failed|failure|invalid|blocked|ng|エラー|失敗|不正)$/.test(status)
+        || /^(error|failed|failure|invalid|blocked|ng|エラー|失敗|不正)$/.test(kind);
+      if (isError) return { className: 'error', label: 'エラー' };
+      if (/^(warn|warning|注意|警告)$/.test(status) || /^(warn|warning|注意|警告)$/.test(kind)) {
+        return { className: 'warning', label: '警告' };
+      }
+      if (status) return { className: 'status', label: `状態: ${status}` };
+      return null;
+    }
+    function renderPlanTimeline(model) {
+      const status = byId('plan-contract-status');
+      const planState = model.planState || { errors: [], diagnostics: [] };
+      const planErrors = Array.isArray(planState.errors) ? planState.errors : [];
+      const diagnostics = Array.isArray(planState.diagnostics) ? planState.diagnostics : [];
+      const state = model.timelineState || { valid: true, errors: [] };
+      const timelineErrors = state.valid
+        ? []
+        : Array.isArray(state.errors) && state.errors.length
+          ? state.errors
+          : ['snapshot.timelineを読み込めません'];
+      if (status) {
+        if (planErrors.length || timelineErrors.length) {
+          status.hidden = false;
+          const messages = [];
+          if (planErrors.length) messages.push(`構造化Planエラー（legacy fallbackなし）: ${planErrors.join(' / ')}`);
+          if (timelineErrors.length) messages.push(`構造化timelineエラー（legacy fallbackなし）: ${timelineErrors.join(' / ')}`);
+          status.textContent = messages.join(' / ');
+        } else if (diagnostics.length) {
+          status.hidden = false;
+          status.textContent = `Plan診断: ${diagnostics.map(item => item.message).join(' / ')}`;
+        } else if (model.plan) {
+          status.hidden = false;
+          status.textContent = `構造化Plan v${model.plan.schemaVersion} · Task ${model.tasks.length}件 · Markdown Taskの再解析なし`;
+        } else {
+          status.hidden = true;
+          status.textContent = '';
+        }
+      }
+      const meta = byId('plan-timeline-meta');
+      const list = byId('plan-timeline-list');
+      if (!meta || !list) return;
+      const structured = Boolean(model.plan);
+      const events = structured
+        ? model.timeline.slice().sort((left, right) => {
+            const leftTime = Date.parse(left.time);
+            const rightTime = Date.parse(right.time);
+            if (Number.isFinite(leftTime) && Number.isFinite(rightTime) && leftTime !== rightTime) return leftTime - rightTime;
+            if (Number.isFinite(leftTime) !== Number.isFinite(rightTime)) return Number.isFinite(leftTime) ? -1 : 1;
+            return left._index - right._index;
+          })
+        : model.entries.map((entry, index) => ({
+            ...entry,
+            id: entry.id || `legacy-${index + 1}`,
+            kind: 'legacy-log',
+            tasks: [],
+            source: '05_log.md'
+          })).reverse();
+      meta.textContent = state.valid ? `${events.length} events` : 'timeline error';
+      const announcementKey = JSON.stringify({
+        structured,
+        valid: state.valid,
+        errors: timelineErrors,
+        events: events.map(event => [event.id, event.time, event.title, event.status, event.error, timelineSourceLabel(event.source)])
+      });
+      if (announcementKey !== lastPlanTimelineAnnouncementKey) {
+        const announcement = !state.valid
+          ? `計画timelineを読み込めません。${timelineErrors.join(' / ')}`
+          : structured
+            ? `計画timelineを更新しました。${events.length}件。`
+            : '';
+        if (announcement) byId('state-announcer').textContent = announcement;
+        lastPlanTimelineAnnouncementKey = announcementKey;
+      }
+      if (!state.valid) {
+        list.innerHTML = `<p class="plan-timeline-empty error" role="alert">構造化timelineエラー（legacy fallbackなし）: ${escapeHtml(timelineErrors.join(' / '))}</p>`;
+        return;
+      }
+      if (!events.length) {
+        list.innerHTML = `<p class="plan-timeline-empty">${structured ? 'snapshot.timelineに時系列が未記録です。' : '05_log.mdに時系列が未記録です。'}</p>`;
+        return;
+      }
+      list.innerHTML = events.map(event => {
+        const taskLabel = event.tasks?.length ? ` · ${event.tasks.map(number => `Task ${number}`).join(' / ')}` : '';
+        const phaseLabel = event.phase ? `Phase ${event.phase}` : event.kind || 'event';
+        const eventStatus = timelineEventStatus(event);
+        const sourceLabel = timelineSourceLabel(event.source);
+        const eventLabel = [event.title, eventStatus?.label, sourceLabel].filter(Boolean).join(' / ');
+        return `<article class="plan-timeline-event${eventStatus?.className === 'error' ? ' error' : ''}" role="listitem" aria-label="${escapeHtml(eventLabel)}">
+          <header><div><small>${escapeHtml(phaseLabel)}${escapeHtml(taskLabel)}${eventStatus ? ` <span class="plan-timeline-event-state ${escapeHtml(eventStatus.className)}" aria-label="${escapeHtml(eventStatus.label)}">${escapeHtml(eventStatus.label)}</span>` : ''}</small></div><time datetime="${escapeHtml(event.time || '')}">${escapeHtml(timelineEventTimeLabel(event))}</time></header>
+          <h4>${escapeHtml(event.title || '無題のevent')}</h4>
+          <p>${escapeHtml(event.summary || event.body || '詳細未記録')}</p>
+          ${sourceLabel ? `<footer><span>出典: ${escapeHtml(sourceLabel)}</span></footer>` : ''}
+        </article>`;
+      }).join('');
+    }
     function renderExecutionBrief(model) {
       const hadCodeFocus = document.activeElement?.id === 'implementation-code';
       const brief = ROADMAP_MODEL.buildExecutionBrief(model, selectedImplementationTaskNumber);
@@ -6179,6 +6710,8 @@
         ? '完了'
         : model.freshness.state === 'stale'
           ? '更新待ち'
+          : model.freshness.state === 'unknown'
+            ? '更新時刻不明'
           : current
             ? `Task ${current.number} ${statusLabel(current.status)}`
             : 'Task未記録';
@@ -6191,10 +6724,12 @@
         : 'Task未記録';
       byId('brief-current-task').textContent = [
         current ? `現在: Task ${current.number}「${current.title}」` : model.waiting.reason,
+        !current && brief.recordedTask ? `記録上: Task ${brief.recordedTask.number}「${brief.recordedTask.title}」（現在未確認）` : '',
         next ? `次: Task ${next.number}「${next.title}」` : progress.total > 0 && progress.done === progress.total ? '次: なし' : '次: 未記録'
-      ].join(' / ');
+      ].filter(Boolean).join(' / ');
       renderDesignSummary(brief.design);
       renderRoadmapRoute(ROADMAP_MODEL.buildRoadmapRoute(brief));
+      renderPlanTimeline(model);
       renderCurrentFocus(brief, model);
       renderDetailDocument(brief, model);
       renderImpactCodeMap(brief);
@@ -6315,6 +6850,19 @@
         byId('plan-meta').textContent = `source ${model.snapshot.sourceFingerprint.slice(0, 12) || 'fingerprint未記録'} · 編集前に codemap check を実行`;
         byId('codemap-summary').setAttribute('aria-label', `${model.snapshot.nodes.length} nodes、${model.snapshot.edges.length} relations、${unknown} unknown`);
         byId('codemap-summary').innerHTML = `<span class="codemap-metric"><strong>${model.snapshot.nodes.length}</strong><small>nodes</small></span><span class="codemap-metric"><strong>${model.snapshot.edges.length}</strong><small>relations</small></span><span class="codemap-metric unknown"><strong>${unknown}</strong><small>unknown</small></span>`;
+        return;
+      }
+      if (model.plan && !model.plan.valid) {
+        byId('wayfinder-phase').textContent = 'PLAN CONTRACT';
+        byId('wayfinder-status').textContent = '明示的エラー';
+        byId('wayfinder-next-decision').textContent = '構造化Planを修正する';
+        byId('decision-subject').textContent = model.planState.errors.join(' / ');
+        byId('wayfinder-unmatched').textContent = `Plan error ${model.planState.errors.length}件`;
+        byId('wayfinder-failed').textContent = 'legacy fallbackなし';
+        byId('wayfinder-task-progress').textContent = `${model.fixedProgress.done} / ${model.fixedProgress.total} 構造化Task`;
+        byId('plan-meta').textContent = 'snapshot.planを表示できません。30_plan.mdの構造化契約を確認してください。';
+        byId('next-step-sequence').textContent = 'Plan contract errorを解消してください';
+        byId('decision-evidence').dataset.artifact = '30_plan.md';
         return;
       }
       const phase = model.activePhase;

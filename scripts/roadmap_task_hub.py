@@ -46,7 +46,7 @@ class MemoryTask:
     project_path: str | None
     task_state: str | None
     approval_state: str | None
-    updated_at: str
+    updated_at: str | None
     summary: dict[str, object]
     detail: dict[str, object]
 
@@ -92,6 +92,8 @@ class TaskHubSession:
         self._lock = threading.Lock()
         self._tasks: tuple[UnifiedTask, ...] = ()
         self._archived_count = 0
+        self._warnings: tuple[dict[str, object], ...] = ()
+        self._skipped_tasks: tuple[dict[str, object], ...] = ()
         self._fingerprint: str | None = None
         self.connected = False
         self.last_successful_sync: str | None = None
@@ -123,10 +125,22 @@ class TaskHubSession:
             if not isinstance(index, dict):
                 raise TypeError("index builder result has no index")
             tasks = tuple(index.get("tasks", ()))
+            warnings = tuple(
+                warning
+                for warning in index.get("warnings", ())
+                if isinstance(warning, dict)
+            )
+            skipped_tasks = tuple(
+                skipped
+                for skipped in index.get("skippedTasks", ())
+                if isinstance(skipped, dict)
+            )
             fingerprint = json.dumps(
                 {
                     "tasks": [_task_to_dict(task) for task in tasks],
                     "archivedCount": int(index.get("archivedCount", 0)),
+                    "warnings": warnings,
+                    "skippedTasks": skipped_tasks,
                 },
                 ensure_ascii=False,
                 sort_keys=True,
@@ -137,6 +151,8 @@ class TaskHubSession:
                 if changed:
                     self._tasks = tasks
                     self._archived_count = int(index.get("archivedCount", 0))
+                    self._warnings = warnings
+                    self._skipped_tasks = skipped_tasks
                     self._fingerprint = fingerprint
                 self.connected = True
                 self.last_successful_sync = provider.synced_at
@@ -156,6 +172,8 @@ class TaskHubSession:
                 "error": self.error,
                 "tasks": [_task_to_dict(task) for task in self._tasks],
                 "archivedCount": self._archived_count,
+                "warnings": list(self._warnings),
+                "skippedTasks": list(self._skipped_tasks),
             }
 
     def task(self, task_id: str) -> dict[str, object] | None:
@@ -680,8 +698,10 @@ def discover_memory_tasks(roots: list[Path]) -> tuple[MemoryTask, ...]:
                 }
                 if metadata_error is None:
                     metadata_error = str(error)
-            updated_at = _optional_string(metadata.get("updated_at"))
-            if updated_at is None:
+            if "updated_at" in metadata:
+                updated_value = metadata.get("updated_at")
+                updated_at = updated_value if isinstance(updated_value, str) else None
+            else:
                 timestamps = [
                     child.stat().st_mtime
                     for child in task_dir.iterdir()
@@ -758,15 +778,39 @@ def _parse_time(value: str) -> datetime:
     return parsed.replace(tzinfo=timezone.utc) if parsed.tzinfo is None else parsed
 
 
+def _try_parse_time(value: object) -> datetime | None:
+    if not isinstance(value, str) or not value.strip():
+        return None
+    try:
+        return _parse_time(value)
+    except (TypeError, ValueError, OverflowError):
+        return None
+
+
+def _memory_timestamp_warning(
+    memory: MemoryTask, state: Literal["degraded", "skipped"]
+) -> dict[str, object]:
+    return {
+        "code": "invalid_updated_at",
+        "reason": "invalid_updated_at",
+        "state": state,
+        "taskId": f"memory:{memory.path}",
+        "path": str(memory.path),
+        "title": memory.title,
+        "message": (
+            "task-meta.json updated_at is missing or not a valid ISO 8601 "
+            "timestamp; the task was not assigned an invented timestamp"
+        ),
+    }
+
+
 def _candidate_score(thread: CodexThread, memory: MemoryTask) -> int:
     score = 3 if memory.project_path == thread.cwd else 0
     if memory.title == thread.title:
         score += 2
-    try:
-        if abs(_parse_time(memory.updated_at).timestamp() - thread.updated_at) <= 15 * 60:
-            score += 1
-    except ValueError:
-        pass
+    memory_time = _try_parse_time(memory.updated_at)
+    if memory_time is not None and abs(memory_time.timestamp() - thread.updated_at) <= 15 * 60:
+        score += 1
     return score
 
 
@@ -787,6 +831,8 @@ def build_task_index(
     current_time = now or datetime.now(timezone.utc)
     unified: list[UnifiedTask] = []
     consumed_paths: set[Path] = set()
+    warnings: list[dict[str, object]] = []
+    skipped_tasks: list[dict[str, object]] = []
     archived_count = 0
 
     for thread in provider.threads:
@@ -795,7 +841,11 @@ def build_task_index(
         if memory is not None:
             consumed_paths.add(memory.path)
         thread_time = datetime.fromtimestamp(thread.updated_at, timezone.utc)
-        memory_time = _parse_time(memory.updated_at) if memory is not None else None
+        memory_time = _try_parse_time(memory.updated_at) if memory is not None else None
+        memory_warning = None
+        if memory is not None and memory_time is None:
+            memory_warning = _memory_timestamp_warning(memory, "degraded")
+            warnings.append(memory_warning)
         updated_time = max(thread_time, memory_time) if memory_time else thread_time
         activity = read_session_activity(thread.session_path, now=current_time)
         last_event = activity.get("lastEvent")
@@ -836,6 +886,9 @@ def build_task_index(
             "runningToolCount": len(activity.get("runningTools", [])),
             **(memory.summary if memory is not None else {}),
         }
+        if memory_warning is not None:
+            summary["dataQuality"] = "degraded"
+            summary["dataWarnings"] = [memory_warning]
         detail = {
             "thread": {
                 "id": thread.id,
@@ -846,6 +899,9 @@ def build_task_index(
             "activity": activity,
             **(memory.detail if memory is not None else {}),
         }
+        if memory_warning is not None:
+            detail["dataQuality"] = "degraded"
+            detail["dataWarnings"] = [memory_warning]
         unified.append(
             UnifiedTask(
                 id=thread.id,
@@ -871,7 +927,20 @@ def build_task_index(
     for memory in memories:
         if memory.path in consumed_paths:
             continue
-        updated_time = _parse_time(memory.updated_at)
+        updated_time = _try_parse_time(memory.updated_at)
+        if updated_time is None:
+            warning = _memory_timestamp_warning(memory, "skipped")
+            warnings.append(warning)
+            skipped_tasks.append(
+                {
+                    "id": f"memory:{memory.path}",
+                    "path": str(memory.path),
+                    "title": memory.title,
+                    "state": "skipped",
+                    "reason": "invalid_updated_at",
+                }
+            )
+            continue
         age_minutes = max(0.0, (current_time - updated_time).total_seconds() / 60)
         explicit_state = memory.approval_state or memory.task_state
         section = classify_task(None, explicit_state, age_minutes, 1)
@@ -904,7 +973,12 @@ def build_task_index(
             task.id,
         )
     )
-    return {"tasks": tuple(unified), "archivedCount": archived_count}
+    return {
+        "tasks": tuple(unified),
+        "archivedCount": archived_count,
+        "warnings": tuple(warnings),
+        "skippedTasks": tuple(skipped_tasks),
+    }
 
 
 def run_task_hub(
