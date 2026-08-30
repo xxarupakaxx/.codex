@@ -277,6 +277,7 @@
     {"path": "codemap.html", "lifecycle": "grandfathered", "owner": "viewing-plans", "artifactKind": "legacy-codemap-html", "staticProfile": "legacy-grandfathered", "browserProfile": "roadmap-matrix"}
   ],
   "literalExceptions": [
+    {"path": "scripts/task-context.py", "contains": "roadmap.html", "reason": "read-only task artifact reference, not a producer", "removeWhen": "consumer stops referencing Roadmap or begins producing HTML"},
     {"path": "scripts/html_artifact_contract.py", "contains": "*.html", "reason": "contract scanner pattern, not a producer", "removeWhen": "not applicable"},
     {"path": "scripts/validate-matt-skill-integration.py", "contains": "tools/roadmap_viewer.html", "reason": "integration canary target, not a producer", "removeWhen": "canary manifest-driven"},
     {"path": "scripts/verify-codex-model-compat.py", "contains": ".html", "reason": "file extension allowlist", "removeWhen": "not applicable"},

@@ -1,126 +1,71 @@
 # .codex
 
-User-scope Codex configuration imported from `~/.claude`.
+Codexのuser-scope設定を、再現可能な正本として管理する。AGENTS.mdは入口、context/とrules/とskills/が詳細を持つ。runtime state、auth、history、SQLite、secret、plugin cache、生成画像は保存しない。
 
-This repository intentionally stores only reproducible configuration:
+## 配置
 
-- `AGENTS.md`
-- `agents/*.toml`
-- `skills/`
-- `commands/`
-- `prompts/`
-- `config/user.example.json`
-- `context/`
-- `rules/`
-- `templates/`
-- `tools/`
-- `workflows/`
-- `scheduled-tasks/`
-- `hooks.json`
-- `claude-compat/`
-- `config.example.toml`
+    AGENTS.md
+    context/       Phase、memory形式、routing、Codemap、HTML契約
+    rules/         model、security、complexity、ADR、Git
+    skills/        focused workflow
+    commands/      互換shim
+    prompts/       custom prompt
+    agents/        role定義
+    scripts/       deterministic check、Roadmap/Codemap生成
+    templates/     project入口
+    config.example.toml
 
-It does not store runtime state, auth files, SQLite databases, histories,
-attachments, generated images, plugin caches, or local secret values.
-Claude-only runtime/configuration references are kept under `claude-compat/`.
+Claude固有の設定は claude-compat/ に置き、同じworkflowを二重管理しない。
 
-`AGENTS.md` is intentionally a short table of contents. Detailed workflow,
-routing, security, ADR, and review rules live under `context/`, `rules/`, and
-`skills/`; keep history and task-local exceptions out of the entrypoint.
+## 使い方
 
-## Apply locally
+このtreeを参照し、必要なfileを ~/.codex へ配置する。config.example.tomlから実際のconfig.tomlを作り、secretはpassword managerまたはlocal environmentから復元する。新規projectには templates/project/AGENTS.md と templates/project/CLAUDE.md をコピーし、projectの変数、検証command、固有不変条件を置く。
 
-Use the files as references, then copy or merge into `~/.codex`.
-Create a real `~/.codex/config.toml` from `config.example.toml` and restore
-secret values from a password manager or local environment.
+## Canonical route
 
-For a new project, copy `templates/project/AGENTS.md` and
-`templates/project/CLAUDE.md`. Put project variables, verification commands,
-and project-only invariants in `AGENTS.md`; `CLAUDE.md` only imports it.
+作業順は context/workflow-rules.md のPhase 0–5.5、条件付きgateは context/workflow-details.md、artifactとsession復元は context/memory-file-formats.md、Skillと委譲は context/agent-team-routing.md が正本である。Roadmapは30_plan.mdを入力に`~/.codex/scripts/sync-roadmap.py`が検査・生成・atomic publishし、HTMLやsnapshotを手編集しない。短い保守はlog-onlyで追跡し、Roadmapを自動強制しない。
 
-## Validate the harness
+lfgは skills/lfg/SKILL.md がcanonicalで、commands/lfg.md、prompts/lfg.md、skills/source-command-lfg/SKILL.mdは互換shimである。shimへPhase手順を戻さない。
 
-```bash
-python3 scripts/validate-agent-harness.py
-python3 scripts/validate-agent-harness.py --contracts
-python3 scripts/validate-agent-harness.py --full-replay
-python3 -m unittest discover -s tests -p 'test_*.py'
-node --test tests/roadmap-viewer.test.mjs
-bash -n hooks/*.sh claude-compat/hooks/*.sh
-```
+## 検証
 
-To validate Phase artifacts stored in a project-specific directory:
+任意のproject cwdから、user-scopeの絶対home入口で次を実行する。
 
-```bash
-python3 scripts/validate-agent-harness.py --artifact-dir .context
-```
+    python3 ~/.codex/scripts/validate-agent-harness.py
+    python3 ~/.codex/scripts/validate-agent-harness.py --contracts
+    python3 ~/.codex/scripts/validate-agent-harness.py --full-replay
+    python3 -m unittest discover -s ~/.codex/tests -p 'test_*.py'
+    node --test ~/.codex/tests/roadmap-viewer.test.mjs
+    bash -n ~/.codex/hooks/*.sh ~/.codex/claude-compat/hooks/*.sh
 
-Codex delivery routing uses the Local / Fast / Standard / Heavy / Judgment
-capability classes in `rules/model-routing.md`. The current runtime resolves
-them to Luna, Terra, and Sol and fails closed when a required model is absent.
-
-`lfg` is maintained at `skills/lfg/SKILL.md`. Its command, prompt, and
-source-command surfaces are compatibility shims. Phase order and gates remain
-in `context/workflow-rules.md`; artifact schemas remain in
-`context/memory-file-formats.md`.
+artifactを別rootで検証する場合は --artifact-dir を指定する。設定済みと実行済み、構文PASSとuser outcomeは別に報告する。
 
 ## Team Run
 
-`team-run` is maintained as a Codex Skill at `skills/team-run/SKILL.md`.
-`graph-engineering` is maintained as a Codex Skill at
-`skills/graph-engineering/SKILL.md`; its contract and adoption boundary live in
-`context/graph-engineering.md`, and execution reuses `team-run`.
-Use it for high-value multi-turn work where Goal, Team Journal, reviewer
-heat, and sub-agent coordination need to move together.
+高価値で複数turnのGoal、Team Journal、Review Heat、独立roleが必要なときだけ skills/team-run/SKILL.md を使う。graph-engineeringは複数loopをtyped state、auditable edge、異なるauthorityで統治する場合だけ重ねる。
 
-Read order:
+読む順序:
 
-1. `skills/team-run/SKILL.md`
-2. `context/workflow-rules.md`
-3. `context/agent-team-routing.md`
-4. `context/team-run.md`
-5. Project `AGENTS.md` and project overrides such as `.codex/context/agent-team-routing.md` / `.codex/context/team-run.md`, when present
+1. skills/team-run/SKILL.md
+2. context/workflow-rules.md
+3. context/agent-team-routing.md
+4. context/team-run.md
+5. projectのAGENTS.mdとproject override
 
-The legacy `commands/team-run.md` and `prompts/team-run.md` files are
-compatibility entrypoints only. Update the Skill and context files instead of
-duplicating workflow text in those shims.
+commands/team-run.md と prompts/team-run.md は入口shimであり、正本を更新する。
 
-Claude-style command markdown files are mirrored into `prompts/` for Codex
-custom prompts. Invoke them as `/prompts:<name>` after restarting Codex.
+## Skill routing
 
-## Skill Routing
+skills/ask-skill-router/SKILL.mdで、user-invokedの進路変更とmodel-invokedの局所disciplineを分ける。Superpowers、team-run、orchestrate、blueprint、外部Skillの導入・更新は既定にせず、明示要求または条件付きgateで使う。必要なSkillだけを読み、成果とfresh検証を残す。
 
-`skills/ask-skill-router/SKILL.md` is the lightweight router for choosing a
-workflow before reaching for a heavy process gate. It keeps the distinction
-between user-invoked flows, such as `team-run`, `orchestrate`, `grill-me`,
-PRD writing, and issue splitting, and model-invoked disciplines, such as
-`research`, `tdd`, `diagnosing-bugs`, `modeling-domains`, and verification.
+## Codemap
 
-Superpowers remains available as a strong option, but it is no longer treated
-as the default route for every non-trivial task.
+code-changing taskは最初のedit前にtask-local Codemapをrefresh / checkし、編集後もfreshnessを確認する。workspaceを検査し、codemap.json、codemap.lock、roadmap.htmlはtask memoryに置く。verified relationにはpath:line evidenceを付け、unknown relationを推測で埋めない。
 
-## Codemap preflight
+    python3 ~/.codex/scripts/generate-codemap.py refresh \
+      --root WORKSPACE --artifact-dir TASK_MEMORY \
+      --input TASK_MEMORY/codemap.source.json
+    python3 ~/.codex/scripts/generate-codemap.py check \
+      --root WORKSPACE --artifact-dir TASK_MEMORY
 
-Code-changing tasks use a task-local evidence map before the first edit. The
-map validates files in the workspace, but its artifacts stay in the current
-task memory directory and out of Git:
-
-- `codemap.json` is the AI-readable topology.
-- `roadmap.html` is the single Task Workspace for plan/progress and the evidence-backed Code Map.
-- `codemap.lock` records source, map, template, and HTML fingerprints.
-
-Author the map beside the task artifacts, then generate all three outputs together:
-
-```bash
-python3 scripts/generate-codemap.py refresh \
-  --root <workspace-root> \
-  --artifact-dir <task-memory-directory> \
-  --input <task-memory-directory>/codemap.source.json
-python3 scripts/generate-codemap.py check \
-  --root <workspace-root> \
-  --artifact-dir <task-memory-directory>
-```
-
-Verified relations require repository path and line evidence. Unproven relations
-remain explicit `unknown` edges with a reason. See `context/codemap.md` for the
-preflight, freshness, and Roadmap/Codemap separation contracts.
+ClaudeからRoadmapを同期する場合も、旧generatorを直接呼ばず、~/.codex/scripts/sync-roadmap.pyを明示入口として使用する。

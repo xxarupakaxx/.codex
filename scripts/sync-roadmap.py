@@ -7,12 +7,15 @@ import argparse
 import hashlib
 import importlib.util
 import json
+import os
 import re
 import subprocess
 import sys
 import time
 from pathlib import Path
 from typing import Any
+
+sys.dont_write_bytecode = True
 
 
 try:
@@ -29,6 +32,22 @@ except ModuleNotFoundError:
     PlanContractError = _PLAN_CONTRACT_MODULE.PlanContractError
     parse_plan_contract = _PLAN_CONTRACT_MODULE.parse_plan_contract
     parse_plan_files = _PLAN_CONTRACT_MODULE.parse_plan_files
+
+
+try:
+    from task_completion import CompletionValidationError, validate_phase5_completion
+except ModuleNotFoundError:
+    _TASK_COMPLETION_PATH = Path(__file__).with_name("task_completion.py")
+    _TASK_COMPLETION_SPEC = importlib.util.spec_from_file_location(
+        "task_completion", _TASK_COMPLETION_PATH
+    )
+    if _TASK_COMPLETION_SPEC is None or _TASK_COMPLETION_SPEC.loader is None:
+        raise
+    _TASK_COMPLETION_MODULE = importlib.util.module_from_spec(_TASK_COMPLETION_SPEC)
+    sys.modules[_TASK_COMPLETION_SPEC.name] = _TASK_COMPLETION_MODULE
+    _TASK_COMPLETION_SPEC.loader.exec_module(_TASK_COMPLETION_MODULE)
+    CompletionValidationError = _TASK_COMPLETION_MODULE.CompletionValidationError
+    validate_phase5_completion = _TASK_COMPLETION_MODULE.validate_phase5_completion
 
 
 ELIGIBLE_ROUTES = {"explicit-roadmap", "roadmap"}
@@ -53,6 +72,7 @@ PHASE_STATES = {
     "4": "verifying",
     "5": "completed",
 }
+PUBLISHED_OUTPUTS = ("roadmap.html", "roadmap-snapshot.json", "task-meta.json")
 DELEGATION_DECISION_FIELDS = (
     "decision", "role", "gate", "decision_unit",
     "passed_conditions", "failed_conditions", "local_first_evidence", "reason",
@@ -81,7 +101,9 @@ def validate_task_metadata(task_dir: Path, workspace_root: Path) -> str | None:
         return None
     try:
         metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeError, json.JSONDecodeError):
+        return "task_metadata_invalid"
+    if not isinstance(metadata, dict):
         return "task_metadata_invalid"
     expected = str(workspace_root.resolve())
     for field in ("project_path", "worktree_path"):
@@ -110,6 +132,64 @@ def source_fingerprints(task_dir: Path, route: str) -> dict[str, str]:
         for name in names
         if (task_dir / name).is_file()
     }
+
+
+def _backup_published_outputs(
+    task_dir: Path,
+) -> tuple[dict[str, bytes | None], list[str]]:
+    backups: dict[str, bytes | None] = {}
+    invalid: list[str] = []
+    for name in PUBLISHED_OUTPUTS:
+        path = task_dir / name
+        if path.is_symlink() or (path.exists() and not path.is_file()):
+            backups[name] = None
+            invalid.append(name)
+        elif path.is_file():
+            backups[name] = path.read_bytes()
+        else:
+            backups[name] = None
+    return backups, invalid
+
+
+def _restore_published_outputs(
+    task_dir: Path, backups: dict[str, bytes | None]
+) -> list[str]:
+    errors: list[str] = []
+    for name, previous in backups.items():
+        path = task_dir / name
+        try:
+            if previous is None:
+                if path.is_symlink() or path.is_file():
+                    path.unlink()
+                elif path.exists():
+                    raise OSError(f"cannot remove non-file output {path}")
+                continue
+            stage = path.with_name(
+                f".{path.name}.{os.getpid()}.{time.time_ns()}.restore.tmp"
+            )
+            try:
+                stage.write_bytes(previous)
+                os.replace(stage, path)
+            finally:
+                try:
+                    stage.unlink()
+                except FileNotFoundError:
+                    pass
+        except OSError as exc:
+            errors.append(f"{name}: {exc}")
+    return errors
+
+
+def _failed_after_generation(
+    task_dir: Path,
+    backups: dict[str, bytes | None],
+    code: int,
+    result: dict[str, object],
+) -> tuple[int, dict[str, object]]:
+    restore_errors = _restore_published_outputs(task_dir, backups)
+    if restore_errors:
+        result["restore_errors"] = restore_errors
+    return code, result
 
 
 def detect_route(log_text: str) -> str | None:
@@ -174,7 +254,7 @@ def validate_ui_preview_authoring(
 def _read_json_snapshot(path: Path) -> dict[str, Any] | None:
     try:
         snapshot = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
+    except (OSError, UnicodeError, json.JSONDecodeError):
         return None
     return snapshot if isinstance(snapshot, dict) else None
 
@@ -182,7 +262,7 @@ def _read_json_snapshot(path: Path) -> dict[str, Any] | None:
 def _read_embedded_snapshot(path: Path) -> dict[str, Any] | None:
     try:
         html = path.read_text(encoding="utf-8")
-    except OSError:
+    except (OSError, UnicodeError):
         return None
     matches = list(EMBEDDED_SNAPSHOT_PATTERN.finditer(html))
     if len(matches) != 1:
@@ -519,7 +599,15 @@ def synchronize(
     log_path = task_dir / "05_log.md"
     if not log_path.is_file():
         return 2, {"status": "failed", "reason": "log_missing", "path": str(log_path)}
-    log_text = log_path.read_text(encoding="utf-8")
+    try:
+        log_text = log_path.read_text(encoding="utf-8")
+    except (OSError, UnicodeError) as exc:
+        return 2, {
+            "status": "failed",
+            "reason": "log_invalid",
+            "path": str(log_path),
+            "error": str(exc),
+        }
     route = detect_route(log_text)
     if route is None:
         return 2, {"status": "failed", "reason": "route_missing"}
@@ -593,6 +681,22 @@ def synchronize(
                 "reason": "plan_diagnostics_present",
                 "diagnostics": diagnostics,
             }
+    completion_gate: dict[str, object] | None = None
+    if phase == "5":
+        try:
+            completion_gate = validate_phase5_completion(
+                task_dir,
+                workspace_root,
+                plan_model,
+            )
+        except CompletionValidationError as exc:
+            return 2, {
+                "status": "failed",
+                "route": route,
+                "phase": phase,
+                "reason": exc.reason,
+                **exc.details,
+            }
     if not generator.is_file():
         return 2, {
             "status": "failed",
@@ -600,7 +704,6 @@ def synchronize(
             "reason": "generator_missing",
             "path": str(generator),
         }
-
     command = roadmap_command(
         task_dir, generator.resolve(), phase, open_requested, headless
     )
@@ -620,36 +723,81 @@ def synchronize(
             "plan_source_hash": plan_model.get("sourceHash"),
             "plan_task_ids": _task_ids(plan_model),
             "plan_edges": plan_model.get("edges", []),
+            **({"completion_gate": completion_gate} if completion_gate else {}),
         }
-    completed = subprocess.run(command, capture_output=True, text=True, check=False)
-    if completed.returncode != 0:
-        return completed.returncode, {
-            "status": "failed",
-            "route": route,
-            "reason": "generator_failed",
-            "stderr": completed.stderr.strip(),
-        }
-    artifacts = (task_dir / "roadmap.html", task_dir / "roadmap-snapshot.json")
-    missing = [str(path) for path in artifacts if not path.is_file()]
-    if missing:
+    try:
+        output_backups, invalid_outputs = _backup_published_outputs(task_dir)
+    except OSError as exc:
         return 2, {
             "status": "failed",
             "route": route,
-            "reason": "roadmap_artifact_missing",
-            "missing": missing,
+            "reason": "roadmap_artifact_backup_failed",
+            "error": str(exc),
         }
+    if invalid_outputs:
+        return 2, {
+            "status": "failed",
+            "route": route,
+            "reason": "roadmap_artifact_backup_invalid",
+            "paths": [str(task_dir / name) for name in invalid_outputs],
+        }
+    try:
+        completed = subprocess.run(command, capture_output=True, text=True, check=False)
+    except (OSError, UnicodeError) as exc:
+        return _failed_after_generation(
+            task_dir,
+            output_backups,
+            2,
+            {
+                "status": "failed",
+                "route": route,
+                "reason": "generator_failed",
+                "error": str(exc),
+            },
+        )
+    if completed.returncode != 0:
+        return _failed_after_generation(
+            task_dir,
+            output_backups,
+            completed.returncode,
+            {
+                "status": "failed",
+                "route": route,
+                "reason": "generator_failed",
+                "stderr": completed.stderr.strip(),
+            },
+        )
+    artifacts = (task_dir / "roadmap.html", task_dir / "roadmap-snapshot.json")
+    missing = [str(path) for path in artifacts if not path.is_file()]
+    if missing:
+        return _failed_after_generation(
+            task_dir,
+            output_backups,
+            2,
+            {
+                "status": "failed",
+                "route": route,
+                "reason": "roadmap_artifact_missing",
+                "missing": missing,
+            },
+        )
     snapshot_error = validate_generated_snapshot(
         task_dir / "roadmap-snapshot.json",
         task_dir,
         plan_model,
     )
     if snapshot_error:
-        return 2, {
-            "status": "failed",
-            "route": route,
-            "reason": snapshot_error,
-            "path": str(task_dir / "roadmap-snapshot.json"),
-        }
+        return _failed_after_generation(
+            task_dir,
+            output_backups,
+            2,
+            {
+                "status": "failed",
+                "route": route,
+                "reason": snapshot_error,
+                "path": str(task_dir / "roadmap-snapshot.json"),
+            },
+        )
     pair_error = validate_snapshot_pair(
         task_dir / "roadmap.html",
         task_dir / "roadmap-snapshot.json",
@@ -657,18 +805,28 @@ def synchronize(
         plan_model,
     )
     if pair_error:
-        return 2, {
-            "status": "failed",
-            "route": route,
-            "reason": pair_error,
-            "paths": [
-                str(task_dir / "roadmap.html"),
-                str(task_dir / "roadmap-snapshot.json"),
-            ],
-        }
+        return _failed_after_generation(
+            task_dir,
+            output_backups,
+            2,
+            {
+                "status": "failed",
+                "route": route,
+                "reason": pair_error,
+                "paths": [
+                    str(task_dir / "roadmap.html"),
+                    str(task_dir / "roadmap-snapshot.json"),
+                ],
+            },
+        )
     metadata_error = validate_task_metadata(task_dir, workspace_root)
     if metadata_error:
-        return 2, {"status": "failed", "reason": metadata_error}
+        return _failed_after_generation(
+            task_dir,
+            output_backups,
+            2,
+            {"status": "failed", "reason": metadata_error},
+        )
     return 0, {
         "status": "synchronized",
         "route": route,
@@ -686,6 +844,7 @@ def synchronize(
         "artifact_fingerprints": {
             path.name: file_fingerprint(path) for path in artifacts
         },
+        **({"completion_gate": completion_gate} if completion_gate else {}),
     }
 
 

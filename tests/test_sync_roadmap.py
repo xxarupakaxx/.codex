@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import importlib.util
 import json
 import tempfile
@@ -67,6 +68,63 @@ class SyncRoadmapTest(unittest.TestCase):
             )
         return task
 
+    def phase5_task(self, *, checked: bool = True) -> Path:
+        task = self.write_task("roadmap")
+        source = self.workspace / "src.py"
+        source.write_text("print('fixture')\n", encoding="utf-8")
+        marker = "x" if checked else " "
+        (task / "30_plan.md").write_text(
+            "# Plan\n\n"
+            "## Task 1: fixture\n\n"
+            "acceptance: AC1\n"
+            "required_sources: task:30_plan.md, task:40_progress.md, "
+            "task:checkpoint.md, workspace:src.py\n\n"
+            "#### purpose\nfixture\n\n"
+            "#### targets\n- src.py\n\n"
+            f"#### implementation\n- [{marker}] implement fixture\n\n"
+            "#### outputs\n- output\n\n"
+            "#### verification\n- test fixture\n",
+            encoding="utf-8",
+        )
+        (task / "40_progress.md").write_text("進捗: 100%\n", encoding="utf-8")
+        (task / "checkpoint.md").write_text("- [x] AC1: fixture passes\n", encoding="utf-8")
+        (task / "90_verification.md").write_text(
+            "AC1 fixture verification passed\n", encoding="utf-8"
+        )
+        model = MODULE.parse_plan_files(task / "30_plan.md", task / "40_progress.md")
+
+        def sha(path: Path) -> str:
+            return hashlib.sha256(path.read_bytes()).hexdigest()
+
+        bundle = {
+            "artifact_id": "eb-fixture",
+            "source_hash": model["sourceHash"],
+            "acceptance_evidence": ["AC1|PASS|source:task:90_verification.md#L1"],
+            "tests": ["fixture-test"],
+            "findings": [],
+            "residual_risks": [],
+            "writes_performed": ["src.py"],
+            "safety_decision_id": "safe-fixture",
+            "policy_source": "AGENTS.md",
+            "lineage": ["fixture"],
+            "journey_evidence": ["fixture journey"],
+            "negative_path_evidence": ["fixture negative path"],
+            "completion_state": "implemented",
+            "source_fingerprints": {
+                "task:30_plan.md": sha(task / "30_plan.md"),
+                "task:40_progress.md": sha(task / "40_progress.md"),
+                "task:checkpoint.md": sha(task / "checkpoint.md"),
+                "workspace:src.py": sha(source),
+            },
+            "evidence_fingerprints": {
+                "task:90_verification.md": sha(task / "90_verification.md")
+            },
+        }
+        (task / "evidence-bundle.json").write_text(
+            json.dumps(bundle, ensure_ascii=False), encoding="utf-8"
+        )
+        return task
+
     def snapshot_v2(
         self,
         task: Path,
@@ -131,6 +189,42 @@ class SyncRoadmapTest(unittest.TestCase):
         self.assertEqual(result["task_dir"], str(task.resolve()))
         self.assertEqual(result["open_status"], "requested")
         self.assertIn("--open", result["command"])
+
+    def test_phase5_requires_evidence_before_generator(self) -> None:
+        task = self.phase5_task()
+        (task / "evidence-bundle.json").unlink()
+        marker_generator = self.root / "phase5-marker-generator.py"
+        marker_generator.write_text(
+            "from pathlib import Path\n"
+            "import sys\n"
+            "task = Path(sys.argv[1])\n"
+            "(task / 'generated-marker').write_text('called')\n",
+            encoding="utf-8",
+        )
+        code, result = MODULE.synchronize(
+            task, marker_generator, "5", self.workspace, "run-1", dry_run=True
+        )
+        self.assertNotEqual(code, 0)
+        self.assertEqual(result["reason"], "completion_evidence_missing")
+        self.assertFalse((task / "generated-marker").exists())
+
+    def test_phase5_dry_run_reports_completion_gate(self) -> None:
+        task = self.phase5_task()
+        code, result = MODULE.synchronize(
+            task, self.generator, "5", self.workspace, "run-1", dry_run=True
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "dry_run")
+        self.assertEqual(result["completion_gate"]["status"], "pass")
+        self.assertIn("completed", result["command"])
+
+    def test_phase5_uses_raw_steps_when_progress_says_complete(self) -> None:
+        task = self.phase5_task(checked=False)
+        code, result = MODULE.synchronize(
+            task, self.generator, "5", self.workspace, "run-1", dry_run=True
+        )
+        self.assertNotEqual(code, 0)
+        self.assertEqual(result["reason"], "completion_plan_steps_incomplete")
 
     def test_headless_suppresses_open_but_keeps_generation(self) -> None:
         task = self.write_task("roadmap")
@@ -367,13 +461,31 @@ class SyncRoadmapTest(unittest.TestCase):
 
     def test_generator_failure_is_not_hidden(self) -> None:
         task = self.write_task("roadmap")
+        old_html = b"OLD_HTML"
+        old_json = b'{"old": true}'
+        old_metadata = json.dumps({"project_path": str(self.workspace)}).encode()
+        (task / "roadmap.html").write_bytes(old_html)
+        (task / "roadmap-snapshot.json").write_bytes(old_json)
+        (task / "task-meta.json").write_bytes(old_metadata)
         failing = self.root / "failing-generator.py"
-        failing.write_text("raise SystemExit(7)\n", encoding="utf-8")
+        failing.write_text(
+            "from pathlib import Path\n"
+            "import sys\n"
+            "task = Path(sys.argv[1])\n"
+            "(task / 'roadmap.html').write_text('NEW_BAD')\n"
+            "(task / 'roadmap-snapshot.json').write_text('{}')\n"
+            "(task / 'task-meta.json').write_text('[]')\n"
+            "raise SystemExit(7)\n",
+            encoding="utf-8",
+        )
         code, result = MODULE.synchronize(
             task, failing, "2", self.workspace, "run-1"
         )
         self.assertEqual(code, 7)
         self.assertEqual(result["reason"], "generator_failed")
+        self.assertEqual((task / "roadmap.html").read_bytes(), old_html)
+        self.assertEqual((task / "roadmap-snapshot.json").read_bytes(), old_json)
+        self.assertEqual((task / "task-meta.json").read_bytes(), old_metadata)
 
     def test_success_without_roadmap_artifacts_fails_closed(self) -> None:
         task = self.write_task("roadmap")
@@ -385,6 +497,12 @@ class SyncRoadmapTest(unittest.TestCase):
 
     def test_generator_output_without_plan_tasks_fails_closed(self) -> None:
         task = self.write_task("roadmap")
+        old_html = b"OLD_HTML"
+        old_json = b'{"old": true}'
+        old_metadata = json.dumps({"project_path": str(self.workspace)}).encode()
+        (task / "roadmap.html").write_bytes(old_html)
+        (task / "roadmap-snapshot.json").write_bytes(old_json)
+        (task / "task-meta.json").write_bytes(old_metadata)
         generator = self.root / "empty-snapshot-generator.py"
         generator.write_text(
             "from pathlib import Path\n"
@@ -401,9 +519,38 @@ class SyncRoadmapTest(unittest.TestCase):
 
         self.assertNotEqual(code, 0)
         self.assertEqual(result["reason"], "roadmap_snapshot_invalid")
+        self.assertEqual((task / "roadmap.html").read_bytes(), old_html)
+        self.assertEqual((task / "roadmap-snapshot.json").read_bytes(), old_json)
+        self.assertEqual((task / "task-meta.json").read_bytes(), old_metadata)
+
+    def test_non_utf8_generated_pair_preserves_previous_artifacts(self) -> None:
+        task = self.write_task("roadmap")
+        for target in ("roadmap.html", "roadmap-snapshot.json"):
+            with self.subTest(target=target):
+                previous = {
+                    "roadmap.html": b"OLD_HTML",
+                    "roadmap-snapshot.json": b'{"old": true}',
+                    "task-meta.json": json.dumps({"project_path": str(self.workspace)}).encode(),
+                }
+                for name, content in previous.items():
+                    (task / name).write_bytes(content)
+                generator = self.write_snapshot_generator(task, self.snapshot_v2(task), "bad-encoding.py")
+                with generator.open("a") as stream:
+                    stream.write(f"\n(Path(sys.argv[1]) / {target!r}).write_bytes(bytes([255]))\n")
+                code, result = MODULE.synchronize(task, generator, "3", self.workspace, "run-1")
+                self.assertNotEqual(code, 0)
+                self.assertEqual(result["status"], "failed")
+                for name, content in previous.items():
+                    self.assertEqual((task / name).read_bytes(), content)
 
     def test_success_returns_artifact_fingerprints(self) -> None:
         task = self.write_task("roadmap")
+        old_html = b"OLD_HTML"
+        old_json = b'{"old": true}'
+        old_metadata = json.dumps({"project_path": str(self.workspace)}).encode()
+        (task / "roadmap.html").write_bytes(old_html)
+        (task / "roadmap-snapshot.json").write_bytes(old_json)
+        (task / "task-meta.json").write_bytes(old_metadata)
         generator = self.write_snapshot_generator(task, self.snapshot_v2(task))
         code, result = MODULE.synchronize(
             task, generator, "2", self.workspace, "run-1"
@@ -414,6 +561,9 @@ class SyncRoadmapTest(unittest.TestCase):
             set(result["artifact_fingerprints"]),
             {"roadmap.html", "roadmap-snapshot.json"},
         )
+        self.assertNotEqual((task / "roadmap.html").read_bytes(), old_html)
+        self.assertNotEqual((task / "roadmap-snapshot.json").read_bytes(), old_json)
+        self.assertEqual((task / "task-meta.json").read_bytes(), old_metadata)
 
     def test_dry_run_reports_same_plan_contract_used_by_sync(self) -> None:
         task = self.write_task("roadmap")
@@ -572,6 +722,12 @@ class SyncRoadmapTest(unittest.TestCase):
 
     def test_missing_embedded_html_snapshot_fails_closed(self) -> None:
         task = self.write_task("roadmap")
+        old_html = b"OLD_HTML"
+        old_json = b'{"old": true}'
+        old_metadata = json.dumps({"project_path": str(self.workspace)}).encode()
+        (task / "roadmap.html").write_bytes(old_html)
+        (task / "roadmap-snapshot.json").write_bytes(old_json)
+        (task / "task-meta.json").write_bytes(old_metadata)
         snapshot = self.snapshot_v2(task)
         encoded = json.dumps(snapshot, ensure_ascii=False)
         generator = self.root / "missing-html-snapshot-generator.py"
@@ -592,6 +748,9 @@ class SyncRoadmapTest(unittest.TestCase):
 
         self.assertNotEqual(code, 0)
         self.assertEqual(result["reason"], "roadmap_snapshot_pair_invalid")
+        self.assertEqual((task / "roadmap.html").read_bytes(), old_html)
+        self.assertEqual((task / "roadmap-snapshot.json").read_bytes(), old_json)
+        self.assertEqual((task / "task-meta.json").read_bytes(), old_metadata)
 
     def test_other_workspace_memory_is_rejected(self) -> None:
         other = self.workspace / "other"
@@ -613,6 +772,48 @@ class SyncRoadmapTest(unittest.TestCase):
         )
         self.assertNotEqual(code, 0)
         self.assertEqual(result["reason"], "task_metadata_project_path_mismatch")
+
+    def test_task_metadata_list_is_invalid(self) -> None:
+        task = self.write_task("roadmap")
+        (task / "task-meta.json").write_text("[]", encoding="utf-8")
+        code, result = MODULE.synchronize(
+            task, self.generator, "2", self.workspace, "run-1"
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(result["reason"], "task_metadata_invalid")
+
+    def test_nonregular_published_output_fails_before_generator(self) -> None:
+        task = self.write_task("roadmap")
+        outside = self.workspace / "outside.html"
+        outside.write_text("outside", encoding="utf-8")
+        output = task / "roadmap.html"
+        try:
+            output.symlink_to(outside)
+        except OSError as exc:
+            self.skipTest(f"symlink unavailable: {exc}")
+        marker = self.root / "must-not-run-generator.py"
+        marker.write_text(
+            "from pathlib import Path\n"
+            "import sys\n"
+            "Path(sys.argv[1], 'generated-marker').write_text('called')\n",
+            encoding="utf-8",
+        )
+        code, result = MODULE.synchronize(
+            task, marker, "2", self.workspace, "run-1"
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(result["reason"], "roadmap_artifact_backup_invalid")
+        self.assertTrue(output.is_symlink())
+        self.assertFalse((task / "generated-marker").exists())
+
+    def test_invalid_utf8_log_is_invalid(self) -> None:
+        task = self.write_task("roadmap")
+        (task / "05_log.md").write_bytes(b"roadmap_route: roadmap\xff\n")
+        code, result = MODULE.synchronize(
+            task, self.generator, "2", self.workspace, "run-1"
+        )
+        self.assertEqual(code, 2)
+        self.assertEqual(result["reason"], "log_invalid")
 
 
 if __name__ == "__main__":
