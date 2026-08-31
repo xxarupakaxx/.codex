@@ -22,7 +22,7 @@ AXES = (
     "context_volume",
 )
 MODEL_ROSTER = {
-    "Fast": ("gpt-5.6-luna", "max"),
+    "Fast": ("gpt-5.6-luna", "medium"),
     "Standard": ("gpt-5.6-terra", "high"),
     "Heavy": ("gpt-5.6-sol", "high"),
     "Judgment": ("gpt-5.6-sol", "max"),

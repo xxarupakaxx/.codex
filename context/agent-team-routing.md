@@ -32,6 +32,14 @@ route、実装単位、acceptance、write scopeを決めた直後、対象成果
 
 workerへ渡す正規単位はWork Packetである。objective、scope、out_of_scope、owned_paths、acceptance_ids、constraints、capability_class、safety_decision_id、side_effects_requested、external_write_targets、approval_required、approval_evidence、dry_run_required、baseline、reality_contract、verification、dependencies、handoff_requirements、reviewer_focus、journey_scenarios、negative_paths、completion_targetを含める。空欄ではなく N/A: <理由> を使う。makerはEvidence Bundle draft、checkerはreview sectionを担当し、makerが最終判定を兼ねない。
 
+## 子Agentへの依頼と反復
+
+- 独立した作業は`fork_turns="none"`と必要なJIT briefで開始する。会話履歴が不可欠な場合だけ必要なturn数を指定し、全文継承の`all`はその理由を記録する。短いbriefに要件・安全境界・未解決事項を落とさない。
+- 追加依頼は、未達のacceptanceまたは具体的なfinding、前回からの新しい根拠、次に行う検証を一度に渡す。漠然とした「さらに確認」や、結果が変わっていない状態の再送をしない。
+- 同じfindingで修正と再検証を2回繰り返しても進展がなければ、leadが原因と検証方法を見直す。必要な修正を放棄せず、再現例・直接検証・適切な専門roleへ切り替える根拠を決めてから続ける。既存の安全gateやretry上限は維持する。
+- 必須acceptanceと正しさに関わる指摘を解消したら、任意の改善だけを理由にworkerやreviewerを再起動しない。待機中は完了通知を使い、同じ状態の一覧取得を繰り返さない。
+- 同じturnで読んだ変更のない規則や長いtool outputを再読しない。復元時は短い記録と必要な正本の節から読み、全文確認が必須の対象は省略しない。
+
 ## 非同期作業の心拍監視
 
 継続監視を依頼された場合は、Lunaで状態を確認し、対応が必要なときだけ担当のSol taskへ引き継ぐ。監視を理由に作業範囲や権限を広げない。

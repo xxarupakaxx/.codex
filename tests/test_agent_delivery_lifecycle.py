@@ -74,7 +74,7 @@ class RoutingTest(unittest.TestCase):
 
         self.assertEqual(
             (decision.status, decision.handler, decision.model, decision.reasoning_effort),
-            ("READY", "FAST_WORKER", "gpt-5.6-luna", "max"),
+            ("READY", "FAST_WORKER", "gpt-5.6-luna", "medium"),
         )
         self.assertEqual(decision.allowed_tools, ())
 
@@ -95,7 +95,7 @@ class RoutingTest(unittest.TestCase):
         factors = {**ZERO_FACTORS, "ambiguity": 1, "verification_difficulty": 1}
         decision = route_work_packet(factors, available_models=ALL_MODELS)
         self.assertEqual((decision.route_id, decision.capability_class), ("fast-track", "Fast"))
-        self.assertEqual((decision.model, decision.reasoning_effort), ("gpt-5.6-luna", "max"))
+        self.assertEqual((decision.model, decision.reasoning_effort), ("gpt-5.6-luna", "medium"))
 
     def test_medium_work_routes_to_terra(self) -> None:
         factors = {**ZERO_FACTORS, "ambiguity": 2, "blast_radius": 2, "context_volume": 2}

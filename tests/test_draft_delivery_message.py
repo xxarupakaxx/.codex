@@ -52,11 +52,11 @@ class DraftDeliveryMessageTest(unittest.TestCase):
             "content": {"type": "feat", "subject": "配送契約を追加", "body": ""},
         }
 
-    def test_command_is_ephemeral_read_only_luna_max_with_tool_features_disabled(self) -> None:
+    def test_command_is_ephemeral_read_only_luna_medium_with_tool_features_disabled(self) -> None:
         command = build_command(Path("schema.json"), Path("output.json"), Path("isolated"))
 
         self.assertIn(MODEL, command)
-        self.assertIn('model_reasoning_effort="max"', command)
+        self.assertIn('model_reasoning_effort="medium"', command)
         self.assertIn('service_tier="priority"', command)
         for marker in ("--ephemeral", "--ignore-user-config", "--ignore-rules", "read-only"):
             self.assertIn(marker, command)

@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Run an isolated Luna Max text-only delivery draft and validate its output."""
+"""Run an isolated Fast-class text-only delivery draft and validate its output."""
 
 from __future__ import annotations
 

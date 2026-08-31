@@ -10,6 +10,14 @@ Codex で sub-agent を起動する際のモデル/role選択ルール。
 - Claude-only model aliases or slugs are not valid in Codex examples or prompts.（例外: 外部相談ブリッジ `scripts/consult-fable.sh` 内の `--model fable` は claude CLI への引数であり対象外。末尾の External Consult 節を参照）
 - plugin / skill / agent role の選択は `context/agent-team-routing.md` を参照する。このファイルは model / service_tier 方針に集中する。
 
+## 通常実行の既定値
+
+`config.toml`の通常子AgentはLuna / medium、同時起動上限は4とする。モデル固有のcontext上限を使い、`model_context_window`は上書きせず、`model_auto_compact_token_limit = 200000`で早めに圧縮する。設定例は`config.example.toml`へ反映する。
+
+これらは通常処理の開始値であり、専門roleの固定設定や明示されたWork Packetのcapability classを上書きしない。重要判断のJudgment / maxを維持する。既定設定だけで進行中taskのmodel・effortが変わったとは扱わず、新しいtaskの実行記録で確認する。
+
+圧縮後は要件・未完了Task・根拠の参照を短い記録から復元する。文脈不足や修正回数が増えた場合は、対象taskに限って必要な文脈とeffortを見直し、全taskを一律にmaxへ戻さない。同時起動上限は瞬間的な並列消費を抑える設定であり、総token削減率を保証しない。
+
 ## Capability classesとruntime roster
 
 Workflow routeとmodel capability classは別軸である。
@@ -17,7 +25,7 @@ Workflow routeとmodel capability classは別軸である。
 | class | 用途 | current runtime resolution |
 |---|---|---|
 | Local | 検索、差分確認、決定的な機械処理 | modelなし |
-| Fast | 小さく決定的な実行 | `gpt-5.6-luna`, effort `max` |
+| Fast | 小さく決定的な実行 | `gpt-5.6-luna`, effort `medium` |
 | Standard | 既知経路の中規模実装 | `gpt-5.6-terra`, effort `high` |
 | Heavy | 広いcontextまたは高い実装難度 | `gpt-5.6-sol`, effort `high` |
 | Judgment | PRD、architecture、security、最終判定 | `gpt-5.6-sol`, effort `max` |
@@ -105,7 +113,7 @@ commit messageとPR本文では、文章生成packetと副作用packetを分け�
 
 - 単一目的の定型subjectはL0 localで作る。
 - 複数の意図、理由、trade-offを要約する価値がある場合だけFast classを使う。
-- Fast classは`gpt-5.6-luna`, effort `max`へ解決する。
+- Fast classは`gpt-5.6-luna`, effort `medium`へ解決する。
 - `route_delivery_draft`の`allowed_tools == ()`を`scripts/draft_delivery_message.py`が、user configとshell/browser/apps/multi-agent等のtool featureを無効化したephemeral invocationとして維持する。
 - Lunaを解決できなければ弱いmodelへfallbackせずleadへ戻す。
 - outputは未信頼の`Delivery Draft Output`として親が`source_hash`と`claim_references`を検証する。
