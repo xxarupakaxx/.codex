@@ -85,6 +85,10 @@ Workflow routeは工程の形であり、Local / Fast / Standard / Heavy / Judgm
 - prd-flow: Approved PRD → Work Packet → maker → checker → Evidence。
 - multi-packet-flow: Approved PRDを独立packetへ分け、packetごとにwriterを一人に固定する。
 
+<!-- skill-governance-contract:workflow:start -->
+外部Skillのruntime変更は、固定revision catalog、全内容hash、安全審査、価値eval、人間承認、Codex・Claude parity、配布証明の順にgateする。自動install、無審査update、自動deleteは行わない。
+<!-- skill-governance-contract:workflow:end -->
+
 ### Phase 5: 完了
 
 変更内容、検証、review、残課題、route、completion_state、completion_target、commit / pushの状態を報告する。構文・機械PASSとuser outcomeの達成を分ける。コード変更は変更量をtarget / actual / variance / reasonで示す。measured tokens（tokenizerで実測した入出力token）とmeasured bytes（読込・書込byte）、proxy（行数、呼び出し数、推定token）を別項目にし、proxyを実測tokenと呼ばない。external writeは承認証跡がある場合だけ行う。

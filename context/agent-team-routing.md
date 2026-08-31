@@ -8,6 +8,10 @@ leadは要件、route、統合、一次資料確認、fresh検証、最終判断
 
 最初にlocal read、rg、既存test、決定的な小さな実行を行い、最小のrouteを選ぶ。大きなflow、固定全員review、件数合わせのspawnは既定にしない。user-invokedのSkill / commandは明示要求または既存の承認済み依頼が対象のときだけ起動し、通常のroute選択で自動起動しない。ユーザーが指定したSkillは先にそのSKILL.mdを全文確認する。第三者Skillの発見・評判・導入・更新・廃止は skill-governance を入口にし、人気順の自動導入や無審査promotionを行わない。
 
+<!-- skill-governance-contract:routing:start -->
+第三者Skillは `skill-governance` で候補catalogとactive runtimeを分離する。read-only inventoryだけをmodel-invokedとし、promotion、update、retirement、delete、runtime mutationはuser-invokedかつ人間承認を必須にする。
+<!-- skill-governance-contract:routing:end -->
+
 ## Delegation Gate
 
 worker / implementer / reviewerを起動する前に、次の全条件を評価する。
