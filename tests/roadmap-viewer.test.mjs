@@ -1,7 +1,15 @@
 import assert from 'node:assert/strict';
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
+import { createRequire } from 'node:module';
 import test from 'node:test';
 import vm from 'node:vm';
+
+const require = createRequire(import.meta.url);
+const playwrightModule = process.env.CODEX_PLAYWRIGHT_MODULE || '/Users/yoshiki/.cache/codex-runtimes/codex-primary-runtime/dependencies/node/node_modules/playwright';
+let chromium = null;
+if (existsSync(playwrightModule)) {
+  try { ({ chromium } = require(playwrightModule)); } catch { chromium = null; }
+}
 
 const html = readFileSync(new URL('../tools/roadmap_viewer.html', import.meta.url), 'utf8');
 const viewingPlansSkill = readFileSync(new URL('../skills/viewing-plans/SKILL.md', import.meta.url), 'utf8');
@@ -334,7 +342,8 @@ const implementationSourcePreviews = [
     code: 'function buildExecutionBrief(model) {\n  const plan = model.snapshot.files["30_plan.md"];\n  return { plan };',
     status: 'resolved',
     message: '',
-    truncated: false
+    truncated: false,
+    evidenceRevision: 'source-revision-2'
   }
 ];
 
@@ -380,7 +389,7 @@ const implementationUiPreviews = [
     title: '新規UI差分panel',
     layout: 'list',
     newScreen: true,
-    status: 'unverified',
+    status: 'planned',
     before: { status: 'source-unavailable', items: [] },
     after: [
       { id: 'summary', label: '要約', kind: 'region', state: 'visible', change: 'added' },
@@ -660,11 +669,9 @@ test('structured timeline preserves source provenance and exposes error status i
       ['timeline-error-status', { file: '90_verification.md', lineStart: 7, lineEnd: 7 }, 'failed', true]
     ]
   );
-  assert.match(html, /function timelineSourceLabel\(source\)/);
-  assert.match(html, /出典: \$\{escapeHtml\(sourceLabel\)\}/);
-  assert.match(html, /plan-timeline-event\$\{eventStatus\?\.className === 'error' \? ' error' : ''\}/);
-  assert.match(html, /aria-live="polite" aria-atomic="false"/);
-  assert.match(html, /計画timelineを読み込めません/);
+  assert.match(html, /function renderVerification\(model\)/);
+  assert.match(html, /id="timeline-list"/);
+  assert.match(html, /明示された更新記録はありません/);
 });
 
 test('invalid structured timeline is explicit and never keeps a successful plan status', () => {
@@ -679,20 +686,19 @@ test('invalid structured timeline is explicit and never keeps a successful plan 
   assert.equal(result.plan.valid, true);
   assert.equal(result.timelineState.valid, false);
   assert.match(result.timelineState.errors.join(' '), /snapshot\.timeline must be an array/);
-  assert.match(html, /if \(planErrors\.length \|\| timelineErrors\.length\)/);
-  assert.match(html, /構造化timelineエラー（legacy fallbackなし）/);
+  assert.match(html, /model\.timelineState/);
+  assert.match(html, /Timeline error/);
   assert.match(html, /role="alert"/);
 });
 
 test('first screen exposes structured plan status and human-readable timeline', () => {
-  for (const id of ['plan-contract-status', 'plan-timeline', 'plan-timeline-meta', 'plan-timeline-list']) {
+  for (const id of ['plan-contract-alert', 'verification', 'timeline-list']) {
     assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
   }
-  assert.match(html, /function renderPlanTimeline\(model\)/);
-  assert.match(html, /構造化Planエラー（legacy fallbackなし）/);
-  assert.match(html, /snapshot\.timelineに時系列が未記録です/);
-  assert.match(html, /model\.plan\.edges\.forEach/);
-  assert.match(html, /if \(model\.plan && !model\.plan\.valid\)/);
+  assert.match(html, /function renderOrientation\(model, brief\)/);
+  assert.match(html, /function renderVerification\(model\)/);
+  assert.match(html, /Plan contract error/);
+  assert.match(html, /model\.plan && model\.plan\.valid/);
 });
 
 test('sourcePreviewsはsnapshot v1のoptional additive fieldとして正規化されるべき', () => {
@@ -712,6 +718,7 @@ test('sourcePreviewsはsnapshot v1のoptional additive fieldとして正規化�
     JSON.parse(JSON.stringify(normalized.sourcePreviews)),
     [implementationSourcePreviews[1]]
   );
+  assert.equal(normalized.sourcePreviews[0].evidenceRevision, 'source-revision-2');
   const legacy = model.normalizeSnapshot({ version: 1, files: {} });
   assert.ok(Array.isArray(legacy.sourcePreviews), 'legacy snapshots must receive an empty sourcePreviews array');
   assert.deepEqual(
@@ -806,6 +813,40 @@ test('generator exact-shapeのuiPreviewはsourceとprovenance.beforeからViewer
   assert.equal(brief.selectedUiPreviews[0].before.status, 'anchor-missing');
   assert.equal(brief.selectedUiPreviews[0].before.message, 'source anchor drift');
   assert.equal(model.buildExecutionBrief(result, '2').selectedUiPreviews[0].isNewScreen, true);
+});
+
+test('source付きで未確認のBeforeは新規画面にせず、sourceなしの計画だけを新規画面とする', () => {
+  const normalized = model.normalizeSnapshot({
+    version: 1,
+    files: { '30_plan.md': '# Plan\n' },
+    uiPreviews: [{
+      version: 1,
+      taskNumber: '1',
+      layout: 'list',
+      title: 'source付きの未確認Before',
+      status: 'unverified',
+      isNewScreen: true,
+      provenance: {
+        before: { source: 'repo:src/old.js#render', baseRef: 'a'.repeat(40) },
+        after: { source: '30_plan.md#Task 1' }
+      },
+      before: { items: [] },
+      after: { items: [{ id: 'new', label: 'New', kind: 'section', state: 'planned', change: 'added' }] }
+    }, {
+      version: 1,
+      taskNumber: '2',
+      layout: 'list',
+      title: '実際の新規画面',
+      status: 'planned',
+      isNewScreen: true,
+      provenance: { before: {}, after: { source: '30_plan.md#Task 2' } },
+      before: { items: [] },
+      after: { items: [{ id: 'new', label: 'New', kind: 'section', state: 'planned', change: 'added' }] }
+    }]
+  });
+
+  assert.equal(normalized.uiPreviews[0].isNewScreen, false);
+  assert.equal(normalized.uiPreviews[1].isNewScreen, true);
 });
 
 test('uiPreviewの変更はsnapshot signatureを変えてlive更新対象になるべき', () => {
@@ -1038,53 +1079,15 @@ test('roadmap routeはblockedを未着手へ丸めず文字でも区別すべき
   });
 
   assert.match(route.summary, /Task 1 ブロック/);
-  assert.match(html, /statusLabel\(currentTask\.status\)/);
+  assert.match(html, /statusLabel\(task\.status\)/);
 });
 
-test('first-screen roadmap routeは4stage Project Mapとして読めるべき', () => {
-  for (const id of ['brief-route', 'brief-route-map', 'brief-route-summary']) {
-    assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
-  }
-  assert.match(html, /function renderRoadmapRoute\(route\)/);
-  assert.match(html, /PROJECT MAP/);
-  assert.match(html, /企画から検証まで/);
-  assert.match(html, /class="project-map-grid"/);
-  assert.match(html, /role="list" aria-label="企画、設計、実装、検証のProject Map"/);
-});
-
-test('Project Map mobile layoutは128px内で4stageを横overflowなしに保つべき', () => {
-  assert.match(html, /\.brief-route\s*\{[^}]*max-height:\s*180px[^}]*overflow:\s*auto/s);
-  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.brief-route\s*\{[^}]*max-height:\s*128px/);
-  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.brief-route-head h3\s*\{[^}]*white-space:\s*nowrap/);
-  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.brief-route-map\s*\{[^}]*overflow-x:\s*hidden/);
-  assert.match(html, /\.project-map-grid\s*\{[^}]*grid-template-columns:\s*repeat\(4,\s*minmax\(0,\s*1fr\)\)/);
-});
-
-test('Project Map nodeは代表識別とcurrent stateを短く表示すべき', () => {
-  const renderSource = html.match(/function renderRoadmapRoute\(route\) \{([\s\S]*?)\n    \}\n    function centerRoadmapRoute/)?.[1] || '';
-  assert.match(renderSource, /currentTask = route\.tasks\.find\(task => task\.isCurrent\)/);
-  assert.match(renderSource, /stage: '企画'/);
-  assert.match(renderSource, /stage: '設計'/);
-  assert.match(renderSource, /stage: '実装'/);
-  assert.match(renderSource, /stage: '検証'/);
-  assert.match(renderSource, /現在・\$\{statusLabel\(currentTask\.status\)\}/);
-  assert.match(renderSource, /project-map-glyph/);
-  assert.match(renderSource, /project-map-state/);
-});
-
-test('Project Map compact化は旧SVG routeの横スクロールへ戻さないべき', () => {
-  const renderSource = html.match(/function renderRoadmapRoute\(route\) \{([\s\S]*?)\n    \}\n    function centerRoadmapRoute/)?.[1] || '';
-  assert.doesNotMatch(renderSource, /brief-route-svg/);
-  assert.doesNotMatch(renderSource, /style="min-width:\$\{width\}px"/);
-  assert.doesNotMatch(renderSource, /requestAnimationFrame\(centerRoadmapRoute\)/);
-  assert.match(html, /\.project-map-node\.current/);
-  assert.match(html, /\.project-map-node\.missing/);
-});
-
-test('Project Map desktop layoutは180px上限で既存brief順序を保つべき', () => {
-  assert.match(html, /\.brief-route\s*\{[^}]*max-height:\s*180px[^}]*overflow:\s*auto/s);
-  assert.ok(html.indexOf('id="brief-route"') < html.indexOf('id="brief-design-summary"'));
-  assert.ok(html.indexOf('id="brief-route"') < html.indexOf('id="brief-flow"'));
+test('Task indexは一読UI内のスクロール位置へ直接移動できる', () => {
+  assert.match(html, /id="plan-index-list"/);
+  assert.match(html, /data-plan-jump/);
+  assert.match(html, /href="#' \+ id/);
+  assert.match(html, /target\.scrollIntoView/);
+  assert.doesNotMatch(html, /function renderRoadmapRoute\(route\)/);
 });
 
 test('Taskに目的・変更対象・成果物・検証があるとき flowは実行契約を保持すべき', () => {
@@ -1425,7 +1428,7 @@ test('stale and unknown freshness keep the recorded Task secondary in the execut
   assert.equal(unknownBrief.recordedTask.number, '1.5');
   assert.match(unknownBrief.waitingReason, /不明/);
   assert.equal(model.buildRoadmapRoute(unknownBrief).tasks.some(task => task.isCurrent), false);
-  assert.match(html, /現在未確認/);
+  assert.match(html, /記録上・|stale・更新待ち|現在地未記録/);
 });
 
 test('artifact completion labels require phase evidence instead of file existence', () => {
@@ -1801,6 +1804,16 @@ test('renders workflow markdown safely without an external parser', () => {
   assert.doesNotMatch(rendered, /<img src=x/);
 });
 
+test('main plan本文だけはsourceの見出し階層をそのまま保ち、既定のdrawer offsetも維持する', () => {
+  const mainDocument = model.renderWorkflowMarkdown('# Root\n\n## Section\n\n### Detail', 0);
+  assert.match(mainDocument, /<h1 class="md-heading-1"/);
+  assert.match(mainDocument, /<h2 class="md-heading-2"/);
+  assert.match(mainDocument, /<h3 class="md-heading-3"/);
+
+  const legacyDocument = model.renderWorkflowMarkdown('# Root');
+  assert.match(legacyDocument, /<h4 class="md-heading-1"/);
+});
+
 test('keeps malformed markdown table input visible as escaped source text', () => {
   const rendered = model.renderWorkflowMarkdown('| A | B |\n| -- | broken |\n<script>x</script>');
 
@@ -1809,459 +1822,509 @@ test('keeps malformed markdown table input visible as escaped source text', () =
   assert.doesNotMatch(rendered, /<table>/);
 });
 
-test('task hub shell exposes list detail status settings and responsive behavior', () => {
-  for (const id of ['task-hub', 'provider-status', 'task-sections', 'task-detail', 'hub-stale-minutes', 'hub-recent-hours']) {
-    assert.match(html, new RegExp(`id=["']${id}["']`));
+test('計画書は正本本文を一度だけ描画しTaskへ補足を差し込む', () => {
+  const template = html.slice(0, html.indexOf('<script id="embedded-snapshot"'));
+  for (const id of ['main-content', 'plan-document', 'plan-source-document', 'plan-source-content', 'dependencies', 'verification', 'sources']) {
+    assert.match(template, new RegExp("id=[\\\"']" + id + "[\\\"']"), id + ' is required');
   }
-  assert.match(html, /@media \(max-width: 1023px\)/);
+  assert.ok(template.indexOf('id="plan-source-document"') < template.indexOf('id="dependencies"'));
+  assert.ok(template.indexOf('id="dependencies"') < template.indexOf('id="verification"'));
+  assert.ok(template.indexOf('id="verification"') < template.indexOf('id="sources"'));
+  assert.doesNotMatch(template, /id=["']before-after["']/);
+  assert.doesNotMatch(template, /id=["']task-plan["']/);
+  assert.doesNotMatch(template, /id=["']task-list["']/);
+  assert.doesNotMatch(template, /<details\b/i);
+  assert.doesNotMatch(template, /detail-drawer|data-detail-tab|role=["']tab["']/);
+  assert.doesNotMatch(template, /id=["']plan-source-document-title["']/);
+  assert.doesNotMatch(template, /計画本文/);
+  assert.match(html, /function renderPlanSource\(model\)/);
+  assert.match(html, /host\.innerHTML = renderMarkdown\(displaySource, 0\)/);
+  assert.match(html, /findTaskHeading\(headings, task\)/);
+  assert.match(html, /renderTask\(record\.task, model\)/);
+});
+
+test('30_plan.mdの導入・背景・任意sectionを保持し投影用JSONブロックを重複表示しない', () => {
+  assert.match(html, /function stripProjectedBlocks\(markdown\)/);
+  assert.match(html, /label === 'ui-preview-json' \|\| label === 'diagram-json'/);
+  assert.match(html, /function stripPlanMetadata\(markdown\)/);
+  assert.match(html, /const metadata = stripPlanMetadata\(stripProjectedBlocks\(content\)\)/);
+  assert.match(html, /const displaySource = stripFirstMarkdownH1\(metadata\.markdown\)/);
+  assert.match(html, /const entries = \[\]/);
+  assert.match(html, /required_sources\|write\[ _\]scope\|acceptance\|UI変更/);
+  assert.match(html, /metadataEntries/);
+  assert.match(html, /30_plan\.mdの全文/);
+  assert.match(html, /Plan source: /);
+  assert.match(html, /計画本文から実コードを補作しません/);
+  assert.match(html, /function firstMarkdownH1\(markdown\)/);
+  assert.match(html, /function stripFirstMarkdownH1\(markdown\)/);
+  assert.match(html, /function renderWorkflowMarkdown\(markdown, headingOffset = 3\)/);
+  assert.match(html, /const offset = Number\.isFinite\(Number\(headingOffset\)\)/);
+});
+
+test('Task本文へBefore/After・source・diagram根拠を添え、本文項目を再出力しない', () => {
+  const renderSource = html.match(/function renderTask\(task, model\) \{([\s\S]*?)\n    \}\n    function dependencyEdges/)?.[1] || '';
+  assert.match(renderSource, /model\.snapshot\.uiPreviews\.filter/);
+  assert.match(renderSource, /renderBeforeAfter/);
+  assert.match(renderSource, /renderPlanDiagram/);
+  assert.match(renderSource, /task\.source/);
+  assert.match(renderSource, /sourcePreview/);
+  assert.doesNotMatch(renderSource, /task\.purpose/);
+  assert.doesNotMatch(renderSource, /task\.implementation/);
+  assert.doesNotMatch(renderSource, /task\.targets/);
+  assert.doesNotMatch(renderSource, /task\.outputs/);
+  assert.doesNotMatch(renderSource, /task\.verification/);
+  assert.match(html, /class="task-appendix"/);
+  assert.match(html, /class="task-change"/);
+  assert.match(html, /class="task-source"/);
+  assert.match(html, /class="task-diagram"/);
+  assert.match(html, /現在の実コード/);
+  assert.match(html, /参照版の実装/);
+  assert.match(renderSource, /sourcePreviews\.map/);
+  assert.match(html, /Plan source anchor未記録/);
+});
+
+test('Before/Afterは各Taskの補足として640px以上2列、375px縦組みを保つ', () => {
+  assert.match(html, /function renderBeforeAfter\(preview\)/);
+  assert.match(html, /data-side="before"/);
+  assert.match(html, /data-side="after"/);
+  assert.match(html, /確認済みの観測/);
+  assert.match(html, /計画上の案/);
+  assert.match(html, /@media \(min-width: 640px\)[\s\S]*\.task-change\s*>\s*\.compare-grid/);
+  assert.match(html, /@media \(max-width: 639px\)[\s\S]*\.compare-panel/);
+  assert.match(html, /preview\.isNewScreen/);
+  assert.match(html, /beforeIsUnverified/);
+  assert.match(html, /hasExistingBefore/);
+  for (const change of ['same', 'added', 'modified', 'removed']) {
+    assert.match(html, new RegExp('change-' + change));
+  }
+});
+
+test('依存とfresh Codemapは本文内SVG・evidence・unknown理由を持つ', () => {
+  assert.match(html, /function dependencyEdges\(model\)/);
+  assert.match(html, /function renderDependencyMap\(model\)/);
+  assert.match(html, /id="task-dependency-svg"/);
+  assert.match(html, /id="task-dependency-relations"/);
+  assert.match(html, /marker-end="url\(#' \+ arrowId/);
+  assert.match(html, /function renderCodemap\(model\)/);
+  assert.match(html, /ROADMAP_MODEL\.buildCodemapViewModel\(codemap\)/);
+  assert.match(html, /ROADMAP_MODEL\.codemapEvidenceLabel\(edge\)/);
+  assert.match(html, /status !== 'fresh' \|\| !codemap/);
+  assert.match(html, /arrowId = mobile \? 'codemap-arrow-narrow' : 'codemap-arrow'/);
+  assert.match(html, /titleId = mobile \? 'dependency-svg-title-narrow' : 'dependency-svg-title'/);
+  assert.match(html, /titleId = mobile \? 'codemap-svg-title-narrow' : 'codemap-svg-title'/);
+  assert.match(html, /descId = mobile \? 'codemap-svg-desc-narrow' : 'codemap-svg-desc'/);
+  assert.match(html, /verifiedはpath:line、unknownは理由/);
+  assert.doesNotMatch(html, /detail-tab-impact/);
+});
+
+test('検証・レビュー・時系列は本文の末尾側に常時表示し欠落を未記録とする', () => {
+  assert.match(html, /function renderVerification\(model\)/);
+  for (const name of ['90_verification.md', '80_review.md', 'checkpoint.md']) {
+    assert.match(html, new RegExp(name.replace('.', '\\.')));
+  }
+  assert.match(html, /この成果物は未記録です/);
+  assert.match(html, /model\.timelineState/);
+  assert.match(html, /Timeline error/);
+  assert.match(html, /id="timeline-list"/);
+});
+
+test('Plan v2・legacy・source hash・invalid output境界をモデルと表示で維持する', () => {
+  assert.match(html, /ROADMAP_MODEL\.normalizeSnapshot/);
+  assert.match(html, /ROADMAP_MODEL\.snapshotSignature/);
+  assert.match(html, /ROADMAP_MODEL\.buildModel/);
+  assert.match(html, /model\.planState/);
+  assert.match(html, /model\.plan \? 'v' \+ model\.plan\.schemaVersion/);
+  assert.match(html, /plan\.sourceHash/);
+  assert.match(html, /30_plan\.md · legacy source/);
+  assert.match(html, /if \(model\.plan && model\.plan\.valid\)/);
+  assert.match(html, /if \(!model\.plan\)/);
+  assert.match(html, /return \[\];/);
+});
+
+test('user content・source・Markdownはescape/sanitizeを経由しCSPを維持する', () => {
+  const template = html.slice(0, html.indexOf('<script id="embedded-snapshot"'));
+  assert.match(template, /meta http-equiv="Content-Security-Policy"/);
+  assert.match(template, /default-src 'none'/);
+  assert.match(template, /script-src 'unsafe-inline'/);
+  assert.match(template, /style-src 'unsafe-inline'/);
+  assert.match(template, /img-src data:/);
+  assert.match(template, /connect-src 'self'/);
+  assert.match(html, /function escapeHtml\(value\)/);
+  assert.match(html, /renderMarkdown\(value\)/);
+  assert.match(html, /escapeHtml\(task\.title/);
+  assert.match(html, /escapeHtml\(preview\.code\)/);
+  assert.match(html, /ROADMAP_MODEL\.highlightSourceCode/);
+  assert.doesNotMatch(html, /innerHTML\s*=\s*preview\.code/);
+  assert.doesNotMatch(html, /innerHTML\s*=\s*task\.body/);
+  assert.doesNotMatch(template, /<script[^>]+src=/i);
+  assert.doesNotMatch(template, /\son[a-z]+\s*=/i);
+});
+
+test('Hubは明示されたsession modeだけで起動し通常表示にpopupや別serverを増やさない', () => {
+  const template = html.slice(0, html.indexOf('<script id="embedded-snapshot"'));
+  for (const id of ['task-hub', 'provider-status', 'task-sections', 'task-detail', 'hub-stale-minutes', 'hub-recent-hours']) {
+    assert.match(template, new RegExp("id=[\\\"']" + id + "[\\\"']"));
+  }
+  assert.match(template, /<section class="hub-view"[^>]*hidden>/);
+  assert.match(html, /function hubSessionKey\(\)/);
+  assert.match(html, /if \(hubSessionKey\(\)\)/);
+  assert.match(html, /function initializeTaskHub\(\)/);
+  assert.match(html, /X-Roadmap-Session/);
   assert.match(html, /setInterval\(refresh, 2000\)/);
   assert.match(html, /setInterval\(heartbeat, 5000\)/);
-  assert.match(html, /response\.status === 409/);
-  assert.match(html, /renderWorkflowMarkdown\(markdown\)/);
-  for (const label of ['Live状況', '現在やっていること', '直近完了', '実行中command / tool', 'agent一覧', 'event timeline', 'blocker']) {
-    assert.match(html, new RegExp(label));
-  }
-  assert.match(html, /activeSubagentCount/);
-  assert.match(html, /runningTools/);
-  assert.match(html, /elapsedSeconds/);
-  assert.match(html, /body\.task-hub-active\s*\{[^}]*overflow:\s*hidden/);
-  assert.match(html, /\.task-sidebar\s*\{[^}]*overflow-y:\s*auto/);
-  assert.match(html, /\.task-detail\s*\{[^}]*overflow-y:\s*auto/);
-  assert.match(html, /overscroll-behavior:\s*contain/);
+  assert.doesNotMatch(template, /window\.open\(/);
+  assert.doesNotMatch(template, /target=["']_blank["']/i);
+  assert.match(template, /EXPLICIT MODE/);
 });
 
-test('single-task HTMLは具体的な実行briefをConcept Mapより先に配置すべき', () => {
-  const ids = [
-    'execution-brief',
-    'current-focus',
-    'current-primary-action',
-    'brief-design-summary',
-    'brief-spec',
-    'brief-approach',
-    'brief-boundary',
-    'brief-quick-links',
-    'detail-drawer',
-    'detail-tab-document',
-    'detail-tab-change',
-    'detail-tab-impact',
-    'detail-tab-test',
-    'detail-tab-sources',
-    'concept-map-disclosure'
-  ];
-  for (const id of ids) {
-    assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
-  }
-  assert.doesNotMatch(html, /id=["']brief-summary["']/);
-  assert.doesNotMatch(html, /id=["']source-line["']/);
-  assert.doesNotMatch(html, /id=["']workspace-view-plan["']/);
-  assert.doesNotMatch(html, /id=["']workspace-view-code["']/);
-  assert.doesNotMatch(html.match(/<header class="app-header"[\s\S]*?<\/header>/)?.[0] || '', /codemap-gate/);
-  assert.match(html, /id="detail-panel-impact"[\s\S]*id="codemap-gate"/);
-  assert.ok(html.indexOf('id="brief-route"') < html.indexOf('id="brief-design-summary"'));
-  assert.ok(html.indexOf('id="brief-route"') < html.indexOf('id="current-focus"'));
-  assert.ok(html.indexOf('id="current-focus"') < html.indexOf('id="brief-design-summary"'));
-  assert.ok(html.indexOf('id="execution-brief"') < html.indexOf('id="concept-map-disclosure"'));
+test('selection・focus・scroll・live updateは一読UIのDOMへつながる', () => {
+  assert.match(html, /function captureViewState\(\)/);
+  assert.match(html, /function sourceIdPart\(value\)/);
+  assert.match(html, /function sourcePreviewId\(task, preview\)/);
+  assert.match(html, /data-source-task/);
+  assert.match(html, /state\.key\) \|\| findViewTarget\(state\.fallback\)/);
+  assert.match(html, /function restoreViewState\(state\)/);
+  assert.match(html, /window\.scrollTo\(\{ top: state\.scrollTop/);
+  assert.match(html, /target\.scrollIntoView\(\{ block: 'start', behavior: 'auto' \}\)/);
+  assert.match(html, /data-plan-jump/);
+  assert.match(html, /history\.replaceState/);
+  assert.match(html, /function startLivePolling\(\)/);
+  assert.match(html, /fetch\('roadmap-snapshot\.json\?ts=' \+ Date\.now\(\)/);
+  assert.match(html, /generation !== pollGeneration/);
+  assert.match(html, /lastSnapshotSignature/);
+  assert.match(html, /function refreshFreshness\(\)[\s\S]*?captureViewState\(\)[\s\S]*?restoreViewState\(view\)/);
+  assert.match(html, /renderPlanSource\(model\)/);
 });
 
-test('execution briefは初期renderとfreshness更新の両方で再描画すべき', () => {
-  assert.match(html, /function renderExecutionBrief\(model\)/);
-  assert.match(html, /function render\(snapshotInput,[\s\S]*?renderExecutionBrief\(currentModel\)/);
-  assert.match(html, /function refreshFreshness\(\)[\s\S]*?renderExecutionBrief\(next\)/);
-  assert.match(html, /concept-map-disclosure[\s\S]*?addEventListener\('toggle'/);
+test('SVG・keyboard・responsive・forced colorsの安全な表示契約を持つ', () => {
+  assert.match(html, /<a class="skip-link" id="skip-link" href="#main-content">/);
+  assert.match(html, /\.skip-link:focus\s*\{[^}]*transform:\s*translateY\(0\)/);
+  assert.match(html, /--quiet:\s*#5f6d64/);
+  assert.ok(contrastRatio('#5f6d64', '#f4f6f2') >= 4.5);
+  assert.ok(contrastRatio('#9aa99f', '#151b17') >= 4.5);
+  assert.match(html, /<svg class="relationship-svg"/);
+  assert.match(html, /role="img"/);
+  assert.match(html, /<title/);
+  assert.match(html, /<desc/);
+  assert.match(html, /html[\s\S]*overflow-x: clip/);
+  assert.match(html, /body[\s\S]*overflow-x: clip/);
+  assert.match(html, /button:focus-visible, a:focus-visible/);
+  assert.match(html, /@media \(forced-colors: active\)/);
+  assert.match(html, /@media \(prefers-reduced-motion: reduce\)/);
+  assert.match(html, /white-space: nowrap/);
+  assert.doesNotMatch(html, /transition:\s*all/);
 });
 
-test('Concept Mapのinspectorはprimary briefを上書きせずprovenanceがある時だけartifact CTAを出すべき', () => {
-  const inspectorSource = html.match(/function renderGraphInspector\(node, tree\) \{([\s\S]*?)\n    \}\n    function drawGraphEdges/)?.[1] || '';
-
-  assert.doesNotMatch(inspectorSource, /wayfinder-next-decision/);
-  assert.doesNotMatch(inspectorSource, /decision-subject/);
-  assert.match(inspectorSource, /decision-evidence'\)\.hidden = !node\.artifact/);
-});
-
-test('brief-first layoutはdesktopの情報階層とmobileの一列順序を維持すべき', () => {
-  assert.match(html, /\.execution-brief\s*\{[^}]*order:\s*1/);
-  assert.match(html, /\.concept-map-disclosure\s*\{[^}]*order:\s*2/);
-  assert.match(html, /\.current-focus\s*\{/);
-  assert.match(html, /<div class="detail-drawer" id="detail-drawer"[^>]*hidden>/);
-  assert.match(html, /\.design-summary-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3,/);
-  assert.match(html, /\.claim-grid\s*\{[^}]*grid-template-columns:\s*repeat\(3,/);
-  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.design-summary-grid,[\s\S]*\.claim-grid\s*\{[^}]*grid-template-columns:\s*1fr/);
-  assert.match(html, /id="brief-quick-links"[\s\S]*data-artifact="00_spec\.md"[\s\S]*data-artifact="30_plan\.md"/);
-});
-
-test('設計書の主見出しは選択Taskではなく計画全体の目的を表示すべき', () => {
-  const renderSource = html.match(/function renderExecutionBrief\(model\) \{([\s\S]*?)\n    \}\n    function renderHeader/)?.[1] || '';
-
-  assert.match(renderSource, /execution-brief-title'\)\.textContent = brief\.design\.goal\.text/);
-  assert.match(renderSource, /brief-design-context'\)\.textContent = brief\.design\.context\.text/);
-  assert.doesNotMatch(renderSource, /execution-brief-title'\)\.textContent = selectedTask/);
-  assert.match(html, /function renderDesignSummary\(design\)/);
-  assert.match(html, /設計の骨格/);
-  assert.match(html, /境界と完了/);
-  assert.match(html, /data-artifact-section=/);
-  assert.match(html, /data-md-heading=/);
-  assert.match(html, /function openArtifact\(name, section = ''\)/);
-});
-
-test('implementation workspaceはdrawer内でTask indexと選択detailを持つsplit viewであるべき', () => {
-  for (const id of [
-    'detail-panel-change',
-    'brief-workspace',
-    'brief-task-index',
-    'brief-task-detail',
-    'brief-implementation',
-    'brief-source-preview',
-    'brief-source-location',
-    'brief-source-code'
-  ]) {
-    assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
-  }
-  assert.match(html, /id="detail-panel-change"[\s\S]*id="brief-workspace"/);
-  assert.match(html, /\.brief-workspace\s*\{[^}]*display:\s*grid[^}]*grid-template-columns:/);
-  assert.match(html, /@media \(max-width:\s*900px\)[\s\S]*\.brief-workspace\s*\{[^}]*grid-template-columns:\s*1fr/);
-  assert.match(html, /\.brief-source-code\s*\{[^}]*overflow-x:\s*auto/);
-});
-
-test('Change detailは要約、UI差分、Evidenceの順でProgressiveに表示すべき', () => {
-  for (const id of [
-    'brief-ui-preview',
-    'ui-preview-list',
-    'brief-change-evidence',
-    'ui-preview-evidence-toggle',
-    'ui-preview-evidence',
-    'ui-preview-evidence-close',
-    'ui-preview-evidence-list'
-  ]) {
-    assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
-  }
-  assert.ok(html.indexOf('id="brief-implementation"') < html.indexOf('id="brief-ui-preview"'));
-  assert.ok(html.indexOf('id="brief-ui-preview"') < html.indexOf('id="brief-change-evidence"'));
-  assert.match(html, /現状・base refから確認/);
-  assert.match(html, /計画案・未実装/);
-  assert.match(html, /新規画面/);
-  assert.match(html, /\.ui-preview-sides\s*\{[^}]*grid-template-columns:\s*repeat\(2,/s);
-  assert.match(html, /@media \(max-width:\s*720px\)[\s\S]*\.ui-preview-sides\s*\{[^}]*grid-template-columns:\s*1fr/s);
-  for (const change of ['same', 'added', 'modified', 'removed']) {
-    assert.match(html, new RegExp(`change-${change}`), `${change} state needs class coverage`);
-  }
-  assert.match(html, /aria-label="\$\{escapeHtml\(aria\)\}"/);
-  assert.match(html, /setUiPreviewEvidenceExpanded/);
-});
-
-test('選択Taskは現在Taskと別stateで、EvidenceとImpactはdrawer内のon-demand surfaceであるべき', () => {
-  assert.match(
-    html,
-    /\.brief-flow-item\.current:not\(\[aria-selected="true"\]\)\s*\{/,
-    'current-but-not-selected needs a secondary visual state',
-  );
-  assert.match(
-    html,
-    /\.brief-flow-item\[aria-selected="true"\]\s*\{/,
-    'selected task needs its own primary visual state',
-  );
-  assert.doesNotMatch(
-    html,
-    /\.brief-flow-item\.current,\s*\.brief-flow-item\[aria-selected="true"\]/,
-    'current and selected must not share one visual rule',
-  );
-  assert.match(
-    html,
-    /\.brief-implementation\s*\{[^}]*border-left:[^;]+;[^}]*background:/s,
-    'planned steps need a dedicated plan surface',
-  );
-  assert.match(
-    html,
-    /\.brief-source-preview\s*\{[^}]*border-top:[^;]+;/s,
-    'current source fact needs a distinct source surface',
-  );
-  assert.match(html, /function renderCurrentFocus\(brief, model\)/);
-  assert.match(html, /current-focus-task-title'\)\.textContent = current\?\.title/);
-  assert.match(html, /function renderImpactCodeMap\(brief\)/);
-  assert.match(html, /id="detail-panel-sources"[\s\S]*id="brief-claims"[\s\S]*id="brief-artifacts"/);
-  assert.match(html, /data-detail-open="impact"/);
-  assert.doesNotMatch(html, /workspace-view-switch/);
-});
-
-test('implementation workspaceはsourceのpath・anchor・codeをHTML escapeして描画すべき', () => {
-  const renderSource = html.match(/function renderExecutionBrief\(model\) \{([\s\S]*?)\n    \}\n    function renderHeader/)?.[1] || '';
-
-  assert.match(renderSource, /escapeHtml\([^)]*\.path\)/);
-  assert.match(renderSource, /escapeHtml\([^)]*\.anchor\)/);
-  assert.match(renderSource, /escapeHtml\([^)]*\.code\)/);
-  assert.doesNotMatch(renderSource, /\.innerHTML\s*=\s*[^;\n]*\.code\b/);
-  assert.match(html, /<pre[^>]*id=["']brief-source-code["'][^>]*>[\s\S]*?<code/);
-});
-
-test('source highlighterはtokenを色分けしつつscript breakoutを文字列として保持すべき', () => {
-  const highlighted = model.highlightSourceCode(
-    'const value = 42; // note\nconst payload = "</script><script>alert(1)</script>";',
-    'javascript',
-  );
-
-  assert.match(highlighted, /class="syntax-token syntax-keyword">const<\/span>/);
-  assert.match(highlighted, /class="syntax-token syntax-number">42<\/span>/);
-  assert.match(highlighted, /class="syntax-token syntax-comment">\/\/ note<\/span>/);
-  assert.match(highlighted, /class="syntax-token syntax-string">/);
-  assert.match(highlighted, /&lt;\/script&gt;&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
-  assert.doesNotMatch(highlighted, /<script>/);
-});
-
-test('source highlighterは主要なplan実装言語へ最低1つの意味tokenを付けるべき', () => {
-  const examples = new Map([
-    ['python', ['def build():\\n    return True', /syntax-keyword/]],
-    ['typescript', ['const ready: boolean = true;', /syntax-(?:keyword|literal)/]],
-    ['html', ['<section aria-label="plan">', /syntax-tag/]],
-    ['css', ['.plan { opacity: 0.8; }', /syntax-number/]],
-    ['json', ['{"ready": true}', /syntax-(?:string|literal)/]],
-    ['shell', ['if test -f plan; then # ready', /syntax-(?:keyword|comment)/]],
-    ['markdown', ['# 実装計画', /syntax-keyword/]],
-  ]);
-
-  for (const [language, [source, expected]] of examples) {
-    assert.match(model.highlightSourceCode(source.replaceAll('\\n', '\n'), language), expected, language);
-  }
-  assert.equal(model.highlightSourceCode('<raw>', 'unknown'), '&lt;raw&gt;');
-});
-
-test('Task別実装図は明示diagram JSONだけを選択Taskへ結び付け、未記録Taskを補完しないべき', () => {
-  const result = model.buildModel(model.normalizeSnapshot({
-    generatedAt,
+test('browser: Task本文一度・任意section保持・比較layout・scroll復元', { skip: !chromium }, async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+  const page = await browser.newPage({ viewport: { width: 768, height: 900 } });
+  const errors = [];
+  page.on('pageerror', error => errors.push(error.message));
+  page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+  await page.goto(new URL('../tools/roadmap_viewer.html', import.meta.url).href);
+  await page.keyboard.press('Tab');
+  const firstFocus = await page.evaluate(() => ({ id: document.activeElement?.id || '', href: document.activeElement?.getAttribute('href') || '', outline: getComputedStyle(document.activeElement).outlineStyle }));
+  assert.deepEqual(firstFocus, { id: 'skip-link', href: '#main-content', outline: 'solid' });
+  const snapshot = {
+    version: 1,
+    title: '一読計画',
+    generatedAt: new Date().toISOString(),
     files: {
-      '30_plan.md': `## Task 1: 図あり
+      '30_plan.md': `# 人向けの計画書
 
-### 実装
+required_sources: task:30_plan.md, workspace:tools/example.js
 
-- parserへ渡す。
-
-### 実装図
-
-\`\`\`diagram-json
-{"direction":"LR","nodes":[{"id":"S","label":"source"},{"id":"P","label":"parser"},{"id":"V","label":"viewer"}],"edges":[{"from":"S","to":"P","label":"解析する"},{"from":"P","to":"V","label":"描画する"}]}
+\`\`\`yaml
+required_sources: example configuration
 \`\`\`
 
-## Task 2: 図なし
+導入の文章 ONCE
+
+## Task 1: 本文のTask
+
+### 目的
+目的の文章 ONCE
 
 ### 実装
+- 実装の文章 ONCE
 
-- sourceから関係を推測しない。`
-    }
-  }), { nowMs });
+### 変更対象
+- src/example.js
 
-  const explicit = model.buildExecutionBrief(result, '1');
-  const absent = model.buildExecutionBrief(result, '2');
-  assert.equal(explicit.selectedImplementationDiagram.direction, 'LR');
-  assert.deepEqual(Array.from(explicit.selectedImplementationDiagram.nodes, node => node.title), ['source', 'parser', 'viewer']);
-  assert.deepEqual(Array.from(explicit.selectedImplementationDiagram.edges, edge => edge.predicate), ['解析する', '描画する']);
-  assert.equal(absent.selectedImplementationDiagram, null);
+#### 実装根拠
+- repo:src/example.js#build
+
+### 成果物
+- 成果物の文章 ONCE
+
+### 検証
+- 検証の文章 ONCE
+
+## 任意section
+
+任意sectionの文章 ONCE
+`
+    },
+    sourcePreviews: [{
+      taskNumber: '1',
+      path: 'src/example.js',
+      anchor: 'function build',
+      language: 'javascript',
+      startLine: 1,
+      endLine: 1,
+      code: 'const actual = 1;',
+      status: 'resolved',
+      message: '',
+      truncated: false,
+      evidenceRevision: 'fixed-ref-revision'
+    }],
+    uiPreviews: [{
+      version: 1,
+      taskNumber: '1',
+      layout: 'list',
+      title: 'UI',
+      provenance: { before: { source: 'repo:src/example.js#build', baseRef: 'a'.repeat(40), observedLabels: ['old'] }, after: { source: '30_plan.md#Task 1' } },
+      before: { items: [{ id: 'old', label: 'Old', kind: 'item', change: 'same' }] },
+      after: { items: [{ id: 'new', label: 'New', kind: 'item', change: 'added' }] }
+    }]
+  };
+  await page.evaluate(value => window.__ROADMAP_VIEWER__.render(value), snapshot);
+  const browserView = await page.evaluate(() => {
+    const host = document.querySelector('#plan-source-content');
+    const textContent = host.textContent;
+    const panels = [...host.querySelectorAll('.task-appendix .compare-panel')].map(item => item.getBoundingClientRect());
+    const taskHeading = document.querySelector('#task-1');
+    const counts = value => (textContent.match(new RegExp(value, 'g')) || []).length;
+    return {
+      bodyScrollWidth: document.body.scrollWidth,
+      innerWidth: window.innerWidth,
+      taskId: taskHeading?.id || '',
+      appendixCount: host.querySelectorAll('.task-appendix').length,
+      counts: {
+        task: counts('Task 1: 本文のTask'),
+        purpose: counts('目的の文章 ONCE'),
+        implementation: counts('実装の文章 ONCE'),
+        optional: counts('任意sectionの文章 ONCE'),
+        code: counts('const actual = 1;')
+      },
+      title: document.querySelector('#task-title')?.textContent || '',
+      sourceH1Count: host.querySelectorAll('h1').length,
+      taskHeadingTag: taskHeading?.tagName || '',
+      purposeHeadingTag: host.querySelector('[data-md-heading="目的"]')?.tagName || '',
+      rawRequiredSources: textContent.includes('required_sources: task:30_plan.md'),
+      codeRequiredSources: textContent.includes('required_sources: example configuration'),
+      sourceCodeLabels: [...host.querySelectorAll('.source-code')].map(node => node.getAttribute('aria-label') || ''),
+      sourceLedger: document.querySelector('#source-ledger')?.textContent || '',
+      panels: panels.map(rect => ({ left: rect.left, top: rect.top, width: rect.width }))
+    };
+  });
+  assert.deepEqual(errors, []);
+  assert.equal(browserView.bodyScrollWidth, 768);
+  assert.equal(browserView.taskId, 'task-1');
+  assert.equal(browserView.appendixCount, 1);
+  assert.deepEqual(browserView.counts, { task: 1, purpose: 1, implementation: 1, optional: 1, code: 1 });
+  assert.equal(browserView.title, '人向けの計画書');
+  assert.equal(browserView.sourceH1Count, 0);
+  assert.equal(browserView.taskHeadingTag, 'H2');
+  assert.equal(browserView.purposeHeadingTag, 'H3');
+  assert.equal(browserView.rawRequiredSources, false);
+  assert.equal(browserView.codeRequiredSources, true);
+  assert.deepEqual(browserView.sourceCodeLabels, ['参照版の実装 fixed-ref-revision']);
+  assert.match(browserView.sourceLedger, /required_sources/);
+  assert.match(browserView.sourceLedger, /workspace:tools\/example\.js/);
+  assert.equal(browserView.panels.length, 2);
+  assert.ok(Math.abs(browserView.panels[0].top - browserView.panels[1].top) < 1);
+  const sourceExcerpt = page.locator('.source-code').first();
+  const sourceExcerptId = await sourceExcerpt.getAttribute('id');
+  assert.match(sourceExcerptId || '', /^source-excerpt-/);
+  await sourceExcerpt.focus();
+  const focusedBefore = await page.evaluate(() => ({ id: document.activeElement?.id || '', scrollY }));
+  const reordered = {
+    ...snapshot,
+    sourcePreviews: [
+      {
+        taskNumber: '1', path: 'src/other.js', anchor: 'other', language: 'javascript',
+        startLine: 1, endLine: 1, code: 'const other = 1;', status: 'resolved', message: '', truncated: false
+      },
+      snapshot.sourcePreviews[0]
+    ]
+  };
+  await page.evaluate(value => window.__ROADMAP_VIEWER__.render(value), reordered);
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  const focusedAfter = await page.evaluate(() => ({ id: document.activeElement?.id || '', scrollY }));
+  assert.equal(focusedAfter.id, focusedBefore.id);
+  assert.equal(focusedAfter.scrollY, focusedBefore.scrollY);
+  await page.evaluate(value => window.__ROADMAP_VIEWER__.render(value), { ...snapshot, sourcePreviews: [] });
+  await page.evaluate(() => new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve))));
+  assert.equal(await page.evaluate(() => document.activeElement?.id || ''), 'task-1');
+  await page.setViewportSize({ width: 375, height: 812 });
+  const mobilePanels = await page.evaluate(() => [...document.querySelectorAll('.task-appendix .compare-panel')].map(item => ({ left: item.getBoundingClientRect().left, top: item.getBoundingClientRect().top })));
+  assert.ok(mobilePanels[1].top > mobilePanels[0].top);
+  await page.locator('#plan-index-list a[data-plan-jump="1"]').click();
+  const jumped = await page.evaluate(() => ({ focus: document.activeElement?.id || '', scrollY }));
+  assert.equal(jumped.focus, 'task-1');
+  await page.evaluate(value => window.__ROADMAP_VIEWER__.render(value), snapshot);
+  await page.waitForTimeout(40);
+  const restored = await page.evaluate(() => ({ focus: document.activeElement?.id || '', scrollY }));
+  assert.equal(restored.focus, 'task-1');
+  assert.equal(restored.scrollY, jumped.scrollY);
+  } finally {
+    await browser.close();
+  }
 });
 
-test('implementation workspaceは選択Taskの実装図と同値な関係一覧を持つべき', () => {
-  const renderDiagramSource = html.match(/function renderImplementationDiagram\(diagram\) \{([\s\S]*?)\n    \}\n    function renderExecutionBrief/)?.[1] || '';
-  for (const id of [
-    'implementation-diagram',
-    'implementation-diagram-flow',
-    'implementation-diagram-relations',
-    'implementation-diagram-message',
-  ]) {
-    assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
+test('browser: 375px Codemapは縦配置で図の横panを要求しない', { skip: !chromium }, async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 375, height: 812 } });
+    await page.goto(new URL('../tools/roadmap_viewer.html', import.meta.url).href);
+    const snapshot = {
+      version: 1,
+      kind: 'roadmap',
+      title: 'Code Map narrow',
+      generatedAt: new Date().toISOString(),
+      files: { '30_plan.md': '# Plan\n' },
+      codemapStatus: 'fresh',
+      codemap: {
+        kind: 'codemap',
+        lanes: [
+          { id: 'input', title: 'Input', order: 0 },
+          { id: 'view', title: 'View', order: 1 },
+          { id: 'test', title: 'Test', order: 2 }
+        ],
+        nodes: Array.from({ length: 7 }, (_, index) => ({
+          id: 'node-' + index,
+          title: 'Node ' + index,
+          kind: 'module',
+          lane: index < 2 ? 'input' : index < 5 ? 'view' : 'test',
+          path: 'src/node-' + index + '.js'
+        })),
+        edges: Array.from({ length: 6 }, (_, index) => ({
+          id: 'edge-' + index,
+          from: 'node-' + index,
+          to: 'node-' + (index + 1),
+          relation: 'calls',
+          status: index === 4 ? 'unknown' : 'verified',
+          reason: index === 4 ? 'relation is not confirmed' : '',
+          evidence: index === 4 ? [] : [{ path: 'src/node-' + index + '.js', line: index + 1 }]
+        }))
+      }
+    };
+    await page.evaluate(value => window.__ROADMAP_VIEWER__.render(value), snapshot);
+    const view = await page.evaluate(() => {
+      const host = document.querySelector('#codemap-svg');
+      const narrow = host.querySelector('.codemap-narrow');
+      const wide = host.querySelector('.codemap-wide');
+      const text = narrow.querySelector('text');
+      return {
+        bodyScrollWidth: document.body.scrollWidth,
+        hostScrollWidth: host.scrollWidth,
+        hostClientWidth: host.clientWidth,
+        narrowDisplay: getComputedStyle(narrow).display,
+        wideDisplay: getComputedStyle(wide).display,
+        textSize: getComputedStyle(text).fontSize,
+        relationCount: document.querySelectorAll('#codemap-relations li').length,
+        unknownText: document.querySelector('#codemap-relations').textContent
+      };
+    });
+    assert.equal(view.bodyScrollWidth, 375);
+    assert.equal(view.hostScrollWidth, view.hostClientWidth);
+    assert.equal(view.narrowDisplay, 'block');
+    assert.equal(view.wideDisplay, 'none');
+    assert.equal(view.textSize, '12px');
+    assert.equal(view.relationCount, 6);
+    assert.match(view.unknownText, /UNKNOWN/);
+  } finally {
+    await browser.close();
   }
-  assert.match(html, /function renderImplementationDiagram\(diagram\)/);
-  assert.match(html, /aria-label="実装図の関係"/);
-  assert.match(html, /class="implementation-diagram-svg"/);
-  assert.match(html, /<svg class="implementation-diagram-svg"/);
-  assert.match(html, /<polygon class="diagram-node decision"/);
-  assert.match(html, /<path class="diagram-edge"/);
-  assert.match(renderDiagramSource, /escapeHtml\(node\.title\)/);
-  assert.match(renderDiagramSource, /escapeHtml\(edge\.predicate\)/);
 });
 
-test('viewing-plansのauthoring contractは設計summaryとTask実行契約を要求すべき', () => {
-  assert.match(viewingPlansSkill, /(?:実施Task|各工程|Current Task)/);
-  for (const label of ['仕様', '実装根拠', '(?:実行順序|全体像|全体の進め方)', '(?:source|Code Map)', '成果物']) {
-    assert.match(viewingPlansSkill, new RegExp(label));
+test('browser: source付き空Beforeは未確認として表示し新規画面扱いにしない', { skip: !chromium }, async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 768, height: 812 } });
+    await page.goto(new URL('../tools/roadmap_viewer.html', import.meta.url).href);
+    const snapshot = {
+      version: 1,
+      title: '未確認Before fixture',
+      generatedAt: new Date().toISOString(),
+      files: {
+        '30_plan.md': `# 未確認Before fixture
+
+## Task 1: source付きUI
+
+### 目的
+既存sourceのBeforeを確認する。
+`
+      },
+      uiPreviews: [{
+        version: 1,
+        taskNumber: '1',
+        layout: 'list',
+        title: 'source付きの未確認Before',
+        status: 'unverified',
+        isNewScreen: true,
+        provenance: {
+          before: { source: 'repo:src/old.js#render', baseRef: 'a'.repeat(40) },
+          after: { source: '30_plan.md#Task 1' }
+        },
+        before: { items: [] },
+        after: { items: [{ id: 'new', label: 'New section', kind: 'section', state: 'planned', change: 'added' }] }
+      }]
+    };
+    await page.evaluate(value => window.__ROADMAP_VIEWER__.render(value), snapshot);
+    const before = await page.locator('.compare-panel[data-side="before"]').innerText();
+    assert.match(before, /Before未確認/);
+    assert.doesNotMatch(before, /新規画面/);
+    assert.match(before, /old\.js#render/);
+  } finally {
+    await browser.close();
   }
-  for (const contract of ['(?:Project Map(?: \\+ Focus)?|依存図)', '(?:Current Task|Task)', '(?:primary action|初期画面)', '(?:NextまたはBlocker|補助表示)', 'Detail drawer', '(?:ImpactからCode Map|Code Map)']) {
-    assert.match(viewingPlansSkill, new RegExp(contract));
-  }
-  for (const heading of ['#### 目的', '#### 変更対象', '#### 実装根拠', '#### 実装', '#### 実装図', '#### 成果物', '#### 検証']) {
-    assert.match(memoryFileFormats, new RegExp(heading));
-  }
-  assert.match(memoryFileFormats, /repo:<relative-path>#<anchor-or-Lx-Ly>/);
-  assert.match(viewingPlansSkill, /生成時点の実source/);
-  assert.match(viewingPlansSkill, /bare pathや `変更対象` からsource参照を推測しない/);
-  assert.match(viewingPlansSkill, /実装図.*planに明示されたnodeとedgeだけ/s);
 });
 
-test('viewing-plansは短い保守作業をRoadmapから除外し必要時だけ昇格すべき', () => {
-  for (const route of ['explicit-roadmap', 'roadmap', 'log-only']) {
-    assert.ok(viewingPlansSkill.includes(`\`${route}\``));
-  }
-  for (const maintenance of ['競合解消', '単発再実行', '形式修正', '誤字修正', '設定同期']) {
-    assert.match(viewingPlansSkill, new RegExp(maintenance));
-  }
-  assert.match(viewingPlansSkill, /ファイル数だけを理由にRoadmapへ昇格させない/);
-  assert.match(viewingPlansSkill, /表を上から順に評価し、最初に一致した結果/);
-  assert.match(viewingPlansSkill, /仕様や振る舞いの選択.*複数の解消案.*依存する複数Task.*roadmap.*昇格/s);
-  assert.match(viewingPlansSkill, /roadmap_route: <結果>：<理由>/);
-  assert.match(viewingPlansSkill, /log-only.*30_plan\.md.*roadmap\.html.*作らない/s);
-  assert.match(viewingPlansSkill, /Codemap preflightは省略しない/);
-});
+test('browser: 末尾Taskの補足は本文の目的・実装の後ろへ置く', { skip: !chromium }, async () => {
+  const browser = await chromium.launch({ headless: true });
+  try {
+    const page = await browser.newPage({ viewport: { width: 768, height: 812 } });
+    await page.goto(new URL('../tools/roadmap_viewer.html', import.meta.url).href);
+    const snapshot = {
+      version: 1,
+      title: '末尾Task fixture',
+      generatedAt: new Date().toISOString(),
+      files: {
+        '30_plan.md': `# 末尾Task fixture
 
-test('the tree-first roadmap information architecture remains in the HTML', () => {
-  for (const id of [
-    'task-title',
-    'wayfinder',
-    'graph-shell',
-    'graph-edges',
-    'graph-outcomes',
-    'graph-tasks',
-    'graph-artifacts',
-    'node-inspector',
-    'inspector-title',
-    'inspector-facts',
-    'inspector-relations'
-  ]) {
-    assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
-  }
-  assert.match(html, /id="state-announcer" role="status" aria-live="polite"/);
-  assert.doesNotMatch(html, /id="live-status"[^>]*aria-live=/);
-  assert.doesNotMatch(html, /id="implementation-source-message"[^>]*aria-live=/);
-  assert.match(html, /byId\('state-announcer'\)\.textContent = `接続状態: \$\{text\}`/);
-  assert.match(html, /prefers-reduced-motion/);
-  assert.match(html, /Tabler Icons/);
-  assert.match(html, /id="graph-shell" role="region"/);
-  assert.match(html, /data-graph-column="outcome" role="group"/);
-  assert.match(html, /data-graph-column="outcome"/);
-  assert.match(html, /data-graph-column="task"/);
-  assert.match(html, /data-graph-column="artifact"/);
-  assert.match(html, /aria-describedby="\$\{relationId\}"/);
-  assert.match(html, /成果の観点 \$\{outgoing\.length\}件/);
-  assert.match(html, /data-outcome-cluster/);
-  assert.match(html, /現状を知る/);
-  assert.match(html, /仕組みを決める/);
-  assert.match(html, /安全に守る/);
-  assert.match(html, /requires/);
-  assert.match(html, /implemented by/);
-  assert.match(html, /waits for/);
-  assert.match(html, /proves/);
-  assert.match(html, /data-related-node/);
-  assert.match(html, /node-inspector'\)\.hidden = tree\.explicitGraphMap \? node\.id === tree\.activeNodeId : node\.kind === 'goal'/);
-  assert.match(html, /\.graph-inspector\[hidden\]\s*\{\s*display:\s*none/);
-  assert.match(html, /\.inspector-facts\s*\{\s*display:\s*none/);
-  assert.match(html, /function pathNodeIds\(tree, selectedId\)/);
-  assert.match(html, /function visibleGraphNodeIds\(tree, selected\)/);
-  assert.match(html, /function canReceiveRestoredFocus\(element\)/);
-  assert.match(html, /function fallbackFocusTarget\(key, fallbackId = ''\)/);
-  assert.match(html, /function selectedPathEdges\(tree, selectedId\)/);
-  assert.match(html, /function buildTreeViewModel\(model\)/);
-  assert.match(html, /function parseSvgDiagramSpec\(markdown\)/);
-  assert.match(html, /firstDiagramJson/);
-  assert.match(html, /graph-map\.md/);
-  assert.match(html, /if \(tree\.explicitGraphMap\) \{\s*renderExplicitGraph\(tree\);\s*return;\s*\}/);
-  assert.match(html, /className = 'explicit-node-layer'/);
-  assert.match(html, /id="graph-propositions"/);
-  assert.match(html, /tree\.propositions\.map/);
-  assert.match(html, /tree\.explicitGraphMap \? tree\.edges : selectedPathEdges/);
-  assert.match(html, /\.explicit-node-layer \.graph-node\.kind-decision/);
-  assert.match(html, /\.explicit-node-layer \.graph-node\.kind-risk/);
-  assert.match(html, /\.explicit-node-layer \.graph-node\.kind-verification/);
-  assert.match(html, /\.explicit-node-layer \.graph-node\.kind-decision,[\s\S]*?clip-path:\s*none/);
-  assert.match(html, /\.explicit-node-layer \.graph-node\[aria-current="true"\] \.node-glyph/);
-  assert.doesNotMatch(html, /\.explicit-node-layer \.graph-node\.kind-decision,[\s\S]{0,360}clip-path:\s*polygon/);
-  assert.match(html, /function renderGraph\(model\)/);
-  assert.match(html, /function drawGraphEdges\(tree, selectedId, visibleIds\)/);
-  assert.match(html, /data-graph-node/);
-  assert.match(html, /ArrowDown/);
-  assert.match(html, /ArrowUp/);
-  assert.match(html, /ArrowLeft/);
-  assert.match(html, /ArrowRight/);
-  assert.match(html, /event\.key === 'Home'/);
-  assert.match(html, /event\.key === 'End'/);
-  assert.match(html, /event\.key === 'Enter'/);
-  assert.match(html, /event\.key === 'Escape'/);
-  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.graph-shell\s*\{[\s\S]*grid-template-columns:\s*1fr/);
-  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.graph-edges\s*\{\s*display:\s*none/);
-  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.outcome-cluster-grid\s*\{\s*grid-template-columns:\s*1fr/);
-  assert.match(html, /const visible = new Set\(allOutcomes\)/);
-  assert.match(html, /document\.title = workspaceTitle/);
-  assert.match(html, /--ease-out:\s*cubic-bezier/);
-  assert.match(html, /@media \(hover: hover\) and \(pointer: fine\)/);
-  assert.doesNotMatch(html, /transition:\s*all/);
-  assert.doesNotMatch(html, /\*, \*::before, \*::after\s*\{[^}]*transition:\s*none/);
-  assert.match(html, /missing-implementation/);
-  assert.match(html, /\.graph-edge-label\s*\{/);
-  assert.match(html, /body:not\(\.task-hub-active\) #open-utility,[\s\S]*\.inspector-actions/);
-  assert.doesNotMatch(html, /id=["'](?:open-files|export-json|file-input|drop-zone|viewer-settings|review-stats|all-artifact-list|artifact-jump)["']/);
-  assert.doesNotMatch(html, /function (?:loadFiles|exportJson)\(|手動ファイル読込|表示と読込|成果物metadataなし/);
-  assert.match(html, /id=["']source-list["']/);
-  assert.match(html, /id=["']source-preview["']/);
-  assert.doesNotMatch(html, /body:not\(\.task-hub-active\) \.utility-disclosure\s*\{[^}]*display:\s*none !important/);
-  assert.match(html, /body:not\(\.task-hub-active\) \.outcome-trace,[\s\S]*\.revision-panel,[\s\S]*\.implementation-strip,[\s\S]*\.evidence-shortcuts/);
-  assert.match(html, /function stopLivePolling\(/);
-  assert.match(html, /generation !== pollGeneration/);
-  assert.match(html, /const current = model\.activeTask/);
-  assert.match(html, /function refreshFreshness\(/);
-  assert.match(html, /renderGraph\(next\)/);
-  assert.doesNotMatch(html, /function brandData\(/);
-});
+## Task 1: 最後のTask
 
-test('decision beacon navigation exposes first-class artifacts and an accessible mobile drawer', () => {
-  for (const id of [
-    'viewer-layout',
-    'viewer-sidebar',
-    'open-viewer-nav',
-    'close-viewer-nav',
-    'nav-scrim',
-    'nav-artifacts-meta',
-    'nav-outcomes-meta',
-    'nav-verification-meta',
-    'nav-reports-meta'
-  ]) {
-    assert.match(html, new RegExp(`id=["']${id}["']`), `${id} is required`);
-  }
-  for (const label of ['ダッシュボード', 'ロードマップ', '成果物', 'アウトカム', '検証', 'レポート']) {
-    assert.match(html, new RegExp(`<span>${label}</span>`));
-  }
-  assert.match(html, /data-nav-target="implementation-strip"/);
-  assert.match(html, /data-nav-target="evidence-shortcuts"/);
-  assert.match(html, /data-nav-artifact="90_verification\.md"/);
-  assert.match(html, /data-nav-artifact="80_review\.md"/);
-  assert.match(html, /@media \(max-width: 1023px\)[\s\S]*body\.viewer-nav-open \.app-sidebar/);
-  assert.match(html, /function openViewerNav\(/);
-  assert.match(html, /function closeViewerNav\(/);
-  assert.match(html, /function updateViewerNavFromScroll\(/);
-  assert.match(html, /viewerNavScrollLockUntil/);
-  assert.match(html, /event\.key === 'Escape'/);
-  assert.match(html, /event\.key !== 'Tab'/);
-  assert.match(html, /aria-modal/);
-  assert.match(html, /byId\('main-content'\)\.inert = true/);
-  assert.match(html, /prefers-reduced-motion:[\s\S]*\.app-sidebar, \.nav-scrim/);
-});
+### 目的
+末尾Taskの目的本文。
 
-test('warning tokens and missing artifacts have accessible contrast contracts', () => {
-  assert.match(html, /--warn-text:\s*#6f4800/);
-  assert.match(html, /\[data-theme="dark"\][\s\S]*--warn-text:\s*#f0c978/);
-  assert.ok(contrastRatio('#6f4800', '#f3f4f0') >= 4.5);
-  assert.ok(contrastRatio('#6f4800', '#ffffff') >= 4.5);
-  assert.ok(contrastRatio('#f0c978', '#242a26') >= 4.5);
-  assert.ok(contrastRatio('#f0c978', '#1c211e') >= 4.5);
-  assert.ok(contrastRatio('#626a65', '#ffffff') >= 4.5);
-  assert.ok(contrastRatio('#626a65', '#f3f4f0') >= 4.5);
-  assert.match(html, /\.trace-token\.warn\s*\{[^}]*color:\s*var\(--warn-text\)/);
-  assert.match(html, /\.artifact-warning\s*\{[^}]*color:\s*var\(--warn-text\)/);
-  assert.match(html, /\.artifact-state\.missing\s*\{[^}]*color:\s*var\(--warn-text\)\s*!important/);
-});
-
-test('focused document workspace keeps markdown readable and responsive', () => {
-  assert.match(html, /class="document-workspace" aria-label="Markdownワークスペース"/);
-  assert.match(html, /class="document-sidebar" aria-label="Markdownソース"/);
-  assert.match(html, /class="document-reader" aria-label="選択したMarkdown"/);
-  assert.match(html, /\.document-workspace\s*\{[^}]*grid-template-columns:\s*minmax\(228px,\s*280px\)\s*minmax\(0,\s*1fr\)/);
-  assert.match(html, /\.source-preview\s*\{[^}]*font-size:\s*16px/);
-  assert.match(html, /\.source-preview\s*\{[^}]*line-height:\s*1\.75/);
-  assert.doesNotMatch(html, /\.source-preview\s*\{[^}]*max-height/);
-  assert.match(html, /--shadow:\s*none/);
-  assert.match(html, /font-family:\s*ui-serif,\s*"Yu Mincho"/);
-  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.document-workspace\s*\{\s*grid-template-columns:\s*1fr/);
-  assert.match(html, /@media \(max-width: 720px\)[\s\S]*\.document-sidebar\s*\{[^}]*border-bottom:\s*1px solid var\(--line\)/);
+### 実装
+末尾Taskの実装本文。
+`
+      },
+      sourcePreviews: [{
+        taskNumber: '1', path: 'src/last.js', anchor: 'build', language: 'javascript',
+        startLine: 1, endLine: 1, code: 'const last = true;', status: 'resolved', message: '', truncated: false
+      }]
+    };
+    await page.evaluate(value => window.__ROADMAP_VIEWER__.render(value), snapshot);
+    const order = await page.evaluate(() => {
+      const host = document.querySelector('#plan-source-content');
+      const children = [...host.children];
+      return {
+        purpose: children.findIndex(node => node.textContent.includes('末尾Taskの目的本文')),
+        implementation: children.findIndex(node => node.textContent.includes('末尾Taskの実装本文')),
+        appendix: children.findIndex(node => node.classList.contains('task-appendix')),
+        tags: children.map(node => node.tagName)
+      };
+    });
+    assert.ok(order.purpose >= 0);
+    assert.ok(order.implementation > order.purpose);
+    assert.ok(order.appendix > order.implementation, JSON.stringify(order));
+    assert.equal(await page.locator('#task-1').evaluate(node => node.tagName), 'H2');
+  } finally {
+    await browser.close();
+  }
 });

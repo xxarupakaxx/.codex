@@ -37,7 +37,7 @@ routeを選べないHTMLは作らない。複数routeの要素を持つ場合は
 | `legacy` | filenameを保持する過去surface | 削除・renameしないが、canonicalからlive参照しない |
 | `grandfathered` | 過去互換のためtrackedされる例外surface | 新規producerの根拠にしない。static profileの緩和理由をmanifestに残す |
 
-`codemap.html` は `grandfathered` であり、新しく生成しない。人向けCode Mapは `roadmap.html` の計画書の補助表示からDetail drawerを開き、Impact内のCode Mapとして確認する。
+`codemap.html` は `grandfathered` であり、新しく生成しない。人向けCode Mapは `roadmap.html` の計画本文に図と根拠の一覧を埋め込む。
 
 ## Producer Gate
 
@@ -68,7 +68,7 @@ Roadmapの通常生成でrenderer、共通CSS、UI preview common primitive、br
 - `charset`
 - `viewport`
 - `title`
-- `data-artifact-kind` またはmanifestで許可されたartifact kind
+- `meta[name="artifact-kind"]` にmanifestで許可されたartifact kind（`html[data-artifact-kind]`だけでは代用しない）
 - CSP
 - external load 0
 - duplicate ID 0
@@ -105,7 +105,7 @@ mobile / tablet responsive、print preview、PDF exportは`html`と静的`html-d
 
 ## Roadmap / Code Map
 
-`html-plan` routeの主入口は `roadmap.html` である。初期画面は30_plan.mdの計画本文を連続表示する。背景・目的・全体の進め方と工程ごとの本文を読みやすい文字と余白で示し、目次から章へ移動できる。Project Map + Focus、timeline、Code Mapは補助表示に置く。sourceに存在する情報だけを使う。
+`html-plan` routeの主入口は `roadmap.html` である。初期画面を一つのHTML計画書とし、目的、変更前後、Taskごとの実装説明、検証、依存関係をスクロールだけで読めるようにする。重要情報の表示にdrawer・tab・折り畳みの操作を要求せず、sourceに存在する情報だけを使う。
 
 - 企画: `00_spec.md`
 - 設計: `20_survey.md` / `30_plan.md`
@@ -115,11 +115,11 @@ mobile / tablet responsive、print preview、PDF exportは`html`と静的`html-d
 
 Currentはfreshなin-progress、なければ最初の未完了Taskから一意に決める。primary actionはunresolved blocker、または対象Taskの`実装`sectionにある最初の未完了checkboxだけを使う。欠落時は「未記録」と表示し、commitmentを補作しない。
 
-Code Mapは常時toggleではない。Detail drawerのImpactから開き、閉じたら起点へfocusを戻す。`codemap.json` / `codemap.lock`は機械判定の正本であり、Roadmapの更新時刻でfreshnessを代用しない。
+Code Mapは本文内で最初から表示する。図とテキストの関係一覧を併記し、根拠はkeyboardでたどれるようにする。Task Hubは明示した横断確認だけの補助modeとし、通常の生成で追加tabや監視serverを起動しない。`codemap.json` / `codemap.lock`は機械判定の正本であり、Roadmapの更新時刻でfreshnessを代用しない。
 
 UI変更Taskでは、計画を作るLLMが対象sourceを読み、`UI変更: yes`と`ui-preview-json`を同じTaskへ自動記録する。rootは `{version, taskNumber, previews:[最大3]}`、`taskNumber` はTask見出しから抽出した数値文字列、各previewは `{id,title,layout,provenance,before,after,uncertainty}` であり、generatorがoptionalな`uiPreviews`としてsnapshot v1へ加える。これは既存snapshot versionを上げないadditive fieldであり、legacy snapshotやTask Hubの既存表示を変えない。Beforeは `provenance.before.source=repo:...`、40桁commit SHAの`baseRef`、`observedLabels`、Afterは `provenance.after.source`、未確認事項は`uncertainty`として分ける。通常生成はplan内の単一SHAを自動利用し、ユーザーによるmetadata入力やCLI ref指定を要求しない。
 
-UI previewはRoadmap Change詳細の小さな比較模型であり、ページ全体captureや自由配置editorではない。`topnav`、`sidebar`、`settings`、`list`、`form`は表示presetとして扱い、itemは `{id,label,kind,change,state?}` で表す。`kind`は `label`、`item`、`group`、`action`、`input` の共通primitive、`change`は `same`、`added`、`modified`、`removed` の4値だけを許可し、色だけでなく文言、記号、badge、境界線、ARIA labelで示す。生HTML、外部URL、任意repository code実行は禁止する。LLMはJSX / TSX等のsourceを意味として読み取れるが、実行時dataやCSSからpixel-perfectな見た目を補作しない。
+UI previewは計画本文内の小さな比較模型であり、ページ全体captureや自由配置editorではない。`topnav`、`sidebar`、`settings`、`list`、`form`は表示presetとして扱い、itemは `{id,label,kind,change,state?}` で表す。`kind`は `label`、`item`、`group`、`action`、`input` の共通primitive、`change`は `same`、`added`、`modified`、`removed` の4値だけを許可し、色だけでなく文言、記号、badge、境界線、ARIA labelで示す。生HTML、外部URL、任意repository code実行は禁止する。LLMはJSX / TSX等のsourceを意味として読み取れるが、実行時dataやCSSからpixel-perfectな見た目を補作しない。
 
 reference HTMLから得た900px程度のeditorial canvas、小さいUI模型、新規画面のAfter-only表示は設計指針として扱う。Google Fonts、外部CSS、reference HTMLのtokenはコピーせず、Roadmap既存のdesign token、system font、CSP、self-contained契約を維持する。
 

@@ -63,10 +63,11 @@ ROADMAP_CSP = (
     "form-action 'none'"
 )
 IMPLEMENTATION_EVIDENCE_RE = re.compile(
-    r"^#### 実装根拠\s*$([\s\S]*?)(?=^####\s|\Z)",
+    r"^#{3,4} 実装根拠\s*$([\s\S]*?)(?=^#{3,4}\s|\Z)",
     re.MULTILINE,
 )
 INLINE_CODE_RE = re.compile(r"`([^`\r\n]+)`")
+BARE_SOURCE_REFERENCE_RE = re.compile(r"(?<![A-Za-z0-9_])repo:")
 LINE_RANGE_RE = re.compile(r"^L([1-9]\d*)-L([1-9]\d*)$")
 
 DEFAULT_SOURCE_ALLOW_PREFIXES = (
@@ -546,17 +547,30 @@ def parse_source_preview_references(
     plan_model: dict[str, object] | None = None,
 ) -> list[tuple[str, str]]:
     references: list[tuple[str, str]] = []
+    seen: set[tuple[str, str]] = set()
     for task_number, _, _, task_section in iter_task_sections(plan, plan_model):
         evidence = IMPLEMENTATION_EVIDENCE_RE.search(task_section)
         if not evidence:
             continue
-        first_inline = INLINE_CODE_RE.search(evidence.group(1))
-        if not first_inline:
-            continue
-        reference = first_inline.group(1).strip()
-        if not reference.startswith("repo:"):
-            continue
-        references.append((task_number, reference))
+        evidence_text = evidence.group(1)
+        inline_matches = list(INLINE_CODE_RE.finditer(evidence_text))
+        candidates = [match.group(1).strip() for match in inline_matches]
+        bare_text = INLINE_CODE_RE.sub(" ", evidence_text)
+        for line in bare_text.splitlines():
+            bare_matches = list(BARE_SOURCE_REFERENCE_RE.finditer(line))
+            for index, match in enumerate(bare_matches):
+                end = bare_matches[index + 1].start() if index + 1 < len(bare_matches) else len(line)
+                candidate = line[match.start():end].strip()
+                candidate = re.sub(r"\s+(?:と|and|および|及び)\s*$", "", candidate)
+                candidates.append(candidate.rstrip(".,;!?。、，；！"))
+        for reference in candidates:
+            if not reference.startswith("repo:"):
+                continue
+            key = (task_number, reference)
+            if key in seen:
+                continue
+            seen.add(key)
+            references.append(key)
     return references
 
 
@@ -1763,20 +1777,28 @@ def build_snapshot(
         plan,
         plan_model,
     )
-    effective_base_ref = base_ref or inferred_base_ref
-    base_revision, resolved_base_ref_message = resolve_git_commit(
+    source_base_revision, source_base_ref_message = resolve_git_commit(
         effective_source_root,
-        effective_base_ref,
-    ) if effective_base_ref else (None, "")
-    base_ref_message = resolved_base_ref_message or inferred_base_ref_message
+        base_ref,
+    ) if base_ref else (None, "")
+    ui_base_ref = base_ref or inferred_base_ref
+    if base_ref:
+        ui_base_revision = source_base_revision
+        ui_base_ref_message = source_base_ref_message
+    else:
+        ui_base_revision, resolved_ui_ref_message = resolve_git_commit(
+            effective_source_root,
+            ui_base_ref,
+        ) if ui_base_ref else (None, "")
+        ui_base_ref_message = resolved_ui_ref_message or inferred_base_ref_message
     git_blob_cache: dict[tuple[str, str], tuple[bytes | None, str, str]] = {}
     source_previews = collect_source_previews(
         plan,
         source_root=effective_source_root,
         source_allow_prefixes=source_allow_prefixes,
-        base_ref=effective_base_ref,
-        base_revision=base_revision,
-        base_ref_message=base_ref_message,
+        base_ref=base_ref,
+        base_revision=source_base_revision,
+        base_ref_message=source_base_ref_message,
         git_blob_cache=git_blob_cache,
         plan_model=plan_model,
     )
@@ -1784,9 +1806,9 @@ def build_snapshot(
         plan,
         source_root=effective_source_root,
         source_allow_prefixes=source_allow_prefixes,
-        base_ref=effective_base_ref,
-        base_revision=base_revision,
-        base_ref_message=base_ref_message,
+        base_ref=ui_base_ref,
+        base_revision=ui_base_revision,
+        base_ref_message=ui_base_ref_message,
         git_blob_cache=git_blob_cache,
         plan_model=plan_model,
     )
@@ -2081,8 +2103,9 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
     parser.add_argument(
         "--base-ref",
         help=(
-            "Optional Git ref override for source-backed UI Before previews and source previews. "
-            "Without it, one immutable SHA declared by the plan is used automatically."
+            "Optional Git ref override for source previews and source-backed UI Before previews. "
+            "Without it, source previews use the current worktree; one immutable SHA declared by "
+            "the plan is used automatically for UI Before previews."
         ),
     )
     parser.add_argument("--thread-id", help="Bind task-meta.json to a Codex thread ID.")

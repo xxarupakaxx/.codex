@@ -1,6 +1,6 @@
 # UI Change Preview Runbook
 
-このrunbookは、UI変更TaskでRoadmap ViewerのChange詳細に出すBefore / After previewをauthoringするための契約である。`viewing-plans`の補助資料であり、HTML route、static gate、browser profileは `@context/html-artifact-contract.md` と `.codex/config/html-surfaces.json` を正本にする。
+このrunbookは、UI変更TaskでRoadmap Viewerの計画本文に出すBefore / After previewをauthoringするための契約である。`viewing-plans`の補助資料であり、HTML route、static gate、browser profileは `@context/html-artifact-contract.md` と `.codex/config/html-surfaces.json` を正本にする。
 
 ## 使う場面
 
@@ -51,7 +51,7 @@ rootで使えるkey:
 previewで使えるkey:
 
 - `id`: Task内で一意なpreview ID。
-- `title`: Change詳細に表示する短い名前。
+- `title`: 本文の変更前後に表示する短い名前。
 - `layout`: `topnav`、`sidebar`、`settings`、`list`、`form` のいずれか。これは表示presetであり、item primitiveではない。
 - `provenance`: Before / Afterの根拠。
 - `before`: base refから確認した現状模型。

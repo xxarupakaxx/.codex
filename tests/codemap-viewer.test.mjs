@@ -144,32 +144,21 @@ test('roadmap snapshots preserve an embedded codemap workspace view', () => {
   }));
 });
 
-test('codemap markup keeps semantic lanes and exposes Impact Code Map inside the detail drawer', () => {
-  assert.match(html, /class="codemap-lane-group"[^>]*role="group"/);
-  assert.match(html, /id="copy-codemap-path"/);
-  assert.match(html, /id="detail-tab-impact"/);
-  assert.match(html, /id="detail-panel-impact"/);
-  assert.match(html, /id="impact-code-map"/);
-  assert.match(html, /renderImpactCodeMap/);
-  assert.match(html, /id="codemap-gate"/);
-  assert.doesNotMatch(html, /id="workspace-view-plan"/);
+test('Code Map is an inline SVG supplement with lane and evidence text', () => {
+  assert.match(html, /id="dependencies"/);
+  assert.match(html, /id="codemap-figure"/);
+  assert.match(html, /id="codemap-status"/);
+  assert.match(html, /id="codemap-svg"/);
+  assert.match(html, /id="codemap-relations"/);
+  assert.match(html, /function renderCodemap\(model\)/);
+  assert.match(html, /ROADMAP_MODEL\.buildCodemapViewModel\(codemap\)/);
+  assert.match(html, /ROADMAP_MODEL\.codemapEvidenceLabel\(edge\)/);
+  assert.match(html, /titleId = mobile \? 'codemap-svg-title-narrow' : 'codemap-svg-title'/);
+  assert.match(html, /descId = mobile \? 'codemap-svg-desc-narrow' : 'codemap-svg-desc'/);
+  assert.match(html, /status !== 'fresh' \|\| !codemap/);
+  assert.match(html, /class="svg-edge' \+ unknown/);
+  assert.match(html, /class="unknown"/);
+  assert.match(html, /verifiedはpath:line、unknownは理由/);
+  assert.doesNotMatch(html, /detail-tab-impact/);
   assert.doesNotMatch(html, /id="workspace-view-code"/);
-  assert.match(html, /body\.codemap-mode \.explicit-node-layer \.node-meta[^}]*11px/);
-});
-
-test('codemap polish keeps metrics lanes states direction and evidence visually explicit', () => {
-  assert.match(html, /class="codemap-metric/);
-  assert.match(html, /class="codemap-lane-count"/);
-  assert.match(html, /class="node-state status-unknown"/);
-  assert.match(html, /class="relation-status status-/);
-  assert.match(html, /id="graph-arrow-active"/);
-  assert.match(html, /marker-end="url\(#graph-arrow-/);
-  assert.match(html, /workspaceTitle} · Code Map/);
-  assert.match(html, /body\.codemap-mode \.explicit-node-layer \.graph-node\[aria-current="true"\][^}]*var\(--accent\)/);
-  assert.match(html, /body\.codemap-mode \.explicit-node-layer \.graph-node\[aria-current="true"\] \.node-glyph[^}]*var\(--accent\)/);
-  assert.match(html, /id="codemap-mobile-context"/);
-  assert.match(html, /class="mobile-context-evidence"/);
-  assert.match(html, /\.mobile-context-title\s*\{[^}]*grid-column:\s*1/);
-  assert.match(html, /markerWidth="9"/);
-  assert.match(html, /--codemap-radius:\s*4px/);
 });

@@ -894,6 +894,42 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
         self.assertLessEqual(len(byte_preview["code"].encode("utf-8")), 4 * 1024)
         self.assertTrue(byte_preview["truncated"])
 
+    def test_source_preview_collects_each_distinct_reference_in_task_evidence(self) -> None:
+        source_dir = self.root / "src"
+        source_dir.mkdir()
+        (source_dir / "first.py").write_text("def first():\n    return 1\n")
+        (source_dir / "second.py").write_text("def second():\n    return 2\n")
+        (self.task_dir / "30_plan.md").write_text(
+            "\n".join(
+                [
+                    "# Plan",
+                    "",
+                    "### Task 1: multiple source references",
+                    "",
+                    "#### 実装根拠",
+                    "",
+                    "- repo:src/first.py#def first",
+                    "- repo:src/second.py#def second",
+                    "- 同じ根拠を再掲: `repo:src/first.py#def first`。",
+                    "",
+                    "#### 実装",
+                    "",
+                    "- 2つのsourceを確認する。",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+
+        self.assertEqual(
+            [(preview["path"], preview["anchor"]) for preview in snapshot["sourcePreviews"]],
+            [("src/first.py", "def first"), ("src/second.py", "def second")],
+        )
+        self.assertEqual(snapshot["sourcePreviews"][0]["code"].splitlines()[0], "def first():")
+        self.assertEqual(snapshot["sourcePreviews"][1]["code"].splitlines()[0], "def second():")
+
         task_sections: list[str] = ["# Plan", ""]
         for number in range(1, 10):
             path = source_dir / f"budget_{number}.py"
@@ -973,6 +1009,10 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
         automatic = roadmap.build_snapshot(self.task_dir, source_root=self.root)
         self.assertEqual(automatic["uiPreviews"][0]["status"], "resolved")
         self.assertEqual(automatic["uiPreviews"][0]["evidenceRevision"], base_sha)
+        automatic_source = automatic["sourcePreviews"][0]
+        self.assertEqual(automatic_source["status"], "resolved")
+        self.assertNotIn("evidenceRevision", automatic_source)
+        self.assertIn("Danger", automatic_source["code"])
 
     def test_ui_preview_rejects_invalid_blocks_without_building_model(self) -> None:
         valid = self.valid_ui_payload()
