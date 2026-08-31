@@ -307,7 +307,230 @@
       display: flex;
       flex-direction: column;
     }
-    .execution-brief { order: 1; overflow: hidden; }
+    .execution-brief { order: 1; overflow: clip; display: flex; flex-direction: column; }
+    .execution-brief > .brief-header { order: 0; }
+    .execution-brief > .plan-reading { order: 1; }
+    .execution-brief > .brief-secondary { order: 2; }
+    .plan-reading {
+      padding: clamp(30px, 5vw, 58px) clamp(18px, 4vw, 44px) 68px;
+      border-bottom: 1px solid var(--line);
+      background: var(--surface);
+    }
+    .plan-reading-layout {
+      width: min(100%, 1240px);
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: minmax(176px, 220px) minmax(0, 920px);
+      align-items: start;
+      gap: clamp(28px, 4vw, 64px);
+    }
+    .plan-reading-toc {
+      position: sticky;
+      top: calc(var(--header-height) + 24px);
+      max-height: calc(100vh - var(--header-height) - 48px);
+      min-width: 0;
+      padding-right: 12px;
+      overflow-y: auto;
+      overscroll-behavior: contain;
+    }
+    .plan-reading-toc-mobile { display: none; }
+    .plan-reading-toc-kicker,
+    .plan-reading-source {
+      margin: 0;
+      color: var(--faint);
+      font-size: 11px;
+      font-weight: 780;
+      letter-spacing: .08em;
+      text-transform: uppercase;
+    }
+    .plan-reading-toc h3 {
+      margin: 7px 0 0;
+      color: var(--ink);
+      font-size: 14px;
+      letter-spacing: -.01em;
+    }
+    .plan-reading-toc-list {
+      margin: 14px 0 0;
+      padding: 0;
+      display: grid;
+      gap: 4px;
+      list-style: none;
+    }
+    .plan-reading-toc-list li[data-level="3"],
+    .plan-reading-toc-list li[data-level="4"],
+    .plan-reading-toc-list li[data-level="5"],
+    .plan-reading-toc-list li[data-level="6"] { padding-left: 12px; }
+    .plan-reading-toc-list a {
+      min-height: 34px;
+      padding: 7px 9px;
+      display: flex;
+      align-items: center;
+      border-left: 2px solid transparent;
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.35;
+      text-decoration: none;
+      overflow-wrap: anywhere;
+    }
+    .plan-reading-toc-list a:hover {
+      border-left-color: var(--accent);
+      background: var(--surface-accent);
+      color: var(--accent-strong);
+    }
+    .plan-reading-toc-list a:focus-visible {
+      border-left-color: var(--focus);
+      outline: 2px solid var(--focus);
+      outline-offset: -2px;
+    }
+    .plan-reading-toc-empty { margin: 14px 0 0; color: var(--muted); font-size: 12px; line-height: 1.5; }
+    .plan-reading-document { min-width: 0; max-width: 920px; }
+    .plan-reading-document-header {
+      margin: 0 0 42px;
+      padding-bottom: 24px;
+      border-bottom: 1px solid var(--line);
+    }
+    .plan-reading-title {
+      max-width: 920px;
+      margin: 10px 0 0;
+      color: var(--ink);
+      font-family: ui-serif, "Yu Mincho", "Hiragino Mincho ProN", Georgia, serif;
+      font-size: clamp(32px, 4vw, 48px);
+      font-weight: 700;
+      letter-spacing: -.035em;
+      line-height: 1.18;
+      overflow-wrap: anywhere;
+    }
+    .plan-reading-source { margin-top: 13px; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-weight: 650; letter-spacing: .02em; text-transform: none; }
+    .plan-reading-state {
+      margin: 18px 0 0;
+      padding: 11px 13px;
+      border: 1px solid color-mix(in srgb, var(--danger) 42%, var(--line));
+      border-left: 3px solid var(--danger);
+      border-radius: var(--radius);
+      background: color-mix(in srgb, var(--danger) 7%, var(--surface));
+      color: var(--danger);
+      font-size: 13px;
+      line-height: 1.55;
+      overflow-wrap: anywhere;
+    }
+    .plan-reading-state[hidden] { display: none; }
+    .plan-reading-content {
+      max-width: 920px;
+      color: var(--ink);
+      font-size: 17px;
+      line-height: 1.8;
+      overflow-wrap: anywhere;
+    }
+    .plan-reading-content.rendered > :first-child { margin-top: 0; }
+    .plan-reading-content.rendered > :last-child { margin-bottom: 0; }
+    .plan-reading-content.rendered .md-heading-1,
+    .plan-reading-content.rendered .md-heading-2,
+    .plan-reading-content.rendered .md-heading-3,
+    .plan-reading-content.rendered .md-heading-4,
+    .plan-reading-content.rendered .md-heading-5,
+    .plan-reading-content.rendered .md-heading-6 {
+      scroll-margin-top: calc(var(--header-height) + 24px);
+      margin: 46px 0 13px;
+      color: var(--ink);
+      font-family: ui-serif, "Yu Mincho", "Hiragino Mincho ProN", Georgia, serif;
+      font-weight: 700;
+      line-height: 1.3;
+      letter-spacing: -.02em;
+    }
+    .plan-reading-content.rendered .md-heading-2 { padding-bottom: 10px; border-bottom: 1px solid var(--line); font-size: clamp(24px, 3vw, 31px); }
+    .plan-reading-content.rendered .md-heading-3 { font-size: clamp(20px, 2.4vw, 25px); }
+    .plan-reading-content.rendered .md-heading-4 { font-size: 20px; }
+    .plan-reading-content.rendered .md-heading-5 { font-size: 18px; }
+    .plan-reading-content.rendered .md-heading-6 { font-size: 17px; }
+    .plan-reading-content.rendered p { margin: 16px 0; }
+    .plan-reading-content.rendered ul,
+    .plan-reading-content.rendered ol { margin: 16px 0; padding-left: 30px; }
+    .plan-reading-content.rendered li { margin: 8px 0; }
+    .plan-reading-content.rendered .md-check { margin-left: -23px; display: flex; align-items: flex-start; gap: 9px; list-style: none; }
+    .plan-reading-content.rendered .md-check input { width: 17px; height: 17px; margin: 7px 0 0; flex: 0 0 auto; accent-color: var(--accent-button); }
+    .plan-reading-content.rendered code { padding: 2px 6px; border-radius: 4px; background: var(--surface-soft); font: 14px/1.65 ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace; }
+    .plan-reading-content.rendered pre { margin: 22px 0; padding: 18px; overflow: auto; border: 1px solid var(--line); border-radius: 6px; background: var(--surface-soft); }
+    .plan-reading-content.rendered pre code { padding: 0; background: transparent; white-space: pre; }
+    .plan-reading-content.rendered blockquote { margin: 18px 0; padding: 10px 16px; border-left: 3px solid var(--accent); background: var(--surface-soft); color: var(--muted); }
+    .plan-reading-content.rendered hr { margin: 28px 0; border: 0; border-top: 1px solid var(--line); }
+    .plan-reading-content.rendered a,
+    .plan-reading-content.rendered .md-wikilink { color: var(--accent); text-decoration: underline; text-underline-offset: 3px; }
+    .plan-reading-content.rendered .md-table-wrap { margin: 20px 0; overflow-x: auto; border: 1px solid var(--line); border-radius: 6px; }
+    .plan-reading-content.rendered table { width: 100%; border-collapse: collapse; font-size: 15px; line-height: 1.6; }
+    .plan-reading-content.rendered th,
+    .plan-reading-content.rendered td { padding: 11px 12px; border-right: 1px solid var(--line); border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
+    .plan-reading-content.rendered th:last-child,
+    .plan-reading-content.rendered td:last-child { border-right: 0; }
+    .plan-reading-content.rendered tbody tr:last-child td { border-bottom: 0; }
+    .plan-reading-content.rendered th { background: var(--surface-soft); font-weight: 750; }
+    .brief-secondary { border-bottom: 1px solid var(--line); background: var(--surface-soft); }
+    .brief-secondary > summary {
+      min-height: 58px;
+      padding: 14px clamp(18px, 4vw, 44px);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      cursor: pointer;
+      list-style: none;
+    }
+    .brief-secondary > summary::-webkit-details-marker { display: none; }
+    .brief-secondary > summary strong { color: var(--ink); font-size: 14px; }
+    .brief-secondary > summary span { color: var(--muted); font-size: 12px; }
+    .brief-secondary > summary .summary-chevron { margin-left: auto; }
+    .brief-secondary[open] > summary { border-bottom: 1px solid var(--line); }
+    .brief-secondary[open] > summary .summary-chevron { transform: rotate(90deg); }
+    .brief-secondary-content { min-width: 0; }
+    .brief-secondary-content > :first-child { margin-top: 0; }
+    .brief-secondary-content > :last-child { border-bottom: 0; }
+    @media (max-width: 960px) {
+      .plan-reading { padding: 30px 24px 52px; }
+      .plan-reading-layout { grid-template-columns: minmax(0, 1fr); gap: 30px; }
+      .plan-reading-toc-desktop { display: none; }
+      .plan-reading-toc-mobile {
+        display: block;
+        position: static;
+        max-height: none;
+        margin: 0 0 30px;
+        padding: 0 0 20px;
+        border-bottom: 1px solid var(--line);
+      }
+      .plan-reading-toc-mobile .plan-reading-toc-list {
+        margin-top: 10px;
+        display: grid;
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+        gap: 2px 18px;
+      }
+      .plan-reading-toc-mobile .plan-reading-toc-list li[data-level="3"],
+      .plan-reading-toc-mobile .plan-reading-toc-list li[data-level="4"],
+      .plan-reading-toc-mobile .plan-reading-toc-list li[data-level="5"],
+      .plan-reading-toc-mobile .plan-reading-toc-list li[data-level="6"] { padding-left: 0; }
+      .plan-reading-toc-mobile .plan-reading-toc-list a {
+        min-height: 32px;
+        padding: 5px 0 5px 10px;
+        border: 0;
+        border-left: 2px solid var(--line);
+        border-radius: 0;
+        background: transparent;
+        font-size: 13px;
+      }
+      .plan-reading-toc-mobile .plan-reading-toc-list a:hover { border-left-color: var(--accent); background: transparent; }
+      .plan-reading-document { max-width: none; }
+      .plan-reading-content { max-width: none; }
+    }
+    @media (max-width: 720px) {
+      .plan-reading { padding: 26px 16px 46px; }
+      .plan-reading-layout { gap: 24px; }
+      .plan-reading-document-header { margin-bottom: 32px; padding-bottom: 20px; }
+      .plan-reading-title { font-size: clamp(30px, 9vw, 40px); }
+      .plan-reading-content { font-size: 17px; line-height: 1.8; }
+      .plan-reading-toc-mobile .plan-reading-toc-list { grid-template-columns: 1fr; gap: 1px; }
+      .plan-reading-content.rendered .md-heading-2 { font-size: 25px; }
+      .plan-reading-content.rendered .md-heading-3 { font-size: 21px; }
+      .plan-reading-content.rendered th,
+      .plan-reading-content.rendered td { padding: 10px; }
+      .brief-secondary > summary { padding: 13px 16px; }
+      .brief-secondary > summary span { display: none; }
+    }
     .concept-map-disclosure { order: 2; }
     .implementation-strip { order: 3; }
     .evidence-shortcuts { order: 4; }
@@ -3136,7 +3359,34 @@
     </aside>
 
     <main class="shell" id="main-content" tabindex="-1">
-    <section class="panel execution-brief" id="execution-brief" tabindex="-1" aria-labelledby="execution-brief-title">
+    <section class="panel execution-brief" id="execution-brief" tabindex="-1" aria-labelledby="plan-reading-title">
+      <section class="plan-reading" id="plan-reading" tabindex="-1" aria-labelledby="plan-reading-title">
+        <div class="plan-reading-layout">
+          <nav class="plan-reading-toc plan-reading-toc-desktop" aria-label="計画書の目次">
+            <p class="plan-reading-toc-kicker">PLAN DOCUMENT</p>
+            <h3>この計画の章</h3>
+            <ol class="plan-reading-toc-list" id="plan-reading-toc-list"></ol>
+          </nav>
+          <article class="plan-reading-document" aria-label="30_plan.mdの計画本文">
+            <header class="plan-reading-document-header">
+              <p class="plan-reading-source">30_plan.md · Markdown正本</p>
+              <h2 class="plan-reading-title" id="plan-reading-title">計画本文を読み込み中です。</h2>
+              <p class="plan-reading-state" id="plan-reading-state" role="alert" hidden></p>
+            </header>
+            <nav class="plan-reading-toc plan-reading-toc-mobile" aria-label="計画書の目次（本文内）">
+              <p class="plan-reading-toc-kicker">PLAN DOCUMENT</p>
+              <h3>この計画の章</h3>
+              <ol class="plan-reading-toc-list" id="plan-reading-toc-mobile-list"></ol>
+            </nav>
+            <div class="plan-reading-content rendered" id="plan-reading-content"></div>
+          </article>
+        </div>
+      </section>
+
+      <details class="brief-secondary" id="brief-secondary">
+        <summary><strong>実行状況と補助情報</strong><span>Project Map、timeline、Current Focus、設計summary</span><img class="icon summary-chevron" data-icon="chevron" alt=""></summary>
+        <div class="brief-secondary-content">
+
       <header class="brief-header">
         <div>
           <p class="brief-kicker brief-header-kicker">PLAN BRIEF</p>
@@ -3228,6 +3478,8 @@
           </article>
         </div>
       </section>
+        </div>
+      </details>
     </section>
 
     <div class="detail-drawer" id="detail-drawer" role="dialog" aria-modal="true" aria-labelledby="detail-drawer-title" hidden>
@@ -4251,31 +4503,52 @@
       html = html.replace(/\u0000(\d+)\u0000/g, (_, index) => tokens[Number(index)] || '');
       return html;
     }
+    function isAuthoringMetadataLine(line) {
+      return /^\s*(?:[-*+]\s+)?(?:\[[ xX]\]\s+)?(?:required_sources|write[_ ]scope|owned_paths|acceptance(?:_ids)?|ui[-_ ]?change|UI変更|completion_target|capability_class|safety_decision_id|external_write_targets|approval_required|dry_run_required|reviewer_focus|journey_scenarios|negative_paths|handoff_requirements|reality_contract|baseRef)\s*[:：]/i.test(asText(line));
+    }
     function splitMarkdownTableRow(line) {
       return asText(line).trim().replace(/^\|/, '').replace(/\|$/, '').split('|').map(cell => cell.trim());
     }
-    function renderWorkflowMarkdown(markdown) {
+    function renderWorkflowMarkdown(markdown, options = {}) {
       const lines = asText(markdown).replace(/\r\n?/g, '\n').split('\n');
+      const hideAuthoringMetadata = Boolean(options?.hideAuthoringMetadata);
+      const headingIdPrefix = asText(options?.headingIdPrefix);
+      const headingOffsetValue = Number(options?.headingOffset);
+      const headingOffset = Number.isFinite(headingOffsetValue) ? headingOffsetValue : 3;
+      const skipFirstH1 = Boolean(options?.skipFirstH1);
+      let headingIndex = 0;
+      let skippedFirstH1 = false;
       const output = [];
       for (let index = 0; index < lines.length;) {
         const line = lines[index];
         if (!line.trim()) { index += 1; continue; }
+        if (hideAuthoringMetadata && isAuthoringMetadataLine(line)) { index += 1; continue; }
         const fence = line.match(/^\s*```\s*([\w-]*)\s*$/);
         if (fence) {
+          const language = asText(fence[1]).toLowerCase();
           const code = [];
           index += 1;
           while (index < lines.length && !/^\s*```\s*$/.test(lines[index])) { code.push(lines[index]); index += 1; }
           if (index < lines.length) index += 1;
-          const language = fence[1] ? ` data-language="${escapeMarkdownHtml(fence[1])}"` : '';
-          output.push(`<pre><code${language}>${escapeMarkdownHtml(code.join('\n'))}</code></pre>`);
+          if (hideAuthoringMetadata && language === 'ui-preview-json') continue;
+          const languageAttribute = language ? ` data-language="${escapeMarkdownHtml(fence[1])}"` : '';
+          output.push(`<pre><code${languageAttribute}>${escapeMarkdownHtml(code.join('\n'))}</code></pre>`);
           continue;
         }
         const heading = line.match(/^(#{1,6})\s+(.+)$/);
         if (heading) {
           const sourceLevel = heading[1].length;
-          const level = Math.min(6, sourceLevel + 3);
+          const currentHeadingIndex = headingIndex;
+          headingIndex += 1;
+          if (skipFirstH1 && sourceLevel === 1 && !skippedFirstH1) {
+            skippedFirstH1 = true;
+            index += 1;
+            continue;
+          }
+          const level = Math.min(6, Math.max(1, sourceLevel + headingOffset));
           const headingText = stripMarkdown(heading[2]).trim();
-          output.push(`<h${level} class="md-heading-${sourceLevel}" data-md-heading="${escapeMarkdownHtml(headingText)}" tabindex="-1">${renderInlineMarkdown(heading[2])}</h${level}>`);
+          const headingId = headingIdPrefix ? ` id="${escapeMarkdownHtml(`${headingIdPrefix}${currentHeadingIndex + 1}`)}"` : '';
+          output.push(`<h${level} class="md-heading-${sourceLevel}"${headingId} data-md-heading="${escapeMarkdownHtml(headingText)}" tabindex="-1">${renderInlineMarkdown(heading[2])}</h${level}>`);
           index += 1;
           continue;
         }
@@ -4325,6 +4598,44 @@
         index += 1;
       }
       return output.join('');
+    }
+    function extractPlanReadingHeadings(markdown) {
+      const text = asText(markdown).replace(/\r\n?/g, '\n');
+      const headings = [];
+      let fenced = false;
+      text.split('\n').forEach((line, lineIndex) => {
+        const fence = line.match(/^\s*```\s*([\w-]*)\s*$/);
+        if (fence) {
+          fenced = !fenced;
+          return;
+        }
+        if (fenced) return;
+        const match = line.match(/^(#{1,6})\s+(.+)$/);
+        if (!match) return;
+        headings.push({
+          id: `plan-heading-${headings.length + 1}`,
+          level: match[1].length,
+          text: stripMarkdown(match[2]).trim(),
+          sourceLine: lineIndex + 1
+        });
+      });
+      return headings.filter(item => item.text);
+    }
+    function buildPlanReading(model) {
+      const markdown = asText(model?.snapshot?.files?.['30_plan.md']);
+      const headings = extractPlanReadingHeadings(markdown);
+      const title = headings.find(item => item.level === 1)?.text || '計画本文';
+      const errors = model?.plan && model.plan.valid === false
+        ? Array.isArray(model.plan.errors) ? model.plan.errors.slice() : ['snapshot.planの検証に失敗しました。']
+        : [];
+      return {
+        source: '30_plan.md',
+        markdown,
+        headings: errors.length ? [] : headings,
+        title,
+        valid: errors.length === 0,
+        errors
+      };
     }
     function groupTaskSections(tasks) {
       const grouped = { running: [], waiting: [], recent_completed: [] };
@@ -5571,7 +5882,7 @@
       PHASES, MODEL_KNOWN_FILES, normalizeSnapshot, snapshotSignature, inferTitle,
       checkboxStats, extractTasks, extractLogEntries, extractReviewCounts, normalizePlanContract, normalizeTimeline,
       extractRisks, extractPhaseSignals, buildModel, artifactStateFor,
-      renderInlineMarkdown, renderWorkflowMarkdown, groupTaskSections,
+      renderInlineMarkdown, renderWorkflowMarkdown, extractPlanReadingHeadings, buildPlanReading, groupTaskSections,
       extractPlanSections, taskHubSettings, extractExplicitOutcomeTrace,
       extractRevisionLog, buildOutcomeTrace, stateLabel, parseSvgDiagramSpec,
       codemapEvidenceLabel, buildCodemapViewModel, buildPlanContractErrorTreeViewModel, buildTreeViewModel, buildExecutionBrief, buildDesignSummary, buildRoadmapRoute, highlightSourceCode
@@ -5592,6 +5903,7 @@
     let pollGeneration = 0;
     let taskExpansionInitialized = false;
     let selectedSource = '';
+    let planReadingRenderKey = '';
     let uiPreviewEvidenceExpanded = false;
     let codemapQuery = '';
     let previewMode = storageGet('roadmapViewerPreviewMode') === 'raw' ? 'raw' : 'rendered';
@@ -6294,6 +6606,46 @@
       byId('brief-boundaries').innerHTML = list(design.boundaries, '境界が未記録です。');
       byId('brief-done').innerHTML = list(design.done, '完了条件が未記録です。');
     }
+    function renderPlanReading(model) {
+      const reading = ROADMAP_MODEL.buildPlanReading(model);
+      const title = byId('plan-reading-title');
+      const state = byId('plan-reading-state');
+      const content = byId('plan-reading-content');
+      const tocLists = ['plan-reading-toc-list', 'plan-reading-toc-mobile-list']
+        .map(id => byId(id)).filter(Boolean);
+      if (!title || !state || !content || !tocLists.length) return reading;
+      const renderKey = JSON.stringify([reading.title, reading.valid, reading.errors, reading.markdown]);
+      if (renderKey === planReadingRenderKey && content.dataset.rendered === 'true') return reading;
+      planReadingRenderKey = renderKey;
+      title.textContent = reading.title;
+      if (!reading.valid) {
+        state.hidden = false;
+        state.textContent = `構造化Planエラー（legacy fallbackなし）: ${reading.errors.join(' / ')}`;
+        content.innerHTML = '<p class="brief-empty">構造化Planを修正すると、計画本文を表示できます。</p>';
+      } else if (!reading.markdown.trim()) {
+        state.hidden = true;
+        state.textContent = '';
+        content.innerHTML = '<p class="brief-empty">30_plan.mdに計画本文が未記録です。</p>';
+      } else {
+        state.hidden = true;
+        state.textContent = '';
+        content.innerHTML = ROADMAP_MODEL.renderWorkflowMarkdown(reading.markdown, {
+          hideAuthoringMetadata: true,
+          headingIdPrefix: 'plan-heading-',
+          headingOffset: 1,
+          skipFirstH1: true
+        });
+      }
+      content.dataset.rendered = 'true';
+      const headings = reading.headings.filter(item => item.level === 2 || (item.level === 3 && /^(?:Task|タスク)\s+\d/i.test(item.text)));
+      tocLists.forEach(list => {
+        const suffix = list.id.includes('mobile') ? 'mobile' : 'desktop';
+        list.innerHTML = headings.length
+          ? headings.map(item => `<li data-level="${item.level}"><a id="plan-toc-${escapeHtml(item.id)}-${suffix}" href="#${escapeHtml(item.id)}">${escapeHtml(item.text)}</a></li>`).join('')
+          : '<li class="plan-reading-toc-empty">章見出しが未記録です。</li>';
+      });
+      return reading;
+    }
     function primaryActionFor(task, model) {
       if (!task) return { label: '未記録', state: 'missing' };
       const unresolved = task.blockedBy
@@ -6697,6 +7049,7 @@
     function renderExecutionBrief(model) {
       const hadCodeFocus = document.activeElement?.id === 'implementation-code';
       const brief = ROADMAP_MODEL.buildExecutionBrief(model, selectedImplementationTaskNumber);
+      const reading = renderPlanReading(model);
       const phase = model.activePhase;
       const progress = model.fixedProgress;
       const current = brief.currentTask;
@@ -6716,6 +7069,7 @@
             ? `Task ${current.number} ${statusLabel(current.status)}`
             : 'Task未記録';
       byId('execution-brief-title').textContent = brief.design.goal.text || '計画全体の目的が未記録です。';
+      if (!brief.design.goal.text) byId('execution-brief-title').textContent = reading.title;
       byId('brief-design-context').textContent = brief.design.context.text;
       byId('brief-design-context').hidden = !brief.design.context.text;
       byId('brief-progress').textContent = `${progress.done} / ${progress.total} Task`;
@@ -6833,7 +7187,8 @@
     function renderHeader(model) {
       const taskTitle = String(model.snapshot.title || '').trim() || 'Roadmap';
       const isCodemap = model.snapshot.kind === 'codemap';
-      const workspaceTitle = String(workspaceRootSnapshot?.title || taskTitle).trim() || 'Task Workspace';
+      const readingTitle = isCodemap ? taskTitle : ROADMAP_MODEL.buildPlanReading(model).title;
+      const workspaceTitle = String(isCodemap ? workspaceRootSnapshot?.title || taskTitle : readingTitle).trim() || 'Task Workspace';
       byId('task-title').textContent = isCodemap ? `${workspaceTitle} · Code Map` : workspaceTitle;
       document.title = workspaceTitle;
       const updated = model.snapshot.generatedAt;

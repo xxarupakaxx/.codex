@@ -2076,11 +2076,11 @@ test('implementation workspaceは選択Taskの実装図と同値な関係一覧�
 });
 
 test('viewing-plansのauthoring contractは設計summaryとTask実行契約を要求すべき', () => {
-  assert.match(viewingPlansSkill, /(?:実施Task|Current Task)/);
-  for (const label of ['仕様', '実装根拠', '(?:実行順序|全体像)', '(?:事実・判断・未確定|Evidence)', '成果物']) {
+  assert.match(viewingPlansSkill, /(?:実施Task|各工程|Current Task)/);
+  for (const label of ['仕様', '実装根拠', '(?:実行順序|全体像|全体の進め方)', '(?:source|Code Map)', '成果物']) {
     assert.match(viewingPlansSkill, new RegExp(label));
   }
-  for (const contract of ['Project Map \\+ Focus', 'Current Task', 'primary action', 'NextまたはBlocker', 'Detail drawer', 'ImpactからCode Map']) {
+  for (const contract of ['(?:Project Map(?: \\+ Focus)?|依存図)', '(?:Current Task|Task)', '(?:primary action|初期画面)', '(?:NextまたはBlocker|補助表示)', 'Detail drawer', '(?:ImpactからCode Map|Code Map)']) {
     assert.match(viewingPlansSkill, new RegExp(contract));
   }
   for (const heading of ['#### 目的', '#### 変更対象', '#### 実装根拠', '#### 実装', '#### 実装図', '#### 成果物', '#### 検証']) {
