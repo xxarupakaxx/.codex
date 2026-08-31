@@ -87,6 +87,9 @@ DEFAULT_SOURCE_ALLOW_PREFIXES = (
     "config",
     "docs",
 )
+DEFAULT_SOURCE_ALLOW_FILES = (
+    ("tools", "roadmap_viewer.html"),
+)
 DENIED_SOURCE_COMPONENTS = {
     "Daily",
     "Living",
@@ -669,7 +672,7 @@ def validate_source_path_parts(
         return None, "source-denied", "秘密情報を格納し得るファイルは表示できません。"
 
     path_parts = tuple(raw_parts)
-    if not any(
+    if path_parts not in DEFAULT_SOURCE_ALLOW_FILES and not any(
         path_parts[: len(prefix)] == prefix
         for prefix in allowed_prefixes
     ):

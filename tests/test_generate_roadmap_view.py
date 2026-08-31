@@ -1401,6 +1401,48 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
             ["custom", "vendor/generated"],
         )
 
+    def test_registered_viewer_template_is_exactly_allowed_and_sibling_tools_are_denied(self) -> None:
+        tools_dir = self.root / "tools"
+        tools_dir.mkdir()
+        (tools_dir / "roadmap_viewer.html").write_text('const safe = "<span>allowed</span>";\n')
+        (tools_dir / "other.html").write_text('const leak = "LEAK_OTHER_TOOL";\n')
+        (self.task_dir / "30_plan.md").write_text(
+            "\n".join(
+                [
+                    "# Plan",
+                    "",
+                    "### Task 1: registered viewer source",
+                    "",
+                    "#### 実装根拠",
+                    "",
+                    "- repo:tools/roadmap_viewer.html#const safe",
+                    "- repo:tools/other.html#const leak",
+                    "",
+                    "#### 実装",
+                    "",
+                    "- 登録済みtemplateだけをsource previewする。",
+                    "",
+                ]
+            ),
+            encoding="utf-8",
+        )
+
+        snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+        previews = {preview["path"]: preview for preview in snapshot["sourcePreviews"]}
+
+        self.assertEqual(previews["tools/roadmap_viewer.html"]["status"], "resolved")
+        self.assertIn("<span>allowed</span>", previews["tools/roadmap_viewer.html"]["code"])
+        self.assertEqual(previews["tools/other.html"]["status"], "source-denied")
+        self.assertEqual(previews["tools/other.html"]["code"], "")
+        self.assertNotIn("LEAK_OTHER_TOOL", json.dumps(snapshot, ensure_ascii=False))
+
+        _parts, status, _message = roadmap.validate_source_path_parts(
+            "tools/roadmap_viewer.html/child.py",
+            roadmap.normalize_source_prefixes(None),
+        )
+        self.assertIsNone(_parts)
+        self.assertEqual(status, "source-denied")
+
     def test_source_preview_denies_unsafe_paths_and_files_without_leaking_content(self) -> None:
         fixtures: dict[str, tuple[str, str]] = {}
 
