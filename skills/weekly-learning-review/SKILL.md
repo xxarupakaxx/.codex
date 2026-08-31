@@ -7,7 +7,7 @@ description: 直近1週間のDaily、digest、trend、payment-trend、新規know
 
 毎朝の自動収集（digest、trend、payment-trend）は「読んで終わり」になりやすい。
 このスキルは週に一度、収集済みの情報を学びとして固め、[[AI-Agent-MOC]] や [[LayerX入社準備-MOC]] のグラフに接続し、メタデータの穴を可視化する。
-**まず `CLAUDE.md` を読み絶対ルールとセカンドブレイン拡張フィールドの定義に従うこと。** 地の文は `japanese-tech-writing` の規範で書く。
+**まず適用対象の `AGENTS.md` と Vaultの `_shared-ai/knowledge/vault-operation-contract.md` を読み、絶対ルールと運用境界を確認すること。** 地の文は `japanese-tech-writing` の規範で書く。
 
 入力: $ARGUMENTS
 
@@ -16,6 +16,8 @@ description: 直近1週間のDaily、digest、trend、payment-trend、新規know
 - $ARGUMENTS に週（`2026-W28`）や日付があればその週。なければ**今日を含むISO週**（月曜起点）。
 - 出力先: `Inbox/automation/weekly-review/weekly-review-YYYY-Www.md`。
 - 同じ週のノートが既にあれば新規作成せず、各節を**追記**で更新する（週の途中で何度実行してもよい）。
+- 実行開始時に `run_id`、対象週、今回の確認範囲（開始日・終了日）、前回のsource別cursor/watermarkを固定する。週途中の実行は月曜から実行日（または指定された締め日）までを `partial` として扱い、日曜まで確認していないのに週全体の学びとして断定しない。過去週でも未取得・未読の範囲があれば同様に明記する。
+- 同じ週を再実行するときは、source path・日付・見出しまたはURLなどの安定した識別子と既存ノートのリンク／記録を照合する。既出項目は再度数えたり同じ要約を重ねたりせず、新規項目または確認済み範囲の差分だけを追記する。
 
 ## 2. 収集（検索ファースト。全文読みは絞った対象のみ）
 
@@ -29,6 +31,7 @@ description: 直近1週間のDaily、digest、trend、payment-trend、新規know
    - 当週の新規 knowledge / note: `summary`（なければ冒頭段落）
 4. `Claude-note/` はVault側とiCloud側の正本が未確定のため、読み取りも書き込みも行わず、NextActionsの状況へ言及しない。呼出しpromptに「読み取りのみ」と残っていても、この停止境界を優先する。
 5. `automation_read: false` または `source_system: claude-note` のノートは、列挙、本文読取、リンク追跡、要約の対象外にする。
+6. `Daily`、digest、trend、payment-trend、knowledgeをsource別に、処理窓・cursor/watermark・`success`・`normal-empty`（allowlist、対象日、必要なページングまで確認した正常な空結果）・`failed`・`unread` で記録する。`success` または確認済みの `normal-empty` だけ進捗を進め、取得不全・失敗・未読では前回位置を保持して未処理範囲と再開条件を残す。
 
 ## 3. 週次レビューノートの生成
 
@@ -37,6 +40,9 @@ frontmatterは拡張スキーマを使う（`type: note`、`tags: [automation, w
 本文の構成:
 
 ```md
+## 対象範囲と収集状態
+（run_id、対象週、今回の確認済み日付範囲、source別のcursor/watermarkと success / normal-empty / failed / unread。未読・未取得範囲と再開条件も記録する）
+
 ## 今週の学び
 （テーマ別に最大5項目。各項目は1〜3文で「何がわかったか」を書き、根拠ノートへ [[リンク]] する）
 
@@ -44,7 +50,7 @@ frontmatterは拡張スキーマを使う（`type: note`、`tags: [automation, w
 （payment-trendのlearning_theme一覧、基礎ノートへ接続できた/できなかった話題、簿記や議事録などその他の学習活動）
 
 ## 今週の数字
-（系統別の作成ノート数。Daily / digest / trend / payment-trend / knowledge / その他）
+（系統別の作成ノート数。Daily / digest / trend / payment-trend / knowledge / その他。確認済みと未読・未取得を分ける）
 
 ## メタデータ監査
 （当週の新規ノートのうち summary なし・related なし・depth なしの件数と一覧。全期間の孤立ノート（リンク0）も件数を出す）
@@ -70,3 +76,4 @@ frontmatterは拡張スキーマを使う（`type: note`、`tags: [automation, w
 
 - **主モードは on-demand**（対話で呼ぶ）。定期実行では金曜09:15の `/loop-engineering` の後、金曜18:00に週1回実行する。
 - Codex automationの現行IDとcadenceは `Inbox/automation/SCHEDULES.md` の `/weekly-learning-review` 節を正本とする。
+- SCHEDULESにあるcadenceや登録情報は設定の案内であり、runの起動、Vaultへの保存、完了報告・通知の成功を意味しない。各状態を実際の実行記録で分け、週途中・failed・unreadのrunを完了週として報告しない。

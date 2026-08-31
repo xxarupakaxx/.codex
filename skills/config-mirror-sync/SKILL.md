@@ -1,11 +1,11 @@
 ---
 name: config-mirror-sync
-description: "`~/.codex`・`~/.claude`の変更をObsidianボルト（`~/Documents/obsidian-vault`）へ反映する。Markdown抜粋ミラー（`_shared-ai/mirrors/`）とgit submodule（`.codex`/`.claude-global`）の両方が対象。「vaultに同期して」「obsidianに反映して」「ミラー更新して」等の依頼時、またはhome側でコミット・pushした直後にvault側も最新化したい場合に使用。**除外**: PJ内ドキュメント整合はproject-sync、単一ファイルの一時的なコピーは対象外。"
+description: "`~/.codex`・`~/.claude`の変更をObsidianボルトへ反映する。Markdown抜粋ミラー（`_shared-ai/mirrors/`）とgit submodule（`.codex`/`.claude-global`）の両方が対象。「vaultに同期して」「obsidianに反映して」「ミラー更新して」等の依頼時、またはhome側でコミット・pushした直後にvault側も最新化したい場合に使用。**除外**: PJ内ドキュメント整合はproject-sync、単一ファイルの一時的なコピーは対象外。"
 ---
 
 # Config Mirror Sync — Obsidianボルトへの反映
 
-`~/.codex`・`~/.claude`は正本としてホームディレクトリに残したまま、Obsidianボルト（`~/Documents/obsidian-vault`）側の2種類の参照経路を最新化する。
+`~/.codex`・`~/.claude`は正本としてホームディレクトリに残したまま、実行環境で確定したObsidianボルト側の2種類の参照経路を最新化する。固定の旧パスを前提にせず、対象Vault rootの実在とGit repositoryであることを先に確認する。
 
 - **Markdown抜粋ミラー**（`_shared-ai/mirrors/`）: `~/.claude/CLAUDE.md`と、`commands/*.md`、`prompts/*.md`、`context/**/*.md`、`rules/**/*.md`、`skills/*/SKILL.md`だけを人間が読める形でコピーする。Codex用のroot `AGENTS.md`はruntime入口を複製せず、`~/.codex/published/AGENTS.md`を正本とする薄いgenerated pointerとして同期する。同期定義は`_shared-ai/sync-manifest.toml`。
 - **git submodule**（vault直下の`.codex`・`.claude-global`）: 設定ファイルやスクリプトも含めた実体を独立repoとして参照する。
@@ -18,13 +18,18 @@ description: "`~/.codex`・`~/.claude`の変更をObsidianボルト（`~/Documen
 
 ### 1. 現況確認
 
+以下の `VAULT` は実行環境で実在確認したpathに置き換えてから実行する。
+
 ```bash
-VAULT=~/Documents/obsidian-vault
+VAULT="<実在確認済みのObsidian Vault root>"
 git -C ~/.codex rev-parse HEAD   # 対象が.codexの場合。.claudeなら ~/.claude で確認
 git -C "$VAULT" submodule status
+git -C "$VAULT" status --short
 ```
 
-対象submoduleのcommitがhome側の現HEADと一致していなければ、その対象は同期が必要。
+実行開始時に `run_id`、対象（codex / claude）、manifestのscope、home側のHEAD、submodule pointer、Vaultのdirty状態を記録する。開始時に対象Vaultまたはsubmoduleに既存のdirty差分があれば、対象を分離できるまでapply・stage・commitを行わない。各sourceについて対象window、cursor（home HEADまたは現在のpointer）、`success`、`normal-empty`（manifestを最後まで確認し更新対象がない正常な空結果）、`failed`、`unread` を分ける。`success` または確認済みの `normal-empty` だけcursorを進め、失敗・不完全取得・未読では進めず、未処理sourceと再開条件を残す。同じwindowの再実行はsource pathと既存mirror・pointerを照合し、同じ同期や通知を二重に作らない。
+
+対象submoduleのcommitがhome側の現HEADと一致していなければ、その対象は同期が必要。設定、run起動、dry-run、実際の保存、commit/push、完了通知は別状態であり、設定が存在することや起動成功だけで同期完了とは扱わない。
 
 ### 2. Markdown抜粋ミラーの同期
 
@@ -37,11 +42,13 @@ python3 _shared-ai/scripts/sync-ai-dotfiles.py          # dry-run
 
 ```bash
 python3 _shared-ai/scripts/sync-ai-dotfiles.py --apply
+git diff --check
 git diff --cached --check
-rg -i "access_token|api_key|credential|password|refresh_token|secret" _shared-ai/mirrors
+git status --short
+rg -i --count-matches --no-heading "access_token|api_key|credential|password|refresh_token|secret" _shared-ai/mirrors
 ```
 
-`git diff --cached --check`がexit 0、`rg`のヒットが0件であることを確認する。
+`git diff --check` と `git diff --cached --check` がexit 0、`git status --short` に削除・リネーム・意図しないpathがなく、secretパターンの走査結果（pathと件数だけ）を確認する。キーワードのヒット数0件は安全性の証明にならないため、実値や認証情報の混入があれば失敗として止め、manifestの除外規則と対象差分も別に確認する。行本文を出力する検索やログへの転記は行わない。apply後の未staged差分も必ず確認し、dry-runや起動だけを保存成功と報告しない。
 
 ### 3. git submoduleの更新
 
@@ -50,7 +57,7 @@ git -C "$VAULT" submodule update --remote --merge .codex          # 対象が.co
 git -C "$VAULT" submodule update --remote --merge .claude-global  # 対象が.claudeの場合
 ```
 
-更新後、`git -C "$VAULT/.codex" rev-parse HEAD`がhome側の`git -C ~/.codex rev-parse HEAD`と一致することを確認する。
+更新後、対象runtimeごとにpointerを照合する。Codex対象は `git -C "$VAULT/.codex" rev-parse HEAD` と `git -C ~/.codex rev-parse HEAD`、Claude対象は `git -C "$VAULT/.claude-global" rev-parse HEAD` と `git -C ~/.claude rev-parse HEAD` を比較する。両方を対象にした場合は両方が一致して初めて同期成功とし、片方の一致をもう片方の完了とは扱わない。
 
 ### 4. vault側のポインタ更新をコミット
 
@@ -62,7 +69,7 @@ git add .codex .claude-global _shared-ai/mirrors   # 実際に更新した対象
 git commit -m "chore: AI dotfilesミラーとsubmoduleポインタを最新化"
 ```
 
-pushはhome側の許可とは別に、その場でユーザーに確認してから実行する（vaultはhome側とは別のGitHub remoteの独立repoのため）。
+pushはhome側の許可を別remoteへ自動的に広げず、対象remote・操作・差分が現在の依頼または既存の承認範囲に含まれるかを確認する。含まれる場合は一律に再確認せず、含まれない場合だけユーザーに確認して停止する（Vaultはhome側とは別のGitHub remoteの独立repoのため）。
 
 ## 良い例
 
@@ -75,9 +82,9 @@ home側（例: `~/.codex`）で編集・commit・push → vault側で本手順�
 
 ## 完了条件
 
-- [ ] Markdown抜粋ミラー: `git diff --cached --check`がexit 0、secretパターンのrg走査がヒット0、削除が0件
+- [ ] Markdown抜粋ミラー: `git diff --check` と `git diff --cached --check` がexit 0、`git status --short` と対象差分を確認し、削除・リネーム・意図しないpath・実値の機密情報がない。未staged差分を含む対象差分を確認済み
 - [ ] git submodule: 対象のsubmodule HEADがhome側の現HEADと一致
-- [ ] vaultリポジトリに上記変更を記録したコミットが存在する（pushはユーザー確認後）
+- [ ] vaultリポジトリに上記変更を記録したコミットが存在する。pushは対象remote・操作・差分が現在の依頼または既存の承認範囲に含まれる場合に続行し、含まれない場合だけユーザー確認を得る
 
 ## 除外されるもの
 
