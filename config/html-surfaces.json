@@ -252,7 +252,47 @@
     {"path": "claude-compat/tools/plan_viewer.html", "lifecycle": "legacy", "owner": "workflow-html-app", "artifactKind": "legacy-plan-viewer", "staticProfile": "legacy-grandfathered", "browserProfile": "roadmap-matrix"},
     {"path": "claude-compat/tools/log_viewer.html", "lifecycle": "legacy", "owner": "workflow-html-app", "artifactKind": "legacy-log-viewer", "staticProfile": "legacy-grandfathered", "browserProfile": "roadmap-matrix"},
     {"path": "claude-compat/tools/diagram_viewer.html", "lifecycle": "legacy", "owner": "workflow-html-app", "artifactKind": "legacy-diagram-viewer", "staticProfile": "legacy-grandfathered", "browserProfile": "diagram-matrix"},
-    {"path": "codemap.html", "lifecycle": "grandfathered", "owner": "viewing-plans", "artifactKind": "legacy-codemap-html", "staticProfile": "legacy-grandfathered", "browserProfile": "roadmap-matrix"}
+    {"path": "codemap.html", "lifecycle": "grandfathered", "owner": "viewing-plans", "artifactKind": "legacy-codemap-html", "staticProfile": "legacy-grandfathered", "browserProfile": "roadmap-matrix"},
+    {
+      "path": "skills/diagram-design/examples/architecture.html",
+      "lifecycle": "canonical",
+      "owner": "diagram-design",
+      "artifactKind": "html-diagram",
+      "staticProfile": "strict-self-contained",
+      "browserProfile": "desktop-diagram"
+    },
+    {
+      "path": "skills/diagram-design/examples/comparison.html",
+      "lifecycle": "canonical",
+      "owner": "diagram-design",
+      "artifactKind": "html-diagram",
+      "staticProfile": "strict-self-contained",
+      "browserProfile": "desktop-diagram"
+    },
+    {
+      "path": "skills/diagram-design/examples/dependency-before.html",
+      "lifecycle": "canonical",
+      "owner": "diagram-design",
+      "artifactKind": "html-diagram",
+      "staticProfile": "strict-self-contained",
+      "browserProfile": "desktop-diagram"
+    },
+    {
+      "path": "skills/diagram-design/examples/dependency-candidate.html",
+      "lifecycle": "canonical",
+      "owner": "diagram-design",
+      "artifactKind": "html-diagram",
+      "staticProfile": "strict-self-contained",
+      "browserProfile": "desktop-diagram"
+    },
+    {
+      "path": "skills/diagram-design/examples/process.html",
+      "lifecycle": "canonical",
+      "owner": "diagram-design",
+      "artifactKind": "html-diagram",
+      "staticProfile": "strict-self-contained",
+      "browserProfile": "desktop-diagram"
+    }
   ],
   "literalExceptions": [
     {"path": "claude-compat/mcp-servers/workflow-html-app/server.ts", "contains": ".html", "reason": "Retired workflow-html-app source retained as legacy; not registered or built by the live display workflow.", "removeWhen": "Historical source is removed with explicit approval."},
