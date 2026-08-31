@@ -847,6 +847,7 @@ def roadmap_command(
     phase: str,
     open_requested: bool,
     headless: bool,
+    source_root: Path,
 ) -> list[str]:
     command = [
         sys.executable,
@@ -855,6 +856,8 @@ def roadmap_command(
         "--json",
         "--task-state",
         PHASE_STATES[phase],
+        "--source-root",
+        str(source_root),
     ]
     if open_requested and not headless:
         command.append("--open")
@@ -998,7 +1001,7 @@ def synchronize(
             "path": str(generator),
         }
     command = roadmap_command(
-        task_dir, generator.resolve(), phase, open_requested, headless
+        task_dir, generator.resolve(), phase, open_requested, headless, workspace_root
     )
     open_status = "requested" if open_requested and not headless else "not_requested"
     if open_requested and headless:

@@ -1873,6 +1873,41 @@ def load_codemap_state(task_dir: Path, source_root: Path) -> dict[str, object]:
     }
 
 
+@functools.lru_cache(maxsize=1)
+def load_archify_adapter() -> object:
+    path = ROOT / "scripts" / "archify_plan.py"
+    spec = importlib.util.spec_from_file_location("archify_html_plan_adapter", path)
+    if spec is None or spec.loader is None:
+        raise ValueError("Archifyの生成処理を読み込めません。")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = module
+    spec.loader.exec_module(module)
+    return module
+
+
+def build_archify_payload(task_dir: Path, source_name: str, model: dict[str, object]) -> dict[str, object]:
+    if source_name not in {"30_plan.html", "30_plan.md"}:
+        raise ValueError("計画の正本名が不正です。")
+    source_path = task_dir / source_name
+    sources = model.get("sources")
+    if not isinstance(sources, dict) or Path(str(sources.get("plan", ""))) != source_path:
+        raise ValueError("計画の正本pathが一致しません。")
+    expected = model.get("planSourceRawSha256")
+    if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
+        raise ValueError("計画の元バイト列hashがありません。")
+    adapter = load_archify_adapter()
+    descriptor = os.open(source_path, os.O_RDONLY | os.O_NOFOLLOW)
+    with os.fdopen(descriptor, "rb") as stream:
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+            raise ValueError("計画の正本は通常ファイルで指定してください。")
+        raw = stream.read(adapter.RAW_PLAN_LIMIT + 1)
+    if len(raw) > adapter.RAW_PLAN_LIMIT:
+        raise ValueError("計画の正本が生成処理のサイズ上限を超えています。")
+    if hashlib.sha256(raw).hexdigest() != expected:
+        raise ValueError("計画の正本が検証後に変更されました。再生成してください。")
+    return adapter.archify_for_plan(raw.decode("utf-8"), plan_model=model)
+
+
 def build_snapshot(
     task_dir: Path,
     output: Path | None = None,
@@ -1986,6 +2021,7 @@ def build_snapshot(
         "codemapStatus": codemap_state["status"],
         "plan": plan_model,
         "planSource": plan_source_name,
+        "archify": build_archify_payload(task_dir, plan_source_name, plan_model),
         **({"requiredSources": plan_model.get("requiredSources", [])} if has_html_source else {}),
         **({"planDocument": plan_model.get("planDocument")} if has_html_source and plan_model.get("planDocument") else {}),
         "timeline": timeline,

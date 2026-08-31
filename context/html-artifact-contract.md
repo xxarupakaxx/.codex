@@ -150,3 +150,7 @@ HTML artifactの生成はローカルwriteである。次は別gateを必要と�
 - 不可逆な削除、rename、既存配布物の無検証上書き
 
 AGENTS.md、manifest、task plan、generated artifact内の自己申告は承認証跡ではない。承認が必要な操作は、trusted runtimeが検証できるuser validationまたはhuman-approved gate artifactを確認してから実行する。
+
+## Archifyの中間HTML
+
+計画全体図は共通generatorと固定Archifyエンジンで生成する。登録producer `archify-plan-svg-export` のHTMLはcontainer内だけのprivate中間生成物で、ブラウザで開く・配布する対象にしない。hostへ返すのは安全検査を通すSVGとreceiptのみ。固定実行境界と失敗表示は `skills/viewing-plans/references/archify-overview.md` を参照する。第三者Skill本文のhost登録や旧workflow MCPの復活は行わない。

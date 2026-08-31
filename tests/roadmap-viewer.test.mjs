@@ -1910,7 +1910,7 @@ test('依存とfresh Codemapは本文内SVG・evidence・unknown理由を持つ'
   assert.match(html, /ROADMAP_MODEL\.codemapEvidenceLabel\(edge\)/);
   assert.match(html, /status !== 'fresh' \|\| !codemap/);
   assert.match(html, /arrowId = mobile \? 'codemap-arrow-narrow' : 'codemap-arrow'/);
-  assert.match(html, /titleId = mobile \? 'dependency-svg-title-narrow' : 'dependency-svg-title'/);
+  assert.doesNotMatch(html, /titleId = mobile \? 'dependency-svg-title-narrow' : 'dependency-svg-title'/);
   assert.match(html, /titleId = mobile \? 'codemap-svg-title-narrow' : 'codemap-svg-title'/);
   assert.match(html, /descId = mobile \? 'codemap-svg-desc-narrow' : 'codemap-svg-desc'/);
   assert.match(html, /verifiedはpath:line、unknownは理由/);
@@ -1973,7 +1973,7 @@ test('Hubは明示されたsession modeだけで起動し通常表示にpopupや
   assert.match(html, /setInterval\(refresh, 2000\)/);
   assert.match(html, /setInterval\(heartbeat, 5000\)/);
   assert.doesNotMatch(template, /window\.open\(/);
-  assert.doesNotMatch(template, /target=["']_blank["']/i);
+  assert.match(template, /id=["']archify-open["'][^>]*target=["']_blank["']/i);
   assert.match(template, /EXPLICIT MODE/);
 });
 

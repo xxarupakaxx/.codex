@@ -81,6 +81,19 @@
       "extends": "strict-self-contained",
       "requiredCspDirectives": ["default-src", "script-src", "style-src", "img-src", "connect-src", "base-uri", "form-action"]
     },
+    "archify-transient": {
+      "extends": "strict-self-contained",
+      "requireArtifactKind": false,
+      "requiredCspDirectives": [
+        "default-src",
+        "script-src",
+        "style-src",
+        "img-src",
+        "connect-src",
+        "base-uri",
+        "form-action"
+      ]
+    },
     "mcp-current": {
       "extends": "strict-self-contained",
       "requireArtifactKind": false,
@@ -115,6 +128,21 @@
     "diagram-matrix": ["375x812", "768x1024", "1440x900", "overflow", "keyboard", "focus", "svg-visible"]
   },
   "producers": [
+    {
+      "id": "archify-plan-svg-export",
+      "route": "html-plan",
+      "owner": "viewing-plans",
+      "source": "scripts/archify_render.mjs",
+      "templates": [],
+      "outputPatterns": [
+        "<container>/tmp/run/.archify-transient.html"
+      ],
+      "artifactKind": "archify-transient",
+      "staticProfile": "archify-transient",
+      "browserProfile": "desktop-diagram",
+      "delivery": "private-intermediate-only; publish validated SVG, never HTML",
+      "runtimeBoundary": "scripts/archify_plan.py; pinned Docker image, network-none, nonroot, Chrome sandbox, split tmpfs, resource limits, bounded envelope and SVG validation"
+    },
     {
       "id": "roadmap-generator",
       "route": "html-plan",

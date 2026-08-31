@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "backend": "docker-colima-v1",
+  "policyId": "archify-plan-container-v1",
+  "image": "sha256:38a8ae4469004b74e492ee8378b8dbe6d1397fde4053e4c607457f4a000b8825",
+  "baseImage": "mcr.microsoft.com/playwright@sha256:824f1a789072e648c62541c2cfa4479c4061a290d5c27766d67dc1dcbc19b321",
+  "sourceManifestSha256": "0549797b20e76a6908bd7328fe482fe168b81f40e5135a9aed44c67e543b03e5",
+  "sourceConfigSha256": "8f3b1e38ff92ed0a589169686322123d676837fb9ce0716a27ebf28087e04810",
+  "bridgeSha256": "9dad3a3a9bc070702432b0a56a67fa919b5b29b62d64de472011ee15f9dc299d",
+  "entrypointSha256": "98805d3ae4c2728afbdb1e576538d9224e287a67a366e620def489a9fe9b9f98",
+  "seccompSha256": "05e4588202a0950e17465aff9831b04f6e196dcd5b31941515a6db4d0a3ee45d",
+  "dockerExecutable": "/opt/homebrew/bin/docker",
+  "dockerRealpath": "/opt/homebrew/Cellar/docker/29.0.1/bin/docker",
+  "dockerSha256": "7feea539042afd5712216041af4f54580816226b298c6f749ee133ff428a1ba7",
+  "nodeExecutable": "/usr/bin/node",
+  "nodeSha256": "4adeeca28663521e926659041cf26dbe5bded9d104316373c364a8b65ed17f03",
+  "nodeVersion": "v24.17.0",
+  "chromeExecutable": "/ms-playwright/chromium-1228/chrome-linux/chrome",
+  "chromeSha256": "c1aa0fb5b6c60eb093df69d9e40dd50ab2039d3ccba8836ef21880340a77af64",
+  "chromeVersion": "149.0.7827.0"
+}

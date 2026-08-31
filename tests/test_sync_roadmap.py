@@ -108,6 +108,12 @@ class SyncRoadmapTest(unittest.TestCase):
         self.assertEqual(MODULE.source_fingerprints(task, "roadmap").keys(), {"05_log.md", "30_plan.html"})
         self.assertEqual(result["plan_task_ids"], ["1"])
         self.assertEqual(result["plan_source_hash"], MODULE.resolve_plan_source(task)["sourceHash"])
+        # A task memory directory may live outside its source workspace.
+        # Generation and the trusted projection must inspect the same root.
+        command = result["command"]
+        self.assertNotEqual(task.parent.resolve(), self.workspace.resolve())
+        self.assertEqual(command.count("--source-root"), 1)
+        self.assertEqual(command[command.index("--source-root") + 1], str(self.workspace.resolve()))
 
     def test_invalid_html_shadows_valid_markdown(self) -> None:
         task = self.write_html_task("invalid-html")

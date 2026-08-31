@@ -56,6 +56,7 @@ Skillやテンプレートの定型を理由に、この原則に反する加筆
 | artifact、session復元、Evidence、学習record | `context/memory-file-formats.md` |
 | agent、Skill、委譲、外部write | `context/agent-team-routing.md` |
 | Task Workspace、Codemap、Roadmap view | `context/codemap.md`、`skills/viewing-plans/SKILL.md` |
+| 計画全体のArchify SVG | `skills/viewing-plans/references/archify-overview.md` |
 | team-run compositionとexit gate | `context/team-run.md`、`skills/team-run/SKILL.md` |
 | modelとservice tier | `rules/model-routing.md` |
 | complexity budget | `rules/complexity-budget.md` |
