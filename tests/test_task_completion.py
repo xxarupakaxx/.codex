@@ -107,6 +107,49 @@ class TaskCompletionTest(unittest.TestCase):
         self.assertEqual(result["planned_acceptance_ids"], ["AC1"])
         self.assertEqual(result["source_fingerprints_checked"], 4)
 
+    def test_html_completion_uses_typed_acceptance_and_sources_without_progress(self) -> None:
+        parser_path = SCRIPT.with_name("roadmap_plan_contract.py")
+        parser_spec = importlib.util.spec_from_file_location("html_plan_parser_test_module", parser_path)
+        assert parser_spec and parser_spec.loader
+        parser = importlib.util.module_from_spec(parser_spec)
+        parser_spec.loader.exec_module(parser)
+        html = (
+            "<main id=\"plan-document\" data-plan-schema=\"2\"><h1>HTML</h1>"
+            "<section data-task-id=\"1\"><h2>Task 1: HTML</h2>"
+            "<section data-field=\"purpose\"><p>Purpose</p></section>"
+            "<section data-field=\"targets\"><p>src.py</p></section>"
+            "<section data-field=\"implementation\"><ul><li data-complete=\"true\">Step</li></ul></section>"
+            "<section data-field=\"outputs\"><p>Output</p></section>"
+            "<section data-field=\"verification\"><p>Verification</p></section>"
+            "<ul data-field=\"acceptance\"><li data-acceptance-id=\"H1\">H1</li></ul>"
+            "<ul data-field=\"required-sources\"><li data-source-ref=\"task:30_plan.html\"></li>"
+            "<li data-source-ref=\"task:checkpoint.md\"></li><li data-source-ref=\"workspace:src.py\"></li></ul>"
+            "</section></main>"
+        )
+        html_path = self.task / "30_plan.html"
+        html_path.write_text(html, encoding="utf-8")
+        (self.task / "30_plan.md").write_text("stale MD sibling", encoding="utf-8")
+        (self.task / "checkpoint.md").write_text("- H1: passes\n", encoding="utf-8")
+        model = parser.resolve_plan_source(self.task)
+        payload = self.bundle(
+            source_hash=model["sourceHash"],
+            acceptance_evidence=["H1|PASS|source:task:90_verification.md#L1"],
+            source_fingerprints={
+                "task:30_plan.html": self.sha(html_path),
+                "task:checkpoint.md": self.sha(self.task / "checkpoint.md"),
+                "workspace:src.py": self.sha(self.source),
+            },
+        )
+        result = self.validate_phase5_html(payload, model)
+
+        self.assertEqual(result["status"], "pass")
+        self.assertEqual(result["planned_acceptance_ids"], ["H1"])
+        self.assertEqual(result["source_fingerprints_checked"], 3)
+
+    def validate_phase5_html(self, payload: dict[str, object], model: dict[str, object]) -> dict[str, object]:
+        self.write_bundle(payload)
+        return MODULE.validate_phase5_completion(self.task, self.workspace, model)
+
     def test_progress_override_cannot_complete_unchecked_raw_step(self) -> None:
         self.plan = self.plan.replace("- [x] implement fixture", "- [ ] implement fixture")
         (self.task / "30_plan.md").write_text(self.plan, encoding="utf-8")

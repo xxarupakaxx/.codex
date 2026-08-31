@@ -27,6 +27,7 @@ DEFAULT_FILES = [
     "00_spec.md",
     "10_task.md",
     "20_survey.md",
+    "30_plan.html",
     "30_plan.md",
     "40_progress.md",
     "80_review.md",
@@ -240,11 +241,11 @@ def _replace_staged(stage: Path, destination: Path) -> None:
     stage.replace(destination)
 
 
-def _read_publish_target(path: Path) -> tuple[bool, str | None]:
+def _read_publish_target(path: Path) -> tuple[bool, bytes | None]:
     if not path.exists():
         return False, None
     try:
-        return True, path.read_text()
+        return True, path.read_bytes()
     except OSError as error:
         raise OSError(f"cannot read existing Roadmap output {path}: {error}") from error
 
@@ -277,8 +278,8 @@ def publish_output_pair(
     if html_path.resolve(strict=False) == json_path.resolve(strict=False):
         raise ValueError("HTML and JSON Roadmap outputs must be different files")
     try:
-        parsed_json = json.loads(json_text)
-    except (TypeError, json.JSONDecodeError) as error:
+        parsed_json = load_plan_contract_module().strict_json_loads(json_text)
+    except (TypeError, json.JSONDecodeError, ValueError) as error:
         raise ValueError(f"Roadmap snapshot JSON is invalid: {error}") from error
     if not isinstance(parsed_json, dict):
         raise ValueError("Roadmap snapshot JSON must contain an object")
@@ -305,7 +306,7 @@ def publish_output_pair(
                     "existed": existed,
                     "previous": previous,
                     "stage": stage,
-                    "changed": not existed or previous != text,
+                    "changed": not existed or previous != text.encode("utf-8"),
                     "backup": None,
                 }
             )
@@ -318,11 +319,11 @@ def publish_output_pair(
                 continue
             path = state["path"]
             previous = state["previous"]
-            if not isinstance(path, Path) or not isinstance(previous, str):
+            if not isinstance(path, Path) or not isinstance(previous, bytes):
                 raise OSError("invalid Roadmap output backup state")
             backup = _publish_stage_path(path)
-            atomic_write_text(backup, previous)
-            if backup.read_text() != previous:
+            backup.write_bytes(previous)
+            if backup.read_bytes() != previous:
                 raise OSError(f"Roadmap output backup was not verified: {backup}")
             backups.append(backup)
             state["backup"] = backup
@@ -386,7 +387,7 @@ def ensure_task_meta(
         existing = loaded
 
     now = datetime.now(timezone.utc).isoformat()
-    files, _ = read_files(task_dir)
+    files, _, _ = read_files(task_dir)
     desired = {
         **existing,
         "schema_version": 1,
@@ -420,10 +421,16 @@ def ensure_task_meta(
     return desired
 
 
-def read_files(task_dir: Path) -> tuple[dict[str, str], list[dict[str, object]]]:
+def read_files(task_dir: Path) -> tuple[dict[str, str], list[dict[str, object]], dict[str, str]]:
     files: dict[str, str] = {}
     sources: list[dict[str, object]] = []
+    raw_hashes: dict[str, str] = {}
+    html_source_present = (task_dir / "30_plan.html").exists() or (task_dir / "30_plan.html").is_symlink()
     for name in DEFAULT_FILES:
+        if html_source_present and name == "30_plan.md":
+            # The legacy sibling is intentionally invisible to the canonical
+            # HTML snapshot, including its artifact ledger and fingerprint.
+            continue
         path = task_dir / name
         if path.is_symlink():
             continue
@@ -433,7 +440,11 @@ def read_files(task_dir: Path) -> tuple[dict[str, str], list[dict[str, object]]]
             continue
         if not stat.S_ISREG(source_stat.st_mode):
             continue
-        text = path.read_text()
+        raw = path.read_bytes()
+        raw_hashes[name] = hashlib.sha256(raw).hexdigest()
+        text = raw.decode("utf-8")
+        if name != "30_plan.html":
+            text = text.replace("\r\n", "\n").replace("\r", "\n")
         files[name] = text
         sources.append(
             {
@@ -443,7 +454,7 @@ def read_files(task_dir: Path) -> tuple[dict[str, str], list[dict[str, object]]]
                 "modifiedAt": datetime.fromtimestamp(source_stat.st_mtime, timezone.utc).isoformat(),
             }
         )
-    return files, sources
+    return files, sources, raw_hashes
 
 
 def infer_source_root(task_dir: Path) -> Path | None:
@@ -483,6 +494,8 @@ def parse_plan_model(
 ) -> dict[str, object]:
     """Return the canonical Plan model without reinterpreting Task headings here."""
     module = load_plan_contract_module()
+    if str(plan_source).casefold().endswith("30_plan.html"):
+        return module.parse_html_plan_contract(plan.encode("utf-8"), plan_source=plan_source, progress_source=progress_source)
     return module.parse_plan_contract(
         plan,
         progress,
@@ -549,6 +562,21 @@ def parse_source_preview_references(
     plan: str,
     plan_model: dict[str, object] | None = None,
 ) -> list[tuple[str, str]]:
+    if isinstance(plan_model, dict) and plan_model.get("sourceKind") == "html":
+        references: list[tuple[str, str]] = []
+        seen: set[tuple[str, str]] = set()
+        for task in plan_model.get("tasks", []):
+            if not isinstance(task, dict):
+                continue
+            task_number = str(task.get("number", ""))
+            for reference in task.get("sourceRefs", []):
+                if not isinstance(reference, str) or not reference.startswith("repo:"):
+                    continue
+                key = (task_number, reference)
+                if key not in seen:
+                    seen.add(key)
+                    references.append(key)
+        return references
     references: list[tuple[str, str]] = []
     seen: set[tuple[str, str]] = set()
     for task_number, _, _, task_section in iter_task_sections(plan, plan_model):
@@ -1169,6 +1197,29 @@ def infer_ui_preview_base_ref(
     plan_model: dict[str, object] | None = None,
 ) -> tuple[str | None, str]:
     """Use one LLM-recorded immutable SHA when the CLI did not supply a ref."""
+    if isinstance(plan_model, dict) and plan_model.get("sourceKind") == "html":
+        declared_refs: set[str] = set()
+        for task in plan_model.get("tasks", []):
+            if not isinstance(task, dict):
+                continue
+            for block in task.get("uiPreviewBlocks", []):
+                if not isinstance(block, dict):
+                    continue
+                for preview in block.get("previews", []):
+                    if not isinstance(preview, dict):
+                        continue
+                    provenance = preview.get("provenance")
+                    before = provenance.get("before") if isinstance(provenance, dict) else None
+                    source = before.get("source") if isinstance(before, dict) else None
+                    if not isinstance(source, str) or not source.strip():
+                        continue
+                    declared = before.get("baseRef")
+                    if not isinstance(declared, str) or not re.fullmatch(r"[0-9a-f]{40}", declared.strip()):
+                        return None, "planのbaseRefは固定40桁commit SHAで記録してください。"
+                    declared_refs.add(declared.strip())
+        if len(declared_refs) > 1:
+            return None, "planに複数のbaseRefがあるため自動選択できません。"
+        return (next(iter(declared_refs)), "") if declared_refs else (None, "")
     declared_refs: set[str] = set()
     for _task_number, _start, _end, body in iter_task_sections(plan, plan_model):
         for block in UI_PREVIEW_BLOCK_RE.finditer(body):
@@ -1408,6 +1459,42 @@ def collect_ui_previews(
     git_blob_cache: dict[tuple[str, str], tuple[bytes | None, str, str]] | None = None,
     plan_model: dict[str, object] | None = None,
 ) -> list[dict[str, object]]:
+    if isinstance(plan_model, dict) and plan_model.get("sourceKind") == "html":
+        normalized_root = (
+            source_root.expanduser().resolve(strict=False)
+            if source_root is not None
+            else None
+        )
+        allowed_prefixes = normalize_source_prefixes(source_allow_prefixes)
+        previews: list[dict[str, object]] = []
+        used_bytes = 0
+        for task in plan_model.get("tasks", []):
+            if not isinstance(task, dict):
+                continue
+            task_number = str(task.get("number", ""))
+            for block in task.get("uiPreviewBlocks", []):
+                if not isinstance(block, dict):
+                    continue
+                try:
+                    candidates = normalize_ui_preview_block(
+                        task_number,
+                        json.dumps(block, ensure_ascii=False, separators=(",", ":")),
+                        source_root=normalized_root,
+                        allowed_prefixes=allowed_prefixes,
+                        base_ref=base_ref,
+                        base_revision=base_revision,
+                        base_ref_message=base_ref_message,
+                        git_blob_cache=git_blob_cache,
+                    )
+                except (ValueError, json.JSONDecodeError) as error:
+                    candidates = [invalid_ui_preview(task_number, str(error))]
+                for preview in candidates:
+                    preview_bytes = len(json.dumps(preview, ensure_ascii=False).encode("utf-8"))
+                    if len(previews) >= MAX_UI_PREVIEW_COUNT or used_bytes + preview_bytes > MAX_TOTAL_UI_PREVIEW_BYTES:
+                        return previews
+                    previews.append(preview)
+                    used_bytes += preview_bytes
+        return previews
     task_sections = iter_task_sections(plan, plan_model)
     if not task_sections and not UI_PREVIEW_BLOCK_RE.search(plan):
         return []
@@ -1473,6 +1560,29 @@ def validate_declared_ui_previews(
     previews: list[dict[str, object]],
     plan_model: dict[str, object] | None = None,
 ) -> None:
+    if isinstance(plan_model, dict) and plan_model.get("sourceKind") == "html":
+        declared = {
+            str(task.get("number", ""))
+            for task in plan_model.get("tasks", [])
+            if isinstance(task, dict) and task.get("uiChange") is True
+        }
+        if not declared:
+            return
+        _inferred_ref, inferred_message = infer_ui_preview_base_ref(plan, plan_model)
+        if inferred_message:
+            raise ValueError(inferred_message)
+        previews_by_task: dict[str, list[dict[str, object]]] = {}
+        for preview in previews:
+            previews_by_task.setdefault(str(preview.get("taskNumber", "")), []).append(preview)
+        invalid = sorted(
+            task_number
+            for task_number in declared
+            if not previews_by_task.get(task_number)
+            or any(item.get("status") == "invalid" for item in previews_by_task[task_number])
+        )
+        if invalid:
+            raise ValueError("UI変更Taskのui-preview fragmentが未作成または不正です: " + ", ".join(invalid))
+        return
     declared = {
         task_number
         for task_number, _start, _end, body in iter_task_sections(plan, plan_model)
@@ -1522,6 +1632,8 @@ def collect_artifacts(task_dir: Path, output: Path | None = None) -> list[dict[s
         for name in sorted(file_names):
             path = current_dir / name
             if path.is_symlink() or name in OUTPUT_NAMES or is_temporary_file(path):
+                continue
+            if path == task_dir / "30_plan.md" and ((task_dir / "30_plan.html").exists() or (task_dir / "30_plan.html").is_symlink()):
                 continue
             if path.resolve(strict=False) in excluded_paths:
                 continue
@@ -1681,13 +1793,20 @@ def parse_log_timeline(log_text: str, *, log_source: str = "05_log.md") -> list[
     return events
 
 
-def infer_title(files: dict[str, str], task_dir: Path) -> str:
+def infer_title(
+    files: dict[str, str], task_dir: Path, plan_model: dict[str, object] | None = None
+) -> str:
+    if isinstance(plan_model, dict) and plan_model.get("sourceKind") == "html":
+        document = plan_model.get("planDocument")
+        if isinstance(document, dict) and isinstance(document.get("title"), str) and document["title"].strip():
+            return document["title"].strip()
+
     directory_title = re.sub(r"^\d{6,8}[_-]+", "", task_dir.name)
     directory_title = re.sub(r"[_-]+", " ", directory_title).strip()
     if directory_title:
         return directory_title
 
-    for name in ("30_plan.md", "00_spec.md", "05_log.md"):
+    for name in ("30_plan.html", "30_plan.md", "00_spec.md", "05_log.md"):
         text = files.get(name, "")
         for line in text.splitlines():
             if line.startswith("# "):
@@ -1762,18 +1881,35 @@ def build_snapshot(
     source_allow_prefixes: list[str] | None = None,
     base_ref: str | None = None,
 ) -> dict[str, object]:
-    files, sources = read_files(task_dir)
+    files, sources, raw_hashes = read_files(task_dir)
     if not files:
         raise ValueError(f"no roadmap source files found in {task_dir}")
     artifacts = collect_artifacts(task_dir, output)
     effective_source_root = source_root or infer_source_root(task_dir) or task_dir.parent
-    plan = files.get("30_plan.md", "")
-    plan_model = parse_plan_model(
-        plan,
-        files.get("40_progress.md", ""),
-        plan_source=str(task_dir / "30_plan.md"),
-        progress_source=str(task_dir / "40_progress.md"),
-    )
+    parser_module = load_plan_contract_module()
+    has_html_source = (task_dir / "30_plan.html").exists() or (task_dir / "30_plan.html").is_symlink()
+    if has_html_source:
+        # The resolver reads exact UTF-8 bytes and deliberately does not use
+        # the sibling Markdown file, even when that file is present.
+        plan_model = parser_module.resolve_plan_source(
+            task_dir,
+            preloaded_plan_text=files.get("30_plan.html"),
+            preloaded_plan_raw_sha256=raw_hashes.get("30_plan.html"),
+            preloaded_progress_text=files.get("40_progress.md", ""),
+        )
+        plan = files.get("30_plan.html", "")
+        plan_source_name = "30_plan.html"
+    else:
+        plan = files.get("30_plan.md", "")
+        plan_model = parse_plan_model(
+            plan,
+            files.get("40_progress.md", ""),
+            plan_source=str(task_dir / "30_plan.md"),
+            progress_source=str(task_dir / "40_progress.md"),
+        )
+        if "30_plan.md" in raw_hashes:
+            plan_model["planSourceRawSha256"] = raw_hashes["30_plan.md"]
+        plan_source_name = "30_plan.md"
     log_source = str(task_dir / "05_log.md")
     timeline = parse_log_timeline(files.get("05_log.md", ""), log_source=log_source)
     inferred_base_ref, inferred_base_ref_message = infer_ui_preview_base_ref(
@@ -1817,8 +1953,13 @@ def build_snapshot(
     )
     validate_declared_ui_previews(plan, ui_previews, plan_model)
     codemap_state = load_codemap_state(task_dir, effective_source_root)
+    fingerprint_files = dict(files)
+    if has_html_source:
+        # A legacy sibling is retained for compatibility and ledger display,
+        # but changing it cannot change the canonical HTML snapshot identity.
+        fingerprint_files.pop("30_plan.md", None)
     fingerprint = build_fingerprint(
-        files,
+        fingerprint_files,
         artifacts,
         source_previews,
         ui_previews,
@@ -1828,11 +1969,12 @@ def build_snapshot(
     )
     snapshot: dict[str, object] = {
         "version": 1,
-        "title": infer_title(files, task_dir),
+        "title": infer_title(files, task_dir, plan_model),
         "taskDir": str(task_dir),
         "generatedAt": datetime.now(timezone.utc).isoformat(),
         "fingerprint": fingerprint,
         "planSourceHash": plan_model.get("sourceHash", ""),
+        "planSourceRawSha256": plan_model.get("planSourceRawSha256", ""),
         "generationId": "roadmap-" + hashlib.sha256(
             ("v2\0" + fingerprint).encode("utf-8")
         ).hexdigest()[:20],
@@ -1843,6 +1985,9 @@ def build_snapshot(
         "uiPreviews": ui_previews,
         "codemapStatus": codemap_state["status"],
         "plan": plan_model,
+        "planSource": plan_source_name,
+        **({"requiredSources": plan_model.get("requiredSources", [])} if has_html_source else {}),
+        **({"planDocument": plan_model.get("planDocument")} if has_html_source and plan_model.get("planDocument") else {}),
         "timeline": timeline,
         "timelineSource": {
             "file": log_source,
@@ -1904,8 +2049,8 @@ def validate_roadmap_html(html: str, output: Path) -> None:
 
 def read_json_snapshot(path: Path) -> dict[str, object] | None:
     try:
-        value = json.loads(path.read_text())
-    except (OSError, json.JSONDecodeError):
+        value = load_plan_contract_module().strict_json_loads(path.read_text())
+    except (OSError, json.JSONDecodeError, ValueError):
         return None
     return value if isinstance(value, dict) else None
 
@@ -1919,8 +2064,8 @@ def read_html_snapshot(path: Path) -> dict[str, object] | None:
     if not match:
         return None
     try:
-        value = json.loads(match.group(1))
-    except json.JSONDecodeError:
+        value = load_plan_contract_module().strict_json_loads(match.group(1))
+    except (json.JSONDecodeError, ValueError):
         return None
     return value if isinstance(value, dict) else None
 

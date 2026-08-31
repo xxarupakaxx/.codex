@@ -105,19 +105,23 @@ mobile / tablet responsive、print preview、PDF exportは`html`と静的`html-d
 
 ## Roadmap / Code Map
 
-`html-plan` routeの主入口は `roadmap.html` である。初期画面を一つのHTML計画書とし、目的、変更前後、Taskごとの実装説明、検証、依存関係をスクロールだけで読めるようにする。重要情報の表示にdrawer・tab・折り畳みの操作を要求せず、sourceに存在する情報だけを使う。
+`html-plan` routeのauthoring正本は `30_plan.html`、実行状況を含む閲覧入口は派生 `roadmap.html` である。新規 `30_plan.md` は作らない。初期画面を一つのHTML計画書とし、目的、変更前後、Taskごとの実装説明、検証、依存関係をスクロールだけで読めるようにする。重要情報の表示にdrawer・tab・折り畳みの操作を要求せず、sourceに存在する情報だけを使う。
 
 - 企画: `00_spec.md`
-- 設計: `20_survey.md` / `30_plan.md`
-- 実装: `30_plan.md`、`40_progress.md`、実artifact
+- 設計・計画: `20_survey.md` / `30_plan.html`
+- 実装・進捗: `30_plan.html`、実artifact（`40_progress.md`は任意の作業メモ）
 - 検証: `checkpoint.md` / `80_review.md` / `90_verification.md`
 - Code Map freshness: `codemap.lock`
 
 Currentはfreshなin-progress、なければ最初の未完了Taskから一意に決める。primary actionはunresolved blocker、または対象Taskの`実装`sectionにある最初の未完了checkboxだけを使う。欠落時は「未記録」と表示し、commitmentを補作しない。
 
+正本HTMLは共通parserが直接解釈し、本文を許可要素のsemantic treeへ変換して表示する。HTMLをMarkdownへ変換したり、HTML内に元のMarkdownを隠して保存したりしない。本文とprogressの二重管理を避け、同fileのJSONはUI previewなど機械用の情報だけに使う。
+
+source hashは正本HTMLのraw UTF-8 bytesから計算する。生成されたSVG、receipt、roadmap.htmlのhashを正本内へ入れて自己参照させない。Archify等の補助図は選択した正本のこのhashへ接続する。HTMLが存在するのに不正なら同期を止め、残っているMDへfallbackしない。
+
 Code Mapは本文内で最初から表示する。図とテキストの関係一覧を併記し、根拠はkeyboardでたどれるようにする。Task Hubは明示した横断確認だけの補助modeとし、通常の生成で追加tabや監視serverを起動しない。`codemap.json` / `codemap.lock`は機械判定の正本であり、Roadmapの更新時刻でfreshnessを代用しない。
 
-UI変更Taskでは、計画を作るLLMが対象sourceを読み、`UI変更: yes`と`ui-preview-json`を同じTaskへ自動記録する。rootは `{version, taskNumber, previews:[最大3]}`、`taskNumber` はTask見出しから抽出した数値文字列、各previewは `{id,title,layout,provenance,before,after,uncertainty}` であり、generatorがoptionalな`uiPreviews`としてsnapshot v1へ加える。これは既存snapshot versionを上げないadditive fieldであり、legacy snapshotやTask Hubの既存表示を変えない。Beforeは `provenance.before.source=repo:...`、40桁commit SHAの`baseRef`、`observedLabels`、Afterは `provenance.after.source`、未確認事項は`uncertainty`として分ける。通常生成はplan内の単一SHAを自動利用し、ユーザーによるmetadata入力やCLI ref指定を要求しない。
+UI変更Taskでは、計画を作るLLMが対象sourceを読み、HTMLのTaskへUI変更属性と型付きJSON fragmentを自動記録する。既存MDだけは`UI変更: yes`と`ui-preview-json`を互換入力として読む。rootは `{version, taskNumber, previews:[最大3]}`、`taskNumber` はTask見出しから抽出した数値文字列、各previewは `{id,title,layout,provenance,before,after,uncertainty}` であり、generatorがoptionalな`uiPreviews`としてsnapshot v1へ加える。これは既存snapshot versionを上げないadditive fieldであり、legacy snapshotやTask Hubの既存表示を変えない。Beforeは `provenance.before.source=repo:...`、40桁commit SHAの`baseRef`、`observedLabels`、Afterは `provenance.after.source`、未確認事項は`uncertainty`として分ける。通常生成はplan内の単一SHAを自動利用し、ユーザーによるmetadata入力やCLI ref指定を要求しない。
 
 UI previewは計画本文内の小さな比較模型であり、ページ全体captureや自由配置editorではない。`topnav`、`sidebar`、`settings`、`list`、`form`は表示presetとして扱い、itemは `{id,label,kind,change,state?}` で表す。`kind`は `label`、`item`、`group`、`action`、`input` の共通primitive、`change`は `same`、`added`、`modified`、`removed` の4値だけを許可し、色だけでなく文言、記号、badge、境界線、ARIA labelで示す。生HTML、外部URL、任意repository code実行は禁止する。LLMはJSX / TSX等のsourceを意味として読み取れるが、実行時dataやCSSからpixel-perfectな見た目を補作しない。
 

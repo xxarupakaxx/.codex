@@ -14,7 +14,7 @@ from typing import Any, Sequence
 sys.dont_write_bytecode = True
 
 try:
-    from roadmap_plan_contract import PlanContractError, parse_plan_files
+    from roadmap_plan_contract import PlanContractError, parse_plan_files, resolve_plan_source
 except ModuleNotFoundError:
     parser_path = Path(__file__).with_name("roadmap_plan_contract.py")
     parser_spec = importlib.util.spec_from_file_location("task_context_plan_parser", parser_path)
@@ -24,6 +24,7 @@ except ModuleNotFoundError:
     parser_spec.loader.exec_module(parser_module)
     PlanContractError = parser_module.PlanContractError
     parse_plan_files = parser_module.parse_plan_files
+    resolve_plan_source = parser_module.resolve_plan_source
 
 
 SCHEMA_VERSION = 1
@@ -38,7 +39,7 @@ SAFE_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]{0,127}")
 ACCEPTANCE_RE = re.compile(r"^\s*(?:[-*+]\s+)?acceptance\s*[:：]\s*(.*)$", re.I | re.M)
 ACCEPTANCE_ID_RE = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*\Z")
 ARTIFACTS = (
-    "00_spec.md", "20_survey.md", "30_plan.md", "40_progress.md", "05_log.md",
+    "00_spec.md", "20_survey.md", "30_plan.html", "30_plan.md", "40_progress.md", "05_log.md",
     "checkpoint.md", "80_review.md", "90_verification.md", "roadmap.html",
     "roadmap-snapshot.json",
 )
@@ -177,7 +178,15 @@ def _metadata(task: Path) -> dict[str, Any]:
 
 
 def _refs(task: Path) -> dict[str, dict[str, Any]]:
-    return {name: {"path": str(task / name), "exists": _child(task, name) is not None} for name in ARTIFACTS}
+    html_present = (task / "30_plan.html").exists() or (task / "30_plan.html").is_symlink()
+    refs: dict[str, dict[str, Any]] = {}
+    for name in ARTIFACTS:
+        if html_present and name == "30_plan.md":
+            # A legacy sibling is not part of the HTML source boundary.
+            refs[name] = {"path": str(task / name), "exists": False}
+            continue
+        refs[name] = {"path": str(task / name), "exists": _child(task, name) is not None}
+    return refs
 
 
 def _raw(task: dict[str, Any]) -> tuple[int, int, bool, list[str]]:
@@ -220,12 +229,12 @@ def _dependencies(tasks: list[dict[str, Any]], edges: object) -> tuple[list[str]
 
 
 def _parse(task: Path) -> dict[str, Any] | None:
-    plan = _child(task, "30_plan.md")
-    if plan is None:
+    html = _child(task, "30_plan.html") if (task / "30_plan.html").exists() or (task / "30_plan.html").is_symlink() else None
+    md = _child(task, "30_plan.md") if html is None else None
+    if html is None and md is None:
         return None
-    progress = _child(task, "40_progress.md") or task / "40_progress.md"
     try:
-        return parse_plan_files(plan, progress)
+        return resolve_plan_source(task)
     except (OSError, UnicodeError, PlanContractError, TypeError, ValueError) as exc:
         raise ContextError(f"plan contract is invalid: {_compact(exc)}") from exc
 
@@ -243,6 +252,17 @@ def _section(text: str, names: Sequence[str]) -> str:
 
 
 def _acceptance(model: dict[str, Any]) -> list[str]:
+    if model.get("sourceKind") == "html":
+        values: list[str] = []
+        for task in model.get("tasks", []):
+            if not isinstance(task, dict):
+                continue
+            ids = task.get("acceptanceIds", [])
+            if isinstance(ids, list):
+                for value in ids:
+                    if isinstance(value, str) and value not in values:
+                        values.append(value)
+        return values
     values: list[str] = []
     for task in model.get("tasks", []):
         if not isinstance(task, dict):
@@ -274,6 +294,10 @@ def _detail(task: dict[str, Any]) -> dict[str, Any]:
         "steps": [{"label": _compact(item.get("label", "")), "complete": item.get("complete") is True} for item in steps[:MAX_ITEMS] if isinstance(item, dict)],
         "incompleteSteps": incomplete[:MAX_ITEMS],
         "source": {"path": str(source.get("file", "")), "lineStart": source.get("lineStart"), "lineEnd": source.get("lineEnd")},
+        "acceptanceIds": [value for value in task.get("acceptanceIds", []) if isinstance(value, str)],
+        "requiredSources": [value for value in task.get("requiredSources", []) if isinstance(value, str)],
+        "sourceRefs": [value for value in task.get("sourceRefs", []) if isinstance(value, str)],
+        "uiPreviewBlocks": task.get("uiPreviewBlocks", []) if isinstance(task.get("uiPreviewBlocks"), list) else [],
     }
 
 
@@ -289,14 +313,16 @@ def _bounded_map(values: dict[str, Any]) -> tuple[dict[str, Any], int, bool]:
 
 def _list_entry(task: Path) -> dict[str, Any]:
     refs, metadata = _refs(task), _metadata(task)
-    plan_exists = refs["30_plan.md"]["exists"]
+    html_exists = refs["30_plan.html"]["exists"]
+    plan_exists = html_exists or refs["30_plan.md"]["exists"]
+    plan_source = "30_plan.html" if html_exists else ("30_plan.md" if refs["30_plan.md"]["exists"] else "")
     route = _route(task)
     result: dict[str, Any] = {
         "taskId": metadata["taskId"], "taskPath": str(task),
         "taskTitle": metadata.get("taskTitle", task.name), "taskState": metadata.get("taskState", "unknown"),
         "metadataState": metadata["metadataState"], "route": route,
         "state": "legacy-log-only" if route == "log-only" and not plan_exists else ("available" if plan_exists else "plan-missing"),
-        "planExists": plan_exists, "htmlPath": refs["roadmap.html"]["path"],
+        "planExists": plan_exists, "planSource": plan_source, "htmlPath": refs["roadmap.html"]["path"],
         "htmlExists": refs["roadmap.html"]["exists"], "snapshotExists": refs["roadmap-snapshot.json"]["exists"],
     }
     if metadata.get("metadataError"):
@@ -355,6 +381,7 @@ def brief_context(task_path: str | Path, *, memory_roots: Sequence[str | Path] |
         "taskTitle": metadata.get("taskTitle", task.name), "taskState": metadata.get("taskState", "unknown"),
         "metadataState": metadata["metadataState"], "route": _route(task),
         "htmlPath": refs["roadmap.html"]["path"], "htmlExists": refs["roadmap.html"]["exists"],
+        "planSource": "30_plan.html" if refs["30_plan.html"]["exists"] else ("30_plan.md" if refs["30_plan.md"]["exists"] else ""),
         "sourceRefs": {name: refs[name] for name in ARTIFACTS if name not in {"roadmap.html", "roadmap-snapshot.json"}},
         "limitations": "briefは要約と正本参照を返すだけで、要件・制約全文の充足を保証しません。",
     }
@@ -368,7 +395,11 @@ def brief_context(task_path: str | Path, *, memory_roots: Sequence[str | Path] |
         raise ContextError("parsed plan tasks are invalid")
     task_ids, task_count, task_ids_truncated = _bounded(str(task.get("number", "")) for task in tasks)
     result.update({"taskIds": task_ids, "taskCount": task_count, "taskIdsTruncated": task_ids_truncated})
-    result["parser"] = {"version": model.get("parserVersion", ""), "sourceHash": model.get("sourceHash", "")}
+    result["parser"] = {
+        "version": model.get("parserVersion", ""),
+        "sourceHash": model.get("sourceHash", ""),
+        "planSourceRawSha256": model.get("planSourceRawSha256", ""),
+    }
     if model.get("diagnostics"):
         diagnostics, diagnostic_count, diagnostics_truncated = _bounded(model["diagnostics"])
         result.update({"state": "needs-plan-repair", "frontierTaskIds": [], "frontierCount": 0, "frontierTaskIdsTruncated": False, "unresolvedDependencies": {}, "unresolvedDependencyTaskCount": 0, "unresolvedDependencyCount": 0, "unresolvedDependenciesTruncated": False, "diagnostics": diagnostics, "diagnosticCount": diagnostic_count, "diagnosticsTruncated": diagnostics_truncated})
@@ -404,7 +435,7 @@ def brief_context(task_path: str | Path, *, memory_roots: Sequence[str | Path] |
         "selectedTask": selected_detail,
         "goal": _section(spec, ("Goal", "目的", "概要", "背景・目的")) or (_compact(selected.get("purpose", "")) if selected else ""),
         "constraints": _section(spec, ("制約事項", "制約")), "acceptanceIds": acceptance_ids, "acceptanceIdCount": acceptance_count, "acceptanceIdsTruncated": acceptance_truncated,
-        "nextReads": [{"name": name, "reason": reason} for name, reason in (("00_spec.md", "goal・scope・制約"), ("30_plan.md", "Taskの正本"), ("40_progress.md", "進捗の正本"), ("checkpoint.md", "acceptanceの正本"), ("80_review.md", "reviewと残課題"), ("90_verification.md", "検証結果")) if refs[name]["exists"]],
+        "nextReads": [{"name": name, "reason": reason} for name, reason in (("00_spec.md", "goal・scope・制約"), ("30_plan.html" if refs["30_plan.html"]["exists"] else "30_plan.md", "Taskの正本"), ("40_progress.md", "進捗の補足"), ("checkpoint.md", "acceptanceの正本"), ("80_review.md", "reviewと残課題"), ("90_verification.md", "検証結果")) if refs[name]["exists"]],
     })
     return result
 

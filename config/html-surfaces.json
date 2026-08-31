@@ -127,6 +127,17 @@
       "browserProfile": "roadmap-matrix"
     },
     {
+      "id": "roadmap-plan-authoring",
+      "route": "html-plan",
+      "owner": "viewing-plans",
+      "source": "context/memory-file-formats.md",
+      "templates": [],
+      "outputPatterns": [".local/memory/*/30_plan.html"],
+      "artifactKind": "html-plan",
+      "staticProfile": "strict-self-contained",
+      "browserProfile": "desktop-document"
+    },
+    {
       "id": "roadmap-task-hub",
       "route": "html-plan",
       "owner": "viewing-plans",
@@ -305,7 +316,19 @@
     {"path": "skills/designing-ui-ux/SKILL.md", "contains": ".html", "reason": "source extension mention", "removeWhen": "not applicable"},
     {"path": "skills/design-eval-loop/SKILL.md", "contains": "output.html", "reason": "browser validation example", "removeWhen": "example becomes command manifest"},
     {"path": "skills/viewing-plans/SKILL.md", "contains": "roadmap.html", "reason": "canonical producer documentation until WU-E centralizes docs", "removeWhen": "WU-E docs contract lands"},
+    {"path": "skills/viewing-plans/SKILL.md", "contains": "30_plan.html", "reason": "canonical HTML plan source documentation", "removeWhen": "source contract is centralized in the producer manifest"},
+    {"path": "skills/autonomous-loops/SKILL.md", "contains": "30_plan.html", "reason": "read-only canonical-plan reference", "removeWhen": "source contract is centralized in the producer manifest"},
+    {"path": "skills/creating-adr/SKILL.md", "contains": "30_plan.html", "reason": "read-only canonical-plan reference", "removeWhen": "source contract is centralized in the producer manifest"},
+    {"path": "skills/summarizing-daily-work/SKILL.md", "contains": "30_plan.html", "reason": "read-only canonical-plan reference", "removeWhen": "source contract is centralized in the producer manifest"},
+    {"path": "skills/deepening-plan/SKILL.md", "contains": "30_plan.html", "reason": "read-only canonical-plan reference", "removeWhen": "source contract is centralized in the producer manifest"},
+    {"path": "skills/team-run/SKILL.md", "contains": "30_plan.html", "reason": "read-only canonical-plan reference", "removeWhen": "source contract is centralized in the producer manifest"},
+    {"path": "skills/team-run/SKILL.md", "contains": "roadmap.html", "reason": "read-only generated-viewer reference", "removeWhen": "viewer contract is centralized in the producer manifest"},
     {"path": "skills/visualizing-work/SKILL.md", "contains": "roadmap.html", "reason": "dependency mention, not produced by visualizing-work", "removeWhen": "WU-E docs contract lands"},
-    {"path": "skills/diagram-design/SKILL.md", "contains": "roadmap.html", "reason": "dependency mention, not produced by diagram-design", "removeWhen": "WU-E docs contract lands"}
+    {"path": "skills/diagram-design/SKILL.md", "contains": "roadmap.html", "reason": "dependency mention, not produced by diagram-design", "removeWhen": "WU-E docs contract lands"},
+    {"path": "scripts/roadmap_plan_contract.py", "contains": "30_plan.html", "reason": "canonical HTML plan input used by the shared resolver", "removeWhen": "source resolver is moved to a manifest-driven contract"},
+    {"path": "scripts/sync-roadmap.py", "contains": "30_plan.html", "reason": "canonical HTML plan input used by the sync gate", "removeWhen": "source resolver is moved to a manifest-driven contract"},
+    {"path": "scripts/task-context.py", "contains": "30_plan.html", "reason": "canonical HTML plan input used by read-only context", "removeWhen": "source resolver is moved to a manifest-driven contract"},
+    {"path": "scripts/task_completion.py", "contains": "30_plan.html", "reason": "canonical HTML plan input used by Phase 5 completion", "removeWhen": "source resolver is moved to a manifest-driven contract"},
+    {"path": "scripts/validate-agent-harness.py", "contains": "30_plan.html", "reason": "canonical HTML plan artifact validation", "removeWhen": "HTML plan validation is moved to a manifest-driven contract"}
   ]
 }

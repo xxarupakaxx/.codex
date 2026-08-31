@@ -22,6 +22,8 @@ from agent_delivery_lifecycle import (
     validate_artifact as validate_delivery_artifact,
 )
 
+from roadmap_plan_contract import PlanContractError, parse_html_plan_file
+
 
 ENTRYPOINT_MAX_LINES = 120
 ENTRYPOINT_MAX_BYTES = 24 * 1024
@@ -479,9 +481,21 @@ def validate_artifact_dir(path: Path, now: datetime | None = None) -> list[str]:
 
     checked_at = now or datetime.now(timezone.utc)
     errors = validate_task_metadata_file(path)
+    html_source_present = (path / "30_plan.html").exists() or (path / "30_plan.html").is_symlink()
     for artifact in sorted(path.rglob("*.md")):
+        if html_source_present and artifact == path / "30_plan.md":
+            continue
         if ARTIFACT_NAME.match(artifact.name) or artifact.name in WORKFLOW_ARTIFACTS:
             errors.extend(validate_markdown_artifact(artifact))
+    html_plan = path / "30_plan.html"
+    if html_plan.exists() or html_plan.is_symlink():
+        if html_plan.is_symlink() or not html_plan.is_file():
+            errors.append(f"{html_plan}: canonical HTML plan must be a regular file")
+        else:
+            try:
+                parse_html_plan_file(html_plan)
+            except (OSError, UnicodeError, PlanContractError, TypeError, ValueError) as exc:
+                errors.append(f"{html_plan}: invalid canonical HTML plan: {exc}")
     for bypass in sorted(path.rglob("single-step/*.json")):
         errors.extend(validate_bypass(bypass, checked_at))
     return errors

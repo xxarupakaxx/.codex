@@ -157,9 +157,9 @@ team-run を開始時から使う場合、この時点では Team Journal に dr
 3. **Budget route 選択**: `rules/model-routing.md` の Cost Ladder で L0 local / L1 mini / L2 role / L3 heavy を選ぶ。選択理由を Team Journal に記録する。
 4. **Engineering / Plugin route 選択**: `context/agent-team-routing.md` の Engineering Flow Shape から lane を選び、Superpowers / Product Design / Data Analytics / Sites / Slack / GitHub などの router skill を必要に応じて読む。laneの判定条件はここへ複製しない。
 5. **Superpowers 確認**: 該当する Superpowers skill を読む。曖昧な設計なら brainstorming、明確な実装なら writing-plans / dispatching-parallel-agents を使う。
-6. **global Phase 2 計画**: `context/workflow-rules.md` に従い、30_plan.md を作成する。コード変更では `rules/complexity-budget.md` の要素別target、信頼度、根拠、超過時の再計画条件を計画へ含める。追加調査で判断が変わり得る場合だけ `deepening-plan` を使い、独立 plan review は Delegation Gate と変更リスクに応じて選ぶ。
+6. **global Phase 2 計画**: `context/workflow-rules.md` に従い、30_plan.html を作成する。既存taskにHTMLがない場合だけ30_plan.mdを互換入力として読む。コード変更では `rules/complexity-budget.md` の要素別target、信頼度、根拠、超過時の再計画条件を計画へ含める。追加調査で判断が変わり得る場合だけ `deepening-plan` を使い、独立 plan review は Delegation Gate と変更リスクに応じて選ぶ。
 7. **Team Journal 更新**: `${MEMORY_DIR}/memory/YYMMDD_<task_name>/team-journal.md` に Goal Gate、選択 lane と省略理由、Budget、Complexity Budgetのtarget、leader 状態、plugin route、model route を書く。
-8. **Live Roadmap 起動（任意だが推奨）**: Codex app の横で進捗を見たい場合、`scripts/generate-roadmap-view.py ${MEMORY_DIR}/memory/YYMMDD_<task_name> --serve --watch` を起動し、URLをTeam Journalへ記録する。既定port `0` を使い、複数セッションはメモリディレクトリを分けて衝突を避ける。
+8. **計画書の表示**: 共通syncが生成した同じroadmap.htmlを通常ブラウザで確認する。更新ごとにtabを増やさず、watch・server・複数TaskのHubは明示した横断確認が必要な場合だけ使う。表示手順はviewing-plansへ戻る。
 9. **Review Heat 仮決定**: `context/team-run.md` の Heat ladder で checker / judge の初期セットを決め、Team Journal に記録する。
 10. **planner / plan-reviewer の選択**: lead の直接計画で不足し、独立した分解または検証が価値を生み、Delegation Gate を通る場合だけ起動する。planner には依存、acceptance、risk、write scope を、plan-reviewer には YAGNI、依存矛盾、実現可能性、検証可能性を渡す。
 

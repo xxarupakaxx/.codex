@@ -789,13 +789,13 @@
         </nav>
       </header>
 
-      <section class="plan-section" id="plan-source-document" aria-label="30_plan.mdの全文">
+      <section class="plan-section" id="plan-source-document" aria-label="計画本文">
         <div class="plan-source-heading">
-          <strong>30_plan.md</strong>
+          <strong>計画本文</strong>
           <span id="plan-source-summary">Plan source</span>
         </div>
         <div class="plan-contract-alert" id="plan-contract-alert" role="alert" hidden></div>
-        <article class="markdown-body plan-source-content" id="plan-source-content" aria-label="30_plan.mdの全文"></article>
+        <article class="markdown-body plan-source-content" id="plan-source-content" aria-label="計画本文"></article>
       </section>
 
       <section class="plan-section" id="dependencies" aria-labelledby="dependencies-title">
@@ -1139,6 +1139,185 @@
       const values = Array.isArray(value) ? value : value == null ? [] : [value];
       return values.map(item => asText(item).trim()).filter(Boolean);
     }
+    const PLAN_DOCUMENT_TAGS = new Set([
+      'a', 'article', 'aside', 'b', 'blockquote', 'br', 'caption', 'code', 'col', 'colgroup', 'dd', 'del', 'div',
+      'details', 'dl', 'dt', 'em', 'figcaption', 'figure', 'footer', 'fragment', 'h1', 'h2', 'h3', 'h4', 'h5', 'h6', 'header',
+      'hr', 'i', 'input', 'label', 'li', 'main', 'mark', 'ol', 'p', 'pre', 'section', 'small', 'span', 'strong',
+      'sub', 'summary', 'sup', 'table', 'tbody', 'td', 'tfoot', 'th', 'thead', 'tr', 'u', 'ul', 'svg', 'circle',
+      'defs', 'desc', 'ellipse', 'g', 'line', 'marker', 'path', 'polygon', 'polyline', 'rect', 'text', 'title'
+    ]);
+    const PLAN_DOCUMENT_ATTR_ALIASES = {
+      'viewbox': 'viewBox',
+      'preserveaspectratio': 'preserveAspectRatio',
+      'markerend': 'marker-end',
+      'markerstart': 'marker-start',
+      'strokewidth': 'stroke-width',
+      'strokelinecap': 'stroke-linecap',
+      'strokelinejoin': 'stroke-linejoin',
+      'fillrule': 'fill-rule',
+      'cliprule': 'clip-rule',
+      'refx': 'refX',
+      'refy': 'refY',
+      'markerwidth': 'markerWidth',
+      'markerheight': 'markerHeight'
+    };
+    const PLAN_DOCUMENT_ATTRS = new Set([
+      'id', 'class', 'role', 'title', 'tabindex', 'lang', 'dir', 'href', 'target', 'rel', 'type', 'checked', 'disabled',
+      'aria-label', 'aria-labelledby', 'aria-describedby', 'aria-hidden', 'aria-current', 'aria-live', 'scope', 'headers',
+      'hidden', 'for', 'colspan', 'rowspan', 'span', 'data-plan-schema', 'data-source-kind', 'data-plan-title', 'data-plan-intro',
+      'data-task-id', 'data-task-ref', 'data-field', 'data-section', 'data-acceptance', 'data-acceptance-id', 'data-source',
+      'data-source-ref', 'data-dependency', 'data-blocked-by', 'data-status', 'data-kind', 'data-anchor', 'data-step-index',
+      'data-complete', 'data-plan-section', 'data-plan-task', 'data-done', 'data-total', 'data-progress-done',
+      'data-progress-total', 'data-global-complete', 'data-ui-change', 'viewbox', 'xmlns', 'fill', 'stroke', 'stroke-width',
+      'stroke-linecap', 'stroke-linejoin', 'd', 'points', 'x', 'y', 'x1', 'y1', 'x2', 'y2', 'cx', 'cy', 'r', 'rx', 'ry',
+      'width', 'height', 'transform', 'font-size', 'font-family', 'text-anchor', 'marker-end', 'marker-start', 'refx', 'refy',
+      'orient', 'markerwidth', 'markerheight', 'markerunits', 'fill-rule', 'clip-rule', 'preserveaspectratio', 'name', 'value'
+    ]);
+    const PLAN_DOCUMENT_SAFE_HREF = /^(?:#[A-Za-z0-9_.:-]+|(?:\.\/)?[A-Za-z0-9_.~/-]+(?:#[A-Za-z0-9_.:-]+)?)$/;
+    const PLAN_DOCUMENT_SAFE_EXTERNAL_HREF = /^https?:\/\/[A-Za-z0-9.-]+(?::(\d+))?(?:[/?#][^\s<>"'`\\\x00-\x1f\x7f]*)?$/i;
+    const PLAN_DOCUMENT_SVG_RESOURCE_ATTRS = new Set(['fill', 'stroke', 'marker-end', 'marker-start']);
+    const PLAN_DOCUMENT_LOCAL_SVG_URL = /^url\(\s*#[A-Za-z][A-Za-z0-9_-]*\s*\)$/i;
+    function isSafePlanDocumentExternalHref(value) {
+      const match = PLAN_DOCUMENT_SAFE_EXTERNAL_HREF.exec(asText(value));
+      if (!match) return false;
+      if (!match[1]) return true;
+      const port = Number(match[1]);
+      return Number.isInteger(port) && port >= 1 && port <= 65535;
+    }
+    function isSafePlanDocumentSvgResource(name, value) {
+      if (!PLAN_DOCUMENT_SVG_RESOURCE_ATTRS.has(name)) return true;
+      if (/[\\]|\/\*|\*\//.test(value)) return false;
+      if (/\burl\s*\(/i.test(value)) return PLAN_DOCUMENT_LOCAL_SVG_URL.test(value.trim());
+      return !/^(?:[A-Za-z][A-Za-z0-9+.-]*:|\/)/.test(value);
+    }
+    const PLAN_DOCUMENT_MAX_NODES = 6000;
+    const PLAN_DOCUMENT_MAX_DEPTH = 32;
+    const PLAN_DOCUMENT_MAX_TEXT = 240000;
+    function normalizePlanDocumentAttribute(tag, rawName, rawValue) {
+      const name = asText(rawName).trim();
+      const lowerName = name.toLowerCase();
+      const canonicalName = PLAN_DOCUMENT_ATTR_ALIASES[lowerName] || name;
+      const isAriaAttribute = lowerName.startsWith('aria-') && /^[a-z0-9-]+$/.test(lowerName);
+      if (!name || lowerName.startsWith('on') || ['style', 'src', 'srcdoc', 'xlink:href', 'formaction'].includes(lowerName) || (!PLAN_DOCUMENT_ATTRS.has(lowerName) && !isAriaAttribute)) {
+        throw new Error(`planDocument attribute is not allowed: ${name || 'missing'}`);
+      }
+      if (!['string', 'number', 'boolean'].includes(typeof rawValue)) throw new Error(`planDocument attribute must be scalar: ${name}`);
+      const value = String(rawValue);
+      if (value.length > 240) throw new Error(`planDocument attribute is too long: ${name}`);
+      if (canonicalName === 'href' && (tag !== 'a' || (!PLAN_DOCUMENT_SAFE_HREF.test(value) && !isSafePlanDocumentExternalHref(value)))) throw new Error('planDocument href is not a safe URL');
+      if (canonicalName === 'target' && !['_self', '_blank'].includes(value)) throw new Error('planDocument target is not allowed');
+      if (canonicalName === 'xmlns' && (tag !== 'svg' || value !== 'http://www.w3.org/2000/svg')) throw new Error('planDocument xmlns is not allowed');
+      if (canonicalName !== 'xmlns' && canonicalName !== 'href' && /(?:javascript:|data:|https?:|url\(\s*(?!#))/i.test(value)) throw new Error(`planDocument external resource is not allowed: ${name}`);
+      if (!isSafePlanDocumentSvgResource(canonicalName.toLowerCase(), value)) throw new Error(`planDocument external resource is not allowed: ${name}`);
+      if (canonicalName === 'id' && (!value || /[\s<>"']/.test(value))) throw new Error('planDocument id is not safe');
+      if (tag === 'input' && canonicalName === 'type' && value.toLowerCase() !== 'checkbox') throw new Error('planDocument input type is not allowed');
+      return [canonicalName, value];
+    }
+    function normalizePlanDocumentNode(value, state, depth = 0) {
+      if (state.nodes >= PLAN_DOCUMENT_MAX_NODES) throw new Error('planDocument node limit exceeded');
+      if (depth > PLAN_DOCUMENT_MAX_DEPTH) throw new Error('planDocument nesting is too deep');
+      state.nodes += 1;
+      if (!value || typeof value !== 'object' || Array.isArray(value)) throw new Error('planDocument node must be an object');
+      if (Object.prototype.hasOwnProperty.call(value, 'text')) {
+        if (Object.keys(value).length !== 1 || typeof value.text !== 'string') throw new Error('planDocument text node is invalid');
+        state.text += value.text.length;
+        if (state.text > PLAN_DOCUMENT_MAX_TEXT) throw new Error('planDocument text limit exceeded');
+        return { text: value.text };
+      }
+      const tag = asText(value.tag).trim().toLowerCase();
+      if (!PLAN_DOCUMENT_TAGS.has(tag)) throw new Error(`planDocument tag is not allowed: ${tag || 'missing'}`);
+      if (value.attrs != null && (typeof value.attrs !== 'object' || Array.isArray(value.attrs))) throw new Error(`planDocument attrs are invalid: ${tag}`);
+      if (value.children != null && !Array.isArray(value.children)) throw new Error(`planDocument children are invalid: ${tag}`);
+      const attrs = {};
+      Object.entries(value.attrs || {}).forEach(([name, rawValue]) => {
+        const [canonicalName, cleanValue] = normalizePlanDocumentAttribute(tag, name, rawValue);
+        if (canonicalName === 'id') {
+          if (state.ids.has(cleanValue)) throw new Error(`planDocument id is duplicated: ${cleanValue}`);
+          state.ids.add(cleanValue);
+        }
+        attrs[canonicalName] = cleanValue;
+      });
+      if (attrs.href && isSafePlanDocumentExternalHref(attrs.href)) {
+        const relTokens = new Set(asText(attrs.rel).toLowerCase().split(/\s+/).filter(Boolean));
+        if (attrs.target !== '_blank' || !relTokens.has('noopener') || !relTokens.has('noreferrer')) throw new Error('external planDocument links require target=_blank and rel="noopener noreferrer"');
+      }
+      const children = (value.children || []).map(child => normalizePlanDocumentNode(child, state, depth + 1));
+      return { tag, attrs, children };
+    }
+    function normalizePlanDocument(value) {
+      const errors = [];
+      if (!value || typeof value !== 'object' || Array.isArray(value)) {
+        return { present: false, valid: false, document: null, title: '', nodes: [], errors: ['snapshot.planDocument is required for an HTML plan'] };
+      }
+      const title = asText(value.title).trim();
+      if (asText(value.format).toLowerCase() !== 'html') errors.push('snapshot.planDocument.format must be html');
+      if (!title) errors.push('snapshot.planDocument.title is required');
+      if (title.length > 240) errors.push('snapshot.planDocument.title is too long');
+      if (!Array.isArray(value.nodes)) errors.push('snapshot.planDocument.nodes must be an array');
+      const unknownKeys = Object.keys(value).filter(key => !['format', 'title', 'nodes'].includes(key));
+      unknownKeys.forEach(key => errors.push(`snapshot.planDocument has unknown key: ${key}`));
+      const state = { nodes: 0, text: 0, ids: new Set() };
+      let nodes = [];
+      if (Array.isArray(value.nodes)) {
+        try {
+          nodes = value.nodes.map(node => normalizePlanDocumentNode(node, state));
+        } catch (error) {
+          errors.push(error instanceof Error ? error.message : 'snapshot.planDocument node is invalid');
+        }
+      }
+      const valid = errors.length === 0;
+      return {
+        present: true,
+        valid,
+        document: valid ? { format: 'html', title, nodes } : null,
+        title,
+        nodes: valid ? nodes : [],
+        errors: Array.from(new Set(errors))
+      };
+    }
+    function planDocumentText(value) {
+      const nodes = value && Array.isArray(value.nodes) ? value.nodes : [];
+      const walk = node => {
+        if (node && typeof node.text === 'string') return node.text;
+        return node && Array.isArray(node.children) ? node.children.map(walk).join('') : '';
+      };
+      return nodes.map(walk).join('');
+    }
+    function planDocumentHasHeading(value, pattern) {
+      const nodes = value && Array.isArray(value.nodes) ? value.nodes : [];
+      const walk = node => {
+        if (!node || typeof node !== 'object' || node.text != null) return false;
+        const children = Array.isArray(node.children) ? node.children : [];
+        const content = children.map(child => {
+          if (child && typeof child.text === 'string') return child.text;
+          return planDocumentText({ nodes: [child] });
+        }).join('').trim();
+        if (/^h[1-6]$/.test(asText(node.tag).toLowerCase()) && pattern.test(content)) return true;
+        return children.some(walk);
+      };
+      return nodes.some(walk);
+    }
+    function planSourcePath(snapshot) {
+      return asText(snapshot?.planSource).trim() === '30_plan.html' ? '30_plan.html' : '30_plan.md';
+    }
+    function isTaskSourceLocation(value, taskDir, filename) {
+      const source = asText(value).trim();
+      if (source === filename) return true;
+      const root = asText(taskDir).trim();
+      if (!root.startsWith('/') || /[\\\x00-\x1f\x7f]/.test(root)) return false;
+      const normalizedRoot = root.replace(/\/+$/, '');
+      return source === (normalizedRoot || '') + '/' + filename;
+    }
+    function isLegacyPlanSourceLocation(value, taskDir) {
+      const source = asText(value).trim();
+      if (isTaskSourceLocation(source, taskDir, '30_plan.md')) return true;
+      return source.startsWith('/') && /\/30_plan\.md$/.test(source) && !/[\\\x00-\x1f\x7f]/.test(source);
+    }
+    function planSourceText(snapshot) {
+      return planSourcePath(snapshot) === '30_plan.html'
+        ? planDocumentText(snapshot.planDocument)
+        : asText(snapshot.files?.['30_plan.md'] || snapshot.files?.['10_task.md']);
+    }
     function normalizePlanTask(item, index) {
       if (!item || typeof item !== 'object' || Array.isArray(item)) return null;
       const number = asText(item.number || item.id).trim();
@@ -1147,6 +1326,12 @@
       const implementation = normalizeStringList(item.implementation);
       const outputs = normalizeStringList(item.outputs ?? item.deliverables);
       const verification = normalizeStringList(item.verification ?? item.verify);
+      const acceptanceIds = normalizeStringList(item.acceptanceIds ?? item.acceptance_ids);
+      const sourceRefs = normalizeStringList(item.sourceRefs ?? item.source_refs);
+      const diagramData = Array.isArray(item.diagramData) ? item.diagramData[0] : item.diagramData;
+      const implementationDiagram = item.implementationDiagram && typeof item.implementationDiagram === 'object'
+        ? item.implementationDiagram
+        : diagramData && typeof diagramData === 'object' ? diagramData : null;
       const steps = (Array.isArray(item.steps) ? item.steps : [])
         .filter(step => step && typeof step === 'object')
         .map(step => ({ label: asText(step.label || step.title).trim(), complete: Boolean(step.complete) }))
@@ -1178,9 +1363,11 @@
         body,
         purpose: asText(item.purpose),
         implementation,
-        implementationDiagram: item.implementationDiagram && typeof item.implementationDiagram === 'object' ? item.implementationDiagram : null,
+        implementationDiagram,
         outputs,
         verification,
+        acceptanceIds,
+        sourceRefs,
         blockedBy,
         steps,
         total,
@@ -1191,16 +1378,33 @@
         _index: index
       };
     }
-    function normalizePlanContract(value) {
+    function isSha256(value) {
+      return /^[0-9a-f]{64}$/i.test(asText(value).trim());
+    }
+    function normalizePlanContract(value, options = {}) {
       const inheritedErrors = value && typeof value === 'object' && !Array.isArray(value) && value.valid === false && Array.isArray(value.errors)
         ? value.errors.map(error => asText(error)).filter(Boolean)
         : [];
-      const errors = inheritedErrors.slice();
+      const errors = [
+        ...inheritedErrors,
+        ...(Array.isArray(options.identityErrors) ? options.identityErrors.map(error => asText(error)).filter(Boolean) : [])
+      ];
       if (!value || typeof value !== 'object' || Array.isArray(value)) {
         return {
           present: true, valid: false, schemaVersion: 0, parserVersion: '', sourceHash: '', sourceHashes: {},
-          tasks: [], edges: [], progress: { done: 0, total: 0, globalComplete: false, signals: {} }, diagnostics: [], sources: {}, errors: ['snapshot.plan must be an object']
+          sourceKind: '', planSource: '', planSourceRawSha256: '', tasks: [], edges: [],
+          progress: { done: 0, total: 0, globalComplete: false, signals: {} }, diagnostics: [], sources: {}, requiredSources: [], errors: ['snapshot.plan must be an object']
         };
+      }
+      const sourceKind = asText(value.sourceKind).trim();
+      const planSource = asText(value.planSource || value.plan_source).trim();
+      const planSourceRawSha256 = asText(value.planSourceRawSha256 || value.plan_source_raw_sha256).trim();
+      const requirePlanSourceRawSha256 = Boolean(options.requirePlanSourceRawSha256) || sourceKind === 'html' || planSource === '30_plan.html';
+      const expectedPlanSourceRawSha256 = asText(options.expectedPlanSourceRawSha256).trim();
+      if (requirePlanSourceRawSha256 && !isSha256(planSourceRawSha256)) errors.push('HTML planSourceRawSha256 is required');
+      if (options.requireSnapshotPlanSourceRawSha256 && !isSha256(expectedPlanSourceRawSha256)) errors.push('snapshot.planSourceRawSha256 is required for an HTML plan');
+      if (expectedPlanSourceRawSha256 && (!isSha256(expectedPlanSourceRawSha256) || planSourceRawSha256.toLowerCase() !== expectedPlanSourceRawSha256.toLowerCase())) {
+        errors.push('HTML planSourceRawSha256 does not match the snapshot source');
       }
       const schemaVersion = Number(value.schemaVersion);
       if (schemaVersion !== 2) errors.push(`unsupported plan schemaVersion: ${asText(value.schemaVersion) || 'missing'}`);
@@ -1268,19 +1472,24 @@
       const sources = value.sources && typeof value.sources === 'object' && !Array.isArray(value.sources)
         ? { plan: asText(value.sources.plan), progress: asText(value.sources.progress) }
         : {};
+      const requiredSources = normalizeStringList(value.requiredSources ?? value.required_sources);
       const uniqueErrors = Array.from(new Set(errors));
       return {
         present: true,
         valid: uniqueErrors.length === 0,
         schemaVersion: Number.isFinite(schemaVersion) ? schemaVersion : 0,
         parserVersion: asText(value.parserVersion),
+        sourceKind,
+        planSource,
         sourceHash: asText(value.sourceHash),
         sourceHashes: value.sourceHashes && typeof value.sourceHashes === 'object' ? { ...value.sourceHashes } : {},
+        planSourceRawSha256,
         tasks: tasks.filter(Boolean),
         edges,
         progress,
         diagnostics,
         sources,
+        requiredSources,
         errors: uniqueErrors
       };
     }
@@ -1335,10 +1544,51 @@
     function normalizeSnapshot(snapshotInput) {
       const snapshot = snapshotInput && typeof snapshotInput === 'object' ? snapshotInput : {};
       const files = snapshot.files && typeof snapshot.files === 'object' ? snapshot.files : {};
+      const rawPlanSource = asText(snapshot.planSource || snapshot.plan_source).trim();
+      const hasStructuredPlan = Object.prototype.hasOwnProperty.call(snapshot, 'plan');
+      const rawPlan = snapshot.plan && typeof snapshot.plan === 'object' && !Array.isArray(snapshot.plan) ? snapshot.plan : {};
+      const rawPlanSourceKind = asText(rawPlan.sourceKind).trim().toLowerCase();
+      const rawPlanSourcePath = asText(rawPlan.planSource || rawPlan.plan_source).trim();
+      const rawPlanSources = rawPlan.sources && typeof rawPlan.sources === 'object' && !Array.isArray(rawPlan.sources) ? rawPlan.sources : {};
+      const snapshotTaskDir = asText(snapshot.taskDir || snapshot.task_dir).trim();
+      const rawPlanSourcesPlan = asText(rawPlanSources.plan).trim();
+      const rawPlanSourcesPlanIsHtml = isTaskSourceLocation(rawPlanSourcesPlan, snapshotTaskDir, '30_plan.html');
+      const rawPlanSourcesPlanIsLegacy = isLegacyPlanSourceLocation(rawPlanSourcesPlan, snapshotTaskDir);
+      const hasPlanDocumentProperty = Object.prototype.hasOwnProperty.call(snapshot, 'planDocument');
+      const rawPlanDocumentState = snapshot.planDocumentState && typeof snapshot.planDocumentState === 'object' && !Array.isArray(snapshot.planDocumentState) ? snapshot.planDocumentState : null;
+      const hasHtmlPlanDocumentState = Boolean(rawPlanDocumentState && (rawPlanDocumentState.present === true || rawPlanDocumentState.document != null || rawPlanDocumentState.format === 'html'));
+      const hasHtmlSourceSignal = rawPlanSource === '30_plan.html'
+        || rawPlanSourceKind === 'html'
+        || rawPlanSourcePath === '30_plan.html'
+        || rawPlanSourcesPlanIsHtml
+        || Boolean(rawPlanSourcesPlan && !rawPlanSourcesPlanIsLegacy)
+        || asText(snapshot.sourceKind).trim().toLowerCase() === 'html'
+        || hasPlanDocumentProperty
+        || hasHtmlPlanDocumentState
+        || Object.prototype.hasOwnProperty.call(snapshot.files || {}, '30_plan.html')
+        || Object.prototype.hasOwnProperty.call(snapshot.sourceHashes || {}, '30_plan.html')
+        || (Array.isArray(snapshot.sources) && snapshot.sources.some(item => asText(item?.name).trim() === '30_plan.html'))
+        || (Array.isArray(snapshot.artifacts) && snapshot.artifacts.some(item => asText(item?.path || item?.name).trim() === '30_plan.html'))
+        || Object.prototype.hasOwnProperty.call(rawPlan, 'planDocument')
+        || Object.prototype.hasOwnProperty.call(rawPlan.sourceHashes || {}, '30_plan.html');
+      const hasExplicitUnknownPlanSource = Boolean(rawPlanSource && !['30_plan.html', '30_plan.md'].includes(rawPlanSource));
+      const htmlPlan = hasHtmlSourceSignal || hasExplicitUnknownPlanSource;
+      const planSource = htmlPlan ? '30_plan.html' : rawPlanSource || '30_plan.md';
+      const identityErrors = [];
+      if (htmlPlan && rawPlanSource && rawPlanSource !== '30_plan.html') identityErrors.push(`HTML plan identity conflicts with planSource: ${rawPlanSource}`);
+      if (htmlPlan && rawPlanSourceKind && rawPlanSourceKind !== 'html') identityErrors.push(`HTML plan identity conflicts with plan.sourceKind: ${rawPlanSourceKind}`);
+      if (htmlPlan && rawPlanSourcePath && rawPlanSourcePath !== '30_plan.html') identityErrors.push(`HTML plan identity conflicts with plan.planSource: ${rawPlanSourcePath}`);
+      if (htmlPlan && rawPlanSourcesPlan && !rawPlanSourcesPlanIsHtml) identityErrors.push(`HTML plan identity conflicts with plan.sources.plan: ${rawPlanSourcesPlan}`);
+      if (htmlPlan && asText(snapshot.sourceKind).trim() && asText(snapshot.sourceKind).trim().toLowerCase() !== 'html') identityErrors.push(`HTML plan identity conflicts with snapshot.sourceKind: ${asText(snapshot.sourceKind).trim()}`);
+      if (hasExplicitUnknownPlanSource) identityErrors.push(`unsupported planSource: ${rawPlanSource}`);
       const normalizedFiles = {};
       Object.keys(files).sort().forEach(name => {
         if (typeof files[name] === 'string') normalizedFiles[name] = files[name];
       });
+      if (htmlPlan) delete normalizedFiles['30_plan.md'];
+      const planDocumentState = htmlPlan
+        ? normalizePlanDocument(snapshot.planDocument)
+        : { present: false, valid: true, document: null, title: '', nodes: [], errors: [] };
       const sources = Array.isArray(snapshot.sources) ? snapshot.sources : [];
       const sourceByName = new Map(sources.map(item => [asText(item?.name), item]));
       const artifactInput = Array.isArray(snapshot.artifacts) && snapshot.artifacts.length
@@ -1358,7 +1608,7 @@
             size: Number.isFinite(Number(item.size)) ? Number(item.size) : 0,
             modifiedAt: asText(item.modifiedAt || item.modified_at),
             state: asText(item.state || item.status)
-          })).sort((a, b) => a.path.localeCompare(b.path));
+          })).filter(item => !(htmlPlan && item.path === '30_plan.md')).sort((a, b) => a.path.localeCompare(b.path));
       const sourcePreviews = (Array.isArray(snapshot.sourcePreviews) ? snapshot.sourcePreviews : [])
         .filter(item => item && typeof item === 'object')
         .slice(0, 24)
@@ -1388,8 +1638,16 @@
       const embeddedCodemap = snapshot.codemap && typeof snapshot.codemap === 'object'
         ? normalizeSnapshot({ ...snapshot.codemap, codemap: null })
         : null;
-      const hasStructuredPlan = Object.prototype.hasOwnProperty.call(snapshot, 'plan');
-      const plan = hasStructuredPlan ? normalizePlanContract(snapshot.plan) : null;
+      const planSourceRawSha256 = asText(snapshot.planSourceRawSha256 || snapshot.plan_source_raw_sha256).trim();
+      const plan = hasStructuredPlan
+        ? normalizePlanContract(snapshot.plan, {
+            requirePlanSourceRawSha256: htmlPlan,
+            expectedPlanSourceRawSha256: htmlPlan ? planSourceRawSha256 : '',
+            requireSnapshotPlanSourceRawSha256: htmlPlan,
+            identityErrors
+          })
+        : null;
+      const requiredSources = normalizeStringList(snapshot.requiredSources ?? snapshot.required_sources ?? plan?.requiredSources);
       const timelineState = snapshot.timelineState && typeof snapshot.timelineState === 'object' && snapshot.timelineState.valid === false
         ? {
             ...normalizeTimeline(snapshot.timeline, Object.prototype.hasOwnProperty.call(snapshot, 'timeline')),
@@ -1401,7 +1659,13 @@
         version: Number(snapshot.version) || 1,
         schemaVersion: Number(snapshot.schemaVersion) || 0,
         kind: asText(snapshot.kind),
-        title: asText(snapshot.title) || inferTitle(normalizedFiles) || 'Roadmap',
+        planSource,
+        planSourceRawSha256,
+        ...(htmlPlan ? { planDocument: planDocumentState.document } : {}),
+        planDocumentState,
+        title: htmlPlan
+          ? planDocumentState.title || asText(snapshot.title).trim() || 'Roadmap'
+          : asText(snapshot.title) || inferTitle(normalizedFiles) || 'Roadmap',
         taskDir: asText(snapshot.taskDir || snapshot.task_dir),
         generatedAt: asText(snapshot.generatedAt || snapshot.generated_at),
         fingerprint: asText(snapshot.fingerprint),
@@ -1413,7 +1677,10 @@
         timeline: timelineState.events,
         timelineState,
         files: normalizedFiles,
-        sources: sources.length ? sources : Object.keys(normalizedFiles).map(name => ({ name, size: normalizedFiles[name].length })),
+        requiredSources,
+        sources: (htmlPlan ? sources.filter(item => asText(item?.name) !== '30_plan.md') : sources).length
+          ? (htmlPlan ? sources.filter(item => asText(item?.name) !== '30_plan.md') : sources)
+          : Object.keys(normalizedFiles).map(name => ({ name, size: normalizedFiles[name].length })),
         artifacts,
         sourcePreviews,
         uiPreviews,
@@ -1431,6 +1698,11 @@
       return JSON.stringify({
         fingerprint: snapshot.fingerprint,
         kind: snapshot.kind,
+        planSource: snapshot.planSource,
+        planSourceRawSha256: snapshot.planSourceRawSha256,
+        planDocument: snapshot.planDocument,
+        planDocumentState: snapshot.planDocumentState,
+        requiredSources: snapshot.requiredSources,
         sourceFingerprint: snapshot.sourceFingerprint,
         files: Object.keys(snapshot.files).sort().map(name => [name, snapshot.files[name]]),
         artifacts: stableArtifactValue(snapshot.artifacts),
@@ -1707,7 +1979,8 @@
       const files = detail.files && typeof detail.files === 'object' ? detail.files : {};
       const metadata = detail.metadata && typeof detail.metadata === 'object' ? detail.metadata : {};
       const designNames = ['00_spec.md', '10_design.md', 'design.md', 'blueprint.md'];
-      const implementationNames = ['30_plan.md', 'implementation-plan.md'];
+      const planSource = asText(detail.planSource || detail.plan_source).trim() === '30_plan.html' ? '30_plan.html' : '30_plan.md';
+      const implementationNames = planSource === '30_plan.html' ? ['30_plan.html'] : ['30_plan.md', 'implementation-plan.md'];
       const firstFile = names => names.map(name => asText(files[name])).find(Boolean) || '';
       return {
         designPlan: firstFile(designNames),
@@ -1755,9 +2028,9 @@
       });
       return sections;
     }
-    function extractRisks(files) {
+    function extractRisks(files, planPath = '30_plan.md') {
       const risks = [];
-      for (const section of riskSections(files['30_plan.md'])) {
+      for (const section of riskSections(files[planPath])) {
         for (const line of section.split('\n')) {
           if (/^\s*\|.*\|\s*$/.test(line)) {
             const cells = line.split('|').slice(1, -1).map(cell => cell.trim());
@@ -1865,10 +2138,10 @@
         'failed-holistic': '全体検証失敗'
       }[state] || '状態不明';
     }
-    function suggestedFileForState(state) {
+    function suggestedFileForState(state, planPath = '30_plan.md') {
       return {
         'missing-spec': '00_spec.md',
-        'missing-implementation': '30_plan.md',
+        'missing-implementation': planPath,
         'missing-acceptance': 'checkpoint.md',
         'missing-evidence': '90_verification.md',
         'failed-holistic': '90_verification.md',
@@ -1898,7 +2171,7 @@
       }
       return null;
     }
-    function extractExplicitOutcomeTrace(files) {
+    function extractExplicitOutcomeTrace(files, planPath = '30_plan.md') {
       const section = markdownSection(files['team-journal.md'], /^Outcome Trace$/i);
       const table = parseMarkdownTable(section);
       if (!table) return null;
@@ -1931,7 +2204,7 @@
         const derived = deriveTraceState(outcome);
         outcome.state = normalized && !(normalized === 'matched' && derived !== 'matched') ? normalized : derived;
         outcome.stateLabel = stateLabel(outcome.state);
-        outcome.suggestedFile = suggestedFileForState(outcome.state);
+        outcome.suggestedFile = suggestedFileForState(outcome.state, planPath);
         return outcome;
       }).filter(item => item.outcome);
       return outcomes.length ? outcomes : null;
@@ -1983,24 +2256,28 @@
       if (/(fail|failed|失敗|ng)[\s\S]{0,80}(holistic|全体|総合)/i.test(verification)) return true;
       return reviews.critical > 0 || reviews.important > 0 || finalReviewVerdict(reviewText) === 'NEEDS-REVISION';
     }
-    function buildArtifactWarnings(files, reviews, explicitTrace) {
+    function buildArtifactWarnings(files, reviews, explicitTrace, options = {}) {
       const warnings = [];
-      if (!explicitTrace) warnings.push({ kind: 'missing-trace', file: 'team-journal.md', message: 'Outcome Trace未作成または未読取' });
+      const planPath = asText(options.planPath).trim() || '30_plan.md';
+      const hasPlan = options.hasPlan == null ? hasFile(files, planPath) : Boolean(options.hasPlan);
+      if (!explicitTrace && !options.optionalTrace) warnings.push({ kind: 'missing-trace', file: 'team-journal.md', message: 'Outcome Trace未作成または未読取' });
       for (const [file, message] of [
         ['checkpoint.md', 'Contract未作成'],
-        ['30_plan.md', 'Implementation plan未作成'],
+        [planPath, 'Implementation plan未作成'],
         ['90_verification.md', 'Evidence未収集'],
         ['80_review.md', 'Independent review未実施']
       ]) {
-        if (!hasFile(files, file)) warnings.push({ kind: 'missing-artifact', file, message });
+        if (file === planPath ? !hasPlan : !hasFile(files, file)) warnings.push({ kind: 'missing-artifact', file, message });
       }
       if (holisticFailed(files, reviews)) warnings.push({ kind: 'failed-holistic', file: '90_verification.md', message: 'holistic checkまたはreviewが失敗中' });
       return warnings;
     }
-    function buildFallbackOutcomes(files, reviews) {
+    function buildFallbackOutcomes(files, reviews, options = {}) {
+      if (options.optionalTrace) return [];
       const requirements = extractSpecRequirements(files['00_spec.md']);
       const acceptanceIds = extractAcceptanceIds(files['checkpoint.md']);
-      const hasPlan = hasFile(files, '30_plan.md');
+      const planPath = asText(options.planPath).trim() || '30_plan.md';
+      const hasPlan = options.hasPlan == null ? hasFile(files, planPath) : Boolean(options.hasPlan);
       const hasCheckpoint = hasFile(files, 'checkpoint.md');
       const hasEvidence = hasFile(files, '90_verification.md') || hasFile(files, '80_review.md');
       const failed = holisticFailed(files, reviews);
@@ -2009,7 +2286,7 @@
           id: 'fallback-missing-spec',
           outcome: 'Outcome Traceを作成する',
           requirement: '',
-          implementation: hasPlan ? '30_plan.md' : '',
+          implementation: hasPlan ? planPath : '',
           acceptance: hasCheckpoint ? 'checkpoint.md' : '',
           evidence: hasEvidence ? 'verification/review artifact' : '',
           source: 'fallback',
@@ -2017,7 +2294,7 @@
         };
         outcome.state = 'missing-spec';
         outcome.stateLabel = stateLabel(outcome.state);
-        outcome.suggestedFile = suggestedFileForState(outcome.state);
+        outcome.suggestedFile = suggestedFileForState(outcome.state, planPath);
         return [outcome];
       }
       return requirements.map((requirement, index) => {
@@ -2025,7 +2302,7 @@
           id: `fallback-${index + 1}`,
           outcome: `O-${index + 1} ${requirement}`,
           requirement,
-          implementation: hasPlan ? '30_plan.mdから要接続' : '',
+          implementation: hasPlan ? `${planPath}から要接続` : '',
           acceptance: hasCheckpoint ? acceptanceIds[index] || 'checkpoint.mdから要接続' : '',
           evidence: hasEvidence ? 'verification/reviewから要接続' : '',
           source: 'fallback',
@@ -2039,7 +2316,7 @@
               ? 'missing-acceptance'
               : 'missing-evidence';
         outcome.stateLabel = stateLabel(outcome.state);
-        outcome.suggestedFile = suggestedFileForState(outcome.state);
+        outcome.suggestedFile = suggestedFileForState(outcome.state, planPath);
         return outcome;
       });
     }
@@ -2061,7 +2338,7 @@
         status: missingTotal ? 'attention' : 'matched'
       };
     }
-    function buildNextDecision(outcomes, warnings, summary) {
+    function buildNextDecision(outcomes, warnings, summary, options = {}) {
       const failed = outcomes.find(outcome => outcome.state === 'failed-holistic');
       if (failed) return { label: `${failed.outcome}：全体検証を確認`, action: '全体検証を確認する', context: failed.outcome, file: failed.suggestedFile, state: failed.state };
       const missing = outcomes.find(outcome => outcome.state !== 'matched');
@@ -2076,6 +2353,15 @@
       }
       const warning = warnings[0];
       if (warning) return { label: warning.message, action: '不足している成果物を確認する', context: warning.message, file: warning.file, state: warning.kind };
+      if (options.optionalTrace && !outcomes.length) {
+        return {
+          label: '計画と受入条件を確認',
+          action: '計画と受入条件を確認する',
+          context: 'HTML計画の型付きTaskとacceptanceを確認',
+          file: options.planPath || '30_plan.html',
+          state: 'matched'
+        };
+      }
       return {
         label: summary.total ? 'Outcome Traceは接続済み。検証bundleを確認' : 'Outcome Traceを作成',
         action: summary.total ? '検証bundleを確認する' : 'Outcome Traceを作成する',
@@ -2084,10 +2370,13 @@
         state: 'matched'
       };
     }
-    function buildOutcomeTrace(files, reviews) {
-      const explicit = extractExplicitOutcomeTrace(files);
-      let outcomes = explicit || buildFallbackOutcomes(files, reviews);
-      const warnings = buildArtifactWarnings(files, reviews, explicit);
+    function buildOutcomeTrace(files, reviews, options = {}) {
+      const planPath = asText(options.planPath).trim() || '30_plan.md';
+      const optionalTrace = Boolean(options.optionalTrace && !hasFile(files, 'team-journal.md'));
+      const traceOptions = { ...options, planPath, optionalTrace };
+      const explicit = extractExplicitOutcomeTrace(files, planPath);
+      let outcomes = explicit || buildFallbackOutcomes(files, reviews, traceOptions);
+      const warnings = buildArtifactWarnings(files, reviews, explicit, traceOptions);
       if (holisticFailed(files, reviews) && !outcomes.some(outcome => outcome.state === 'failed-holistic')) {
         outcomes = outcomes.map((outcome, index) => index === 0 ? { ...outcome, state: 'failed-holistic', stateLabel: stateLabel('failed-holistic'), suggestedFile: suggestedFileForState('failed-holistic') } : outcome);
       }
@@ -2096,7 +2385,7 @@
         outcomes,
         traceSummary: summary,
         artifactWarnings: warnings,
-        nextDecision: buildNextDecision(outcomes, warnings, summary)
+        nextDecision: buildNextDecision(outcomes, warnings, summary, traceOptions)
       };
     }
     function buildModel(snapshotInput, options = {}) {
@@ -2106,7 +2395,8 @@
       const tasks = usesStructuredPlan ? snapshot.plan.tasks : extractTasks(snapshot.files);
       const entries = usesStructuredPlan ? snapshot.timeline.slice() : extractLogEntries(snapshot.files);
       const reviews = extractReviewCounts(snapshot.files);
-      const risks = extractRisks(snapshot.files);
+      const planPath = planSourcePath(snapshot);
+      const risks = planPath === '30_plan.html' ? [] : extractRisks(snapshot.files, planPath);
       const phases = extractPhaseSignals(snapshot.files, entries);
       const freshness = freshnessFor(snapshot, nowMs);
       const recordedActiveTask = tasks.find(task => task.status === 'in-progress') || null;
@@ -2114,7 +2404,16 @@
       const completedTasks = tasks.filter(task => task.status === 'complete');
       const activePhase = phases.find(phase => phase.status === 'in-progress') || phases.find(phase => phase.status === 'planned') || phases[phases.length - 1];
       const nextSteps = tasks.filter(task => task.status !== 'complete').slice(0, 3);
-      const trace = buildOutcomeTrace(snapshot.files, reviews);
+      const hasTypedHtmlPlan = planPath === '30_plan.html'
+        && snapshot.plan?.valid === true
+        && Array.isArray(snapshot.plan.tasks)
+        && snapshot.plan.tasks.length > 0
+        && snapshot.plan.tasks.some(task => Array.isArray(task.acceptanceIds) && task.acceptanceIds.length > 0);
+      const trace = buildOutcomeTrace(snapshot.files, reviews, {
+        planPath,
+        hasPlan: planPath === '30_plan.html' ? hasTypedHtmlPlan : hasFile(snapshot.files, planPath),
+        optionalTrace: hasTypedHtmlPlan
+      });
       const revisions = extractRevisionLog(snapshot.files);
       const structuredDependencies = usesStructuredPlan
         ? snapshot.plan.edges.filter(edge => edge.kind === 'blockedBy' || edge.relation === 'blockedBy' || !edge.kind)
@@ -2235,13 +2534,13 @@
       const section = matchedHeading ? stripMarkdown(matchedHeading[1]).trim() : '';
       return sectionStatements(markdown, heading, source).map(item => ({ ...item, section }));
     }
-    function buildDesignSummary(files, purposeSection, approachSection) {
+    function buildDesignSummary(files, purposeSection, approachSection, planPath = '30_plan.md', planText = '') {
       const specSource = files['00_spec.md'];
       const goalText = summarize(purposeSection);
       const contextText = summarize(markdownSection(specSource, /^(背景・目的|背景|Why|Context)$/i));
       const fromSpec = heading => designStatements(specSource, heading, '00_spec.md');
       const decisions = [
-        ...designStatements(files['30_plan.md'], /^(採用判断|判断|決定)$/i, '30_plan.md'),
+        ...designStatements(planText, /^(採用判断|判断|決定)$/i, planPath),
         ...designStatements(specSource, /^(採用判断|判断|決定)$/i, '00_spec.md')
       ];
       const seenDecisions = new Set();
@@ -2249,7 +2548,7 @@
         goal: { text: goalText, source: '00_spec.md' },
         context: { text: contextText, source: '00_spec.md' },
         requirements: fromSpec(/^(必須要件|主要要件|Requirements?)$/i),
-        approach: { text: summarize(approachSection), source: '30_plan.md' },
+        approach: { text: summarize(approachSection), source: planPath },
         decisions: decisions.filter(item => {
           const key = item.text.replace(/\s+/g, ' ').trim().toLowerCase();
           if (!key || seenDecisions.has(key)) return false;
@@ -2279,17 +2578,18 @@
       const purposeSection = markdownSection(specSource, /^(目的|概要|背景・目的|Goal|Objective)$/i);
       const purposeSummary = summarize(purposeSection) || 'Taskの目的が未記録';
       const specificationSummary = buildSpecificationSummary(specSource) || '主要要件・制約・Doneが未記録';
-      const planSource = model.snapshot.files['30_plan.md'];
+      const planPath = planSourcePath(model.snapshot);
+      const planSource = planSourceText(model.snapshot);
       const finalApproachSection = markdownSection(planSource, /^(?:\d{4}-\d{2}-\d{2}\s+)?(?:Final implementation supersession|最終実装)$/i);
       const approachSection = finalApproachSection || markdownSection(planSource, /^(実装方針|採用する最小モデル|Approach)$/i);
       const anchors = Array.from(approachSection.matchAll(/`([^`\n]+)`/g))
         .map(match => match[1].trim())
         .filter((label, index, values) => label && values.indexOf(label) === index)
-        .map(label => ({ label, source: '30_plan.md' }));
+        .map(label => ({ label, source: planPath }));
       const artifactByPath = new Map(model.artifacts.map(artifact => [artifact.path, artifact]));
       const preferredArtifacts = [
         ['00_spec.md', '仕様'],
-        ['30_plan.md', '実装計画'],
+        [planPath, '実装計画'],
         ['40_progress.md', '進捗'],
         ['80_review.md', 'レビュー']
       ].map(([path, label]) => {
@@ -2345,7 +2645,7 @@
         selectedSourcePreview,
         selectedUiPreviews,
         flow: model.tasks.slice(),
-        design: buildDesignSummary(model.snapshot.files, purposeSection, approachSection),
+        design: buildDesignSummary(model.snapshot.files, purposeSection, approachSection, planPath, planSource),
         purpose: {
           summary: purposeSummary,
           source: '00_spec.md'
@@ -2357,7 +2657,7 @@
         approach: {
           summary: summarize(approachSection) || '実装方針が未記録',
           anchors,
-          source: '30_plan.md'
+          source: planPath
         },
         claims: {
           facts: collectStatements(model.snapshot.files, [
@@ -2367,12 +2667,12 @@
           ]),
           decisions: collectStatements(model.snapshot.files, [
             { file: 'team-journal.md', heading: /^(Decisions|判断|決定ログ)$/i },
-            { file: '30_plan.md', heading: /^(?:\d{4}-\d{2}-\d{2}\s+)?(?:Final implementation supersession|採用判断|実装方針|決定)$/i },
+            { file: planPath, heading: /^(?:\d{4}-\d{2}-\d{2}\s+)?(?:Final implementation supersession|採用判断|実装方針|決定)$/i },
             { file: '00_spec.md', heading: /^(採用判断|判断|決定)$/i }
           ]),
           openItems: collectStatements(model.snapshot.files, [
             { file: 'team-journal.md', heading: /^(Open Questions|未確定|未決事項)$/i },
-            { file: '30_plan.md', heading: /^(未確定|リスク|リスクと対策|Open Questions)$/i },
+            { file: planPath, heading: /^(未確定|リスク|リスクと対策|Open Questions)$/i },
             { file: '20_survey.md', heading: /^(仮説|未確定|Open Questions)$/i },
             { file: '00_spec.md', heading: /^(未確定|仮説|Open Questions)$/i }
           ])
@@ -2416,7 +2716,7 @@
       }
       if (/checkpoint\.md$/i.test(path)) return '合格基準';
       if (/survey|research/i.test(path)) return phaseComplete('1') ? '調査済み' : '調査記録';
-      if (/30_plan\.md$/i.test(path)) return phaseComplete('2') ? '計画確定' : '計画';
+      if (/30_plan\.(?:md|html)$/i.test(path)) return phaseComplete('2') ? '計画確定' : '計画';
       if (/team-journal/i.test(path)) return '稼働記録';
       return artifact.state || '生成済み';
     }
@@ -2614,6 +2914,7 @@
       const errors = model.planState.errors.length
         ? model.planState.errors
         : ['構造化Planの検証に失敗しました。'];
+      const sourcePath = planSourcePath(model.snapshot);
       const goal = {
         id: 'plan-contract-goal',
         kind: 'goal',
@@ -2623,7 +2924,7 @@
         status: 'attention',
         meta: 'Plan contract error',
         summary: 'snapshot.planを表示できません。legacy Markdownへはfallbackしていません。',
-        artifact: '30_plan.md',
+        artifact: sourcePath,
         facts: [['source', 'snapshot.plan'], ['状態', '明示的エラー'], ['Task', `${model.tasks.length}件（構造化入力）`]]
       };
       const issue = {
@@ -2636,7 +2937,7 @@
         status: 'failed-holistic',
         meta: `${errors.length} error${errors.length === 1 ? '' : 's'}`,
         summary: errors.join(' / '),
-        artifact: '30_plan.md',
+        artifact: sourcePath,
         order: 1,
         facts: errors.map((error, index) => [`Error ${index + 1}`, error])
       };
@@ -2668,6 +2969,7 @@
       }
       const nodes = [];
       const edges = [];
+      const planPath = planSourcePath(model.snapshot);
       const clusterOrder = { discovery: 0, design: 1, guardrail: 2 };
       const taskStatusLabel = status => ({ complete: '完了', 'in-progress': '進行中', blocked: 'ブロック', planned: '未着手' })[status] || '未着手';
       const edgeVerbFor = kind => ({
@@ -2778,7 +3080,7 @@
           status: active ? 'in-progress' : task.status,
           meta: task.total ? `${task.done}/${task.total} 項目` : taskStatusLabel(task.status),
           summary: stripMarkdown(task.note || task.target || task.blockedBy || 'Task本文から抽出'),
-          artifact: '30_plan.md',
+          artifact: planPath,
           taskNumber: task.number,
           order: parseFloat(task.number) || 0,
           facts: [
@@ -2841,6 +3143,7 @@
         if (artifactPaths.length >= 5) break;
         if (!artifactPaths.includes(path)) artifactPaths.push(path);
       }
+      if (planPath === '30_plan.html' && !artifactPaths.includes(planPath)) artifactPaths.push(planPath);
       if (!artifactPaths.includes('90_verification.md')) artifactPaths.push('90_verification.md');
       if (artifactPaths.length < 6 && !artifactPaths.includes('80_review.md')) artifactPaths.push('80_review.md');
       const artifactIds = new Map();
@@ -2904,7 +3207,7 @@
         });
       });
       if (!model.tasks.length) {
-        addEdge(goalId, artifactIds.get('30_plan.md'), 'artifact', false);
+        addEdge(goalId, artifactIds.get(planPath), 'artifact', false);
       }
       const activeNodeId = model.freshness.state === 'fresh' && model.activeTask ? taskIds.get(model.activeTask.number) : goalId;
       const sorted = list => list.slice().sort((left, right) => {
@@ -2936,7 +3239,8 @@
       renderInlineMarkdown, renderWorkflowMarkdown, groupTaskSections,
       extractPlanSections, taskHubSettings, extractExplicitOutcomeTrace,
       extractRevisionLog, buildOutcomeTrace, stateLabel, parseSvgDiagramSpec,
-      codemapEvidenceLabel, buildCodemapViewModel, buildPlanContractErrorTreeViewModel, buildTreeViewModel, buildExecutionBrief, buildDesignSummary, buildRoadmapRoute, highlightSourceCode
+      codemapEvidenceLabel, buildCodemapViewModel, buildPlanContractErrorTreeViewModel, buildTreeViewModel, buildExecutionBrief, buildDesignSummary, buildRoadmapRoute, highlightSourceCode,
+      normalizePlanDocument, planDocumentText, planDocumentHasHeading, planSourcePath, planSourceText
     };
 
     /* ROADMAP_MODEL_END */
@@ -3041,6 +3345,85 @@
     function renderMarkdown(value, headingOffset = 3) {
       return ROADMAP_MODEL.renderWorkflowMarkdown(text(value), headingOffset);
     }
+    function planDocumentIdMap(planDocument) {
+      const map = new Map();
+      const visit = (node, taskNumber = '') => {
+        if (!node || node.text != null) return;
+        const nodeTask = text(node.attrs?.['data-task-id']).trim().replace(/^task-/i, '') || taskNumber;
+        const rawId = text(node.attrs?.id).trim();
+        const taskHeadingId = /^h[1-6]$/.test(text(node.tag).toLowerCase()) && nodeTask && rawId === 'task-' + safeId(nodeTask);
+        if (rawId && !map.has(rawId)) map.set(rawId, taskHeadingId ? rawId : 'plan-node-' + sourceIdPart(rawId));
+        (node.children || []).forEach(child => visit(child, nodeTask));
+      };
+      (planDocument?.nodes || []).forEach(visit);
+      return map;
+    }
+    function remapPlanDocumentReference(name, value, idMap) {
+      const raw = text(value);
+      if (name === 'id') return idMap.get(raw) || raw;
+      if (name === 'href' && raw.startsWith('#')) return '#' + (idMap.get(raw.slice(1)) || raw.slice(1));
+      if (['aria-labelledby', 'aria-describedby', 'headers', 'for'].includes(name)) return raw.split(/\s+/).map(token => idMap.get(token) || token).join(' ');
+      if (/url\(#([^\)]+)\)/i.test(raw)) return raw.replace(/url\(#([^\)]+)\)/gi, (_, id) => 'url(#' + (idMap.get(id) || id) + ')');
+      return raw;
+    }
+    function renderPlanDocumentNode(node, svgParent = false, idMap = new Map()) {
+      if (node && Object.prototype.hasOwnProperty.call(node, 'text')) return document.createTextNode(text(node.text));
+      if (!node || !text(node.tag)) return null;
+      const tag = text(node.tag).toLowerCase();
+      if (tag === 'fragment') {
+        const fragment = document.createDocumentFragment();
+        (node.children || []).forEach(child => {
+          const childElement = renderPlanDocumentNode(child, svgParent, idMap);
+          if (childElement) fragment.appendChild(childElement);
+        });
+        return fragment;
+      }
+      const isSvg = svgParent || tag === 'svg';
+      const element = isSvg
+        ? document.createElementNS('http://www.w3.org/2000/svg', tag)
+        : document.createElement(tag);
+      Object.entries(node.attrs || {}).forEach(([name, value]) => {
+        if (name === 'checked' && tag === 'input') element.checked = value === '' || value === 'true' || value === 'checked';
+        else if (name === 'disabled' && tag === 'input') element.disabled = true;
+        else if (name === 'hidden') return;
+        else if (name === 'class') element.setAttribute(name, text(value).split(/\s+/).filter(Boolean).map(token => 'plan-author-' + sourceIdPart(token)).join(' '));
+        else element.setAttribute(name, remapPlanDocumentReference(name, value, idMap));
+      });
+      if (tag === 'input') element.disabled = true;
+      if (tag === 'details') element.open = true;
+      (node.children || []).forEach(child => {
+        const childElement = renderPlanDocumentNode(child, isSvg, idMap);
+        if (childElement) element.appendChild(childElement);
+      });
+      return element;
+    }
+    function renderPlanDocumentNodes(planDocument, host) {
+      host.replaceChildren();
+      const idMap = planDocumentIdMap(planDocument);
+      (planDocument?.nodes || []).forEach(node => {
+        const element = renderPlanDocumentNode(node, false, idMap);
+        if (element) host.appendChild(element);
+      });
+      const title = text(planDocument?.title).trim();
+      const firstHeading = host.querySelector('h1');
+      if (firstHeading && title && text(firstHeading.textContent).trim() === title) firstHeading.remove();
+    }
+    function findPlanDocumentTaskSection(host, task) {
+      const number = text(task?.number).trim();
+      return Array.from(host.querySelectorAll('[data-task-id]')).find(node => {
+        const value = text(node.getAttribute('data-task-id')).trim().replace(/^task-/i, '');
+        return value === number;
+      }) || null;
+    }
+    function findPlanDocumentTaskHeading(section, task) {
+      if (!section) return null;
+      const headings = section.matches('h1,h2,h3,h4,h5,h6') ? [section] : Array.from(section.querySelectorAll('h1,h2,h3,h4,h5,h6'));
+      const number = text(task?.number).trim();
+      return headings.find(node => text(node.id) === 'task-' + safeId(number)) || headings.find(node => new RegExp('(?:Task|タスク)\\s*' + number.replace(/[.*+?^${}()|[\\]\\]/g, '\\$&'), 'i').test(text(node.textContent))) || headings[0] || null;
+    }
+    function planMetadataFromSnapshot(snapshot) {
+      return (Array.isArray(snapshot?.requiredSources) ? snapshot.requiredSources : []).map(value => ({ key: 'required_sources', value: text(value).trim() })).filter(item => item.value);
+    }
     function htmlList(items, className = 'plain-list', emptyText = '未記録') {
       const values = Array.isArray(items) ? items.filter(item => text(item).trim()) : [];
       if (!values.length) return '<p class="change-empty">' + escapeHtml(emptyText) + '</p>';
@@ -3106,10 +3489,11 @@
         : '';
       return preview.path + (preview.anchor ? '#' + preview.anchor : '') + lines;
     }
-    function planSourceLocation(task) {
+    function planSourceLocation(task, snapshot) {
       const source = task && task.source;
-      if (!source || !source.file) return 'Plan source anchor未記録';
-      const file = text(source.file).replace(/^.*[\\/]((?:30_plan|40_progress)\.md)$/, '$1');
+      const planPath = ROADMAP_MODEL.planSourcePath(snapshot || {});
+      if (!source || !source.file) return planPath === '30_plan.html' ? '30_plan.html anchor未記録' : 'Plan source anchor未記録';
+      const file = text(source.file).replace(/^.*[\\/]((?:30_plan|40_progress)\.(?:md|html))$/, '$1');
       const start = source.lineStart ? 'L' + source.lineStart : '';
       const end = source.lineEnd && source.lineEnd > source.lineStart ? '–L' + source.lineEnd : '';
       return file + (start ? ':' + start + end : '');
@@ -3178,8 +3562,11 @@
       if (target && typeof target.focus === 'function') target.focus({ preventScroll: true });
     }
     function renderHeader(model) {
-      const planText = text(model.snapshot.files['30_plan.md'] || model.snapshot.files['10_task.md']);
-      const title = firstMarkdownH1(planText) || text(model.snapshot.title).trim() || 'Roadmap';
+      const sourcePath = ROADMAP_MODEL.planSourcePath(model.snapshot);
+      const planText = ROADMAP_MODEL.planSourceText(model.snapshot);
+      const title = sourcePath === '30_plan.html'
+        ? text(model.snapshot.planDocument?.title || model.snapshot.title).trim() || 'Roadmap'
+        : firstMarkdownH1(planText) || text(model.snapshot.title).trim() || 'Roadmap';
       const freshness = model.freshness.state || 'unknown';
       byId('task-title').textContent = title;
       byId('brand-link').textContent = 'Roadmap';
@@ -3195,8 +3582,11 @@
     function renderOrientation(model, brief) {
       const current = currentTaskFor(model);
       const plan = model.plan;
-      const planText = text(model.snapshot.files['30_plan.md'] || model.snapshot.files['10_task.md']);
-      const hasPlanPurpose = /^#{1,6}\s*(目的(?:と方針)?|概要|背景・目的|Goal|Objective)\s*$/im.test(planText);
+      const sourcePath = ROADMAP_MODEL.planSourcePath(model.snapshot);
+      const planText = ROADMAP_MODEL.planSourceText(model.snapshot);
+      const hasPlanPurpose = sourcePath === '30_plan.html'
+        ? ROADMAP_MODEL.planDocumentHasHeading(model.snapshot.planDocument, /^(目的(?:と方針)?|概要|背景・目的|Goal|Objective)$/i)
+        : /^#{1,6}\s*(目的(?:と方針)?|概要|背景・目的|Goal|Objective)\s*$/im.test(planText);
       const purpose = hasPlanPurpose ? '' : brief.design.goal.text || brief.purpose.summary || '';
       const purposeElement = byId('plan-purpose');
       purposeElement.textContent = purpose;
@@ -3209,8 +3599,10 @@
       byId('plan-freshness').textContent = freshnessLabel(model.freshness.state);
       byId('plan-task-count').textContent = model.tasks.length + '件';
       byId('plan-source-summary').textContent = plan
-        ? 'Plan v' + plan.schemaVersion
-        : '30_plan.md · legacy source';
+        ? ROADMAP_MODEL.planSourcePath(model.snapshot) + ' · Plan v' + plan.schemaVersion
+        : ROADMAP_MODEL.planSourcePath(model.snapshot) === '30_plan.html'
+          ? '30_plan.html · source error'
+          : '30_plan.md · legacy source';
       const alert = byId('plan-contract-alert');
       const errors = (model.planState && Array.isArray(model.planState.errors)) ? model.planState.errors : [];
       if (errors.length) {
@@ -3224,7 +3616,9 @@
     function renderIndex(model) {
       const current = currentTaskFor(model);
       const host = byId('plan-index-list');
-      host.innerHTML = model.tasks.length
+      const htmlPlanUnavailable = ROADMAP_MODEL.planSourcePath(model.snapshot) === '30_plan.html'
+        && (!model.snapshot.planDocumentState || !model.snapshot.planDocumentState.valid || !model.plan || !model.plan.valid);
+      host.innerHTML = model.tasks.length && !htmlPlanUnavailable
         ? model.tasks.map(task => {
             const id = 'task-' + safeId(task.number);
             const marker = current && current.number === task.number ? ' · Current' : '';
@@ -3232,9 +3626,46 @@
             const label = 'Task ' + task.number + (title ? ' · ' + title : '');
             return '<a href="#' + id + '" data-plan-jump="' + escapeHtml(task.number) + '" aria-label="' + escapeHtml(label + marker) + '">' + escapeHtml(label) + '<span class="visually-hidden">' + escapeHtml(marker) + '</span></a>';
           }).join('')
-        : '<span class="change-empty">Task未記録</span>';
+        : '<span class="change-empty">' + (htmlPlanUnavailable ? 'HTML planのためTask位置を表示できません。' : 'Task未記録') + '</span>';
     }
     function renderPlanSource(model) {
+      const sourcePath = ROADMAP_MODEL.planSourcePath(model.snapshot);
+      byId('plan-source-document').setAttribute('aria-label', sourcePath + 'の全文');
+      byId('plan-source-content').setAttribute('aria-label', sourcePath + 'の全文');
+      if (sourcePath === '30_plan.html') {
+        const documentState = model.snapshot.planDocumentState;
+        if (!documentState || !documentState.valid || !documentState.document || !model.plan || !model.plan.valid) {
+          const errors = [
+            ...(documentState?.errors || ['planDocumentが未記録です。']),
+            ...(!model.plan ? ['snapshot.planが未記録です。'] : model.plan.valid ? [] : model.plan.errors)
+          ];
+          byId('plan-source-content').innerHTML = '<p class="plan-contract-alert" role="alert"><strong>30_plan.htmlを表示できません。</strong>' + htmlList(errors, 'plain-list', 'planDocument error') + '</p>';
+          return { entries: planMetadataFromSnapshot(model.snapshot) };
+        }
+        const host = byId('plan-source-content');
+        renderPlanDocumentNodes(documentState.document, host);
+        const records = model.tasks.map(task => {
+          const section = findPlanDocumentTaskSection(host, task);
+          const heading = findPlanDocumentTaskHeading(section, task);
+          return { task, section, heading };
+        });
+        records.forEach(record => {
+          const target = record.heading || record.section;
+          if (target) {
+            target.id = 'task-' + safeId(record.task.number);
+            target.setAttribute('tabindex', '-1');
+            target.dataset.planTask = record.task.number;
+          }
+        });
+        records.slice().reverse().forEach(record => {
+          const appendix = renderTask(record.task, model);
+          if (!appendix) return;
+          if (record.section && record.section !== record.heading) record.section.insertAdjacentHTML('beforeend', appendix);
+          else if (record.heading) record.heading.insertAdjacentHTML('afterend', appendix);
+          else host.insertAdjacentHTML('beforeend', appendix);
+        });
+        return { entries: planMetadataFromSnapshot(model.snapshot) };
+      }
       const content = text(model.snapshot.files['30_plan.md'] || model.snapshot.files['10_task.md']);
       const host = byId('plan-source-content');
       if (!content) {
@@ -3483,11 +3914,11 @@
         '<section class="task-source"><div class="task-source-head"><strong>' + escapeHtml(sourcePreview.status === 'resolved'
           ? (sourcePreview.evidenceRevision ? '参照版の実装 ' + sourcePreview.evidenceRevision : '現在の実コード')
           : 'Source evidence') + '</strong><span class="task-source-location">' + escapeHtml(sourceLocation(sourcePreview)) + '</span></div>' +
-        '<p class="source-missing">Plan source: ' + escapeHtml(planSourceLocation(task)) + ' · 状態: ' + escapeHtml(sourcePreview.status || '未記録') + '</p>' +
+        '<p class="source-missing">Plan source: ' + escapeHtml(planSourceLocation(task, model.snapshot)) + ' · 状態: ' + escapeHtml(sourcePreview.status || '未記録') + '</p>' +
         renderSourcePreview(sourcePreview, task) + '</section>'
       ).join('') || ((task.source && task.source.file)
-        ? '<section class="task-source"><div class="task-source-head"><strong>Source evidence</strong><span class="task-source-location">' + escapeHtml(planSourceLocation(task)) + '</span></div>' +
-          '<p class="source-missing">Plan source: ' + escapeHtml(planSourceLocation(task)) + ' · source preview未記録</p>' +
+        ? '<section class="task-source"><div class="task-source-head"><strong>Source evidence</strong><span class="task-source-location">' + escapeHtml(planSourceLocation(task, model.snapshot)) + '</span></div>' +
+          '<p class="source-missing">Plan source: ' + escapeHtml(planSourceLocation(task, model.snapshot)) + ' · source preview未記録</p>' +
           '<p class="source-missing">計画本文から実コードを補作しません。</p></section>'
         : '');
       const changes = previews.map(renderBeforeAfter).join('');
@@ -3668,9 +4099,10 @@
     }
     function renderSources(model, planMetadata = {}) {
       const plan = model.plan;
+      const planPath = ROADMAP_MODEL.planSourcePath(model.snapshot);
       const records = [];
       records.push({
-        name: plan ? '30_plan.md' : '30_plan.md（legacy参照）',
+        name: plan ? planPath : planPath + '（legacy参照）',
         detail: plan ? 'Plan v' + plan.schemaVersion + ' / sourceHash ' + (plan.sourceHash || '未記録') : '構造化Plan未記録',
         state: plan ? '正本' : '未記録'
       });
@@ -3881,6 +4313,15 @@
       const runningTools = Array.isArray(activity.runningTools) ? activity.runningTools : [];
       const agents = Array.isArray(activity.agents) ? activity.agents : [];
       const timeline = Array.isArray(activity.timeline) ? activity.timeline : [];
+      const planSource = text(detail.planSource || detail.plan_source).trim() || (detail.planDocument ? '30_plan.html' : '30_plan.md');
+      const htmlPlanState = planSource === '30_plan.html'
+        ? ROADMAP_MODEL.normalizePlanDocument(detail.planDocument)
+        : null;
+      const hubPlan = planSource === '30_plan.html'
+        ? htmlPlanState?.valid
+          ? ROADMAP_MODEL.planDocumentText(htmlPlanState.document)
+          : '30_plan.htmlを表示できません。' + (htmlPlanState?.errors || []).join(' / ')
+        : files['30_plan.md'] || '';
       const title = escapeHtml(task.title || 'Task');
       byId('task-detail').innerHTML =
         '<h1 id="hub-detail-heading" tabindex="-1">' + title + '</h1>' +
@@ -3895,7 +4336,7 @@
         hubMarkdown('次の一手', files['40_progress.md'] || '') +
         hubMarkdown('概要', typeof task.summary === 'string' ? task.summary : JSON.stringify(task.summary || {})) +
         hubMarkdown('設計Plan', files['00_spec.md'] || '') +
-        hubMarkdown('実装計画', files['30_plan.md'] || '') +
+        hubMarkdown('実装計画', hubPlan) +
         hubMarkdown('実装状況', files['40_progress.md'] || '') +
         hubMarkdown('検証結果', files['90_verification.md'] || '');
       byId('task-detail').focus({ preventScroll: true });

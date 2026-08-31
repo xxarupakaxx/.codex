@@ -4,7 +4,7 @@
 
 ## 使う場面
 
-`ui-preview-json` は、見た目や画面上の配置差分を含むUI変更Taskについて、計画を作るLLMが自動で書く。ユーザーへJSON、metadata、source pathの入力を求めない。
+新規HTMLでは `data-ui-change="true"` と `script[type="application/json"][data-plan-fragment="ui-preview"]` を同じTaskへ置く。以下のpayloadを、計画を作るLLMが対象sourceに基づき自動で書く。`ui-preview-json`のMarkdown fenceは既存MD入力の互換形式だけに使う。ユーザーへJSON、metadata、source pathの入力を求めない。
 
 - 使う: navigation項目追加、settings toggle追加、sidebar導線追加、listやformの構造変更、新規画面の追加。
 - 使わない: behavior-only変更、copyだけの変更、APIやjobだけの変更、source未確認の既存画面、UI変更か不明なTask。
@@ -12,7 +12,7 @@
 
 ## LLM Authoring Flow
 
-UI変更Taskでは、`30_plan.md`を完成させる前に次を行う。
+UI変更Taskでは、`30_plan.html`を完成させる前に次を行う。
 
 1. 計画開始時のrepository `HEAD`を40桁commit SHAへ解決し、baselineとして保持する。
 2. 仕様、変更対象、routeを確認し、対象componentを読む。直接importされ、変更対象の構造や表示labelを持つcomponentと局所styleも必要な範囲だけ読む。
@@ -20,7 +20,7 @@ UI変更Taskでは、`30_plan.md`を完成させる前に次を行う。
 4. 変更対象周辺だけを5 layout / 5 primitiveへ簡略化し、Beforeを作る。実装sourceで確認できたlabelは`observedLabels`へ記録する。
 5. 仕様とTaskの実装手順からAfterを作り、追加・変更・削除をstable IDで対応付ける。
 6. role、feature flag、responsive、実データなど確定できない点を`uncertainty`へ分離する。
-7. Task本文へ`UI変更: yes`と`ui-preview-json`を1ブロック書く。behavior-only Taskは`UI変更: no`とし、blockを作らない。
+7. HTMLのTaskへ`data-ui-change="true"`と型付きJSON fragmentを1つ書く。behavior-onlyではfalseとしfragmentを作らない。既存MDを読む場合だけ`UI変更: yes/no`とfenceを使う。
 8. Roadmapを通常生成し、snapshotの該当previewが`resolved`または理由付き`unverified`であることを確認する。
 
 ## Authoring Source
@@ -28,7 +28,7 @@ UI変更Taskでは、`30_plan.md`を完成させる前に次を行う。
 Before、After、uncertaintyを必ず分ける。
 
 - Before: 計画内に記録した40桁commit SHA上の実装sourceを根拠にする。通常生成ではgeneratorがこのSHAを自動利用する。label、並び、存在するstate、role visibilityだけを確認する。
-- After: `30_plan.md`の目的、変更対象、実装手順、仕様に明示された未実装案だけを根拠にする。
+- After: 正本計画の目的、変更対象、実装手順、仕様に明示された未実装案だけを根拠にする。
 - uncertainty: role別表示、feature flag、responsive差分、権限差分など、sourceまたは計画から確定できない事項を入れる。
 
 禁止する入力:
@@ -86,7 +86,17 @@ unknown keyとunknown kindはinvalidにする。値は表示前にescapeされ�
 - `list`: label、item、空状態、action。
 - `form`: group、label、input、検証message、action。
 
-## Examples
+## Payload examples
+
+新規HTMLでは各例のJSONを次の形で同じTaskに置く。JSONへ本文を複製しない。
+
+```html
+<script type="application/json" data-plan-fragment="ui-preview">
+{"version":1,"taskNumber":"1","previews":[...]}
+</script>
+```
+
+以下のfence表記はpayloadを読みやすく示すもので、新規30_plan.mdを作る指示ではない。
 
 `topnav`:
 

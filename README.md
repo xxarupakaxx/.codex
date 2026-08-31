@@ -23,7 +23,7 @@ Claude固有の設定は claude-compat/ に置き、同じworkflowを二重管�
 
 ## Canonical route
 
-作業順は context/workflow-rules.md のPhase 0–5.5、条件付きgateは context/workflow-details.md、artifactとsession復元は context/memory-file-formats.md、Skillと委譲は context/agent-team-routing.md が正本である。Roadmapは30_plan.mdを入力に`~/.codex/scripts/sync-roadmap.py`が検査・生成・atomic publishし、HTMLやsnapshotを手編集しない。短い保守はlog-onlyで追跡し、Roadmapを自動強制しない。
+作業順は context/workflow-rules.md のPhase 0–5.5、条件付きgateは context/workflow-details.md、artifactとsession復元は context/memory-file-formats.md、Skillと委譲は context/agent-team-routing.md が正本である。Roadmapは30_plan.htmlを正本として`~/.codex/scripts/sync-roadmap.py`が検査・生成・atomic publishする。30_plan.mdはHTMLがない既存taskだけの互換入力であり、roadmap.htmlとsnapshotは手編集しない。短い保守はlog-onlyで追跡し、Roadmapを自動強制しない。
 
 lfgは skills/lfg/SKILL.md がcanonicalで、commands/lfg.md、prompts/lfg.md、skills/source-command-lfg/SKILL.mdは互換shimである。shimへPhase手順を戻さない。
 

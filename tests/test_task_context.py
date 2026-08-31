@@ -70,6 +70,38 @@ class TaskContextTest(unittest.TestCase):
         self.assertIn("30_plan.md", result["sourceRefs"])
         self.assertEqual(result["selectedTask"]["source"]["path"], str(task.resolve() / "30_plan.md"))
 
+    def test_brief_uses_html_canonical_fields_and_ignores_md_sibling(self) -> None:
+        task = self.write_task("html-context", plan_text=None, progress="進捗: 100%\n")
+        (task / "30_plan.html").write_text(
+            """<main id="plan-document" data-plan-schema="2"><h1>HTML context</h1>
+<section data-task-id="1" data-status="complete"><h2>Task 1: Base</h2>
+<h3 data-field="purpose">Purpose</h3><p>Base purpose。</p>
+<h3 data-field="targets">Targets</h3><ul><li>src.py</li></ul>
+<h3 data-field="implementation">Implementation</h3><ul><li data-complete="true">Base step</li></ul>
+<h3 data-field="outputs">Outputs</h3><p>Base output。</p>
+<h3 data-field="verification">Verification</h3><p>Base verification。</p>
+<ul data-field="acceptance"><li data-acceptance-id="H1">HTML acceptance。</li></ul></section>
+<section data-task-id="2" data-status="planned"><h2>Task 2: Child</h2>
+<h3 data-field="purpose">Purpose</h3><p>HTML purpose。</p>
+<h3 data-field="targets">Targets</h3><ul><li>src.py</li></ul>
+<h3 data-field="implementation">Implementation</h3><ul><li data-complete="false">Child step</li></ul>
+<h3 data-field="outputs">Outputs</h3><p>Child output。</p>
+<h3 data-field="verification">Verification</h3><p>Child verification。</p>
+<ul data-field="acceptance"><li data-acceptance-id="H2">Child acceptance。</li></ul>
+<ul data-field="blocked-by"><li data-task-ref="1">Base</li></ul></section></main>""",
+            encoding="utf-8",
+        )
+        (task / "30_plan.md").write_text("MD sibling must not be parsed", encoding="utf-8")
+
+        result = MODULE.brief_context(task, memory_roots=[self.root])
+
+        self.assertEqual(result["planSource"], "30_plan.html")
+        self.assertEqual(result["selectedTask"]["id"], "2")
+        self.assertEqual(result["selectedTask"]["purpose"], "HTML purpose。")
+        self.assertEqual(result["selectedTask"]["source"]["path"], str(task.resolve() / "30_plan.html"))
+        self.assertEqual(result["acceptanceIds"], ["H1", "H2"])
+        self.assertEqual(result["unresolvedDependencies"], {})
+
     def test_acceptance_uses_explicit_task_fields_and_goal_heading(self) -> None:
         text = plan("1|context|- [ ] read")
         text = text.replace("#### 目的\n", "acceptance: REQ-1, AC01\n本文の引用 AC99 は対象外。\n\n#### 目的\n", 1)

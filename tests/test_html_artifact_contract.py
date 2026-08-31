@@ -183,6 +183,20 @@ class HtmlArtifactContractTest(unittest.TestCase):
         self.assertEqual(producers["creating-html-documents"]["browserProfile"], "desktop-document")
         self.assertEqual(producers["state-diagram-html"]["browserProfile"], "desktop-diagram")
         self.assertEqual(producers["state-diagram-html"]["outputPatterns"], ["91_state_diagram.html"])
+        self.assertEqual(
+            producers["roadmap-plan-authoring"],
+            {
+                "id": "roadmap-plan-authoring",
+                "route": "html-plan",
+                "owner": "viewing-plans",
+                "source": "context/memory-file-formats.md",
+                "templates": [],
+                "outputPatterns": [".local/memory/*/30_plan.html"],
+                "artifactKind": "html-plan",
+                "staticProfile": "strict-self-contained",
+                "browserProfile": "desktop-document",
+            },
+        )
 
     def test_manifest_checker_rejects_unregistered_tracked_html(self) -> None:
         with tempfile.TemporaryDirectory() as temp:

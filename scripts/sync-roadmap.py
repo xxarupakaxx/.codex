@@ -19,7 +19,12 @@ sys.dont_write_bytecode = True
 
 
 try:
-    from roadmap_plan_contract import PlanContractError, parse_plan_contract, parse_plan_files
+    from roadmap_plan_contract import (
+        PlanContractError, parse_plan_contract, parse_plan_files, resolve_plan_source,
+        parse_html_plan_contract, strict_json_loads, is_safe_html_href, HTML_VISIBLE_TAGS,
+        is_safe_svg_paint_value,
+        HTML_COMMON_ATTRS, HTML_TAG_ATTRS,
+    )
 except ModuleNotFoundError:
     _PLAN_CONTRACT_PATH = Path(__file__).with_name("roadmap_plan_contract.py")
     _PLAN_CONTRACT_SPEC = importlib.util.spec_from_file_location(
@@ -32,6 +37,14 @@ except ModuleNotFoundError:
     PlanContractError = _PLAN_CONTRACT_MODULE.PlanContractError
     parse_plan_contract = _PLAN_CONTRACT_MODULE.parse_plan_contract
     parse_plan_files = _PLAN_CONTRACT_MODULE.parse_plan_files
+    resolve_plan_source = _PLAN_CONTRACT_MODULE.resolve_plan_source
+    parse_html_plan_contract = _PLAN_CONTRACT_MODULE.parse_html_plan_contract
+    strict_json_loads = _PLAN_CONTRACT_MODULE.strict_json_loads
+    is_safe_html_href = _PLAN_CONTRACT_MODULE.is_safe_html_href
+    HTML_VISIBLE_TAGS = _PLAN_CONTRACT_MODULE.HTML_VISIBLE_TAGS
+    HTML_COMMON_ATTRS = _PLAN_CONTRACT_MODULE.HTML_COMMON_ATTRS
+    HTML_TAG_ATTRS = _PLAN_CONTRACT_MODULE.HTML_TAG_ATTRS
+    is_safe_svg_paint_value = _PLAN_CONTRACT_MODULE.is_safe_svg_paint_value
 
 
 try:
@@ -124,7 +137,8 @@ def _sha256(text: str) -> str:
 def source_fingerprints(task_dir: Path, route: str) -> dict[str, str]:
     names = ["05_log.md"]
     if route in ELIGIBLE_ROUTES:
-        names.append("30_plan.md")
+        html = task_dir / "30_plan.html"
+        names.append("30_plan.html" if html.exists() or html.is_symlink() else "30_plan.md")
     if (task_dir / "task-meta.json").is_file():
         names.append("task-meta.json")
     return {
@@ -220,6 +234,27 @@ def validate_ui_preview_authoring(
     """Require one minimally valid preview block for each LLM-declared UI task."""
     if isinstance(plan_model, str):
         plan_model = parse_plan_contract(plan_model)
+    if plan_model.get("sourceKind") == "html":
+        missing: list[str] = []
+        invalid: list[str] = []
+        for task in plan_model.get("tasks", []):
+            if not isinstance(task, dict) or task.get("uiChange") is not True:
+                continue
+            number = str(task.get("number", ""))
+            blocks = task.get("uiPreviewBlocks")
+            if not isinstance(blocks, list) or not blocks:
+                missing.append(number)
+                continue
+            if len(blocks) != 1 or any(
+                not isinstance(block, dict)
+                or block.get("version") != 1
+                or str(block.get("taskNumber")) != number
+                or not isinstance(block.get("previews"), list)
+                or not block.get("previews")
+                for block in blocks
+            ):
+                invalid.append(number)
+        return missing, invalid
     missing: list[str] = []
     invalid: list[str] = []
     for task in plan_model.get("tasks", []):
@@ -253,8 +288,8 @@ def validate_ui_preview_authoring(
 
 def _read_json_snapshot(path: Path) -> dict[str, Any] | None:
     try:
-        snapshot = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, UnicodeError, json.JSONDecodeError):
+        snapshot = strict_json_loads(path.read_text(encoding="utf-8"))
+    except (OSError, UnicodeError, json.JSONDecodeError, PlanContractError):
         return None
     return snapshot if isinstance(snapshot, dict) else None
 
@@ -268,27 +303,122 @@ def _read_embedded_snapshot(path: Path) -> dict[str, Any] | None:
     if len(matches) != 1:
         return None
     try:
-        snapshot = json.loads(matches[0].group(1))
-    except json.JSONDecodeError:
+        snapshot = strict_json_loads(matches[0].group(1))
+    except (json.JSONDecodeError, PlanContractError):
         return None
     return snapshot if isinstance(snapshot, dict) else None
+
+
+_ROADMAP_GENERATOR_MODULE: object | None = None
+
+
+def _load_roadmap_generator() -> object:
+    global _ROADMAP_GENERATOR_MODULE
+    if _ROADMAP_GENERATOR_MODULE is not None:
+        return _ROADMAP_GENERATOR_MODULE
+    generator_path = Path(__file__).with_name("generate-roadmap-view.py")
+    spec = importlib.util.spec_from_file_location("sync_roadmap_generator", generator_path)
+    if spec is None or spec.loader is None:
+        raise PlanContractError(f"cannot load Roadmap generator: {generator_path}")
+    module = importlib.util.module_from_spec(spec)
+    sys.modules.setdefault(spec.name, module)
+    spec.loader.exec_module(module)
+    _ROADMAP_GENERATOR_MODULE = module
+    return module
+
+
+def _derived_projection(
+    task_dir: Path,
+    expected_plan: dict[str, Any] | list[str],
+    *,
+    source_root: Path | None,
+    base_ref: str | None,
+) -> tuple[dict[str, object] | None, str | None]:
+    if not isinstance(expected_plan, dict) or expected_plan.get("sourceKind") != "html":
+        return None, None
+    root = source_root
+    if root is None:
+        resolved_task = task_dir.resolve()
+        if resolved_task.parent.name == "memory" and resolved_task.parent.parent.name == ".local":
+            root = resolved_task.parent.parent.parent
+        else:
+            root = resolved_task.parent
+    try:
+        generator = _load_roadmap_generator()
+        snapshot = generator.build_snapshot(task_dir, source_root=root, base_ref=base_ref)
+    except (OSError, UnicodeError, PlanContractError, TypeError, ValueError, RuntimeError) as exc:
+        return None, str(exc)
+    return {
+        field: snapshot.get(field)
+        for field in ("sourcePreviews", "uiPreviews", "timeline")
+    }, None
+
+
+def _validate_derived_projection(
+    snapshot: dict[str, Any],
+    task_dir: Path,
+    expected_plan: dict[str, Any] | list[str],
+    *,
+    source_root: Path | None,
+    base_ref: str | None,
+    expected_derived: dict[str, object] | None = None,
+) -> str | None:
+    if not isinstance(expected_plan, dict) or expected_plan.get("sourceKind") != "html":
+        return None
+    if expected_derived is None:
+        expected_derived, error = _derived_projection(
+            task_dir,
+            expected_plan,
+            source_root=source_root,
+            base_ref=base_ref,
+        )
+        if error:
+            return "roadmap_snapshot_derived_invalid"
+    if expected_derived is None:
+        return "roadmap_snapshot_derived_invalid"
+    for field in ("sourcePreviews", "uiPreviews", "timeline"):
+        if field not in snapshot or snapshot.get(field) != expected_derived.get(field):
+            return f"roadmap_snapshot_{field}_mismatch"
+    return None
 
 
 def validate_generated_snapshot(
     snapshot_path: Path,
     task_dir: Path,
     expected_plan: dict[str, Any] | list[str],
+    *,
+    source_root: Path | None = None,
+    base_ref: str | None = None,
 ) -> str | None:
     snapshot = _read_json_snapshot(snapshot_path)
     if snapshot is None:
         return "roadmap_snapshot_invalid"
-    return _validate_snapshot_payload(snapshot, task_dir, expected_plan)
+    derived, derived_error = _derived_projection(
+        task_dir,
+        expected_plan,
+        source_root=source_root,
+        base_ref=base_ref,
+    )
+    if derived_error:
+        return "roadmap_snapshot_derived_invalid"
+    return _validate_snapshot_payload(
+        snapshot,
+        task_dir,
+        expected_plan,
+        source_root=source_root,
+        base_ref=base_ref,
+        expected_derived=derived,
+    )
 
 
 def _validate_snapshot_payload(
     snapshot: dict[str, Any],
     task_dir: Path,
     expected_plan: dict[str, Any] | list[str],
+    *,
+    source_root: Path | None = None,
+    base_ref: str | None = None,
+    expected_derived: dict[str, object] | None = None,
 ) -> str | None:
     """Validate a generated Roadmap snapshot against the parsed source plan.
 
@@ -303,7 +433,13 @@ def _validate_snapshot_payload(
     files = snapshot.get("files")
     if not isinstance(files, dict):
         return "roadmap_snapshot_invalid"
-    generated_plan = files.get("30_plan.md")
+    snapshot_plan_source = snapshot.get("planSource")
+    snapshot_plan = snapshot.get("plan")
+    html_source = snapshot_plan_source == "30_plan.html" or (
+        isinstance(snapshot_plan, dict) and snapshot_plan.get("sourceKind") == "html"
+    )
+    generated_plan_name = "30_plan.html" if html_source else "30_plan.md"
+    generated_plan = files.get(generated_plan_name)
     if not isinstance(generated_plan, str):
         return "roadmap_snapshot_invalid"
     generated_progress = files.get("40_progress.md", "")
@@ -314,6 +450,8 @@ def _validate_snapshot_payload(
     # out. It still uses the same parser, so legacy and canonical headings do
     # not diverge at this boundary.
     if "plan" not in snapshot:
+        if html_source:
+            return "roadmap_snapshot_plan_invalid"
         try:
             generated_model = parse_plan_contract(generated_plan, generated_progress)
         except (PlanContractError, TypeError, ValueError):
@@ -332,6 +470,43 @@ def _validate_snapshot_payload(
         return "roadmap_snapshot_plan_invalid"
     if plan.get("schemaVersion") != 2:
         return "roadmap_snapshot_plan_invalid"
+    expected_raw_sha256 = _expected_plan_raw_sha256(expected_plan)
+    snapshot_raw_sha256 = snapshot.get("planSourceRawSha256")
+    plan_raw_sha256 = plan.get("planSourceRawSha256")
+    if (
+        (snapshot_raw_sha256 is not None and not _is_sha256(snapshot_raw_sha256))
+        or (plan_raw_sha256 is not None and not _is_sha256(plan_raw_sha256))
+    ):
+        return "roadmap_snapshot_source_mismatch"
+    if expected_raw_sha256 and (
+        (snapshot_raw_sha256 is not None and snapshot_raw_sha256 != expected_raw_sha256)
+        or (plan_raw_sha256 is not None and plan_raw_sha256 != expected_raw_sha256)
+    ):
+        return "roadmap_snapshot_source_mismatch"
+    expected_source_kind = expected_plan.get("sourceKind") if isinstance(expected_plan, dict) else None
+    if expected_source_kind == "html":
+        if snapshot_raw_sha256 != expected_raw_sha256 or plan_raw_sha256 != expected_raw_sha256:
+            return "roadmap_snapshot_source_mismatch"
+        if snapshot_plan_source != "30_plan.html":
+            return "roadmap_snapshot_source_mismatch"
+        if plan.get("sourceKind") != "html" or plan.get("planSource") != "30_plan.html":
+            return "roadmap_snapshot_source_mismatch"
+        if "30_plan.md" in files:
+            return "roadmap_snapshot_source_mismatch"
+        if snapshot.get("requiredSources") != expected_plan.get("requiredSources"):
+            return "roadmap_snapshot_plan_invalid"
+        if "planDocument" not in snapshot:
+            return "roadmap_snapshot_plan_invalid"
+        plan_document = snapshot.get("planDocument")
+        expected_document = expected_plan.get("planDocument")
+        if (
+            plan_document != plan.get("planDocument")
+            or plan_document != expected_document
+            or not _plan_document_valid(plan_document)
+        ):
+            return "roadmap_snapshot_plan_invalid"
+    elif snapshot_plan_source not in {None, "30_plan.md"}:
+        return "roadmap_snapshot_source_mismatch"
     if not isinstance(plan.get("tasks"), list) or not isinstance(plan.get("edges"), list):
         return "roadmap_snapshot_plan_invalid"
     if not _tasks_have_contract_shape(plan["tasks"]):
@@ -349,6 +524,8 @@ def _validate_snapshot_payload(
     if not _is_sha256(plan.get("sourceHash")) or plan.get("sourceHash") != expected_source_hash:
         return "roadmap_snapshot_source_mismatch"
     top_level_hash = snapshot.get("planSourceHash")
+    if html_source and top_level_hash != expected_source_hash:
+        return "roadmap_snapshot_source_mismatch"
     if top_level_hash is not None and top_level_hash != expected_source_hash:
         return "roadmap_snapshot_source_mismatch"
     generation_id = snapshot.get("generationId")
@@ -357,6 +534,8 @@ def _validate_snapshot_payload(
     ):
         return "roadmap_snapshot_identity_invalid"
     fingerprint = snapshot.get("fingerprint")
+    if html_source and not _is_sha256(fingerprint):
+        return "roadmap_snapshot_identity_invalid"
     if fingerprint is not None:
         if not _is_sha256(fingerprint):
             return "roadmap_snapshot_identity_invalid"
@@ -368,7 +547,14 @@ def _validate_snapshot_payload(
 
     generated_model: dict[str, Any]
     try:
-        generated_model = parse_plan_contract(generated_plan, generated_progress)
+        if html_source:
+            generated_model = parse_html_plan_contract(
+                generated_plan.encode("utf-8"),
+                plan_source="30_plan.html",
+                progress_source="40_progress.md",
+            )
+        else:
+            generated_model = parse_plan_contract(generated_plan, generated_progress)
     except (PlanContractError, TypeError, ValueError):
         return "roadmap_snapshot_plan_invalid"
     expected_task_ids = _task_ids(expected_plan)
@@ -397,13 +583,28 @@ def _validate_snapshot_payload(
         return "roadmap_snapshot_edge_mismatch"
     if generated_model.get("sourceHash") != expected_source_hash:
         return "roadmap_snapshot_source_mismatch"
+    if html_source and expected_raw_sha256 and generated_model.get("planSourceRawSha256") != expected_raw_sha256:
+        return "roadmap_snapshot_source_mismatch"
     source_hashes = plan.get("sourceHashes")
     expected_source_hashes = _expected_source_hashes(expected_plan)
+    if html_source and (not isinstance(source_hashes, dict) or source_hashes != expected_source_hashes):
+        return "roadmap_snapshot_source_mismatch"
     if source_hashes is not None and source_hashes != expected_source_hashes:
         return "roadmap_snapshot_source_mismatch"
-    generated_plan_hash = _sha256(generated_plan)
-    if expected_source_hashes and generated_plan_hash != expected_source_hashes.get("30_plan.md"):
+    generated_plan_hash = _sha256(generated_plan) if not html_source else hashlib.sha256(generated_plan.encode("utf-8")).hexdigest()
+    expected_hash_name = "30_plan.html" if html_source else "30_plan.md"
+    if expected_source_hashes and generated_plan_hash != expected_source_hashes.get(expected_hash_name):
         return "roadmap_snapshot_source_mismatch"
+    derived_error = _validate_derived_projection(
+        snapshot,
+        task_dir,
+        expected_plan,
+        source_root=source_root,
+        base_ref=base_ref,
+        expected_derived=expected_derived,
+    )
+    if derived_error:
+        return derived_error
     return None
 
 
@@ -412,16 +613,41 @@ def validate_snapshot_pair(
     json_path: Path,
     task_dir: Path,
     expected_plan: dict[str, Any] | list[str],
+    *,
+    source_root: Path | None = None,
+    base_ref: str | None = None,
 ) -> str | None:
     """Require HTML and JSON artifacts to publish one identical snapshot."""
     html_snapshot = _read_embedded_snapshot(html_path)
     json_snapshot = _read_json_snapshot(json_path)
     if html_snapshot is None or json_snapshot is None:
         return "roadmap_snapshot_pair_invalid"
-    html_error = _validate_snapshot_payload(html_snapshot, task_dir, expected_plan)
+    derived, derived_error = _derived_projection(
+        task_dir,
+        expected_plan,
+        source_root=source_root,
+        base_ref=base_ref,
+    )
+    if derived_error:
+        return "roadmap_snapshot_derived_invalid"
+    html_error = _validate_snapshot_payload(
+        html_snapshot,
+        task_dir,
+        expected_plan,
+        source_root=source_root,
+        base_ref=base_ref,
+        expected_derived=derived,
+    )
     if html_error:
         return "roadmap_snapshot_html_invalid"
-    json_error = _validate_snapshot_payload(json_snapshot, task_dir, expected_plan)
+    json_error = _validate_snapshot_payload(
+        json_snapshot,
+        task_dir,
+        expected_plan,
+        source_root=source_root,
+        base_ref=base_ref,
+        expected_derived=derived,
+    )
     if json_error:
         return "roadmap_snapshot_pair_invalid"
     if _snapshot_identity(html_snapshot) != _snapshot_identity(json_snapshot):
@@ -507,10 +733,75 @@ def _tasks_have_contract_shape(tasks: object) -> bool:
     return True
 
 
+def _plan_document_valid(value: object) -> bool:
+    """Validate the sanitized HTML semantic tree before publishing it."""
+    if not isinstance(value, dict) or value.get("format") != "html":
+        return False
+    if not isinstance(value.get("title"), str) or not value["title"].strip():
+        return False
+    nodes = value.get("nodes")
+    if not isinstance(nodes, list):
+        return False
+    seen_ids: set[str] = set()
+    def node_valid(node: object) -> bool:
+        if not isinstance(node, dict):
+            return False
+        if "text" in node:
+            return set(node) == {"text"} and isinstance(node["text"], str)
+        if set(node) - {"tag", "attrs", "children"}:
+            return False
+        tag, attrs, children = node.get("tag"), node.get("attrs"), node.get("children")
+        if not isinstance(tag, str) or tag.casefold() not in HTML_VISIBLE_TAGS:
+            return False
+        allowed_attrs = HTML_COMMON_ATTRS | HTML_TAG_ATTRS.get(tag.casefold(), frozenset())
+        if not isinstance(attrs, dict) or any(
+            not isinstance(key, str) or not isinstance(item, str)
+            or key.casefold().startswith("on") or key.casefold() == "style"
+            or (key.casefold() not in allowed_attrs and not key.casefold().startswith("aria-"))
+            for key, item in attrs.items()
+        ):
+            return False
+        schema = attrs.get("data-plan-schema")
+        if schema is not None and schema != "2":
+            return False
+        if attrs.get("aria-hidden", "").casefold() == "true":
+            return False
+        href = attrs.get("href")
+        if href is not None and not is_safe_html_href(href, tag=tag.casefold(), attrs=attrs):
+            return False
+        target = attrs.get("target")
+        if target is not None and target not in {"_self", "_blank"}:
+            return False
+        xmlns = attrs.get("xmlns")
+        if xmlns is not None and (tag.casefold() != "svg" or xmlns != "http://www.w3.org/2000/svg"):
+            return False
+        identifier = attrs.get("id")
+        if identifier is not None and not re.fullmatch(r"[A-Za-z][A-Za-z0-9_-]*", identifier):
+            return False
+        if identifier is not None:
+            if identifier in seen_ids:
+                return False
+            seen_ids.add(identifier)
+        for paint_name in ("fill", "stroke", "marker-end", "marker-start"):
+            paint = attrs.get(paint_name)
+            if isinstance(paint, str) and not is_safe_svg_paint_value(paint):
+                return False
+        return isinstance(children, list) and all(node_valid(child) for child in children)
+
+    return all(node_valid(node) for node in nodes)
+
+
 def _expected_source_hash(plan: dict[str, Any] | list[str]) -> str | None:
     if isinstance(plan, dict):
         value = plan.get("sourceHash")
         return value if isinstance(value, str) else None
+    return None
+
+
+def _expected_plan_raw_sha256(plan: dict[str, Any] | list[str]) -> str | None:
+    if isinstance(plan, dict):
+        value = plan.get("planSourceRawSha256")
+        return value if isinstance(value, str) and _is_sha256(value) else None
     return None
 
 
@@ -635,23 +926,25 @@ def synchronize(
             "source_fingerprints": source_fingerprints(task_dir, route),
             "reason": "log_only",
         }
-    plan_path = task_dir / "30_plan.md"
-    if not plan_path.is_file():
+    html_path = task_dir / "30_plan.html"
+    md_path = task_dir / "30_plan.md"
+    source_path = html_path if html_path.exists() or html_path.is_symlink() else md_path
+    if not source_path.is_file() or source_path.is_symlink():
         return 2, {
             "status": "failed",
             "route": route,
             "reason": "plan_missing",
-            "path": str(plan_path),
+            "path": str(source_path),
         }
     progress_path = task_dir / "40_progress.md"
     try:
-        plan_model = parse_plan_files(plan_path, progress_path)
+        plan_model = resolve_plan_source(task_dir)
     except (OSError, UnicodeError, PlanContractError, TypeError, ValueError) as exc:
         return 2, {
             "status": "failed",
             "route": route,
             "reason": "plan_contract_invalid",
-            "path": str(plan_path),
+            "path": str(source_path),
             "error": str(exc),
         }
     if not plan_model.get("tasks"):
@@ -659,7 +952,7 @@ def synchronize(
             "status": "failed",
             "route": route,
             "reason": "plan_tasks_missing",
-            "path": str(plan_path),
+            "path": str(source_path),
         }
     if phase == "2":
         missing_ui, invalid_ui = validate_ui_preview_authoring(
@@ -785,6 +1078,7 @@ def synchronize(
         task_dir / "roadmap-snapshot.json",
         task_dir,
         plan_model,
+        source_root=workspace_root,
     )
     if snapshot_error:
         return _failed_after_generation(
@@ -803,6 +1097,7 @@ def synchronize(
         task_dir / "roadmap-snapshot.json",
         task_dir,
         plan_model,
+        source_root=workspace_root,
     )
     if pair_error:
         return _failed_after_generation(

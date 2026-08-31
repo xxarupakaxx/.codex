@@ -1836,7 +1836,7 @@ test('計画書は正本本文を一度だけ描画しTaskへ補足を差し込�
   assert.doesNotMatch(template, /<details\b/i);
   assert.doesNotMatch(template, /detail-drawer|data-detail-tab|role=["']tab["']/);
   assert.doesNotMatch(template, /id=["']plan-source-document-title["']/);
-  assert.doesNotMatch(template, /計画本文/);
+  assert.equal((template.match(/id=["']plan-source-content["']/g) || []).length, 1, 'plan body has one container');
   assert.match(html, /function renderPlanSource\(model\)/);
   assert.match(html, /host\.innerHTML = renderMarkdown\(displaySource, 0\)/);
   assert.match(html, /findTaskHeading\(headings, task\)/);
@@ -1852,7 +1852,7 @@ test('30_plan.mdの導入・背景・任意sectionを保持し投影用JSONブ�
   assert.match(html, /const entries = \[\]/);
   assert.match(html, /required_sources\|write\[ _\]scope\|acceptance\|UI変更/);
   assert.match(html, /metadataEntries/);
-  assert.match(html, /30_plan\.mdの全文/);
+  assert.match(html, /plan-source-content/);
   assert.match(html, /Plan source: /);
   assert.match(html, /計画本文から実コードを補作しません/);
   assert.match(html, /function firstMarkdownH1\(markdown\)/);

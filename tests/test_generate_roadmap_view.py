@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import importlib.util
+import hashlib
 import json
 import os
 import subprocess
@@ -179,6 +180,93 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
         self.assertEqual(snapshot["timeline"][0]["source"]["file"], str(self.task_dir / "05_log.md"))
         self.assertIn("Phase 2", snapshot["timeline"][0]["body"])
 
+    def test_html_source_builds_plan_document_and_ignores_markdown_sibling(self) -> None:
+        source = self.root / "scripts" / "feature.py"
+        source.parent.mkdir()
+        source.write_text("def feature():\n    return True\n", encoding="utf-8")
+        html_source = """<!doctype html><html><head><title>HTML title</title></head><body>
+<main id="plan-document" data-plan-schema="2"><h1 data-plan-title>HTML title</h1>
+<p data-plan-intro>HTML introduction.</p>
+<section data-task-id="1" data-status="complete"><h2>Task 1: HTML task</h2>
+<h3 data-field="purpose">Purpose</h3><p>Use the semantic source.</p>
+<h3 data-field="targets">Targets</h3><ul><li>scripts/feature.py</li></ul>
+<h3 data-field="implementation">Implementation</h3><ul><li data-complete="true">Parse HTML.</li></ul>
+<h3 data-field="outputs">Outputs</h3><p>Plan v2.</p>
+<h3 data-field="verification">Verification</h3><p>Direct source test.</p>
+<ul data-field="acceptance"><li data-acceptance-id="H1">H1.</li></ul>
+<ul data-field="required-sources"><li data-source-ref="task:30_plan.html"></li></ul>
+<p data-field="implementation-evidence"><code data-source-ref="repo:scripts/feature.py#def feature">feature</code></p>
+</section></main></body></html>"""
+        (self.task_dir / "30_plan.html").write_bytes(html_source.replace("\n", "\r\n").encode("utf-8"))
+        (self.task_dir / "30_plan.md").write_text("MD sibling must not be loaded", encoding="utf-8")
+        (self.task_dir / "40_progress.md").write_text("進捗: 0%\n", encoding="utf-8")
+
+        first = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+        (self.task_dir / "30_plan.md").write_text("changed MD sibling", encoding="utf-8")
+        second = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+
+        self.assertEqual(first["planSource"], "30_plan.html")
+        self.assertEqual(first["title"], "HTML title")
+        self.assertEqual(first["plan"]["sourceKind"], "html")
+        self.assertEqual(first["planDocument"]["format"], "html")
+        self.assertNotIn("30_plan.md", first["files"])
+        self.assertEqual(
+            first["files"]["30_plan.html"],
+            (self.task_dir / "30_plan.html").read_bytes().decode("utf-8"),
+        )
+        self.assertEqual(
+            first["plan"]["sourceHashes"]["30_plan.html"],
+            hashlib.sha256((self.task_dir / "30_plan.html").read_bytes()).hexdigest(),
+        )
+        self.assertEqual(first["sourcePreviews"][0]["path"], "scripts/feature.py")
+        self.assertEqual(first["sourcePreviews"][0]["anchor"], "def feature")
+        self.assertEqual(first["sourcePreviews"][0]["status"], "resolved")
+        self.assertEqual(first["plan"]["tasks"][0]["status"], "complete")
+        self.assertEqual(first["fingerprint"], second["fingerprint"])
+        self.assertEqual(first["plan"]["sourceHash"], second["plan"]["sourceHash"])
+
+    def test_legacy_snapshot_keeps_normalized_hash_and_adds_raw_source_sha(self) -> None:
+        plan = """# Plan
+
+## Task 1: legacy raw source
+
+#### 目的
+Keep the legacy parser.
+
+#### 変更対象
+- `scripts/example.py`
+
+#### 実装
+- [x] Preserve source hash.
+
+#### 成果物
+- Legacy Plan.
+
+#### 検証
+- Fixture.
+"""
+        path = self.task_dir / "30_plan.md"
+        crlf_raw = plan.replace("\n", "\r\n").encode("utf-8")
+        path.write_bytes(crlf_raw)
+        crlf_snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+        path.write_bytes(plan.encode("utf-8"))
+        lf_snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+
+        self.assertEqual(crlf_snapshot["plan"]["sourceHash"], lf_snapshot["plan"]["sourceHash"])
+        self.assertEqual(crlf_snapshot["plan"]["sourceHashes"], lf_snapshot["plan"]["sourceHashes"])
+        self.assertEqual(
+            crlf_snapshot["plan"]["planSourceRawSha256"],
+            hashlib.sha256(crlf_raw).hexdigest(),
+        )
+        self.assertEqual(
+            lf_snapshot["plan"]["planSourceRawSha256"],
+            hashlib.sha256(plan.encode("utf-8")).hexdigest(),
+        )
+        self.assertNotEqual(
+            crlf_snapshot["plan"]["planSourceRawSha256"],
+            lf_snapshot["plan"]["planSourceRawSha256"],
+        )
+
     def test_plan_parser_is_called_once_and_generation_id_is_deterministic(self) -> None:
         with mock.patch.object(
             roadmap,
@@ -251,6 +339,36 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
             [path for path in self.task_dir.iterdir() if path.name.endswith(".tmp")],
             [],
         )
+
+    def test_pair_publish_rollback_preserves_existing_output_bytes(self) -> None:
+        output = self.task_dir / "roadmap.html"
+        json_output = self.task_dir / "roadmap-snapshot.json"
+        old_html = b"\xef\xbb\xbfOLD HTML\r\n"
+        old_json = b'{"old": true}\r\n'
+        output.write_bytes(old_html)
+        json_output.write_bytes(old_json)
+        failed = False
+
+        def fail_json_once(stage: Path, destination: Path) -> object:
+            nonlocal failed
+            if destination == json_output and not failed:
+                failed = True
+                raise OSError("injected JSON publish failure")
+            return real_replace(stage, destination)
+
+        real_replace = getattr(roadmap, "_replace_staged")
+        with mock.patch.object(roadmap, "_replace_staged", side_effect=fail_json_once):
+            with self.assertRaisesRegex(OSError, "injected JSON publish failure"):
+                roadmap.write_outputs(
+                    self.task_dir,
+                    output,
+                    write_json=True,
+                    source_root=self.root,
+                )
+
+        self.assertTrue(failed)
+        self.assertEqual(output.read_bytes(), old_html)
+        self.assertEqual(json_output.read_bytes(), old_json)
 
     def test_write_outputs_without_json_keeps_json_output_untouched(self) -> None:
         output = self.task_dir / "roadmap.html"
@@ -417,9 +535,9 @@ class RoadmapGeneratorContractTest(unittest.TestCase):
             ROOT / "skills" / "viewing-plans" / "references" / "ui-change-preview.md"
         ).read_text()
 
-        for phrase in ("LLM自身", "UI変更: yes", "metadata入力", "40桁commit SHA"):
+        for phrase in ("LLM自身", "metadata入力", "40桁commit SHA"):
             self.assertIn(phrase, skill)
-        for phrase in ("LLM Authoring Flow", "ユーザーへJSON", "JSX / TSX", "通常生成"):
+        for phrase in ("LLM Authoring Flow", "ユーザーへJSON", "JSX / TSX", "通常生成", "data-ui-change", "UI変更: yes"):
             self.assertIn(phrase, runbook)
 
     def test_hub_mode_rejects_task_dir(self) -> None:

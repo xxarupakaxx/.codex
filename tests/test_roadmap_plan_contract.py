@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import importlib.util
 import json
+import hashlib
 import tempfile
 import unittest
 from pathlib import Path
@@ -245,6 +246,224 @@ class RoadmapPlanContractTest(unittest.TestCase):
 
         self.assertEqual(model["tasks"][0]["status"], "complete")
         self.assertEqual(model["sources"], {"plan": str(plan), "progress": str(progress)})
+
+    def html_task(self, *, status: str = "in-progress", step_complete: str = "false") -> str:
+        return """<!doctype html>
+<html lang="ja"><head><meta charset="utf-8"><title>HTML canonical plan</title></head>
+<body><main id="plan-document" data-plan-schema="2">
+<h1 data-plan-title>HTML canonical plan</h1><p data-plan-intro>Visible introduction.</p>
+<section id="task-1" data-task-id="1" data-status="%s">
+<h2>Task 1: Parse HTML</h2>
+<h3 data-field="purpose">目的</h3><p>直接DOMを読む。</p>
+<h3 data-field="targets">変更対象</h3><ul><li>scripts/roadmap_plan_contract.py</li></ul>
+<h3 data-field="implementation">実装</h3><ul><li data-step-index="1" data-complete="%s">HTMLを解析する。</li></ul>
+<h3 data-field="outputs">成果物</h3><p>typed Plan。</p>
+<h3 data-field="verification">検証</h3><p>HTML-only fixture。</p>
+<ul data-field="acceptance"><li data-acceptance-id="H1">H1を満たす。</li></ul>
+<ul data-field="required-sources"><li data-source-ref="task:30_plan.html">正本</li></ul>
+<p data-field="implementation-evidence"><code data-source-ref="repo:scripts/roadmap_plan_contract.py#def parse_plan_files, fallback">parser</code></p>
+</section></main>
+<script id="plan-envelope" type="application/json">{"schemaVersion":2,"machine":{"kind":"test"}}</script>
+</body></html>""" % (status, step_complete)
+
+    def test_html_source_parses_typed_fields_and_hashes_exact_bytes(self) -> None:
+        raw = self.html_task(step_complete="true").encode("utf-8")
+        model = MODULE.parse_html_plan_contract(raw, plan_source="/tmp/task/30_plan.html")
+
+        raw_hash = hashlib.sha256(raw).hexdigest()
+        self.assertEqual(model["sourceKind"], "html")
+        self.assertEqual(model["sourceHashes"], {"30_plan.html": raw_hash})
+        self.assertEqual(model["sourceHash"], hashlib.sha256(f"30_plan.html\0{raw_hash}".encode()).hexdigest())
+        self.assertEqual(model["planDocument"]["format"], "html")
+        self.assertEqual(model["planDocument"]["title"], "HTML canonical plan")
+        self.assertEqual(model["tasks"][0]["purpose"], "直接DOMを読む。")
+        self.assertEqual(model["tasks"][0]["steps"], [{"label": "HTMLを解析する。", "complete": True}])
+        self.assertEqual(model["tasks"][0]["acceptanceIds"], ["H1"])
+        self.assertEqual(model["tasks"][0]["requiredSources"], ["task:30_plan.html"])
+        self.assertEqual(model["tasks"][0]["sourceRefs"], ["task:30_plan.html", "repo:scripts/roadmap_plan_contract.py#def parse_plan_files, fallback"])
+        self.assertNotIn('"tag": "script"', json.dumps(model["planDocument"], ensure_ascii=False))
+
+    def test_html_source_wins_over_markdown_and_invalid_html_does_not_fallback(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            task = Path(directory)
+            html = task / "30_plan.html"
+            md = task / "30_plan.md"
+            html.write_text(self.html_task(), encoding="utf-8")
+            md.write_text("not a valid canonical task", encoding="utf-8")
+            first = MODULE.resolve_plan_source(task)
+            md.write_text("changed sibling", encoding="utf-8")
+            second = MODULE.resolve_plan_source(task)
+            self.assertEqual(first["sourceHash"], second["sourceHash"])
+            self.assertEqual(first["tasks"], second["tasks"])
+
+            html.write_text("<html><body><main data-plan-schema=\"2\"><script>alert(1)</script></main></body></html>", encoding="utf-8")
+            with self.assertRaisesRegex(MODULE.PlanContractError, "script"):
+                MODULE.resolve_plan_source(task)
+
+    def test_html_rejects_duplicate_or_nonfinite_json_and_hidden_visible_content(self) -> None:
+        base = self.html_task(step_complete="true")
+        duplicate = base.replace(
+            '"machine":{"kind":"test"}',
+            '"machine":{"kind":"test","kind":"duplicate"}',
+        )
+        nonfinite = base.replace(
+            '"machine":{"kind":"test"}',
+            '"machine":{"kind":NaN}',
+        )
+        hidden = base.replace(
+            '<p data-plan-intro>Visible introduction.</p>',
+            '<p aria-hidden="true">Hidden introduction.</p>',
+        )
+        for html in (duplicate, nonfinite, hidden):
+            with self.subTest(html=html):
+                with self.assertRaises(MODULE.PlanContractError):
+                    MODULE.parse_html_plan_contract(html.encode("utf-8"))
+
+    def test_html_external_navigation_links_are_safe_but_resource_urls_are_rejected(self) -> None:
+        allowed = self.html_task(step_complete="true").replace(
+            '<p data-plan-intro>Visible introduction.</p>',
+            '<p data-plan-intro>Visible introduction. <a href="https://example.com/source" target="_blank" rel="noopener noreferrer">source</a></p>',
+        )
+        model = MODULE.parse_html_plan_contract(allowed.encode("utf-8"))
+        tree_json = json.dumps(model["planDocument"], ensure_ascii=False)
+        self.assertIn("https://example.com/source", tree_json)
+        unsafe = (
+            allowed.replace('target="_blank" rel="noopener noreferrer"', 'target="_self" rel="noopener noreferrer"'),
+            allowed.replace('href="https://example.com/source"', 'href="javascript:alert(1)"'),
+            allowed.replace('href="https://example.com/source"', 'href="//example.com/source"'),
+            allowed.replace('href="https://example.com/source"', 'href="data:text/html,alert(1)"'),
+            allowed.replace('<a href="https://example.com/source" target="_blank" rel="noopener noreferrer">source</a>', '<img src="https://example.com/source">'),
+            allowed.replace('<p data-plan-intro>Visible introduction. <a href="https://example.com/source" target="_blank" rel="noopener noreferrer">source</a></p>', '<p data-plan-intro d="M0 0">Visible introduction.</p>'),
+            allowed.replace('<p data-plan-intro>Visible introduction. <a href="https://example.com/source" target="_blank" rel="noopener noreferrer">source</a></p>', '<p data-plan-intro="Visible introduction."/><svg fill="url(https://evil.test/x)"></svg>'),
+            allowed.replace('</main>', '<svg fill="u\\72l(file:///tmp/x)"></svg><svg fill="u\\72l(//evil.test/x)"></svg></main>'),
+        )
+        for html in unsafe:
+            with self.subTest(html=html):
+                with self.assertRaises(MODULE.PlanContractError):
+                    MODULE.parse_html_plan_contract(html.encode("utf-8"))
+
+    def test_html_requires_one_canonical_main_without_dropping_visible_content(self) -> None:
+        base = self.html_task(step_complete="true")
+        outside = base.replace("</main>", "</main><p>outside visible prose</p>")
+        multiple = base.replace("</main>", "</main><main data-plan-schema=\"2\"><p>second root</p></main>")
+        for html in (outside, multiple):
+            with self.subTest(html=html):
+                with self.assertRaisesRegex(MODULE.PlanContractError, "main|visible"):
+                    MODULE.parse_html_plan_contract(html.encode("utf-8"))
+
+    def test_html_rejects_nested_schema_marker_and_normalizes_boolean_checkbox_state(self) -> None:
+        invalid = self.html_task(step_complete="true").replace(
+            '<section id="task-1" data-task-id="1" data-status="in-progress">',
+            '<section id="task-1" data-task-id="1" data-plan-schema="999" data-status="in-progress">',
+        )
+        with self.assertRaisesRegex(MODULE.PlanContractError, "schema"):
+            MODULE.parse_html_plan_contract(invalid.encode("utf-8"))
+
+        checked = self.html_task(step_complete="true").replace(
+            'data-step-index="1" data-complete="true"',
+            'data-step-index="1"',
+        ).replace(
+            '<li data-step-index="1">HTMLを解析する。</li>',
+            '<li data-step-index="1"><input type="checkbox" checked="false">HTMLを解析する。</li>',
+        )
+        model = MODULE.parse_html_plan_contract(checked.encode("utf-8"))
+        self.assertTrue(model["tasks"][0]["steps"][0]["complete"])
+        self.assertIn('"checked": "true"', json.dumps(model["planDocument"], ensure_ascii=False))
+
+    def test_plan_source_raw_sha_is_additive_across_legacy_and_html_formats(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            md = root / "30_plan.md"
+            lf = self.plan_task("1", "raw hash")
+            md.write_bytes(lf.encode("utf-8"))
+            first = MODULE.parse_plan_files(md, root / "40_progress.md")
+            crlf_raw = lf.replace("\n", "\r\n").encode("utf-8")
+            md.write_bytes(crlf_raw)
+            second = MODULE.parse_plan_files(md, root / "40_progress.md")
+            bom_raw = b"\xef\xbb\xbf" + lf.encode("utf-8")
+            md.write_bytes(bom_raw)
+            third = MODULE.parse_plan_files(md, root / "40_progress.md")
+
+        self.assertEqual(first["sourceHash"], second["sourceHash"])
+        self.assertEqual(first["sourceHashes"], second["sourceHashes"])
+        self.assertNotEqual(second["planSourceRawSha256"], first["planSourceRawSha256"])
+        self.assertEqual(third["planSourceRawSha256"], hashlib.sha256(bom_raw).hexdigest())
+        self.assertEqual(first["planSourceRawSha256"], hashlib.sha256(lf.encode("utf-8")).hexdigest())
+        self.assertEqual(second["planSourceRawSha256"], hashlib.sha256(crlf_raw).hexdigest())
+        self.assertEqual(third["sourceHashes"]["30_plan.md"], MODULE._sha256(bom_raw.decode("utf-8")))
+
+        html_raw = b"\xef\xbb\xbf" + self.html_task(step_complete="true").encode("utf-8")
+        html_model = MODULE.parse_html_plan_contract(html_raw)
+        self.assertEqual(html_model["planSourceRawSha256"], hashlib.sha256(html_raw).hexdigest())
+
+    def test_head_metadata_and_css_resource_loads_fail_closed(self) -> None:
+        valid = self.html_task(step_complete="true").replace(
+            '<meta charset="utf-8">',
+            '<meta charset="utf-8"><meta name="viewport" content="width=device-width">'
+            '<meta http-equiv="Content-Security-Policy" content="default-src \'none\'">'
+            '<style>body { font-family: sans-serif; color: #222; }</style>',
+        )
+        self.assertEqual(MODULE.parse_html_plan_contract(valid.encode())["planDocument"]["title"], "HTML canonical plan")
+        invalid = (
+            '<link rel="stylesheet" href="local.css">',
+            '<base href="elsewhere">',
+            '<meta http-equiv="refresh" content="0;url=https://evil.test">',
+            '<style>@import url(https://evil.test/x);</style>',
+            '<style>u\\72 l(https://evil.test/x)</style>',
+            '<style>@\\69/*comment*/mport "evil.css";</style>',
+            "<style>@im\\\nport \"evil.css\";</style>",
+            "<style>u\\\nrl(//evil.test/x)</style>",
+        )
+        for head_node in invalid:
+            with self.subTest(head_node=head_node):
+                html = self.html_task(step_complete="true").replace(
+                    '<title>HTML canonical plan</title>',
+                    head_node + '<title>HTML canonical plan</title>',
+                )
+                with self.assertRaises(MODULE.PlanContractError):
+                    MODULE.parse_html_plan_contract(html.encode("utf-8"))
+
+    def test_html_rejects_non_whitespace_text_under_document_html_or_head(self) -> None:
+        cases = (
+            "IMPORTANT\n" + self.html_task(step_complete="true"),
+            self.html_task(step_complete="true").replace("<html lang=\"ja\">", "<html lang=\"ja\">IMPORTANT"),
+            self.html_task(step_complete="true").replace("<head>", "<head>IMPORTANT"),
+            self.html_task(step_complete="true") + "IMPORTANT",
+        )
+        for html in cases:
+            with self.subTest(html=html):
+                with self.assertRaisesRegex(MODULE.PlanContractError, "text|head"):
+                    MODULE.parse_html_plan_contract(html.encode("utf-8"))
+
+    def test_preloaded_html_requires_current_regular_file_and_raw_bytes(self) -> None:
+        with tempfile.TemporaryDirectory() as directory:
+            task = Path(directory)
+            html = task / "30_plan.html"
+            raw = self.html_task(step_complete="true").encode("utf-8")
+            html.write_bytes(raw)
+            model = MODULE.resolve_plan_source(
+                task,
+                preloaded_plan_text=raw.decode("utf-8"),
+                preloaded_plan_raw_sha256=hashlib.sha256(raw).hexdigest(),
+            )
+            self.assertEqual(model["planSourceRawSha256"], hashlib.sha256(raw).hexdigest())
+
+            html.write_bytes(raw.replace(b"HTML canonical plan", b"Changed canonical plan", 1))
+            with self.assertRaisesRegex(MODULE.PlanContractError, "preloaded HTML source"):
+                MODULE.resolve_plan_source(
+                    task,
+                    preloaded_plan_text=raw.decode("utf-8"),
+                    preloaded_plan_raw_sha256=hashlib.sha256(raw).hexdigest(),
+                )
+
+            html.unlink()
+            html.symlink_to(task / "missing.html")
+            with self.assertRaises(MODULE.PlanContractError):
+                MODULE.resolve_plan_source(
+                    task,
+                    preloaded_plan_text=raw.decode("utf-8"),
+                    preloaded_plan_raw_sha256=hashlib.sha256(raw).hexdigest(),
+                )
 
     def test_large_plan_task_section_boundaries_are_near_linear(self) -> None:
         task_count = 2500

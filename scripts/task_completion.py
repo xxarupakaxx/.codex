@@ -52,6 +52,7 @@ RESERVED = {
     ROADMAP_OUTPUT, "roadmap-snapshot.json", "task-meta.json",
 }
 MANDATORY = {"task:30_plan.md", "task:40_progress.md"}
+HTML_MANDATORY = {"task:30_plan.html"}
 NO_WORKSPACE_WRITES = "N/A: no workspace writes"
 
 
@@ -214,6 +215,26 @@ def extract_planned_acceptance_ids(plan_model: Mapping[str, Any]) -> list[str]:
     tasks = plan_model.get("tasks")
     if not isinstance(tasks, list) or not tasks:
         _fail("completion_plan_tasks_missing")
+    if plan_model.get("sourceKind") == "html":
+        planned: list[str] = []
+        for task in tasks:
+            if not isinstance(task, Mapping):
+                _fail("completion_plan_task_invalid")
+            number = str(task.get("number", ""))
+            values = task.get("acceptanceIds")
+            if not isinstance(values, list) or not values:
+                _fail("completion_acceptance_missing", task=number)
+            local: list[str] = []
+            for value in values:
+                if not isinstance(value, str) or not ID.fullmatch(value):
+                    _fail("completion_acceptance_invalid", task=number)
+                if value in local:
+                    _fail("completion_acceptance_duplicate", task=number)
+                if value in planned:
+                    _fail("completion_acceptance_duplicate", task=number)
+                local.append(value)
+                planned.append(value)
+        return planned
     planned: list[str] = []
     for task in tasks:
         if not isinstance(task, Mapping):
@@ -345,6 +366,27 @@ def _evidence_refs(bundle: Mapping[str, Any], planned: list[str]) -> dict[str, s
     return refs
 
 
+def _html_required_sources(plan_model: Mapping[str, Any]) -> list[str]:
+    values: list[str] = []
+    top_level = plan_model.get("requiredSources")
+    if isinstance(top_level, list):
+        values.extend(value for value in top_level if isinstance(value, str))
+    for task in plan_model.get("tasks", []):
+        if not isinstance(task, Mapping):
+            continue
+        task_values = task.get("requiredSources")
+        if isinstance(task_values, list):
+            values.extend(value for value in task_values if isinstance(value, str))
+    if not values:
+        _fail("completion_required_sources_missing")
+    canonical: list[str] = []
+    for value in values:
+        _, _, name, _ = _ref(value)
+        if name not in canonical:
+            canonical.append(name)
+    return canonical
+
+
 def _workspace_path(value: str) -> str:
     if isinstance(value, str) and value.startswith("workspace:"):
         value = value[len("workspace:"):]
@@ -411,20 +453,27 @@ def validate_phase5_completion(
 ) -> dict[str, object]:
     """Validate Phase 5 using the sync parser's trusted ``plan_model``.
 
-    The plan text is always read from the task's ``30_plan.md``.  The sync
-    caller supplies the already parsed ``parse_plan_files`` result; this gate
-    has no command or write side effects.
+    The sync caller supplies the already parsed source-aware Plan model; this
+    gate has no command or write side effects. Markdown remains a legacy path.
     """
     task, workspace = Path(task_dir).resolve(), Path(workspace_root).resolve()
     if not task.is_dir() or not workspace.is_dir():
         _fail("completion_root_invalid")
-    plan_path = task / "30_plan.md"
+    html_path = task / "30_plan.html"
+    html_present = html_path.exists() or html_path.is_symlink()
+    if html_present and plan_model.get("sourceKind") != "html":
+        _fail("completion_plan_invalid", error="canonical HTML source requires the HTML resolver model")
+    if not html_present and plan_model.get("sourceKind") == "html":
+        _fail("completion_plan_missing", path=str(html_path))
+    plan_path = html_path if html_present else task / "30_plan.md"
     if plan_path.is_symlink() or not plan_path.is_file():
         _fail("completion_plan_missing", path=str(plan_path))
-    try:
-        plan_text = plan_path.read_text(encoding="utf-8")
-    except (OSError, UnicodeError) as exc:
-        _fail("completion_plan_invalid", error=str(exc))
+    plan_text = ""
+    if plan_model.get("sourceKind") != "html":
+        try:
+            plan_text = plan_path.read_text(encoding="utf-8")
+        except (OSError, UnicodeError) as exc:
+            _fail("completion_plan_invalid", error=str(exc))
     planned = extract_planned_acceptance_ids(plan_model)
     diagnostics = plan_model.get("diagnostics")
     if isinstance(diagnostics, list) and diagnostics:
@@ -452,8 +501,12 @@ def validate_phase5_completion(
     _raw_steps_complete(plan_model)
     if bundle.get("source_hash") != plan_model.get("sourceHash"):
         _fail("completion_source_hash_mismatch")
-    required = extract_required_sources(plan_text)
-    mandatory = set(MANDATORY)
+    required = (
+        _html_required_sources(plan_model)
+        if plan_model.get("sourceKind") == "html"
+        else extract_required_sources(plan_text)
+    )
+    mandatory = set(HTML_MANDATORY if plan_model.get("sourceKind") == "html" else MANDATORY)
     if checkpoint.exists() or checkpoint.is_symlink():
         mandatory.add("task:checkpoint.md")
     if not mandatory.issubset(required) or not set(required) - mandatory:
@@ -474,6 +527,7 @@ def validate_phase5_completion(
         "evidence_acceptance_ids": list(refs),
         "completion_state": bundle.get("completion_state"),
         "completion_target": target,
+        "plan_source_raw_sha256": plan_model.get("planSourceRawSha256", ""),
         "source_fingerprints_checked": source_count,
         "evidence_fingerprints_checked": evidence_count,
     }

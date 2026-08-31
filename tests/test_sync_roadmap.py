@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import importlib.util
+import copy
 import json
 import tempfile
 import unittest
@@ -67,6 +68,65 @@ class SyncRoadmapTest(unittest.TestCase):
                 encoding="utf-8",
             )
         return task
+
+    def write_html_task(self, name: str = "html-roadmap") -> Path:
+        task = self.root / name
+        task.mkdir()
+        (task / "05_log.md").write_text("roadmap_route: roadmap：fixture\n", encoding="utf-8")
+        (task / "30_plan.html").write_text(
+            """<!doctype html><html><head><title>HTML fixture</title></head><body>
+<main id="plan-document" data-plan-schema="2"><h1>HTML fixture</h1>
+<section data-task-id="1" data-status="complete"><h2>Task 1: HTML</h2>
+<h3 data-field="purpose">Purpose</h3><p>Use HTML.</p>
+<h3 data-field="targets">Targets</h3><ul><li>fixture.py</li></ul>
+<h3 data-field="implementation">Implementation</h3><ul><li data-complete="true">Parse HTML.</li></ul>
+<h3 data-field="outputs">Outputs</h3><p>Plan model.</p>
+<h3 data-field="verification">Verification</h3><p>Fixture.</p>
+<ul data-field="acceptance"><li data-acceptance-id="H1">H1</li></ul>
+<ul data-field="required-sources"><li data-source-ref="task:30_plan.html">Canonical source.</li></ul>
+</section></main></body></html>""",
+            encoding="utf-8",
+        )
+        return task
+
+    def test_html_source_is_used_by_sync_dry_run_without_progress_or_markdown(self) -> None:
+        task = self.write_html_task()
+        (task / "30_plan.md").write_text("legacy sibling must be ignored", encoding="utf-8")
+        code, result = MODULE.synchronize(
+            task,
+            self.generator,
+            "3",
+            self.workspace,
+            "html-fixture",
+            memory_root=self.root,
+            dry_run=True,
+            headless=True,
+        )
+
+        self.assertEqual(code, 0)
+        self.assertEqual(result["status"], "dry_run")
+        self.assertEqual(MODULE.source_fingerprints(task, "roadmap").keys(), {"05_log.md", "30_plan.html"})
+        self.assertEqual(result["plan_task_ids"], ["1"])
+        self.assertEqual(result["plan_source_hash"], MODULE.resolve_plan_source(task)["sourceHash"])
+
+    def test_invalid_html_shadows_valid_markdown(self) -> None:
+        task = self.write_html_task("invalid-html")
+        (task / "30_plan.html").write_text("<main><script>alert(1)</script></main>", encoding="utf-8")
+        (task / "30_plan.md").write_text("## Task 1: legacy fallback", encoding="utf-8")
+
+        code, result = MODULE.synchronize(
+            task,
+            self.generator,
+            "3",
+            self.workspace,
+            "html-invalid",
+            memory_root=self.root,
+            dry_run=True,
+            headless=True,
+        )
+
+        self.assertEqual(code, 2)
+        self.assertEqual(result["reason"], "plan_contract_invalid")
 
     def phase5_task(self, *, checked: bool = True) -> Path:
         task = self.write_task("roadmap")
@@ -590,6 +650,100 @@ class SyncRoadmapTest(unittest.TestCase):
 
         self.assertNotEqual(code, 0)
         self.assertEqual(result["reason"], "roadmap_snapshot_source_mismatch")
+
+    def test_v2_snapshot_raw_plan_sha_mismatch_fails_closed(self) -> None:
+        task = self.write_task("roadmap")
+        snapshot = self.snapshot_v2(task)
+        snapshot["plan"]["planSourceRawSha256"] = "0" * 64  # type: ignore[index]
+        snapshot["planSourceRawSha256"] = "0" * 64
+        generator = self.write_snapshot_generator(task, snapshot, "stale-raw-source-generator.py")
+
+        code, result = MODULE.synchronize(
+            task, generator, "3", self.workspace, "run-1"
+        )
+
+        self.assertNotEqual(code, 0)
+        self.assertEqual(result["reason"], "roadmap_snapshot_source_mismatch")
+
+    def test_snapshot_json_rejects_duplicate_keys_and_nonfinite_numbers(self) -> None:
+        duplicate = self.workspace / "duplicate-snapshot.json"
+        duplicate.write_text('{"version":1,"version":1}', encoding="utf-8")
+        nonfinite = self.workspace / "nonfinite-snapshot.json"
+        nonfinite.write_text('{"version":NaN}', encoding="utf-8")
+
+        self.assertIsNone(MODULE._read_json_snapshot(duplicate))
+        self.assertIsNone(MODULE._read_json_snapshot(nonfinite))
+
+    def test_html_derived_projections_are_recomputed_from_current_source(self) -> None:
+        task = self.write_html_task("derived-html").resolve()
+        generator_path = Path(__file__).parents[1] / "scripts" / "generate-roadmap-view.py"
+        spec = importlib.util.spec_from_file_location("derived_projection_generator", generator_path)
+        assert spec and spec.loader
+        generator = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(generator)
+        expected = MODULE.resolve_plan_source(task)
+        snapshot = generator.build_snapshot(task, source_root=self.workspace.resolve())
+
+        self.assertIsNone(
+            MODULE._validate_snapshot_payload(
+                snapshot,
+                task,
+                expected,
+                source_root=self.workspace.resolve(),
+            )
+        )
+        for field in ("sourcePreviews", "uiPreviews", "timeline"):
+            altered = copy.deepcopy(snapshot)
+            altered[field] = [{"tampered": True}]
+            self.assertEqual(
+                MODULE._validate_snapshot_payload(
+                    altered,
+                    task,
+                    expected,
+                    source_root=self.workspace.resolve(),
+                ),
+                f"roadmap_snapshot_{field}_mismatch",
+            )
+
+    def test_html_snapshot_requires_both_raw_sha_projections(self) -> None:
+        task = self.write_html_task("raw-fields").resolve()
+        generator_path = Path(__file__).parents[1] / "scripts" / "generate-roadmap-view.py"
+        spec = importlib.util.spec_from_file_location("raw_field_generator", generator_path)
+        assert spec and spec.loader
+        generator = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(generator)
+        expected = MODULE.resolve_plan_source(task)
+        snapshot = generator.build_snapshot(task, source_root=self.workspace.resolve())
+
+        for field in ("planSourceRawSha256",):
+            for location in ("snapshot", "plan"):
+                altered = copy.deepcopy(snapshot)
+                if location == "snapshot":
+                    altered.pop(field)
+                else:
+                    altered["plan"].pop(field)
+                self.assertEqual(
+                    MODULE._validate_snapshot_payload(
+                        altered,
+                        task,
+                        expected,
+                        source_root=self.workspace.resolve(),
+                    ),
+                    "roadmap_snapshot_source_mismatch",
+                )
+
+    def test_backend_rejects_escaped_external_svg_paint(self) -> None:
+        base = {"format": "html", "title": "safe", "nodes": []}
+        unsafe = copy.deepcopy(base)
+        unsafe["nodes"] = [{"tag": "svg", "attrs": {"fill": r"u\72l(file:///tmp/x)"}, "children": []}]
+        protocol_relative = copy.deepcopy(base)
+        protocol_relative["nodes"] = [{"tag": "svg", "attrs": {"fill": r"u\72l(//evil.test/x)"}, "children": []}]
+        local = copy.deepcopy(base)
+        local["nodes"] = [{"tag": "svg", "attrs": {"fill": "url(#local)"}, "children": []}]
+
+        self.assertFalse(MODULE._plan_document_valid(unsafe))
+        self.assertFalse(MODULE._plan_document_valid(protocol_relative))
+        self.assertTrue(MODULE._plan_document_valid(local))
 
     def test_v2_snapshot_rejects_stale_progress_source(self) -> None:
         task = self.write_task("roadmap")

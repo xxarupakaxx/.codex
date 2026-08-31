@@ -87,7 +87,7 @@ Workflow routeとLocal / Fast / Standard / Heavy / Judgmentのcapability class�
 - 複数turn協調: team-run。graph-engineeringは複数loop、typed state、異なるauthorityが必要な場合だけ使う。
 - architecture: modeling-domains / designing-codebases / improving-architectureを対象範囲に応じて使う。
 
-HTMLを生成・更新・配布する場合は context/html-artifact-contract.md と config/html-surfaces.jsonを確認し、登録済みproducerだけを使う。新しい図の正本はSVGで、MarkdownへMermaidを生成しない。Roadmapは30_plan.mdを入力に`~/.codex/scripts/sync-roadmap.py`が検査・生成・atomic publishし、HTMLの手編集やstale source fallbackをしない。
+HTMLを生成・更新・配布する場合は context/html-artifact-contract.md と config/html-surfaces.jsonを確認し、登録済みproducerだけを使う。新しい図の正本はSVGで、MarkdownへMermaidを生成しない。計画は30_plan.htmlを編集し、`~/.codex/scripts/sync-roadmap.py`で検査・生成・atomic publishする。派生roadmap.htmlの手編集やstale source fallbackはしない。
 
 ## 改善候補の扱い
 
