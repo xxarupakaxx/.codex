@@ -160,28 +160,6 @@
       "browserProfile": "roadmap-matrix"
     },
     {
-      "id": "mcp-workflow-html-app",
-      "route": "html-plan",
-      "owner": "workflow-html-app",
-      "source": "mcp-servers/workflow-html-app/server.ts",
-      "templates": ["mcp-servers/workflow-html-app/ui/plan-viewer.html", "mcp-servers/workflow-html-app/ui/diagram-viewer.html", "mcp-servers/workflow-html-app/ui/verification-viewer.html"],
-      "outputPatterns": ["mcp-servers/workflow-html-app/dist/*.html"],
-      "artifactKind": "mcp-app-html",
-      "staticProfile": "mcp-current",
-      "browserProfile": "roadmap-matrix"
-    },
-    {
-      "id": "claude-compat-workflow-html-app",
-      "route": "html-plan",
-      "owner": "workflow-html-app",
-      "source": "claude-compat/mcp-servers/workflow-html-app/server.ts",
-      "templates": ["claude-compat/mcp-servers/workflow-html-app/ui/plan-viewer.html", "claude-compat/mcp-servers/workflow-html-app/ui/diagram-viewer.html", "claude-compat/mcp-servers/workflow-html-app/ui/verification-viewer.html"],
-      "outputPatterns": ["claude-compat/mcp-servers/workflow-html-app/dist/*.html"],
-      "artifactKind": "mcp-app-html",
-      "staticProfile": "mcp-current",
-      "browserProfile": "roadmap-matrix"
-    },
-    {
       "id": "creating-html-documents",
       "route": "html",
       "owner": "creating-html-documents",
@@ -261,12 +239,12 @@
   ],
   "surfaces": [
     {"path": "tools/roadmap_viewer.html", "lifecycle": "canonical", "owner": "viewing-plans", "artifactKind": "html-plan", "staticProfile": "legacy-grandfathered", "browserProfile": "roadmap-matrix"},
-    {"path": "mcp-servers/workflow-html-app/ui/plan-viewer.html", "lifecycle": "canonical", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "roadmap-matrix"},
-    {"path": "mcp-servers/workflow-html-app/ui/diagram-viewer.html", "lifecycle": "canonical", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "diagram-matrix"},
-    {"path": "mcp-servers/workflow-html-app/ui/verification-viewer.html", "lifecycle": "canonical", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "roadmap-matrix", "allowMissingInWorkingTree": true},
-    {"path": "claude-compat/mcp-servers/workflow-html-app/ui/plan-viewer.html", "lifecycle": "compatibility", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "roadmap-matrix"},
-    {"path": "claude-compat/mcp-servers/workflow-html-app/ui/diagram-viewer.html", "lifecycle": "compatibility", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "diagram-matrix"},
-    {"path": "claude-compat/mcp-servers/workflow-html-app/ui/verification-viewer.html", "lifecycle": "compatibility", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "roadmap-matrix"},
+    {"path": "mcp-servers/workflow-html-app/ui/plan-viewer.html", "lifecycle": "legacy", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "roadmap-matrix"},
+    {"path": "mcp-servers/workflow-html-app/ui/diagram-viewer.html", "lifecycle": "legacy", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "diagram-matrix"},
+    {"path": "mcp-servers/workflow-html-app/ui/verification-viewer.html", "lifecycle": "legacy", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "roadmap-matrix", "allowMissingInWorkingTree": true},
+    {"path": "claude-compat/mcp-servers/workflow-html-app/ui/plan-viewer.html", "lifecycle": "legacy", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "roadmap-matrix"},
+    {"path": "claude-compat/mcp-servers/workflow-html-app/ui/diagram-viewer.html", "lifecycle": "legacy", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "diagram-matrix"},
+    {"path": "claude-compat/mcp-servers/workflow-html-app/ui/verification-viewer.html", "lifecycle": "legacy", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "roadmap-matrix"},
     {"path": "skills/creating-html-documents/assets/editorial-document.html", "lifecycle": "canonical", "owner": "creating-html-documents", "artifactKind": "html-document", "staticProfile": "legacy-grandfathered", "browserProfile": "desktop-document"},
     {"path": "tools/plan_viewer.html", "lifecycle": "legacy", "owner": "viewing-plans", "artifactKind": "legacy-plan-viewer", "staticProfile": "legacy-grandfathered", "browserProfile": "roadmap-matrix"},
     {"path": "tools/log_viewer.html", "lifecycle": "legacy", "owner": "viewing-plans", "artifactKind": "legacy-log-viewer", "staticProfile": "legacy-grandfathered", "browserProfile": "roadmap-matrix"},
@@ -277,6 +255,8 @@
     {"path": "codemap.html", "lifecycle": "grandfathered", "owner": "viewing-plans", "artifactKind": "legacy-codemap-html", "staticProfile": "legacy-grandfathered", "browserProfile": "roadmap-matrix"}
   ],
   "literalExceptions": [
+    {"path": "claude-compat/mcp-servers/workflow-html-app/server.ts", "contains": ".html", "reason": "Retired workflow-html-app source retained as legacy; not registered or built by the live display workflow.", "removeWhen": "Historical source is removed with explicit approval."},
+    {"path": "mcp-servers/workflow-html-app/server.ts", "contains": ".html", "reason": "Retired workflow-html-app source retained as legacy; not registered or built by the live display workflow.", "removeWhen": "Historical source is removed with explicit approval."},
     {"path": "scripts/task-context.py", "contains": "roadmap.html", "reason": "read-only task artifact reference, not a producer", "removeWhen": "consumer stops referencing Roadmap or begins producing HTML"},
     {"path": "scripts/html_artifact_contract.py", "contains": "*.html", "reason": "contract scanner pattern, not a producer", "removeWhen": "not applicable"},
     {"path": "scripts/validate-matt-skill-integration.py", "contains": "tools/roadmap_viewer.html", "reason": "integration canary target, not a producer", "removeWhen": "canary manifest-driven"},

@@ -23,7 +23,7 @@ manifestにないHTML producerやtracked HTML surfaceを新規のcanonical route
 | `design-artifact` | `designing-ui-ux` | `design-artifact` | `strict-self-contained` | `design-approval-matrix` | 承認済みのUI/UX visual artifact |
 | `html-wireframe` | `designing-ui-ux` | `html-wireframe` | `strict-self-contained` | `wireframe-matrix` | low-fidelity構造確認 |
 | `html-prototype` | `designing-ui-ux` + `design-eval-loop` | `html-prototype` | `strict-self-contained` | `prototype-matrix` | working-flowやinteraction prototype |
-| `html-plan` | `viewing-plans` + Roadmap generator | `html-plan` | `roadmap-generated` | `roadmap-matrix` | `roadmap.html`、Plan/Log/Verification MCP UI |
+| `html-plan` | `viewing-plans` + Roadmap generator | `html-plan` | `roadmap-generated` | `roadmap-matrix` | ブラウザで開く`roadmap.html` |
 | `html-diagram` | `visualizing-work` → `generate-state-diagram` / `diagram-design` | `html-diagram` | `strict-self-contained` | `desktop-diagram` | SVG正本をPCで読む補助図HTML。3D等のspecialized producerはmanifest登録済みprofileを使う |
 
 routeを選べないHTMLは作らない。複数routeの要素を持つ場合は、user-visibleな配布物を所有するrouteを主にし、補助要素はmanifest上のproducerとsurfaceへ明示する。
@@ -37,7 +37,7 @@ routeを選べないHTMLは作らない。複数routeの要素を持つ場合は
 | `legacy` | filenameを保持する過去surface | 削除・renameしないが、canonicalからlive参照しない |
 | `grandfathered` | 過去互換のためtrackedされる例外surface | 新規producerの根拠にしない。static profileの緩和理由をmanifestに残す |
 
-`codemap.html` は `grandfathered` であり、新しく生成しない。人向けCode Mapは `roadmap.html` のProject Map + FocusからDetail drawerを開き、Impact内のCode Mapとして確認する。
+`codemap.html` は `grandfathered` であり、新しく生成しない。人向けCode Mapは `roadmap.html` の計画書の補助表示からDetail drawerを開き、Impact内のCode Mapとして確認する。
 
 ## Producer Gate
 
@@ -95,7 +95,7 @@ browser profileはmanifestの`browserProfiles`を正本にする。`html`と静�
 - keyboard flow
 - focus visibility
 
-MCP Apps、Roadmap renderer、prototypeなどruntime挙動を持つsurface実装は、該当profileのbrowser gateがfreshでなければreleaseまたはsurface契約変更の配布完了にしない。
+Roadmap renderer、prototypeなどruntime挙動を持つsurface実装は、該当profileのbrowser gateがfreshでなければreleaseまたはsurface契約変更の配布完了にしない。
 
 `roadmap-matrix` は現在も 375px、768px、1440px、200% zoom、overflow、keyboard、focus restoration、forced colors、reduced motion、contrast を含む。通常のRoadmap再生成ではstatic + desktop smokeを近道として記録できるが、renderer / common CSS / UI preview common primitive / breakpointを変えた時点でこの近道は使わない。
 
@@ -105,7 +105,7 @@ mobile / tablet responsive、print preview、PDF exportは`html`と静的`html-d
 
 ## Roadmap / Code Map
 
-`html-plan` routeの主入口は `roadmap.html` である。初期画面はProject Map + Focusとし、sourceに存在する情報だけを使う。
+`html-plan` routeの主入口は `roadmap.html` である。初期画面は30_plan.mdの計画本文を連続表示する。背景・目的・全体の進め方と工程ごとの本文を読みやすい文字と余白で示し、目次から章へ移動できる。Project Map + Focus、timeline、Code Mapは補助表示に置く。sourceに存在する情報だけを使う。
 
 - 企画: `00_spec.md`
 - 設計: `20_survey.md` / `30_plan.md`
@@ -123,17 +123,11 @@ UI previewはRoadmap Change詳細の小さな比較模型であり、ページ�
 
 reference HTMLから得た900px程度のeditorial canvas、小さいUI模型、新規画面のAfter-only表示は設計指針として扱う。Google Fonts、外部CSS、reference HTMLのtokenはコピーせず、Roadmap既存のdesign token、system font、CSP、self-contained契約を維持する。
 
-## MCP Apps
+## ブラウザで開く
 
-`workflow-html-app`のHTML resourceは `text/html;profile=mcp-app` を使う。対応hostではMCP Apps protocolの`App`と`PostMessageTransport(window.parent, window.parent)`を使い、非対応hostではtext resultへ退化する。
+検査済みのHTMLを通常ブラウザで直接開く。自己完結したfileはローカルserverを必須にせず、更新監視が必要なときだけ既存のloopback serverを使う。ブラウザ起動要求の成功と、実画面で読めたことを分けて記録する。
 
-- tool名とresource URIは互換性の一部として保持する。
-- Plan / Log / Verificationは安全なdocument bundleを共有し、Verificationはそのbundleから生成されるalias fileにする。
-- Diagramはdiagram bundleを使い、durable diagram artifactはSVG正本を維持する。
-- spoofed source、malformed JSON-RPC、未初期化message、XSS payloadを拒否する。
-- canonical UI buildからcompatibility UIを生成し、許可adapter以外のdriftを拒否する。
-
-buildはtemporary distへ出力し、static/browser gateが成功した場合だけ既存distへpublishする。stale source fallbackで失敗を隠さない。
+`workflow-html-app`のPlan / Log / Verification / Diagramは登録から撤去し、現行の表示経路には使わない。旧sourceと互換surfaceは履歴参照のlegacyとして保持し、自動起動・build・再登録を行わない。再導入は明示依頼がある場合だけ別途判断する。
 
 ## Design Approval Boundary
 

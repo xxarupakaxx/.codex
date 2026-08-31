@@ -65,7 +65,7 @@ Phase 2 artifact保存後は、全routeで `~/.codex/scripts/sync-roadmap.py` �
 
 00_spec.mdは概要、背景・目的、現在の事実、採用判断、未確定、必須/任意要件、非機能要件、制約を持つ。
 
-roadmap routeの30_plan.mdは人とLLMが読む計画の正本で、Taskを次の見出しで書く。各Taskの受入条件をacceptance IDへ結び、本文にない担当、期限、因果を補作しない。
+roadmap routeの30_plan.mdは人とLLMが読む計画の正本で、Taskを次の見出しで書く。背景・目的・到達点・全体の進め方を先に文章で示し、その後に成果物や判断がまとまる工程単位のTaskを置く。file単位や一操作ごとにTaskを増やさず、細かな手順はTask内のチェックリストにまとめる。JSONの分割単位を、人が読む計画の章立てへ強制しない。各Taskの受入条件をacceptance IDへ結び、本文にない担当、期限、因果を補作しない。
 
     ### Task 1: <安定した名前>
     #### 目的

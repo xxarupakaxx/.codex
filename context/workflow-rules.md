@@ -32,7 +32,7 @@ GO / CONDITIONAL / NO-GO / DEFERを、実現可能性、工数、依存、リス
 
 ### Phase 2: 計画
 
-roadmap routeでは、30_plan.mdを人とLLMが読む正本として保存する。Taskごとに目的、変更対象、実装、成果物、検証、blockedBy、acceptance ID、source根拠、write scopeを対応させる。roadmap.htmlとroadmap-snapshot.jsonは既存parser / generatorによる派生viewであり、手で編集しない。
+roadmap routeでは、30_plan.mdを人とLLMが読む正本として保存する。背景・目的・到達点・全体の進め方を先に文章で示し、その後に成果物や判断がまとまる工程単位のTaskを置く。file単位や一操作ごとにTaskを増やさず、細かな手順はTask内のチェックリストにまとめる。JSONの分割単位を、人が読む計画の章立てへ強制しない。Taskごとに目的、変更対象、実装、成果物、検証、blockedBy、acceptance ID、source根拠、write scopeを対応させる。roadmap.htmlとroadmap-snapshot.jsonは既存parser / generatorによる派生viewであり、手で編集しない。HTMLは計画本文の連続表示を既定とし、生成・検証後に通常ブラウザで開く。HTML表示専用MCPは使用しない。
 
 Roadmapのschema、v2とlegacyの境界、source hash、timeline、invalid時の停止は context/memory-file-formats.md に集約する。LLMにHTML全文を書かせず、保存済み30_plan.mdを`~/.codex/scripts/sync-roadmap.py`へ渡し、sync自身の検査・生成・publish結果を使う。Phase 2 artifact保存後は全routeで次のtrusted local executorを実行し、exit codeとJSONを05_log.mdに記録する。Phase 3/4/5も同じTASK、root、run-idでphaseだけを変える。log-onlyはskip証跡を残す。
 
