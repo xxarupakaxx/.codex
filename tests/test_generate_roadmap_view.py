@@ -1290,7 +1290,7 @@ Keep the legacy parser.
         self.assertFalse((self.root / "injected-marker").exists())
         self.assertEqual(invalid_ref["sourcePreviews"][0]["status"], "base-ref-unavailable")
         self.assertEqual(invalid_ref["uiPreviews"][0]["status"], "unverified")
-        self.assertEqual(invalid_ref["uiPreviews"][0]["before"]["items"], [])
+        self.assertEqual(invalid_ref["uiPreviews"][0]["before"]["items"][0]["label"], "Home")
 
         self.write_ui_plan(
             self.valid_ui_payload(source="repo:src/Nav.tsx#MissingAnchor")
@@ -1303,7 +1303,7 @@ Keep the legacy parser.
 
         self.assertEqual(drift["uiPreviews"][0]["status"], "unverified")
         self.assertEqual(drift["uiPreviews"][0]["source"]["status"], "anchor-missing")
-        self.assertEqual(drift["uiPreviews"][0]["before"]["items"], [])
+        self.assertEqual(drift["uiPreviews"][0]["before"]["items"][0]["label"], "Home")
 
     def test_ui_preview_uses_single_declared_commit_without_cli_base_ref(self) -> None:
         base_sha = self.init_git_source(
@@ -1432,7 +1432,7 @@ Keep the legacy parser.
 
         self.assertEqual(preview["status"], "unverified")
         self.assertEqual(preview["source"]["status"], "source-denied")
-        self.assertEqual(preview["before"]["items"], [])
+        self.assertEqual(preview["before"]["items"][0]["label"], "Home")
         self.assertNotIn("LEAK_AUTOMATION", json.dumps(preview))
 
     def test_preview_caps_cache_and_git_timeout_bound_large_plans(self) -> None:

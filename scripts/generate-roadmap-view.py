@@ -1437,7 +1437,7 @@ def normalize_ui_preview_block(
                 "evidenceRevision": base_revision or "",
                 "provenance": provenance,
                 "source": source,
-                "before": before if status == "resolved" else {"items": []},
+                "before": before,
                 "after": after,
                 "uncertainty": normalize_ui_uncertainty(
                     preview.get("uncertainty", []),

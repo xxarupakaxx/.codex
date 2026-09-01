@@ -893,7 +893,7 @@ test('browser: source excerpt focus survives reorder and returns to Task when so
   }
 });
 
-test('browser: source付き空Beforeは未確認として両panelを保ち、新規画面表示へ倒さない', { skip: !chromium }, async () => {
+test('browser: source検証失敗時も計画記録のBeforeを保ち、差分と未確認状態を併記する', { skip: !chromium }, async () => {
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 768, height: 812 } });
@@ -910,16 +910,23 @@ test('browser: source付き空Beforeは未確認として両panelを保ち、新
           before: { source: 'repo:src/old.js#render', baseRef: 'a'.repeat(40) },
           after: { source: '30_plan.md#Task 1' }
         },
-        before: { items: [] },
-        after: { items: [{ id: 'new', label: 'New section', kind: 'section', state: 'planned', change: 'added' }] }
+        before: { items: [{ id: 'existing', label: 'Existing section', kind: 'section', state: 'visible', change: 'same' }] },
+        after: { items: [
+          { id: 'existing', label: 'Existing section', kind: 'section', state: 'visible', change: 'same' },
+          { id: 'new', label: 'New section', kind: 'section', state: 'planned', change: 'added' }
+        ] }
       }]
     });
     await page.evaluate(value => window.__ROADMAP_VIEWER__.render(value), snapshot);
     const before = await page.locator('.compare-panel[data-side="before"]').innerText();
     assert.match(before, /Before未確認/);
-    assert.match(before, /未確認の参照/);
+    assert.match(before, /未確認の計画記録/);
+    assert.match(before, /Existing section/);
     assert.doesNotMatch(before, /新規画面/);
     assert.match(before, /old\.js#render/);
+    const after = await page.locator('.compare-panel[data-side="after"]').innerText();
+    assert.match(after, /New section/);
+    assert.match(after, /追加/);
     assert.equal(await page.locator('.task-change .compare-panel').count(), 2);
   } finally {
     await browser.close();

@@ -3811,7 +3811,7 @@
       const source = preview.provenance || {};
       const isBefore = side === 'before';
       const hasBeforeEvidence = Boolean(source.path || source.anchor);
-      const beforeNeedsConfirmation = isBefore && !preview.before.items.length && hasBeforeEvidence && (
+      const beforeNeedsConfirmation = isBefore && hasBeforeEvidence && (
         preview.status === 'unverified' || preview.before.status === 'unverified' ||
         ['partial', 'source-unavailable', 'anchor-missing', 'secret-content'].includes(preview.before.status)
       );
@@ -3824,10 +3824,16 @@
         ? (source.path || source.anchor ? (source.path || 'path未記録') + (source.anchor ? '#' + source.anchor : '') + (source.baseRef ? ' / base ' + source.baseRef : '') : 'Before source未記録')
         : (source.planSource || '30_plan.md');
       const message = isBefore
-        ? (preview.before.message || (beforeNeedsConfirmation ? 'Beforeの要素は未確認です。sourceは記録されていますが内容を確認できません。' : ''))
+        ? (preview.before.message || (beforeNeedsConfirmation
+          ? (preview.before.items.length
+            ? '計画に記録された内容です。参照元は未確認です。'
+            : 'Beforeの要素は未確認です。sourceは記録されていますが内容を確認できません。')
+          : ''))
         : preview.after.message;
       const sourceHeading = isBefore
-        ? (beforeNeedsConfirmation ? '未確認の参照' : '確認済みの観測')
+        ? (beforeNeedsConfirmation
+          ? (preview.before.items.length ? '未確認の計画記録' : '未確認の参照')
+          : '確認済みの観測')
         : '計画上の案';
       return '<article class="compare-panel" data-side="' + side + '">' +
         '<h3>' + (isBefore ? 'Before' : 'After') + '<span>' + escapeHtml(uiStatusLabel(status, side)) + (preview.isNewScreen && !isBefore ? ' · 新規画面 · 未実装' : '') + '</span></h3>' +

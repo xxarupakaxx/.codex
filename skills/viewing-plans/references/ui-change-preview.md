@@ -62,7 +62,7 @@ previewで使えるkey:
 
 `provenance.after.source` は、Afterの根拠になったplan内の見出し、checkbox、または仕様参照である。Afterは未実装案なので、実装済みsourceとして扱わない。
 
-`baseRef`は40桁の固定commit SHAとする。generatorはplan内に単一のSHAがある場合、CLI指定なしで自動利用する。CLI `--base-ref`を指定した場合はCLIを優先し、plan宣言refと一致しなければならない。複数SHA、mutable ref、ref解決不能、anchor drift、Roadmap Task Hub経由では、Beforeは補作せず`unverified`と理由を返す。
+`baseRef`は40桁の固定commit SHAとする。generatorはplan内に単一のSHAがある場合、CLI指定なしで自動利用する。CLI `--base-ref`を指定した場合はCLIを優先し、plan宣言refと一致しなければならない。複数SHA、mutable ref、ref解決不能、anchor drift、Roadmap Task Hub経由では、Beforeをsourceから補作せず`unverified`と理由を返す。planに正規化済みのBefore項目が記録されていれば、差分確認のため保持し、「未確認の計画記録」として表示する。確認済みの観測には昇格させない。
 
 ## Items
 
