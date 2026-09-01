@@ -2161,6 +2161,21 @@ def watch_outputs(
         stop.wait(interval)
 
 
+def open_default_browser(target: str) -> bool:
+    if sys.platform == "darwin":
+        try:
+            result = subprocess.run(
+                ["/usr/bin/open", target],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError:
+            return False
+        return result.returncode == 0
+    return webbrowser.open(target)
+
+
 def serve_output(output: Path, host: str, port: int, open_browser: bool) -> int:
     directory = output.parent
     handler = functools.partial(RoadmapHTTPRequestHandler, directory=str(directory))
@@ -2169,7 +2184,7 @@ def serve_output(output: Path, host: str, port: int, open_browser: bool) -> int:
     url = f"http://{actual_host}:{actual_port}/{output.name}"
     print(url, flush=True)
     if open_browser:
-        webbrowser.open(url)
+        open_default_browser(url)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -2372,7 +2387,7 @@ def main(argv: list[str]) -> int:
         return 0
 
     if args.open:
-        webbrowser.open(output.as_uri())
+        open_default_browser(output.as_uri())
 
     return 0
 

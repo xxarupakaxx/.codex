@@ -529,6 +529,44 @@ Keep the legacy parser.
         self.assertEqual(args.session_id, "session-1")
         self.assertEqual(args.task_state, "waiting")
 
+    def test_macos_opens_roadmap_with_system_default_application(self) -> None:
+        completed = subprocess.CompletedProcess(["/usr/bin/open"], 0)
+        with (
+            mock.patch.object(roadmap.sys, "platform", "darwin"),
+            mock.patch.object(roadmap.subprocess, "run", return_value=completed) as run,
+            mock.patch.object(roadmap.webbrowser, "open") as browser_open,
+        ):
+            opened = roadmap.open_default_browser("file:///tmp/roadmap.html")
+
+        self.assertTrue(opened)
+        run.assert_called_once_with(
+            ["/usr/bin/open", "file:///tmp/roadmap.html"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        browser_open.assert_not_called()
+
+    def test_other_platforms_keep_standard_default_browser_opener(self) -> None:
+        with (
+            mock.patch.object(roadmap.sys, "platform", "linux"),
+            mock.patch.object(roadmap.webbrowser, "open", return_value=True) as browser_open,
+            mock.patch.object(roadmap.subprocess, "run") as run,
+        ):
+            opened = roadmap.open_default_browser("https://127.0.0.1/roadmap.html")
+
+        self.assertTrue(opened)
+        browser_open.assert_called_once_with("https://127.0.0.1/roadmap.html")
+        run.assert_not_called()
+
+    def test_server_and_file_paths_share_default_browser_opener(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("open_default_browser(url)", source)
+        self.assertIn("open_default_browser(output.as_uri())", source)
+        self.assertNotIn("webbrowser.open(url)", source)
+        self.assertNotIn("webbrowser.open(output.as_uri())", source)
+
     def test_viewing_plans_requires_llm_authored_ui_preview_without_user_metadata(self) -> None:
         skill = (ROOT / "skills" / "viewing-plans" / "SKILL.md").read_text()
         runbook = (

@@ -11,7 +11,11 @@ if (existsSync(playwrightModule)) {
   try { ({ chromium } = require(playwrightModule)); } catch { chromium = null; }
 }
 const chromiumExecutable = process.env.CODEX_PLAYWRIGHT_EXECUTABLE || '';
-const launchChromium = () => chromium.launch({ headless: true, ...(chromiumExecutable ? { executablePath: chromiumExecutable } : {}) });
+const launchChromium = () => chromium.launch({
+  headless: true,
+  args: ['--no-default-browser-check'],
+  ...(chromiumExecutable ? { executablePath: chromiumExecutable } : {})
+});
 
 const html = readFileSync(new URL('../tools/roadmap_viewer.html', import.meta.url), 'utf8');
 const viewingPlansSkill = readFileSync(new URL('../skills/viewing-plans/SKILL.md', import.meta.url), 'utf8');
