@@ -10,6 +10,8 @@ let chromium = null;
 if (existsSync(playwrightModule)) {
   try { ({ chromium } = require(playwrightModule)); } catch { chromium = null; }
 }
+const chromiumExecutable = process.env.CODEX_PLAYWRIGHT_EXECUTABLE || '';
+const launchChromium = () => chromium.launch({ headless: true, ...(chromiumExecutable ? { executablePath: chromiumExecutable } : {}) });
 
 const html = readFileSync(new URL('../tools/roadmap_viewer.html', import.meta.url), 'utf8');
 const viewingPlansSkill = readFileSync(new URL('../skills/viewing-plans/SKILL.md', import.meta.url), 'utf8');
@@ -2015,8 +2017,91 @@ test('SVG・keyboard・responsive・forced colorsの安全な表示契約を持�
   assert.doesNotMatch(html, /transition:\s*all/);
 });
 
+test('UI previewは5 layoutを同じ縦一覧へ潰さずprimitiveとstable IDを描画へ渡す', () => {
+  assert.match(html, /data-layout="' \+ escapeHtml\(preview\.layout\) \+ '"/);
+  assert.match(html, /data-item-id="' \+ escapeHtml\(pair\.id\) \+ '"/);
+  assert.match(html, /data-kind="' \+ escapeHtml\(kind\) \+ '"/);
+  assert.match(html, /class="change-primitive"/);
+  for (const layout of ['topnav', 'sidebar', 'settings', 'list', 'form']) {
+    assert.match(html, new RegExp('\\.compare-panel\\[data-layout="' + layout + '"\\]'));
+  }
+  assert.match(html, /data-layout="topnav"\][\s\S]*\.change-list\s*\{[\s\S]*display:\s*flex/);
+  assert.match(html, /data-layout="sidebar"\][\s\S]*\.change-list\s*\{[\s\S]*border-left:/);
+  assert.match(html, /data-layout="settings"\][\s\S]*data-kind="input"\][\s\S]*\.change-primitive/);
+  assert.match(html, /data-layout="form"\][\s\S]*data-kind="input"\][\s\S]*\.change-primitive/);
+});
+
+test('browser: 5 layoutのUI模型はviewportごとに構造差を保つ', { skip: !chromium }, async () => {
+  const browser = await launchChromium();
+  try {
+    const layouts = ['topnav', 'sidebar', 'settings', 'list', 'form'];
+    const files = { '30_plan.md': '# UI模型\n\n' + layouts.map((layout, index) => `## Task ${index + 1}: ${layout}`).join('\n\n') };
+    const uiPreviews = layouts.map((layout, index) => ({
+      version: 1,
+      taskNumber: String(index + 1),
+      layout,
+      title: layout,
+      provenance: { before: { source: `repo:src/${layout}.tsx#root`, baseRef: 'a'.repeat(40) }, after: { source: `Task ${index + 1}` } },
+      before: { items: [{ id: `${layout}-main`, label: 'Main', kind: layout === 'form' || layout === 'settings' ? 'input' : 'item', change: 'same' }] },
+      after: { items: [
+        { id: `${layout}-main`, label: 'Main', kind: layout === 'form' || layout === 'settings' ? 'input' : 'item', change: 'same' },
+        { id: `${layout}-next`, label: 'Next', kind: layout === 'form' ? 'action' : 'item', change: 'added' }
+      ] }
+    }));
+    for (const width of [375, 768, 1440]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      const errors = [];
+      page.on('pageerror', error => errors.push(error.message));
+      page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+      await page.goto(new URL('../tools/roadmap_viewer.html', import.meta.url).href);
+      await page.evaluate(snapshot => window.__ROADMAP_VIEWER__.render(snapshot), { version: 1, title: 'UI模型', generatedAt: new Date().toISOString(), files, uiPreviews });
+      await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'reduce' });
+      await page.keyboard.press('Tab');
+      const result = await page.evaluate(() => ({
+        overflow: document.body.scrollWidth > window.innerWidth,
+        focus: document.activeElement?.id || '',
+        layouts: [...document.querySelectorAll('.compare-panel[data-side="after"]')].map(panel => {
+          const list = panel.querySelector('.change-list');
+          const primitive = panel.querySelector('.change-primitive');
+          return {
+            layout: panel.dataset.layout,
+            display: getComputedStyle(list).display,
+            leftBorder: parseFloat(getComputedStyle(list).borderLeftWidth),
+            topBorder: parseFloat(getComputedStyle(list).borderTopWidth),
+            primitive: primitive ? getComputedStyle(primitive).display : 'none'
+          };
+        })
+      }));
+      assert.deepEqual(errors, []);
+      assert.equal(result.overflow, false, `${width}px must not overflow`);
+      assert.equal(result.focus, 'skip-link');
+      assert.deepEqual(result.layouts.map(item => item.layout), layouts);
+      assert.equal(result.layouts[0].display, 'flex');
+      assert.ok(result.layouts[1].leftBorder > 0);
+      assert.equal(result.layouts[2].primitive, 'block');
+      assert.ok(result.layouts[3].topBorder > 0);
+      assert.equal(result.layouts[4].primitive, 'block');
+      await page.close();
+    }
+    const zoomPage = await browser.newPage({ viewport: { width: 768, height: 900 } });
+    await zoomPage.goto(new URL('../tools/roadmap_viewer.html', import.meta.url).href);
+    await zoomPage.evaluate(snapshot => window.__ROADMAP_VIEWER__.render(snapshot), { version: 1, title: 'UI模型', generatedAt: new Date().toISOString(), files, uiPreviews });
+    const session = await zoomPage.context().newCDPSession(zoomPage);
+    await session.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2 });
+    const zoomResult = await zoomPage.evaluate(() => ({
+      scale: window.visualViewport?.scale || 1,
+      overflow: document.body.scrollWidth > document.documentElement.clientWidth
+    }));
+    assert.equal(zoomResult.scale, 2);
+    assert.equal(zoomResult.overflow, false, '200% zoom must not overflow');
+    await zoomPage.close();
+  } finally {
+    await browser.close();
+  }
+});
+
 test('browser: Task本文一度・任意section保持・比較layout・scroll復元', { skip: !chromium }, async () => {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchChromium();
   try {
   const page = await browser.newPage({ viewport: { width: 768, height: 900 } });
   const errors = [];
@@ -2175,7 +2260,7 @@ required_sources: example configuration
 });
 
 test('browser: 375px Codemapは縦配置で図の横panを要求しない', { skip: !chromium }, async () => {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchChromium();
   try {
     const page = await browser.newPage({ viewport: { width: 375, height: 812 } });
     await page.goto(new URL('../tools/roadmap_viewer.html', import.meta.url).href);
@@ -2241,7 +2326,7 @@ test('browser: 375px Codemapは縦配置で図の横panを要求しない', { sk
 });
 
 test('browser: source付き空Beforeは未確認として表示し新規画面扱いにしない', { skip: !chromium }, async () => {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchChromium();
   try {
     const page = await browser.newPage({ viewport: { width: 768, height: 812 } });
     await page.goto(new URL('../tools/roadmap_viewer.html', import.meta.url).href);
@@ -2284,7 +2369,7 @@ test('browser: source付き空Beforeは未確認として表示し新規画面�
 });
 
 test('browser: 末尾Taskの補足は本文の目的・実装の後ろへ置く', { skip: !chromium }, async () => {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchChromium();
   try {
     const page = await browser.newPage({ viewport: { width: 768, height: 812 } });
     await page.goto(new URL('../tools/roadmap_viewer.html', import.meta.url).href);

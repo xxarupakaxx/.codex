@@ -406,6 +406,77 @@
       font-weight: 780;
       white-space: nowrap;
     }
+    .change-primitive { display: none; }
+    .compare-panel[data-layout="topnav"] .change-list {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-2);
+      padding-bottom: var(--space-2);
+      border-bottom: 1px solid var(--line-strong);
+    }
+    .compare-panel[data-layout="topnav"] .change-item {
+      flex: 1 1 120px;
+      padding: var(--space-2) var(--space-3);
+      grid-template-columns: 20px minmax(0, 1fr);
+      gap: var(--space-2);
+      border: 1px solid var(--line);
+      border-bottom: 3px solid currentColor;
+    }
+    .compare-panel[data-layout="topnav"] .change-badge { grid-column: 2; }
+    .compare-panel[data-layout="sidebar"] .change-list {
+      padding-left: var(--space-3);
+      border-left: 4px solid var(--line-strong);
+    }
+    .compare-panel[data-layout="sidebar"] .change-item {
+      grid-template-columns: 20px minmax(0, 1fr) auto;
+      border: 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .compare-panel[data-layout="settings"] .change-list {
+      gap: var(--space-3);
+    }
+    .compare-panel[data-layout="settings"] .change-item {
+      grid-template-columns: 20px minmax(0, 1fr) auto;
+      border: 1px solid var(--line);
+    }
+    .compare-panel[data-layout="settings"] .change-item[data-kind="input"] .change-primitive {
+      width: 34px;
+      height: 18px;
+      display: block;
+      grid-column: 3;
+      grid-row: 1;
+      border: 1px solid currentColor;
+      border-radius: 999px;
+      background: linear-gradient(90deg, currentColor 0 42%, transparent 42% 100%);
+    }
+    .compare-panel[data-layout="settings"] .change-item[data-kind="input"] .change-badge {
+      grid-column: 2;
+    }
+    .compare-panel[data-layout="list"] .change-list {
+      border-top: 1px solid var(--line-strong);
+    }
+    .compare-panel[data-layout="form"] .change-list {
+      gap: var(--space-4);
+      padding: var(--space-4);
+      border: 1px solid var(--line-strong);
+    }
+    .compare-panel[data-layout="form"] .change-item {
+      padding: 0;
+      grid-template-columns: 20px minmax(0, 1fr) auto;
+      border: 0;
+    }
+    .compare-panel[data-layout="form"] .change-item[data-kind="input"] .change-primitive {
+      min-height: 34px;
+      display: block;
+      grid-column: 2 / -1;
+      border: 1px solid var(--line-strong);
+      background: var(--surface);
+    }
+    .compare-panel[data-layout="form"] .change-item[data-kind="action"] .change-copy strong {
+      width: fit-content;
+      padding: var(--space-2) var(--space-3);
+      border: 1px solid currentColor;
+    }
     .change-empty {
       margin: var(--space-5) 0 0;
       color: var(--muted);
@@ -3797,15 +3868,17 @@
     function previewItemHtml(pair, side) {
       const item = side === 'before' ? pair.before : pair.after;
       const other = side === 'before' ? pair.after : pair.before;
+      const kind = item ? item.kind : other ? other.kind : 'item';
       const label = item ? item.label : side === 'before' ? '現状に存在しない' : '削除予定';
       const meta = item
         ? [uiKindLabel(item.kind), uiStateLabel(item.state), pair.orderChanged ? '順序変更' : ''].filter(Boolean).join(' · ')
         : other ? [uiKindLabel(other.kind), side === 'before' ? '計画側で追加' : '計画側で削除'].join(' · ') : '未記録';
       const aria = side === 'before' ? 'Before ' : 'After ';
-      return '<li class="change-item change-' + escapeHtml(pair.change) + '" aria-label="' + escapeHtml(aria + label + ': ' + uiChangeLabel(pair.change)) + '">' +
+      return '<li class="change-item change-' + escapeHtml(pair.change) + '" data-item-id="' + escapeHtml(pair.id) + '" data-kind="' + escapeHtml(kind) + '" aria-label="' + escapeHtml(aria + label + ': ' + uiChangeLabel(pair.change)) + '">' +
         '<span class="change-symbol" aria-hidden="true">' + escapeHtml(uiChangeSymbol(pair.change)) + '</span>' +
         '<span class="change-copy"><strong>' + escapeHtml(label) + '</strong><span>' + escapeHtml(meta) + '</span></span>' +
-        '<span class="change-badge">' + escapeHtml(uiChangeLabel(pair.change)) + '</span></li>';
+        '<span class="change-badge">' + escapeHtml(uiChangeLabel(pair.change)) + '</span>' +
+        '<span class="change-primitive" aria-hidden="true"></span></li>';
     }
     function renderComparePanel(preview, side) {
       const source = preview.provenance || {};
@@ -3835,7 +3908,7 @@
           ? (preview.before.items.length ? '未確認の計画記録' : '未確認の参照')
           : '確認済みの観測')
         : '計画上の案';
-      return '<article class="compare-panel" data-side="' + side + '">' +
+      return '<article class="compare-panel" data-side="' + side + '" data-layout="' + escapeHtml(preview.layout) + '">' +
         '<h3>' + (isBefore ? 'Before' : 'After') + '<span>' + escapeHtml(uiStatusLabel(status, side)) + (preview.isNewScreen && !isBefore ? ' · 新規画面 · 未実装' : '') + '</span></h3>' +
         '<p class="compare-source"><strong>' + sourceHeading + '</strong><br>' + escapeHtml(sourceText) + (message ? '<br>' + escapeHtml(message) : '') + '</p>' +
         (items ? '<ul class="change-list">' + items + '</ul>' : '<p class="change-empty">' + escapeHtml(isBefore ? 'Beforeの要素は未記録です。' : 'Afterの要素は未記録です。') + '</p>') +
