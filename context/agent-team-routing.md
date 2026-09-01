@@ -62,6 +62,7 @@ task-contextは`~/.codex/scripts/task-context.py`を明示root・指定task付�
 | 固定順の専門chainが必要 | orchestrate | 外部副作用は別gate |
 | UI/UXの新しい判断 | designing-ui-ux | User Validation / HTML gateを先に通す |
 | 固定点からの差分レビュー | reviewing-code | Phase 4のseverityと出荷判定を置き換えない |
+| goal再構築から方案・security・実装を順に監査 | reviewing-codebases-architecture-first | read-only。既存codebase-reviewのissue収集契約を置き換えない |
 | 1–3 moduleのarchitecture改善 | improving-architecture | broad refactorの許可ではない |
 
 実装入口のcanonical nameは `wayfinder`（mapping-large-projects）、`to-spec`（writing-specifications）、`to-tickets`（creating-tracer-tickets）、`implement`（implementing-work）、`teach`（teaching-concepts）である。`batch-grill-me` と `to-questionnaire` は明示起動時だけのin-progress入口として扱う。retired nameを新しい既定routeに戻さない。
