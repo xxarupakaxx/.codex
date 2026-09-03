@@ -203,6 +203,7 @@ LOG_JP_DATE_RE = re.compile(
 ALLOWED_UI_LAYOUTS = {"topnav", "sidebar", "settings", "list", "form"}
 ALLOWED_UI_ITEM_KINDS = {"label", "item", "group", "action", "input"}
 ALLOWED_UI_CHANGES = {"same", "added", "modified", "removed"}
+ALLOWED_UI_SLOTS = {"header", "nav", "main", "aside", "actions", "footer"}
 
 
 class RoadmapHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -1284,7 +1285,7 @@ def normalize_ui_items(value: object, path: str) -> list[dict[str, object]]:
     for index, raw_item in enumerate(value):
         item = ensure_ui_keys(
             raw_item,
-            {"id", "label", "kind", "state", "change"},
+            {"id", "label", "kind", "state", "change", "parentId", "slot"},
             f"{path}[{index}]",
         )
         item_id = ui_id(item.get("id"), f"{path}[{index}].id")
@@ -1305,7 +1306,37 @@ def normalize_ui_items(value: object, path: str) -> list[dict[str, object]]:
         }
         if "state" in item:
             clean["state"] = ui_text(item["state"], f"{path}[{index}].state", allow_empty=True)
+        if "parentId" in item:
+            clean["parentId"] = ui_id(item["parentId"], f"{path}[{index}].parentId")
+        if "slot" in item:
+            slot = ui_text(item["slot"], f"{path}[{index}].slot")
+            if slot not in ALLOWED_UI_SLOTS:
+                raise ValueError(f"{path}[{index}].slot is not allowed")
+            clean["slot"] = slot
+        if "parentId" in clean and "slot" in clean:
+            raise ValueError(f"{path}[{index}] cannot use parentId and slot together")
         items.append(clean)
+
+    items_by_id = {str(item["id"]): item for item in items}
+    for index, item in enumerate(items):
+        parent_id = str(item.get("parentId", ""))
+        if not parent_id:
+            continue
+        parent = items_by_id.get(parent_id)
+        if parent is None:
+            raise ValueError(f"{path}[{index}].parentId does not reference an item")
+        if parent.get("kind") != "group":
+            raise ValueError(f"{path}[{index}].parentId must reference a group")
+
+        visited = {str(item["id"])}
+        current = parent
+        while current is not None:
+            current_id = str(current["id"])
+            if current_id in visited:
+                raise ValueError(f"{path}[{index}].parentId creates a cycle")
+            visited.add(current_id)
+            next_parent_id = str(current.get("parentId", ""))
+            current = items_by_id.get(next_parent_id) if next_parent_id else None
     return items
 
 

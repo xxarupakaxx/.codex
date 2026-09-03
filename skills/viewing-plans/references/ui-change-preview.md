@@ -16,8 +16,8 @@ UI変更Taskでは、`30_plan.html`を完成させる前に次を行う。
 
 1. 計画開始時のrepository `HEAD`を40桁commit SHAへ解決し、baselineとして保持する。
 2. 仕様、変更対象、routeを確認し、対象componentを読む。直接importされ、変更対象の構造や表示labelを持つcomponentと局所styleも必要な範囲だけ読む。
-3. JSX / TSX / templateを意味として読み、表示label、group、並び、action、input、明示stateを抽出する。pixel、余白、色、runtime dataは推測しない。
-4. 変更対象周辺だけを5 layout / 5 primitiveへ簡略化し、Beforeを作る。実装sourceで確認できたlabelは`observedLabels`へ記録する。
+3. JSX / TSX / templateを意味として読み、表示label、container、row、group、並び、action、input、明示stateを抽出する。pixel、余白、色、runtime dataは推測しない。
+4. 変更対象周辺だけを5 layout / 5 primitiveへ簡略化しつつ、sourceで確認した親子関係とheader / nav / main / aside / actions / footerの配置を保持してBeforeを作る。実装sourceで確認できたlabelは`observedLabels`へ記録する。
 5. 仕様とTaskの実装手順からAfterを作り、追加・変更・削除をstable IDで対応付ける。
 6. role、feature flag、responsive、実データなど確定できない点を`uncertainty`へ分離する。
 7. HTMLのTaskへ`data-ui-change="true"`と型付きJSON fragmentを1つ書く。behavior-onlyではfalseとしfragmentを作らない。既存MDを読む場合だけ`UI変更: yes/no`とfenceを使う。
@@ -27,7 +27,7 @@ UI変更Taskでは、`30_plan.html`を完成させる前に次を行う。
 
 Before、After、uncertaintyを必ず分ける。
 
-- Before: 計画内に記録した40桁commit SHA上の実装sourceを根拠にする。通常生成ではgeneratorがこのSHAを自動利用する。label、並び、存在するstate、role visibilityだけを確認する。
+- Before: 計画内に記録した40桁commit SHA上の実装sourceを根拠にする。通常生成ではgeneratorがこのSHAを自動利用する。label、並び、親子関係、slot、存在するstate、role visibilityだけを確認する。
 - After: 正本計画の目的、変更対象、実装手順、仕様に明示された未実装案だけを根拠にする。
 - uncertainty: role別表示、feature flag、responsive差分、権限差分など、sourceまたは計画から確定できない事項を入れる。
 
@@ -73,8 +73,20 @@ itemで使えるkey:
 - `kind`: `label`、`item`、`group`、`action`、`input` のいずれか。5 layoutで共通のprimitiveとして使う。
 - `change`: `same`、`added`、`modified`、`removed` のいずれか。
 - `state`: 任意。enabled、disabled、selected、checked、empty、errorなど、画面上の状態を短く書く。
+- `parentId`: 任意。同じside内にある`kind: group`の`id`を指定し、sourceで確認した親子関係を保つ。
+- `slot`: 任意。root itemの配置を`header`、`nav`、`main`、`aside`、`actions`、`footer`のいずれかで示す。
 
-unknown keyとunknown kindはinvalidにする。値は表示前にescapeされる前提だが、authorはHTMLとして解釈される文字列を書かない。同じ要素は同じ`id`を維持し、順序はitems配列の順番、表示内容は`label`、状態差分は`state`で表す。並び替えのために別IDを作らない。
+unknown key、unknown kind、unknown slot、孤立した`parentId`、group以外への参照、循環参照はinvalidにする。`parentId`と`slot`を同じitemへ指定しない。値は表示前にescapeされる前提だが、authorはHTMLとして解釈される文字列を書かない。同じ要素は同じ`id`を維持し、同じcontainerとslotもBefore / Afterで維持する。順序はitems配列の順番、表示内容は`label`、状態差分は`state`で表す。並び替えのために別IDを作らない。
+
+### 構造的忠実度
+
+`parentId`または`slot`を使うpreviewは、一次元の差分一覧ではなく、Beforeをsource準拠、Afterを計画準拠の構造模型として表示する。実画面のscreenshotやpixel-perfectな複製とは呼ばない。
+
+- 画面上で同じrowやcardに属する要素を、別々のroot itemへ平坦化しない。
+- 既存画面の文脈を示すheader、navigation、main、asideは、変更対象を理解するために必要な範囲だけ保持する。
+- actionを本文itemへ混ぜず、source上の位置に応じて親groupまたは`actions` slotへ置く。
+- 差分annotationはUI模型の外へ分け、追加・変更・削除を色だけでなく記号と文言で示す。
+- sourceで確認できないcontainer、余白、色、icon、画面chromeを、参考HTMLや別productからコピーしない。
 
 ## Layout Presets
 
@@ -122,6 +134,12 @@ unknown keyとunknown kindはinvalidにする。値は表示前にescapeされ�
 {"version":1,"taskNumber":"4","previews":[{"id":"invoice-list","title":"Invoices list","layout":"list","provenance":{"before":{"source":"repo:src/invoices/List.tsx#statusHeader","baseRef":"0123456789abcdef0123456789abcdef01234567","observedLabels":["Status"]},"after":{"source":"Task 4 実装"}},"before":{"items":[{"id":"status-label","label":"Status","kind":"label","change":"same"}]},"after":{"items":[{"id":"status-label","label":"Status","kind":"label","change":"same"},{"id":"owner-label","label":"Owner","kind":"label","change":"added"}]},"uncertainty":[]}]}
 ```
 
+構造付きcomponent:
+
+```ui-preview-json
+{"version":1,"taskNumber":"4","previews":[{"id":"drive-folder","title":"共有ドライブ","layout":"settings","provenance":{"before":{"source":"repo:src/drive-folder-section.tsx#DriveFolderSection","baseRef":"0123456789abcdef0123456789abcdef01234567","observedLabels":["共有ドライブ","Drive で開く","変更","解除"]},"after":{"source":"Task 4 実装"}},"before":{"items":[{"id":"folder-header","label":"共有ドライブ","kind":"group","change":"same","slot":"header"},{"id":"folder-name","label":"提案資料","kind":"item","change":"same","parentId":"folder-header"},{"id":"open-drive","label":"Drive で開く","kind":"action","change":"same","parentId":"folder-header"},{"id":"change-folder","label":"変更","kind":"action","change":"same","slot":"actions"},{"id":"remove-folder","label":"解除","kind":"action","change":"same","slot":"actions"}]},"after":{"items":[{"id":"folder-header","label":"連携フォルダ","kind":"group","change":"modified","slot":"header"},{"id":"folder-name","label":"提案資料","kind":"item","change":"same","parentId":"folder-header"},{"id":"open-drive","label":"Drive で開く","kind":"action","change":"same","parentId":"folder-header"},{"id":"add-folder","label":"フォルダ追加","kind":"action","change":"added","slot":"actions"}]},"uncertainty":[]}]}
+```
+
 `form`:
 
 ```ui-preview-json
@@ -155,7 +173,7 @@ Previewは画面全体ではなく、変更対象周辺の小さなUI模型に�
 reference HTMLから得た指針は、見た目をコピーする材料ではなく、Roadmap内の比較を読みやすくするための制約である。
 
 - 900px程度のeditorial canvasに収まる、短い比較面として考える。
-- ページ全体ではなく、topnavやsettings groupなどの小さいUI模型を並べる。
+- ページ全体ではなく、topnavやsettings groupなどの小さいUI模型を並べる。変更の理解に必要な画面文脈は、同じsurface内へ最小限残す。
 - 新規画面はAfter-onlyで、余白とlabelにより「これから作る画面」だと分かるようにする。
 - Google Fonts、外部CSS、外部画像、reference HTMLのtokenはコピーしない。既存Roadmapのdesign token、system font、CSPを維持する。
 

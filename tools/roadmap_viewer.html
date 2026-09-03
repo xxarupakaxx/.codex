@@ -481,6 +481,132 @@
       margin: var(--space-5) 0 0;
       color: var(--muted);
     }
+    .task-change[data-structured="true"] .compare-panel {
+      padding: var(--space-5);
+    }
+    .ui-app-surface {
+      margin-top: var(--space-5);
+      overflow: hidden;
+      border: 1px solid var(--line-strong);
+      border-radius: 10px;
+      background: var(--surface);
+      box-shadow: 0 8px 22px color-mix(in srgb, var(--ink) 8%, transparent);
+    }
+    .ui-surface-caption { margin: var(--space-4) 0 0; color: var(--muted); font-size: 11px; }
+    .ui-surface-slot {
+      min-width: 0;
+      padding: var(--space-4);
+    }
+    .ui-surface-slot[data-slot="header"] {
+      border-bottom: 1px solid var(--line);
+      background: var(--surface-muted);
+    }
+    .ui-surface-slot[data-slot="nav"] {
+      display: flex;
+      flex-wrap: wrap;
+      gap: var(--space-3);
+      padding-block: var(--space-3);
+      border-bottom: 1px solid var(--line);
+    }
+    .ui-surface-body {
+      display: grid;
+      grid-template-columns: minmax(0, 1fr);
+    }
+    .ui-surface-slot[data-slot="aside"] {
+      border-top: 1px solid var(--line);
+      background: var(--surface-muted);
+    }
+    .ui-surface-slot[data-slot="actions"] {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2);
+      border-top: 1px solid var(--line);
+    }
+    .ui-surface-slot[data-slot="footer"] {
+      border-top: 1px solid var(--line);
+      color: var(--muted);
+      font-size: 12px;
+    }
+    .ui-surface-root + .ui-surface-root { margin-top: var(--space-3); }
+    .ui-preview-group {
+      min-width: 0;
+      padding: var(--space-3);
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--surface);
+    }
+    .ui-group-label {
+      display: block;
+      color: var(--ink);
+      font-size: 12px;
+      font-weight: 780;
+      letter-spacing: .03em;
+    }
+    .ui-group-children {
+      display: flex;
+      flex-wrap: wrap;
+      align-items: center;
+      gap: var(--space-2);
+      margin-top: var(--space-2);
+    }
+    .ui-control {
+      min-width: 0;
+      color: var(--ink);
+      overflow-wrap: anywhere;
+    }
+    .ui-control[data-kind="item"] {
+      flex: 1 1 160px;
+      padding: var(--space-2) var(--space-3);
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: var(--surface);
+      font-weight: 700;
+    }
+    .ui-control[data-kind="label"] { font-size: 13px; font-weight: 700; }
+    .ui-control[data-kind="action"] {
+      display: inline-flex;
+      min-height: 32px;
+      align-items: center;
+      padding: var(--space-2) var(--space-3);
+      border: 1px solid currentColor;
+      border-radius: 6px;
+      color: var(--accent);
+      background: var(--surface-accent);
+      font-size: 12px;
+      font-weight: 760;
+    }
+    .ui-control[data-kind="input"] {
+      flex: 1 1 200px;
+      min-height: 36px;
+      padding: var(--space-2) var(--space-3);
+      border: 1px solid var(--line-strong);
+      border-radius: 6px;
+      background: var(--surface);
+      font-size: 12px;
+    }
+    .ui-control-state { display: block; margin-top: 2px; color: var(--muted); font-size: 11px; font-weight: 500; }
+    .ui-delta-list {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+      gap: var(--space-2);
+      margin: var(--space-3) 0 0;
+      padding: 0;
+      list-style: none;
+    }
+    .ui-delta-list li {
+      padding: var(--space-2) var(--space-3);
+      border-top: 3px solid currentColor;
+      background: var(--surface-muted);
+      color: var(--muted);
+      font-size: 11px;
+      line-height: 1.45;
+    }
+    .ui-delta-list li.change-added { color: var(--good); }
+    .ui-delta-list li.change-modified { color: var(--warn); }
+    .ui-delta-list li.change-removed { color: var(--danger); }
+    .ui-delta-list strong, .ui-delta-list span { display: block; }
+    .ui-delta-list span { margin-top: 2px; color: var(--ink); }
     .uncertainty {
       margin-top: var(--space-5);
       padding-top: var(--space-4);
@@ -779,6 +905,9 @@
     .hub-empty { color: var(--muted); }
     @media (min-width: 640px) {
       .task-change > .compare-grid { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+      .task-change[data-structured="true"] > .compare-grid { grid-template-columns: minmax(0, 1fr); }
+      .ui-surface-body:has(.ui-surface-slot[data-slot="aside"]) { grid-template-columns: minmax(0, 1fr) minmax(180px, 34%); }
+      .ui-surface-slot[data-slot="aside"] { border-top: 0; border-left: 1px solid var(--line); }
     }
     @media (min-width: 640px) and (max-width: 720px) {
       .dependency-wide, .codemap-wide { min-width: 0; }
@@ -955,26 +1084,59 @@
     function asText(value) { return typeof value === 'string' ? value : ''; }
     const UI_PREVIEW_LAYOUTS = new Set(['topnav', 'sidebar', 'settings', 'list', 'form']);
     const UI_PREVIEW_CHANGES = new Set(['same', 'added', 'modified', 'removed']);
+    const UI_PREVIEW_SLOTS = new Set(['header', 'nav', 'main', 'aside', 'actions', 'footer']);
     const UI_PREVIEW_STATUSES = new Set(['verified', 'resolved', 'planned', 'partial', 'unverified', 'source-unavailable', 'anchor-missing', 'secret-content']);
     function boundedUiText(value, limit = 120) {
       return asText(value).replace(/\s+/g, ' ').trim().slice(0, limit);
     }
     function normalizeUiItems(value) {
       const items = Array.isArray(value) ? value : Array.isArray(value?.items) ? value.items : [];
-      return items
+      const normalized = items
         .filter(item => item && typeof item === 'object')
         .slice(0, 24)
         .map(item => {
           const change = boundedUiText(item.change, 24);
-          return {
+          const parentId = boundedUiText(item.parentId, 64);
+          const slot = boundedUiText(item.slot, 24);
+          const normalizedItem = {
             id: boundedUiText(item.id),
             label: boundedUiText(item.label || item.title || item.text),
             kind: boundedUiText(item.kind || item.type, 32),
             state: boundedUiText(item.state || item.status, 48),
             change: UI_PREVIEW_CHANGES.has(change) ? change : 'same'
           };
+          if (parentId) normalizedItem.parentId = parentId;
+          if (UI_PREVIEW_SLOTS.has(slot)) normalizedItem.slot = slot;
+          return normalizedItem;
         })
         .filter(item => item.id && item.label);
+      const unique = [];
+      const seen = new Set();
+      normalized.forEach(item => {
+        if (!seen.has(item.id)) {
+          seen.add(item.id);
+          unique.push(item);
+        }
+      });
+      const byId = new Map(unique.map(item => [item.id, item]));
+      unique.forEach(item => {
+        const parent = item.parentId ? byId.get(item.parentId) : null;
+        if (!parent || parent.kind !== 'group' || item.parentId === item.id) delete item.parentId;
+        if (item.parentId) delete item.slot;
+      });
+      unique.forEach(item => {
+        const visited = new Set([item.id]);
+        let current = item.parentId ? byId.get(item.parentId) : null;
+        while (current) {
+          if (visited.has(current.id)) {
+            delete item.parentId;
+            break;
+          }
+          visited.add(current.id);
+          current = current.parentId ? byId.get(current.parentId) : null;
+        }
+      });
+      return unique;
     }
     function normalizeUiSide(value, fallbackStatus) {
       const source = value && typeof value === 'object' && !Array.isArray(value) ? value : {};
@@ -1076,6 +1238,8 @@
           before.item.label !== after.item.label
           || before.item.kind !== after.item.kind
           || before.item.state !== after.item.state
+          || before.item.parentId !== after.item.parentId
+          || before.item.slot !== after.item.slot
         ));
         const change = !before ? 'added' : !after ? 'removed' : contentChanged && declared === 'same' ? 'modified' : declared;
         return {
@@ -3859,7 +4023,9 @@
         const changed = left && right && (
           left.item.label !== right.item.label ||
           left.item.kind !== right.item.kind ||
-          left.item.state !== right.item.state
+          left.item.state !== right.item.state ||
+          left.item.parentId !== right.item.parentId ||
+          left.item.slot !== right.item.slot
         );
         const change = !left ? 'added' : !right ? 'removed' : changed && declared === 'same' ? 'modified' : declared;
         return { id, before: left ? left.item : null, after: right ? right.item : null, change, orderChanged: Boolean(left && right && left.index !== right.index) };
@@ -3879,6 +4045,74 @@
         '<span class="change-copy"><strong>' + escapeHtml(label) + '</strong><span>' + escapeHtml(meta) + '</span></span>' +
         '<span class="change-badge">' + escapeHtml(uiChangeLabel(pair.change)) + '</span>' +
         '<span class="change-primitive" aria-hidden="true"></span></li>';
+    }
+    function previewHasStructure(preview) {
+      return ['before', 'after'].some(side => (
+        Array.isArray(preview?.[side]?.items) && preview[side].items.some(item => item.parentId || item.slot)
+      ));
+    }
+    function structuredUiItemHtml(pair, side, childrenByParent) {
+      const item = side === 'before' ? pair.before : pair.after;
+      if (!item) return '';
+      const state = item.state ? '<span class="ui-control-state">' + escapeHtml(item.state) + '</span>' : '';
+      const common = ' data-item-id="' + escapeHtml(item.id) + '" data-kind="' + escapeHtml(item.kind) + '" data-change="' + escapeHtml(pair.change) + '" aria-label="' + escapeHtml(item.label + ': ' + uiChangeLabel(pair.change)) + '"';
+      if (item.kind === 'group') {
+        const children = (childrenByParent.get(item.id) || [])
+          .map(child => structuredUiItemHtml(child, side, childrenByParent))
+          .join('');
+        return '<section class="ui-preview-group"' + common + '><span class="ui-group-label">' + escapeHtml(item.label) + '</span>' + state +
+          (children ? '<div class="ui-group-children">' + children + '</div>' : '') + '</section>';
+      }
+      return '<span class="ui-control"' + common + '><strong>' + escapeHtml(item.label) + '</strong>' + state + '</span>';
+    }
+    function renderStructuredUiSlot(slot, rootPairs, side, childrenByParent) {
+      const content = rootPairs
+        .filter(pair => {
+          const item = side === 'before' ? pair.before : pair.after;
+          return item && (item.slot || 'main') === slot;
+        })
+        .map(pair => '<div class="ui-surface-root">' + structuredUiItemHtml(pair, side, childrenByParent) + '</div>')
+        .join('');
+      return content ? '<div class="ui-surface-slot" data-slot="' + slot + '">' + content + '</div>' : '';
+    }
+    function renderStructuredUiSurface(preview, side) {
+      const pairs = previewPairs(preview);
+      const present = pairs.filter(pair => side === 'before' ? pair.before : pair.after);
+      const childrenByParent = new Map();
+      present.forEach(pair => {
+        const item = side === 'before' ? pair.before : pair.after;
+        if (!item.parentId) return;
+        if (!childrenByParent.has(item.parentId)) childrenByParent.set(item.parentId, []);
+        childrenByParent.get(item.parentId).push(pair);
+      });
+      const roots = present.filter(pair => {
+        const item = side === 'before' ? pair.before : pair.after;
+        return !item.parentId;
+      });
+      const header = renderStructuredUiSlot('header', roots, side, childrenByParent);
+      const nav = renderStructuredUiSlot('nav', roots, side, childrenByParent);
+      const main = renderStructuredUiSlot('main', roots, side, childrenByParent);
+      const aside = renderStructuredUiSlot('aside', roots, side, childrenByParent);
+      const actions = renderStructuredUiSlot('actions', roots, side, childrenByParent);
+      const footer = renderStructuredUiSlot('footer', roots, side, childrenByParent);
+      const caption = side === 'before' ? 'source準拠の構造模型' : '計画準拠の構造模型';
+      return '<p class="ui-surface-caption">' + caption + '</p><div class="ui-app-surface">' + header + nav +
+        ((main || aside) ? '<div class="ui-surface-body">' + main + aside + '</div>' : '') + actions + footer + '</div>';
+    }
+    function renderUiDeltaAnnotations(preview, side) {
+      const notes = previewPairs(preview)
+        .filter(pair => {
+          const item = side === 'before' ? pair.before : pair.after;
+          if (!item || pair.change === 'same') return false;
+          return side === 'before' ? pair.change !== 'added' : pair.change !== 'removed';
+        })
+        .map(pair => {
+          const item = side === 'before' ? pair.before : pair.after;
+          const detail = uiChangeLabel(pair.change) + (pair.orderChanged ? ' · 順序変更' : '');
+          return '<li class="change-' + escapeHtml(pair.change) + '"><strong>' + escapeHtml(uiChangeSymbol(pair.change) + ' ' + detail) + '</strong><span>' + escapeHtml(item.label) + '</span></li>';
+        })
+        .join('');
+      return notes ? '<ul class="ui-delta-list" aria-label="差分注釈">' + notes + '</ul>' : '';
     }
     function renderComparePanel(preview, side) {
       const source = preview.provenance || {};
@@ -3908,10 +4142,14 @@
           ? (preview.before.items.length ? '未確認の計画記録' : '未確認の参照')
           : '確認済みの観測')
         : '計画上の案';
+      const structured = previewHasStructure(preview);
+      const previewBody = structured
+        ? renderStructuredUiSurface(preview, side) + renderUiDeltaAnnotations(preview, side)
+        : (items ? '<ul class="change-list">' + items + '</ul>' : '<p class="change-empty">' + escapeHtml(isBefore ? 'Beforeの要素は未記録です。' : 'Afterの要素は未記録です。') + '</p>');
       return '<article class="compare-panel" data-side="' + side + '" data-layout="' + escapeHtml(preview.layout) + '">' +
         '<h3>' + (isBefore ? 'Before' : 'After') + '<span>' + escapeHtml(uiStatusLabel(status, side)) + (preview.isNewScreen && !isBefore ? ' · 新規画面 · 未実装' : '') + '</span></h3>' +
         '<p class="compare-source"><strong>' + sourceHeading + '</strong><br>' + escapeHtml(sourceText) + (message ? '<br>' + escapeHtml(message) : '') + '</p>' +
-        (items ? '<ul class="change-list">' + items + '</ul>' : '<p class="change-empty">' + escapeHtml(isBefore ? 'Beforeの要素は未記録です。' : 'Afterの要素は未記録です。') + '</p>') +
+        previewBody +
         '</article>';
     }
     function renderBeforeAfter(preview) {
@@ -3920,7 +4158,8 @@
         ? renderComparePanel(preview, 'after')
         : renderComparePanel(preview, 'before') + renderComparePanel(preview, 'after');
       const label = preview.isNewScreen ? '新規画面の計画案' : 'BeforeとAfterの比較';
-      return '<section class="task-change" aria-label="' + label + '"><h4>' + (preview.isNewScreen ? 'After' : 'Before / After') + '</h4><div class="compare-grid">' +
+      const structured = previewHasStructure(preview);
+      return '<section class="task-change" data-structured="' + structured + '" aria-label="' + label + '"><h4>' + (preview.isNewScreen ? 'After' : 'Before / After') + '</h4><div class="compare-grid">' +
         panels +
         '</div>' + (preview.uncertainty && preview.uncertainty.length
           ? '<div class="uncertainty"><strong>未確認事項</strong>' + htmlList(preview.uncertainty, 'plain-list', '未確認事項なし') + '</div>'

@@ -1343,6 +1343,55 @@ Keep the legacy parser.
         self.assertEqual(drift["uiPreviews"][0]["source"]["status"], "anchor-missing")
         self.assertEqual(drift["uiPreviews"][0]["before"]["items"][0]["label"], "Home")
 
+    def test_ui_preview_preserves_bounded_structure_and_rejects_invalid_relationships(self) -> None:
+        payload = self.valid_ui_payload()
+        structured = [
+            {"id": "folder-header", "label": "共有ドライブ", "kind": "group", "change": "same", "slot": "header"},
+            {"id": "folder-name", "label": "提案資料", "kind": "item", "change": "same", "parentId": "folder-header"},
+            {"id": "open-drive", "label": "Drive で開く", "kind": "action", "change": "same", "parentId": "folder-header"},
+            {"id": "change-folder", "label": "変更", "kind": "action", "change": "same", "slot": "actions"},
+            {"id": "remove-folder", "label": "解除", "kind": "action", "change": "same", "slot": "actions"},
+        ]
+        payload["previews"][0]["before"]["items"] = structured
+        payload["previews"][0]["after"]["items"] = structured
+        payload["previews"][0]["provenance"]["before"]["observedLabels"] = []
+        self.write_ui_plan(payload)
+
+        snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+        items = snapshot["uiPreviews"][0]["after"]["items"]
+
+        self.assertEqual(items[0]["slot"], "header")
+        self.assertEqual(items[1]["parentId"], "folder-header")
+        self.assertEqual(items[3]["slot"], "actions")
+
+        invalid_items = {
+            "unknown slot": [
+                {"id": "group", "label": "Group", "kind": "group", "change": "same", "slot": "canvas"},
+            ],
+            "missing parent": [
+                {"id": "item", "label": "Item", "kind": "item", "change": "same", "parentId": "missing"},
+            ],
+            "non-group parent": [
+                {"id": "label", "label": "Label", "kind": "label", "change": "same"},
+                {"id": "item", "label": "Item", "kind": "item", "change": "same", "parentId": "label"},
+            ],
+            "cycle": [
+                {"id": "first", "label": "First", "kind": "group", "change": "same", "parentId": "second"},
+                {"id": "second", "label": "Second", "kind": "group", "change": "same", "parentId": "first"},
+            ],
+            "parent and slot": [
+                {"id": "group", "label": "Group", "kind": "group", "change": "same", "slot": "main"},
+                {"id": "item", "label": "Item", "kind": "item", "change": "same", "parentId": "group", "slot": "actions"},
+            ],
+        }
+        for label, items in invalid_items.items():
+            with self.subTest(case=label):
+                invalid = self.valid_ui_payload()
+                invalid["previews"][0]["after"]["items"] = items
+                self.write_ui_plan(invalid)
+                result = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+                self.assertEqual(result["uiPreviews"][0]["status"], "invalid")
+
     def test_ui_preview_uses_single_declared_commit_without_cli_base_ref(self) -> None:
         base_sha = self.init_git_source(
             "export function Nav() {\n"
