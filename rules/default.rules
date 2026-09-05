@@ -17,3 +17,4 @@ prefix_rule(pattern=["git", "ls-remote", "--heads", "origin", "main", "feature/0
 prefix_rule(pattern=["rm", "-rf", "/Users/yoshiki/ghq/github.com/THA-inc/sunshot/.playwright-cli"], decision="allow")
 prefix_rule(pattern=["rm", "-rf", "/Users/yoshiki/ghq/github.com/THA-inc/sunshot/.next"], decision="allow")
 prefix_rule(pattern=["rm", "-rf", "/Users/yoshiki/ghq/github.com/THA-inc/ai-president-dashboard/.next"], decision="allow")
+prefix_rule(pattern=["rm", "-f", "infra/terraform/mt/envs/dev/dev-ai/.terraform.lock.hcl"], decision="allow")
