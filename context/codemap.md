@@ -1,6 +1,8 @@
 # Codemap preflight
 
-Codemapは、コード変更へ着手する前に読むtask単位の根拠付き地図である。workspaceのコードを検証対象とし、taskの調査範囲と証跡としてtask memory directoryへ保存する。Roadmapと同じTask Workspaceに表示するが、source freshnessはCodemap lockで独立検証する。
+Codemapは、管理するコード変更で影響範囲を保持するtask単位の根拠付き地図である。workspaceのコードを検証対象とし、taskの調査範囲と証跡としてtask memory directoryへ保存する。Roadmapと同じTask Workspaceに表示するが、source freshnessはCodemap lockで独立検証する。
+
+context/workflow-rules.mdで管理するコード変更と判断した場合に以下を適用する。通常の局所作業では、対象の呼出元・影響先・関連testの確認で足りれば生成を要求しない。複数moduleの関係を地図で保持する必要が生じたら、管理する作業へ移る。scopeは判断に必要な対象と依存へ絞り、workspace全体の列挙を既定にしない。
 
 ## 正本と生成物
 
@@ -15,7 +17,7 @@ authoring sourceは同じtask memory directoryの `codemap.source.json` とす�
 
 ## 着手前preflight
 
-コードを変更するtaskでは、最初の編集前に次を順番に行う。
+Codemap対象のコード変更では、最初の編集前に次を順番に行う。
 
 1. 対象fileのGit/workspace rootと現在taskのmemory directoryを確定し、task memory directoryの `codemap.lock` と `codemap.json` を探す。
 2. `codemap.json`と`codemap.lock`があれば次を実行する。

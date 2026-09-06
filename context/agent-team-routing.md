@@ -2,11 +2,13 @@
 
 この文書は、Codex が必要な Skill、plugin、worker、reviewer roleを選ぶ正本である。Phaseの順序は context/workflow-rules.md、artifact形式は context/memory-file-formats.md、model / service tierは rules/model-routing.md、Team Runは context/team-run.md を参照する。
 
+専門Skillの選択や委譲が必要になったときに使う。通常の局所作業には、この文書の一括読込やDelegation Decisionの保存を要求しない。複数writerを使う場合はcontext/workflow-rules.mdから管理する作業へ進む。
+
 ## 責務境界と既定
 
 leadは要件、route、統合、一次資料確認、fresh検証、最終判断、commit / push、外部writeを保持する。Skillは現在Phaseのdiscipline、workerは境界を切った実装、reviewerはmakerから独立した確認を担当する。pluginが使えることだけを理由にworkerを起動しない。
 
-最初にlocal read、rg、既存test、決定的な小さな実行を行い、最小のrouteを選ぶ。大きなflow、固定全員review、件数合わせのspawnは既定にしない。user-invokedのSkill / commandは明示要求または既存の承認済み依頼が対象のときだけ起動し、通常のroute選択で自動起動しない。ユーザーが指定したSkillは先にそのSKILL.mdを全文確認する。第三者Skillの発見・評判・導入・更新・廃止は skill-governance を入口にし、人気順の自動導入や無審査promotionを行わない。
+最初に関連ファイルと既存patternを確認し、必要な調査・実行を選ぶ。大きなflow、固定全員review、件数合わせのspawnは既定にしない。user-invokedのSkill / commandは明示要求または既存の承認済み依頼が対象のときだけ起動し、通常のroute選択で自動起動しない。選択したSKILL.mdを全文読み、参照先は現在のworkflowに必要なものだけ読む。第三者Skillの発見・評判・導入・更新・廃止は skill-governance を入口にし、人気順の自動導入や無審査promotionを行わない。
 
 <!-- skill-governance-contract:routing:start -->
 第三者Skillは `skill-governance` で候補catalogとactive runtimeを分離する。read-only inventoryだけをmodel-invokedとし、promotion、update、retirement、delete、runtime mutationはuser-invokedかつ人間承認を必須にする。
@@ -28,7 +30,7 @@ worker / implementer / reviewerを起動する前に、次の全条件を評価�
 
 ### Delegation Decision
 
-route、実装単位、acceptance、write scopeを決めた直後、対象成果物への最初のwriteより前に、05_log.mdへDecisionを保存する。decision_unit、gate、passed_conditions、failed_conditions、local_first_evidence、reason、write_scope、acceptance、lead_retainsを含める。lead実装、read-only、capability不在も理由を省略しない。material change後は旧判断をsupersedesで参照し、write再開前に再評価する。
+管理する作業では、route、実装単位、acceptance、write scopeを決めた直後、対象成果物への最初のwriteより前に、05_log.mdへDecisionを保存する。decision_unit、gate、passed_conditions、failed_conditions、local_first_evidence、reason、write_scope、acceptance、lead_retainsを含める。lead実装、read-only、capability不在も理由を省略しない。material change後は旧判断をsupersedesで参照し、write再開前に再評価する。
 
 workerへ渡す正規単位はWork Packetである。objective、scope、out_of_scope、owned_paths、acceptance_ids、constraints、capability_class、safety_decision_id、side_effects_requested、external_write_targets、approval_required、approval_evidence、dry_run_required、baseline、reality_contract、verification、dependencies、handoff_requirements、reviewer_focus、journey_scenarios、negative_paths、completion_targetを含める。空欄ではなく N/A: <理由> を使う。makerはEvidence Bundle draft、checkerはreview sectionを担当し、makerが最終判定を兼ねない。
 
@@ -86,7 +88,7 @@ Workflow routeとLocal / Fast / Standard / Heavy / Judgmentのcapability class�
 
 ## SkillとHTMLの条件付き入口
 
-状況に応じて読む最小Skillを選ぶ。
+明示指定、または現在の作業に固有の知識・手順が役立つ場合に限り、次から必要なSkillを選ぶ。「実装」「品質」といった分類だけで自動起動しない。
 
 - 調査不足: research / iterative-retrieval / search-first。
 - 実装: implementing-work、必要ならtddまたはdiagnosing-bugs。

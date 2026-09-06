@@ -2,6 +2,8 @@
 
 この文書は、task memory、Roadmap、delivery evidence、知識indexの形式を定める正本である。workflowの順序は context/workflow-rules.md、Skill・委譲は context/agent-team-routing.md、HTML表示は skills/viewing-plans/SKILL.md を参照する。
 
+context/workflow-rules.mdで管理対象と判断したtask、既存artifactの継続、または記録の明示要求がある場合に使う。通常の局所作業にmemory directoryや以下のartifactを新設する義務はない。
+
 CodexとClaudeのdocsはruntime別の入口として必要な差異を持つ。task-context、sync-roadmap、Evidence Bundle schemaはCodex側の共通実装を正本とし、両scopeのMarkdownをbyte同一に保つ契約は置かない。
 
 ## 配置
@@ -43,7 +45,7 @@ task-meta.jsonはgeneratorが管理するmachine-owned manifestである。人�
 
 05_log.mdにはユーザー指示、phase、判断、試行、コマンドの結果、review、未確定、次actionを時系列で追記する。自由文の完了宣言だけでartifactやevidenceを代用しない。
 
-変更・実装taskでは、route、実装単位、acceptance、write scopeを決めた直後、対象成果物の最初のwriteより前に次のDelegation Decisionを保存する。判断がmaterialに変わったら supersedes を付けて再記録する。
+管理する変更・実装taskでは、route、実装単位、acceptance、write scopeを決めた直後、対象成果物の最初のwriteより前に次のDelegation Decisionを保存する。判断がmaterialに変わったら supersedes を付けて再記録する。
 
     ## YYYY-MM-DD HH:MM - Delegation Decision
     - decision: worker | lead | N/A (read-only)
@@ -59,7 +61,7 @@ task-meta.jsonはgeneratorが管理するmachine-owned manifestである。人�
     - supersedes: <日時またはnone>
     - lead_retains: integration, source verification, fresh validation, final decision, external write
 
-Phase 2 artifact保存後は、全routeで `~/.codex/scripts/sync-roadmap.py` の検査結果を記録する。Phase 3/4/5も同じTASK、root、run-idでphaseだけを変える。log-onlyではRoadmap生成skipを記録する。
+管理するtaskのPhase 2 artifact保存後は、全routeで `~/.codex/scripts/sync-roadmap.py` の検査結果を記録する。Phase 3/4/5も同じTASK、root、run-idでphaseだけを変える。log-onlyではRoadmap生成skipを記録する。通常作業には同期やskip証跡を要求しない。
 
 ## 00_spec.md と30_plan.html
 
