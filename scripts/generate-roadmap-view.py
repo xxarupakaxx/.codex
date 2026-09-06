@@ -203,6 +203,7 @@ LOG_JP_DATE_RE = re.compile(
 ALLOWED_UI_LAYOUTS = {"topnav", "sidebar", "settings", "list", "form"}
 ALLOWED_UI_ITEM_KINDS = {"label", "item", "group", "action", "input"}
 ALLOWED_UI_CHANGES = {"same", "added", "modified", "removed"}
+ALLOWED_UI_SLOTS = {"header", "nav", "main", "aside", "actions", "footer"}
 
 
 class RoadmapHTTPRequestHandler(http.server.SimpleHTTPRequestHandler):
@@ -1284,7 +1285,7 @@ def normalize_ui_items(value: object, path: str) -> list[dict[str, object]]:
     for index, raw_item in enumerate(value):
         item = ensure_ui_keys(
             raw_item,
-            {"id", "label", "kind", "state", "change"},
+            {"id", "label", "kind", "state", "change", "parentId", "slot"},
             f"{path}[{index}]",
         )
         item_id = ui_id(item.get("id"), f"{path}[{index}].id")
@@ -1305,7 +1306,37 @@ def normalize_ui_items(value: object, path: str) -> list[dict[str, object]]:
         }
         if "state" in item:
             clean["state"] = ui_text(item["state"], f"{path}[{index}].state", allow_empty=True)
+        if "parentId" in item:
+            clean["parentId"] = ui_id(item["parentId"], f"{path}[{index}].parentId")
+        if "slot" in item:
+            slot = ui_text(item["slot"], f"{path}[{index}].slot")
+            if slot not in ALLOWED_UI_SLOTS:
+                raise ValueError(f"{path}[{index}].slot is not allowed")
+            clean["slot"] = slot
+        if "parentId" in clean and "slot" in clean:
+            raise ValueError(f"{path}[{index}] cannot use parentId and slot together")
         items.append(clean)
+
+    items_by_id = {str(item["id"]): item for item in items}
+    for index, item in enumerate(items):
+        parent_id = str(item.get("parentId", ""))
+        if not parent_id:
+            continue
+        parent = items_by_id.get(parent_id)
+        if parent is None:
+            raise ValueError(f"{path}[{index}].parentId does not reference an item")
+        if parent.get("kind") != "group":
+            raise ValueError(f"{path}[{index}].parentId must reference a group")
+
+        visited = {str(item["id"])}
+        current = parent
+        while current is not None:
+            current_id = str(current["id"])
+            if current_id in visited:
+                raise ValueError(f"{path}[{index}].parentId creates a cycle")
+            visited.add(current_id)
+            next_parent_id = str(current.get("parentId", ""))
+            current = items_by_id.get(next_parent_id) if next_parent_id else None
     return items
 
 
@@ -1437,7 +1468,7 @@ def normalize_ui_preview_block(
                 "evidenceRevision": base_revision or "",
                 "provenance": provenance,
                 "source": source,
-                "before": before if status == "resolved" else {"items": []},
+                "before": before,
                 "after": after,
                 "uncertainty": normalize_ui_uncertainty(
                     preview.get("uncertainty", []),
@@ -2197,6 +2228,21 @@ def watch_outputs(
         stop.wait(interval)
 
 
+def open_default_browser(target: str) -> bool:
+    if sys.platform == "darwin":
+        try:
+            result = subprocess.run(
+                ["/usr/bin/open", target],
+                check=False,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
+        except OSError:
+            return False
+        return result.returncode == 0
+    return webbrowser.open(target)
+
+
 def serve_output(output: Path, host: str, port: int, open_browser: bool) -> int:
     directory = output.parent
     handler = functools.partial(RoadmapHTTPRequestHandler, directory=str(directory))
@@ -2205,7 +2251,7 @@ def serve_output(output: Path, host: str, port: int, open_browser: bool) -> int:
     url = f"http://{actual_host}:{actual_port}/{output.name}"
     print(url, flush=True)
     if open_browser:
-        webbrowser.open(url)
+        open_default_browser(url)
     try:
         server.serve_forever()
     except KeyboardInterrupt:
@@ -2408,7 +2454,7 @@ def main(argv: list[str]) -> int:
         return 0
 
     if args.open:
-        webbrowser.open(output.as_uri())
+        open_default_browser(output.as_uri())
 
     return 0
 
