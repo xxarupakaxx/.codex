@@ -1,11 +1,11 @@
 ---
 name: exploring-codebase
-description: コードベースの構造・パターン・依存関係を3つの並列 `explorer`/専門探索サブエージェント＋過去知見検索で深堀り調査。新しいPJの理解、機能追加前の影響範囲調査、アーキテクチャ把握に使用。「コードベースを調べて」「アーキテクチャを理解したい」「影響範囲を調査して」「構造を把握したい」等の依頼に対応。
+description: コードベースの構造・パターン・依存関係を、関心事に必要な範囲で調査。新しいPJの理解、機能追加前の影響範囲調査、アーキテクチャ把握に使用。「コードベースを調べて」「アーキテクチャを理解したい」「影響範囲を調査して」「構造を把握したい」等の依頼に対応。
 ---
 
 # コードベース深堀り探索
 
-3つの専門探索サブエージェント + 過去知見検索を並列起動し、コードベースを多角的に調査する。
+関心事を先に定め、構造・データフロー・依存関係から必要な観点を選んで調査する。
 
 ## 既存設定との関係
 
@@ -35,9 +35,9 @@ description: コードベースの構造・パターン・依存関係を3つの
 - **関心事・キーワード**: 特定の機能、モジュール、技術要素（あれば）
 - **探索の深さ**: quick / medium / thorough（デフォルト: medium）
 
-### Step 2: 3つの探索サブエージェント + 過去知見検索を並列起動
+### Step 2: 必要な探索観点と担当を選ぶ
 
-**CRITICAL**: `multi_agent_v1.spawn_agent(agent_type: "...")` で以下4つを**同時に**起動する。
+まずローカルで対象と未確認点を絞る。独立した探索を委譲する利益がある場合だけ、`context/agent-team-routing.md`のDelegation Gateに従って、以下の担当から必要なものを選ぶ。人数や同時起動は固定しない。
 
 各エージェントには以下の情報を渡す:
 - 探索対象ディレクトリのフルパス
@@ -47,7 +47,7 @@ description: コードベースの構造・パターン・依存関係を3つの
 
 #### Agent 1: Architecture Explorer
 
-**agent_type**: `architecture-explorer`（未ロード時は `explorer`）
+**agent_type**: `architecture-explorer`（利用可能な場合。不可なら弱いmodelへ暗黙fallbackせず、同等能力の代替を明示的に選ぶか担当を省略する）
 
 **プロンプトテンプレート**:
 ```
@@ -62,7 +62,7 @@ description: コードベースの構造・パターン・依存関係を3つの
 
 #### Agent 2: Data Flow Tracer
 
-**agent_type**: `data-flow-tracer`（未ロード時は `explorer`）
+**agent_type**: `data-flow-tracer`（利用可能な場合。不可なら弱いmodelへ暗黙fallbackせず、同等能力の代替を明示的に選ぶか担当を省略する）
 
 **プロンプトテンプレート**:
 ```
@@ -77,7 +77,7 @@ description: コードベースの構造・パターン・依存関係を3つの
 
 #### Agent 3: Dependency Mapper
 
-**agent_type**: `dependency-mapper`（未ロード時は `explorer`）
+**agent_type**: `dependency-mapper`（利用可能な場合。不可なら弱いmodelへ暗黙fallbackせず、同等能力の代替を明示的に選ぶか担当を省略する）
 
 **プロンプトテンプレート**:
 ```
@@ -92,7 +92,7 @@ description: コードベースの構造・パターン・依存関係を3つの
 
 #### Agent 4: Learnings Researcher（過去知見検索）
 
-**agent_type**: `learnings-researcher`（未ロード時は `explorer` またはローカル `rg`/SQLite検索で代替）
+**agent_type**: `learnings-researcher`（利用可能な場合。不可なら弱いmodelへ暗黙fallbackせず、親sessionのローカル検索を明示的に選ぶか未実施として報告する）
 
 **プロンプトテンプレート**:
 ```
@@ -110,7 +110,7 @@ MEMORY_DIRはPJ AGENTS.md（互換 CLAUDE.md がある場合はその import 内
 
 ### Step 3: 結果の統合
 
-4つのサブエージェントの結果を以下の形式で統合:
+実際に調べた観点の結果を統合する。以下は章立ての候補であり、未調査の観点を調査済みとして埋めない:
 
 ```markdown
 # コードベース探索結果
@@ -119,19 +119,19 @@ MEMORY_DIRはPJ AGENTS.md（互換 CLAUDE.md がある場合はその import 内
 [1-3行で全体像。技術スタック、主要な構成パターン、特筆すべき特徴]
 
 ## Architecture
-[Agent 1の結果をそのまま記載]
+[構造について確認できた事実と根拠]
 
 ## Data Flow
-[Agent 2の結果をそのまま記載]
+[データフローについて確認できた事実と根拠]
 
 ## Dependencies
-[Agent 3の結果をそのまま記載]
+[依存関係について確認できた事実と根拠]
 
 ## Past Learnings
 [Agent 4の結果。過去の関連知見・解決策・落とし穴。該当なしの場合は「関連する過去知見なし」]
 
 ## 注目ポイント
-- [3つのエージェントの結果を横断して、特に重要な発見を箇条書き]
+- [調査結果から、依頼の判断に影響する発見を記載]
 
 ## 追加調査が必要な箇所
 - [深堀りすべき箇所があれば記載]
@@ -160,7 +160,7 @@ MEMORY_DIRはPJ AGENTS.md（互換 CLAUDE.md がある場合はその import 内
 
 ## Codex multi-agent 連携
 
-大規模コードベースでは `multi_agent_v1.spawn_agent(agent_type: "explorer")`、`architecture-explorer`、`dependency-mapper` を目的別に並列起動する。複数ターンで状態共有が必要な場合だけ `team-run` skill の Team Journal に探索結果を集約する。
+大規模コードベースでは、Delegation Gateを通り、利用可能な担当だけを目的別に並列起動する。担当が利用できない場合は弱いmodelへ暗黙fallbackせず、同等能力の代替を明示的に選ぶか未実施として報告する。複数ターンで状態共有が必要な場合だけ `team-run` skill の Team Journal に探索結果を集約する。
 
 ## 既存設定への参照
 
