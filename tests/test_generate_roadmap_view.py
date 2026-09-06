@@ -529,6 +529,44 @@ Keep the legacy parser.
         self.assertEqual(args.session_id, "session-1")
         self.assertEqual(args.task_state, "waiting")
 
+    def test_macos_opens_roadmap_with_system_default_application(self) -> None:
+        completed = subprocess.CompletedProcess(["/usr/bin/open"], 0)
+        with (
+            mock.patch.object(roadmap.sys, "platform", "darwin"),
+            mock.patch.object(roadmap.subprocess, "run", return_value=completed) as run,
+            mock.patch.object(roadmap.webbrowser, "open") as browser_open,
+        ):
+            opened = roadmap.open_default_browser("file:///tmp/roadmap.html")
+
+        self.assertTrue(opened)
+        run.assert_called_once_with(
+            ["/usr/bin/open", "file:///tmp/roadmap.html"],
+            check=False,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+        )
+        browser_open.assert_not_called()
+
+    def test_other_platforms_keep_standard_default_browser_opener(self) -> None:
+        with (
+            mock.patch.object(roadmap.sys, "platform", "linux"),
+            mock.patch.object(roadmap.webbrowser, "open", return_value=True) as browser_open,
+            mock.patch.object(roadmap.subprocess, "run") as run,
+        ):
+            opened = roadmap.open_default_browser("https://127.0.0.1/roadmap.html")
+
+        self.assertTrue(opened)
+        browser_open.assert_called_once_with("https://127.0.0.1/roadmap.html")
+        run.assert_not_called()
+
+    def test_server_and_file_paths_share_default_browser_opener(self) -> None:
+        source = SCRIPT.read_text(encoding="utf-8")
+
+        self.assertIn("open_default_browser(url)", source)
+        self.assertIn("open_default_browser(output.as_uri())", source)
+        self.assertNotIn("webbrowser.open(url)", source)
+        self.assertNotIn("webbrowser.open(output.as_uri())", source)
+
     def test_viewing_plans_requires_llm_authored_ui_preview_without_user_metadata(self) -> None:
         skill = (ROOT / "skills" / "viewing-plans" / "SKILL.md").read_text()
         runbook = (
@@ -1223,7 +1261,7 @@ Keep the legacy parser.
         self.assertFalse((self.root / "injected-marker").exists())
         self.assertEqual(invalid_ref["sourcePreviews"][0]["status"], "base-ref-unavailable")
         self.assertEqual(invalid_ref["uiPreviews"][0]["status"], "unverified")
-        self.assertEqual(invalid_ref["uiPreviews"][0]["before"]["items"], [])
+        self.assertEqual(invalid_ref["uiPreviews"][0]["before"]["items"][0]["label"], "Home")
 
         self.write_ui_plan(
             self.valid_ui_payload(source="repo:src/Nav.tsx#MissingAnchor")
@@ -1236,7 +1274,56 @@ Keep the legacy parser.
 
         self.assertEqual(drift["uiPreviews"][0]["status"], "unverified")
         self.assertEqual(drift["uiPreviews"][0]["source"]["status"], "anchor-missing")
-        self.assertEqual(drift["uiPreviews"][0]["before"]["items"], [])
+        self.assertEqual(drift["uiPreviews"][0]["before"]["items"][0]["label"], "Home")
+
+    def test_ui_preview_preserves_bounded_structure_and_rejects_invalid_relationships(self) -> None:
+        payload = self.valid_ui_payload()
+        structured = [
+            {"id": "folder-header", "label": "共有ドライブ", "kind": "group", "change": "same", "slot": "header"},
+            {"id": "folder-name", "label": "提案資料", "kind": "item", "change": "same", "parentId": "folder-header"},
+            {"id": "open-drive", "label": "Drive で開く", "kind": "action", "change": "same", "parentId": "folder-header"},
+            {"id": "change-folder", "label": "変更", "kind": "action", "change": "same", "slot": "actions"},
+            {"id": "remove-folder", "label": "解除", "kind": "action", "change": "same", "slot": "actions"},
+        ]
+        payload["previews"][0]["before"]["items"] = structured
+        payload["previews"][0]["after"]["items"] = structured
+        payload["previews"][0]["provenance"]["before"]["observedLabels"] = []
+        self.write_ui_plan(payload)
+
+        snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+        items = snapshot["uiPreviews"][0]["after"]["items"]
+
+        self.assertEqual(items[0]["slot"], "header")
+        self.assertEqual(items[1]["parentId"], "folder-header")
+        self.assertEqual(items[3]["slot"], "actions")
+
+        invalid_items = {
+            "unknown slot": [
+                {"id": "group", "label": "Group", "kind": "group", "change": "same", "slot": "canvas"},
+            ],
+            "missing parent": [
+                {"id": "item", "label": "Item", "kind": "item", "change": "same", "parentId": "missing"},
+            ],
+            "non-group parent": [
+                {"id": "label", "label": "Label", "kind": "label", "change": "same"},
+                {"id": "item", "label": "Item", "kind": "item", "change": "same", "parentId": "label"},
+            ],
+            "cycle": [
+                {"id": "first", "label": "First", "kind": "group", "change": "same", "parentId": "second"},
+                {"id": "second", "label": "Second", "kind": "group", "change": "same", "parentId": "first"},
+            ],
+            "parent and slot": [
+                {"id": "group", "label": "Group", "kind": "group", "change": "same", "slot": "main"},
+                {"id": "item", "label": "Item", "kind": "item", "change": "same", "parentId": "group", "slot": "actions"},
+            ],
+        }
+        for label, items in invalid_items.items():
+            with self.subTest(case=label):
+                invalid = self.valid_ui_payload()
+                invalid["previews"][0]["after"]["items"] = items
+                self.write_ui_plan(invalid)
+                result = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+                self.assertEqual(result["uiPreviews"][0]["status"], "invalid")
 
     def test_ui_preview_uses_single_declared_commit_without_cli_base_ref(self) -> None:
         base_sha = self.init_git_source(
@@ -1365,7 +1452,7 @@ Keep the legacy parser.
 
         self.assertEqual(preview["status"], "unverified")
         self.assertEqual(preview["source"]["status"], "source-denied")
-        self.assertEqual(preview["before"]["items"], [])
+        self.assertEqual(preview["before"]["items"][0]["label"], "Home")
         self.assertNotIn("LEAK_AUTOMATION", json.dumps(preview))
 
     def test_preview_caps_cache_and_git_timeout_bound_large_plans(self) -> None:

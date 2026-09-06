@@ -103,3 +103,7 @@ reference HTMLは比較面の余白、caption、focus、responsiveを読みや�
 - Browser gateではoverflow、focus、keyboard、console/page errorを先に確認する。画像やLLMによる視覚reviewは、assertion失敗または明示要求がある場合に限る。
 
 Before / AfterはUI変更の理解を助ける計画内の実DOMであり、production UIの承認や実装完了の証拠ではない。未実装案、sourceのbaseline、unknownを表示上も分離する。
+
+## 既存v1の互換境界
+
+既存v1の互換読込では、itemの`parentId`は同じsideのgroupを参照し、rootの`slot`は`header`、`nav`、`main`、`aside`、`actions`、`footer`に限定する。孤立参照、循環、group以外への参照、`parentId`と`slot`の併用を拒否する。構造付きpayloadは親子関係と配置を保持し、構造のないpayloadは従来のflat表示を保つ。sourceを検証できないv1のBeforeは計画記録として保持し、確認済みの観測へ昇格させない。新規HTMLのv2 authoringへこのitem形式を持ち込まない。

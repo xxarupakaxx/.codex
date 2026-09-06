@@ -126,6 +126,8 @@ UI変更Taskは`data-ui-change="true"`と同じTask内の`script[type="applicati
 
 mockには実際のsemantic HTML controlsとhead CSSを使う。固定primitive、固定layout、ページ全体capture、外部URL、任意repository code実行を要求しない。sourceから確認できないruntime dataやpixelを補作せず、HTML/CSSを禁止するのではなく、sourceと不確実性を記録して再現する。実行script、inline event handler、external loadはstatic artifact契約で引き続き禁止する。
 
+既存v1の互換読込では、itemの`parentId`は同じsideのgroupを参照し、rootの`slot`は`header`、`nav`、`main`、`aside`、`actions`、`footer`に限定する。孤立参照、循環、group以外への参照、`parentId`と`slot`の併用を拒否する。構造付きpayloadは親子関係と配置を保持し、構造のないpayloadは従来のflat表示を保つ。sourceを検証できないv1のBeforeは計画記録として保持し、確認済みの観測へ昇格させない。新規HTMLのv2 authoringへこのitem形式を持ち込まない。
+
 ## ブラウザで開く
 
 検査済みのHTMLを通常ブラウザで直接開く。自己完結したfileはローカルserverを必須にせず、更新監視が必要なときだけ既存のloopback serverを使う。ブラウザ起動要求の成功と、実画面で読めたことを分けて記録する。
