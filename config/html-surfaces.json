@@ -166,6 +166,19 @@
       "browserProfile": "desktop-document"
     },
     {
+      "id": "plan-architecture",
+      "route": "html-plan",
+      "owner": "viewing-plans",
+      "source": "scripts/plan_architecture.py",
+      "templates": [],
+      "outputPatterns": [".local/memory/*/30_plan.html"],
+      "artifactKind": "html-plan",
+      "staticProfile": "strict-self-contained",
+      "browserProfile": "desktop-document",
+      "delivery": "authoring-only; explicit architecture fragment to verified SVG in the matching figure; sync checks read-only",
+      "runtimeBoundary": "fixed Archify Docker/security/pin/cache contract; no task-order or Code Map graph generation"
+    },
+    {
       "id": "roadmap-task-hub",
       "route": "html-plan",
       "owner": "viewing-plans",

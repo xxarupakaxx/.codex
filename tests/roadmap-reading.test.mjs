@@ -499,7 +499,7 @@ test('invalid v2 is explicit and never falls back to Markdown Tasks', () => {
 
 test('reader template follows the document-first structure without the old drawer API', () => {
   const template = html.slice(0, html.indexOf('<script id="embedded-snapshot"'));
-  for (const id of ['plan-document', 'plan-source-document', 'plan-source-content', 'plan-index-list', 'dependencies', 'verification', 'sources']) {
+  for (const id of ['plan-document', 'plan-source-document', 'plan-source-content', 'plan-index-list', 'verification', 'sources']) {
     assert.match(template, new RegExp(`id=["']${id}["']`), `${id} is required`);
   }
   assert.doesNotMatch(template, /plan-reading|brief-secondary|toc-mobile|detail-drawer|data-detail-tab|role=["']tab["']/);

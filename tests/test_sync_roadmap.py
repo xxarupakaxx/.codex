@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import hashlib
+import base64
 import importlib.util
 import copy
 import json
@@ -30,6 +31,15 @@ VALID_DELEGATION_DECISION = """
 - supersedes: none
 - lead_retains: review and codemap refresh
 """
+
+
+def snapshot_document(encoded: str) -> str:
+    return ('<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">'
+            '<meta name="viewport" content="width=device-width, initial-scale=1">'
+            '<meta name="artifact-kind" content="html-plan">'
+            '<meta http-equiv="Content-Security-Policy" content="' + MODULE._load_roadmap_generator().ROADMAP_CSP + '">'
+            '<title>Fixture</title></head><body><main><h1>Fixture</h1></main>'
+            '<script id="embedded-snapshot" type="application/json">' + encoded + '</script></body></html>')
 
 
 class SyncRoadmapTest(unittest.TestCase):
@@ -231,7 +241,7 @@ class SyncRoadmapTest(unittest.TestCase):
             "import json\n"
             "import sys\n"
             "task = Path(sys.argv[1]).resolve()\n"
-            f"(task / 'roadmap.html').write_text({('<script id="embedded-snapshot" type="application/json">' + html_encoded + '</script>')!r})\n"
+            f"(task / 'roadmap.html').write_text({snapshot_document(html_encoded)!r})\n"
             f"snapshot = json.loads({encoded!r})\n"
             "(task / 'roadmap-snapshot.json').write_text("
             "json.dumps(snapshot, ensure_ascii=False))\n",
@@ -584,7 +594,7 @@ class SyncRoadmapTest(unittest.TestCase):
         )
 
         self.assertNotEqual(code, 0)
-        self.assertEqual(result["reason"], "roadmap_snapshot_invalid")
+        self.assertEqual(result["reason"], "roadmap_publication_invalid")
         self.assertEqual((task / "roadmap.html").read_bytes(), old_html)
         self.assertEqual((task / "roadmap-snapshot.json").read_bytes(), old_json)
         self.assertEqual((task / "task-meta.json").read_bytes(), old_metadata)
@@ -751,6 +761,18 @@ class SyncRoadmapTest(unittest.TestCase):
         self.assertFalse(MODULE._plan_document_valid(protocol_relative))
         self.assertTrue(MODULE._plan_document_valid(local))
 
+    def test_backend_uses_shared_inline_style_and_embedded_image_policy(self) -> None:
+        def document(tag, attrs):
+            return {"format": "html", "title": "Mock", "nodes": [
+                {"tag": tag, "attrs": attrs, "children": []}
+            ]}
+
+        self.assertTrue(MODULE._plan_document_valid(document("div", {"style": "padding: 12px; color: #123456"})))
+        self.assertFalse(MODULE._plan_document_valid(document("div", {"style": "background: url(https://example.test/pixel)"})))
+        self.assertFalse(MODULE._plan_document_valid(document("div", {"style": "unknown-property: unsafe"})))
+        self.assertFalse(MODULE._plan_document_valid(document("img", {"src": "https://example.test/pixel.png", "alt": "Mock"})))
+        self.assertTrue(MODULE._plan_document_valid(document("img", {"src": "data:image/png;base64,iVBORw0KGgo=", "alt": "Mock"})))
+
     def test_v2_snapshot_rejects_stale_progress_source(self) -> None:
         task = self.write_task("roadmap")
         (task / "40_progress.md").write_text("進捗: 10%\n", encoding="utf-8")
@@ -849,7 +871,7 @@ class SyncRoadmapTest(unittest.TestCase):
             "import json\n"
             "import sys\n"
             "task = Path(sys.argv[1]).resolve()\n"
-            f"(task / 'roadmap.html').write_text({('<script id="embedded-snapshot" type="application/json">' + encoded + '</script>')!r})\n"
+            f"(task / 'roadmap.html').write_text({snapshot_document(encoded)!r})\n"
             f"snapshot = json.loads({json.dumps(legacy_snapshot, ensure_ascii=False)!r})\n"
             "(task / 'roadmap-snapshot.json').write_text(json.dumps(snapshot))\n",
             encoding="utf-8",
@@ -907,10 +929,69 @@ class SyncRoadmapTest(unittest.TestCase):
         )
 
         self.assertNotEqual(code, 0)
-        self.assertEqual(result["reason"], "roadmap_snapshot_pair_invalid")
+        self.assertEqual(result["reason"], "roadmap_publication_invalid")
         self.assertEqual((task / "roadmap.html").read_bytes(), old_html)
         self.assertEqual((task / "roadmap-snapshot.json").read_bytes(), old_json)
         self.assertEqual((task / "task-meta.json").read_bytes(), old_metadata)
+
+    def test_custom_generator_external_html_is_rejected_and_restored(self) -> None:
+        task = self.write_task("roadmap")
+        generator = self.write_snapshot_generator(task, self.snapshot_v2(task))
+        (task / "roadmap.html").write_text("previous HTML")
+        generator.write_text(generator.read_text() + "\np = task / 'roadmap.html'\np.write_text(p.read_text().replace('</body>', '<img src=\"https://evil.invalid/track\" onerror=\"alert(1)\"></body>'))\n")
+        code, result = MODULE.synchronize(task, generator, "3", self.workspace, "run-1")
+        self.assertNotEqual(code, 0)
+        self.assertEqual(result["reason"], "roadmap_publication_invalid")
+        self.assertEqual((task / "roadmap.html").read_text(), "previous HTML")
+
+    def test_custom_generator_source_change_is_rejected(self) -> None:
+        task = self.write_task("roadmap")
+        generator = self.write_snapshot_generator(task, self.snapshot_v2(task))
+        generator.write_text(generator.read_text() + "\np = task / '30_plan.md'\np.write_text(p.read_text() + '\\nchanged source\\n')\n")
+        code, result = MODULE.synchronize(task, generator, "3", self.workspace, "run-1")
+        self.assertNotEqual(code, 0)
+        self.assertIn("source changed", result["error"])
+        self.assertFalse((task / "roadmap.html").exists())
+
+    def test_custom_generator_resource_payloads_are_rejected(self) -> None:
+        task = self.write_task("roadmap")
+        svg = '<?xml-stylesheet href="https://evil.invalid/style.css"?><svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 10 10"><rect width="10" height="10"/></svg>'
+        encoded = base64.b64encode(svg.encode()).decode()
+        attacks = [
+            '<style>@import "https://evil.invalid/style.css";</style>',
+            '<style>body {background:url(https://evil.invalid/track)}</style>',
+            '<p style="background:url(https://evil.invalid/track)">fixture</p>',
+            f'<img alt="fixture" src="data:image/svg+xml;base64,{encoded}">',
+        ]
+        for attack in attacks:
+            with self.subTest(attack=attack[:50]):
+                generator = self.write_snapshot_generator(task, self.snapshot_v2(task))
+                (task / "roadmap.html").write_text("previous HTML")
+                generator.write_text(generator.read_text() + f"\np = task / 'roadmap.html'\np.write_text(p.read_text().replace('</body>', {attack!r} + '</body>'))\n")
+                code, result = MODULE.synchronize(task, generator, "3", self.workspace, "run-1")
+                self.assertNotEqual(code, 0)
+                self.assertEqual(result["reason"], "roadmap_publication_invalid")
+                self.assertEqual((task / "roadmap.html").read_text(), "previous HTML")
+
+    def test_custom_generator_wildcard_csp_is_rejected(self) -> None:
+        task = self.write_task("roadmap")
+        generator = self.write_snapshot_generator(task, self.snapshot_v2(task))
+        generator.write_text(generator.read_text() + '\np = task / "roadmap.html"\np.write_text(p.read_text().replace("default-src \'none\'", "default-src *"))\n')
+        code, result = MODULE.synchronize(task, generator, "3", self.workspace, "run-1")
+        self.assertNotEqual(code, 0)
+        self.assertEqual(result["reason"], "roadmap_publication_invalid")
+
+    def test_custom_generator_symlink_is_rejected_without_touching_target(self) -> None:
+        task = self.write_task("roadmap")
+        generator = self.write_snapshot_generator(task, self.snapshot_v2(task))
+        external = self.workspace / "outside.html"
+        external.write_text("untouched")
+        generator.write_text(generator.read_text() + f"\np = task / 'roadmap.html'\np.unlink()\np.symlink_to({str(external)!r})\n")
+        code, result = MODULE.synchronize(task, generator, "3", self.workspace, "run-1")
+        self.assertNotEqual(code, 0)
+        self.assertEqual(result["reason"], "roadmap_artifact_missing")
+        self.assertFalse((task / "roadmap.html").is_symlink())
+        self.assertEqual(external.read_text(), "untouched")
 
     def test_other_workspace_memory_is_rejected(self) -> None:
         other = self.workspace / "other"

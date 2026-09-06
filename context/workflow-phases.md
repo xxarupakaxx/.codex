@@ -1,6 +1,6 @@
 # 管理する作業のPhase 0–5.5
 
-この文書は、context/workflow-rules.mdで管理対象と判断した作業の順序と遷移gateを定める。通常の局所作業には適用しない。スキルやコマンドはここを参照し、Phaseの説明を複製しない。artifactの形式は context/memory-file-formats.md、委譲とSkillの選択は context/agent-team-routing.md、条件付きgateは context/workflow-details.md、Task Workspaceは skills/viewing-plans/SKILL.md と context/codemap.md を参照する。
+この文書は、context/workflow-rules.mdで管理対象と判断した作業の順序と遷移gateを定める。通常の局所作業には適用しない。スキルやコマンドはここを参照し、Phaseの説明を複製しない。artifactの形式は context/memory-file-formats.md、委譲とSkillの選択は context/agent-team-routing.md、条件付きgateは context/workflow-details.md、Task WorkspaceとHTML artifactは skills/viewing-plans/SKILL.md と context/html-artifact-contract.md を参照する。
 
 ## 既定lane
 
@@ -22,7 +22,7 @@ routeは変更量だけで決めない。途中で設計判断や依存が増え
 2. システムの日付で MEMORY_DIR/memory/YYMMDD_<task>/ を作り、05_log.mdに指示、Goal、acceptance、仮定、不明点、重要なtrade-off、roadmap_routeを記録する。
 3. session ID、次にthread IDの完全一致で handover とtaskを復元する。一致しない候補を更新時刻や名前だけで選ばない。active / waiting / verifying が一件だけの場合だけ互換fallbackを使い、選択理由を記録する。
 4. memories、solutions、issuesをローカル検索する。調査価値があり、Delegation Gateを満たす場合だけ独立探索を追加する。
-5. コード変更は編集前にCodemap gateを通す。workspace rootを検査対象、codemap成果物をtask memoryだけに置き、stale / missing / mismatch / insufficientならrefreshしてから編集する。
+5. コード変更は編集前に対象source、呼出元・呼出先、直接import、局所style、関連testを確認する。複数moduleのarchitecture/data flowを計画へ載せる場合だけ、実際の構成を明示したdiagram fragmentを作る。Task順やpath列挙から依存図を自動生成するgateは置かない。
 
 ### Phase 1: 把握と調査
 
@@ -32,11 +32,11 @@ GO / CONDITIONAL / NO-GO / DEFERを、実現可能性、工数、依存、リス
 
 ### Phase 2: 計画
 
-roadmap routeでは、30_plan.htmlを人とLLMが共有する計画の正本として保存する。本文をsemantic HTMLで直接管理し、Taskの進捗・依存・acceptanceも同じHTMLに持つ。新規30_plan.mdは作成しない。背景・目的・到達点・全体の進め方を先に文章で示し、その後に成果物や判断がまとまる工程単位のTaskを置く。file単位や一操作ごとにTaskを増やさず、細かな手順はTask内のチェックリストにまとめる。JSONの分割単位を、人が読む計画の章立てへ強制しない。Taskごとに目的、変更対象、実装、成果物、検証、blockedBy、acceptance ID、source根拠、write scopeを対応させる。roadmap.htmlとroadmap-snapshot.jsonは既存parser / generatorによる派生viewであり、手で編集しない。HTMLは計画本文の連続表示を既定とし、生成・検証後に通常ブラウザで開く。HTML表示専用MCPは使用しない。
+roadmap routeでは、30_plan.htmlを人とLLMが共有する計画の正本として保存する。head・style・bodyを備えた完成済みのstandalone HTMLに、why、outcome、実装するコードとarchitecture/data flow、根拠、verificationを見える形で置く。本文をsemantic HTMLで直接管理し、Taskの進捗・依存・acceptanceも同じHTMLに持つ。新規30_plan.mdは作成しない。背景・目的・到達点・全体の進め方を先に文章で示し、その後に成果物や判断がまとまる工程単位のTaskを置く。file単位や一操作ごとにTaskを増やさず、細かな手順はTask内のチェックリストにまとめる。JSONの分割単位を、人が読む計画の章立てへ強制しない。Taskごとに目的、変更対象、実装、成果物、検証、blockedBy、acceptance ID、source根拠、write scopeを対応させる。roadmap.htmlとroadmap-snapshot.jsonは既存parser / generatorによる派生viewであり、手で編集しない。HTMLは計画本文の連続表示を既定とし、生成・検証後に通常ブラウザで開く。HTML表示専用MCPは使用しない。
 
 既存taskは30_plan.htmlがない場合だけ30_plan.mdを互換入力として読める。両方ある場合はHTMLだけを正本とし、不正HTMLをMDで隠さない。HTML形式では40_progress.mdを任意の作業メモとして残せるが、進捗を上書きする正本にはしない。
 
-Roadmapのschema、v2とlegacyの境界、source hash、timeline、invalid時の停止は context/memory-file-formats.md に集約する。LLMは計画のHTML本文と機械属性を編集し、閲覧UIのCSS/JavaScriptや派生snapshotを複製しない。保存済み30_plan.htmlを`~/.codex/scripts/sync-roadmap.py`へ渡し、sync自身の検査・生成・publish結果を使う。Phase 2 artifact保存後はこの文書の全routeで次のtrusted local executorを実行し、exit codeとJSONを05_log.mdに記録する。Phase 3/4/5も同じTASK、root、run-idでphaseだけを変える。log-onlyはskip証跡を残す。
+Roadmapのschema、v2とlegacyの境界、source hash、timeline、invalid時の停止は context/memory-file-formats.md に集約する。LLMは計画のHTML本文と機械属性を編集し、閲覧UIの別実装や派生snapshotを複製しない。architecture/data flow図が必要なときは、明示fragmentをauthoring中にArchifyへ渡してmatching figureへSVGを書き込み、`--check`を通す。保存済み30_plan.htmlを`~/.codex/scripts/sync-roadmap.py`へ渡し、sync自身は完成済み図をread-only検証してからDOM/CSSごとコピーする。Phase 2 artifact保存後はこの文書の全routeで次のtrusted local executorを実行し、exit codeとJSONを05_log.mdに記録する。Phase 3/4/5も同じTASK、root、run-idでphaseだけを変える。log-onlyはskip証跡を残す。
 
     python3 ~/.codex/scripts/sync-roadmap.py TASK --workspace-root WORKSPACE --memory-root MEMORY/memory --run-id RUN --phase 2
 
@@ -56,7 +56,7 @@ roadmap routeでは、各Taskのacceptanceをcheckpointまたは同等のartifac
 
 ### Phase 4: 品質確認
 
-freshな直接検証を先に行い、対象のAGENTS.md、test、lint、typecheck、HTML/Codemap gateを実行する。roadmap routeのcompletion検査は既存syncとEvidence Bundle validatorへ接続し、log-onlyにEvidence Bundleを強制しない。構造検査は意味的なuser outcomeの代替ではない。
+freshな直接検証を先に行い、対象のAGENTS.md、test、lint、typecheck、HTML artifact gateを実行する。architecture figureがある場合は、fragmentとmatching SVGの`plan_architecture.py --check`も実行する。roadmap routeのcompletion検査は既存syncとEvidence Bundle validatorへ接続し、log-onlyにEvidence Bundleを強制しない。構造検査は意味的なuser outcomeの代替ではない。
 
 変更リスクに応じて最小の独立checkerを選ぶ。レビュー結果を05_log.mdへ全件記録し、CRITICALと正しさに関わる指摘は修正する。LLMだけの反復を無制限に続けず、必要なら静的検査、外部feedback、人間gateを挟む。未解決finding、stale source、対応しないacceptance、計画外のwriteがあればPhase 2または3へ戻す。
 
@@ -103,6 +103,5 @@ Workflow routeは工程の形であり、Local / Fast / Standard / Heavy / Judgm
 - context/memory-file-formats.md
 - context/agent-team-routing.md
 - skills/viewing-plans/SKILL.md
-- context/codemap.md
 - context/html-artifact-contract.md と config/html-surfaces.json
 - rules/model-routing.md、rules/complexity-budget.md、rules/adr-criteria.md、rules/security.md

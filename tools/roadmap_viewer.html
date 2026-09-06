@@ -858,23 +858,6 @@
         <article class="markdown-body plan-source-content" id="plan-source-content" aria-label="計画本文"></article>
       </section>
 
-      <section class="plan-section" id="dependencies" aria-labelledby="dependencies-title">
-        <div class="section-heading">
-          <h2 id="dependencies-title">依存とCodemap</h2>
-          <p>明示された依存関係、Codemapのfreshness、evidenceを表示します。</p>
-        </div>
-        <div class="map-stack">
-          <figure class="map-figure" id="codemap-figure" aria-labelledby="codemap-title">
-            <h3 id="codemap-title">Code Map</h3>
-            <p id="codemap-status">Codemapの状態を確認中です。</p>
-            <p class="figure-caption" id="codemap-scroll-hint">図は上下・左右にスクロールできます。</p>
-            <div class="svg-scroll" id="codemap-svg" tabindex="0" role="region" aria-labelledby="codemap-title" aria-describedby="codemap-scroll-hint"></div>
-            <ol class="relation-list" id="codemap-relations" aria-label="Code Mapの関係"></ol>
-            <figcaption class="figure-caption">verifiedはpath:line、unknownは理由を併記します。</figcaption>
-          </figure>
-        </div>
-      </section>
-
       <section class="plan-section" id="verification" aria-labelledby="verification-title">
         <div class="section-heading">
           <h2 id="verification-title">検証と判断材料</h2>
@@ -4246,80 +4229,6 @@
         ? edges.map(edge => '<li>' + escapeHtml('Task ' + edge.from + ' → ' + edge.label + ' → Task ' + edge.to) + '</li>').join('')
         : '<li>明示されたTask依存はありません。</li>';
     }
-    function codemapSvg(map, mobile = false) {
-      const width = mobile ? 360 : Math.max(620, (map.lanes || []).length * 220 + 20);
-      const nodeWidth = mobile ? 320 : 188;
-      const nodeHeight = 46;
-      const laneWidth = 220;
-      const positions = mobile
-        ? new Map(map.nodes.map((node, index) => [node.id, { x: 20, y: 34 + index * 68 }]))
-        : new Map(map.nodes.map(node => [node.id, { x: 16 + (node.gridColumn - 1) * laneWidth, y: (node.gridRow - 1) * 68 + 34 }]));
-      const height = mobile
-        ? Math.max(130, map.nodes.length * 68 + 34)
-        : Math.max(130, Math.max(...map.nodes.map(node => node.gridRow || 1), 1) * 68 + 30);
-      const arrowId = mobile ? 'codemap-arrow-narrow' : 'codemap-arrow';
-      const titleId = mobile ? 'codemap-svg-title-narrow' : 'codemap-svg-title';
-      const descId = mobile ? 'codemap-svg-desc-narrow' : 'codemap-svg-desc';
-      const edgeMarkup = map.edges.map(edge => {
-        const from = positions.get(edge.from);
-        const to = positions.get(edge.to);
-        if (!from || !to) return '';
-        const unknown = edge.status === 'unknown' ? ' unknown' : '';
-        if (mobile) {
-          const center = 180;
-          const startY = from.y + nodeHeight;
-          const endY = to.y;
-          const midY = (startY + endY) / 2;
-          return '<path class="svg-edge' + unknown + '" d="M ' + center + ' ' + startY + ' C ' + center + ' ' + midY + ' ' + center + ' ' + midY + ' ' + center + ' ' + endY + '" marker-end="url(#' + arrowId + ')"></path>';
-        }
-        const x1 = from.x + nodeWidth;
-        const y1 = from.y + nodeHeight / 2;
-        const x2 = to.x;
-        const y2 = to.y + nodeHeight / 2;
-        const midX = (x1 + x2) / 2;
-        return '<path class="svg-edge' + unknown + '" d="M ' + x1 + ' ' + y1 + ' C ' + midX + ' ' + y1 + ' ' + midX + ' ' + y2 + ' ' + x2 + ' ' + y2 + '" marker-end="url(#' + arrowId + ')"></path>';
-      }).join('');
-      const laneMarkup = mobile ? '' : (map.lanes || []).map((lane, index) =>
-        '<text class="svg-meta" x="' + (16 + index * laneWidth) + '" y="20">' + escapeHtml(lane.title) + '</text>'
-      ).join('');
-      const nodeMarkup = map.nodes.map(node => {
-        const point = positions.get(node.id);
-        const unknown = node.status === 'unknown' ? ' unknown' : '';
-        const title = text(node.title).slice(0, mobile ? 28 : 32);
-        const meta = mobile
-          ? text(node.laneTitle || node.path || node.kind).slice(0, 42)
-          : text(node.path || node.kind).slice(0, 32);
-        return '<rect class="svg-node' + unknown + '" x="' + point.x + '" y="' + point.y + '" width="' + nodeWidth + '" height="' + nodeHeight + '"></rect><text x="' + (point.x + 10) + '" y="' + (point.y + 20) + '">' + escapeHtml(title) + '</text><text class="svg-meta" x="' + (point.x + 10) + '" y="' + (point.y + 37) + '">' + escapeHtml(meta) + '</text>';
-      }).join('');
-      return '<svg class="relationship-svg ' + (mobile ? 'codemap-narrow' : 'codemap-wide') + '" width="' + width + '" height="' + height + '" viewBox="0 0 ' + width + ' ' + height + '" role="img" aria-labelledby="' + titleId + ' ' + descId + '"><title id="' + titleId + '">Fresh Code Map</title><desc id="' + descId + '">lane、node、relationをCodemap payloadから表示します。</desc><defs><marker id="' + arrowId + '" markerWidth="8" markerHeight="8" refX="7" refY="4" orient="auto"><path d="M0 0 L8 4 L0 8 Z" fill="currentColor"></path></marker></defs>' + laneMarkup + edgeMarkup + nodeMarkup + '</svg>';
-    }
-    function renderCodemap(model) {
-      const status = text(model.snapshot.codemapStatus || 'not-applicable');
-      const codemap = model.snapshot.codemap;
-      const statusHost = byId('codemap-status');
-      const svgHost = byId('codemap-svg');
-      const relationHost = byId('codemap-relations');
-      statusHost.textContent = 'Codemap: ' + status + (model.snapshot.codemapMessage ? ' · ' + model.snapshot.codemapMessage : '');
-      if (status !== 'fresh' || !codemap) {
-        svgHost.innerHTML = '<p class="change-empty">Codemapはfreshなpayloadがある時だけ表示します。</p>';
-        relationHost.innerHTML = '';
-        return;
-      }
-      const map = ROADMAP_MODEL.buildCodemapViewModel(codemap);
-      if (!map.nodes.length) {
-        svgHost.innerHTML = '<p class="change-empty">Codemap node未記録です。</p>';
-        relationHost.innerHTML = '';
-        return;
-      }
-      svgHost.innerHTML = codemapSvg(map) + codemapSvg(map, true);
-      relationHost.innerHTML = map.edges.length
-        ? map.edges.map(edge => {
-            const evidence = ROADMAP_MODEL.codemapEvidenceLabel(edge);
-            const unknown = edge.status === 'unknown' ? ' class="unknown"' : '';
-            return '<li' + unknown + '>' + escapeHtml(text(edge.from) + ' → ' + text(edge.verb) + ' → ' + text(edge.to) + ' / ' + evidence) + '</li>';
-          }).join('')
-        : '<li>明示されたCodemap relationはありません。</li>';
-    }
     function verificationDocument(name, title, content) {
       const body = content
         ? '<div class="markdown-body">' + renderMarkdown(content) + '</div>'
@@ -4414,7 +4323,6 @@
       renderIndex(model);
       const planMetadata = renderPlanSource(model);
       renderDependencyMap(model);
-      renderCodemap(model);
       renderVerification(model);
       renderSources(model, planMetadata);
     }
@@ -4669,7 +4577,6 @@
       renderPlan,
       renderBeforeAfter,
       renderDependencyMap,
-      renderCodemap,
       captureViewState,
       restoreViewState
     };

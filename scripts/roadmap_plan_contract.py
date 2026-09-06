@@ -3,9 +3,12 @@
 
 from __future__ import annotations
 
+import base64
+import binascii
 import hashlib
 import json
 import re
+import xml.etree.ElementTree as ET
 from bisect import bisect_right
 from html.parser import HTMLParser
 from pathlib import Path
@@ -51,11 +54,12 @@ class PlanContractError(ValueError):
 # keeping the list here avoids sending arbitrary authoring markup downstream.
 HTML_VISIBLE_TAGS = frozenset(
     {
-        "a", "article", "aside", "blockquote", "br", "code", "dd", "del",
+        "a", "article", "aside", "blockquote", "br", "button", "code", "dd", "del",
         "details", "div", "dl", "dt", "em", "figcaption", "figure", "footer",
         "h1", "h2", "h3", "h4", "h5", "h6", "header", "hr", "i", "input",
-        "label", "li", "main", "mark", "ol", "p", "pre", "section", "small",
-        "span", "strong", "sub", "summary", "sup", "table", "tbody", "td",
+        "img", "label", "li", "main", "mark", "nav", "ol", "option", "p", "pre",
+        "section", "select", "small", "span", "strong", "sub", "summary", "sup",
+        "table", "tbody", "td", "textarea",
         "tfoot", "th", "thead", "tr", "u", "ul", "s", "svg", "g", "path",
         "circle", "ellipse", "line", "polygon", "polyline", "rect", "text", "title", "desc",
         "defs", "marker", "caption", "col", "colgroup",
@@ -82,12 +86,21 @@ HTML_COMMON_ATTRS = frozenset(
         "data-dependency", "data-blocked-by", "data-kind", "data-anchor", "data-section", "data-plan-section", "data-plan-task",
         "data-ui-change",
         "data-progress-done", "data-progress-total", "data-global-complete",
+        "data-ui-side", "data-ui-control", "style",
     }
 )
 HTML_TAG_ATTRS = {
     "a": frozenset({"href", "rel", "target"}),
-    "input": frozenset({"type", "checked", "disabled", "name", "value"}),
+    "button": frozenset({"type", "disabled", "aria-pressed"}),
+    "img": frozenset({"src", "alt", "width", "height", "decoding", "loading"}),
+    "input": frozenset({
+        "type", "checked", "disabled", "readonly", "name", "value", "placeholder",
+        "autocomplete", "inputmode",
+    }),
     "label": frozenset({"for"}),
+    "option": frozenset({"disabled", "selected", "value", "label"}),
+    "select": frozenset({"disabled", "multiple", "required", "name", "size"}),
+    "textarea": frozenset({"disabled", "readonly", "placeholder", "rows", "cols", "wrap"}),
     "th": frozenset({"scope", "headers", "colspan", "rowspan"}),
     "td": frozenset({"headers", "colspan", "rowspan"}),
     "col": frozenset({"span"}),
@@ -107,6 +120,63 @@ HTML_TAG_ATTRS = {
     "marker": frozenset({"markerwidth", "markerheight", "refx", "refy", "orient", "viewbox", "markerunits"}),
     "text": frozenset({"x", "y", "fill", "stroke", "stroke-width", "font-size", "font-family", "text-anchor", "transform"}),
 }
+
+
+HTML_UI_CONTROL_TAGS = frozenset({"button", "select", "textarea"})
+HTML_UI_INPUT_TYPES = frozenset({"text", "search"})
+HTML_BOOLEAN_ATTRS = frozenset({"checked", "disabled", "readonly", "selected", "multiple", "required"})
+HTML_MAX_IMAGE_BYTES = 512 * 1024
+# The decoded image limit is authoritative.  This character bound leaves a
+# finite allowance for the data URL prefix while admitting base64 for exactly
+# 512 KiB of image bytes; every other HTML attribute keeps its 8 KiB bound.
+HTML_MAX_IMAGE_ATTR_CHARS = ((HTML_MAX_IMAGE_BYTES + 2) // 3) * 4 + 128
+HTML_MAX_INLINE_STYLE_BYTES = 8 * 1024
+HTML_MAX_HEAD_STYLE_BYTES = 64 * 1024
+CSP_DIRECTIVE_RULES = {
+    "default-src": frozenset({"'none'"}),
+    "script-src": frozenset({"'none'"}),
+    "style-src": frozenset({"'none'", "'unsafe-inline'"}),
+    "img-src": frozenset({"'none'", "data:"}),
+    "connect-src": frozenset({"'none'"}),
+    "object-src": frozenset({"'none'"}),
+    "font-src": frozenset({"'none'"}),
+    "base-uri": frozenset({"'none'"}),
+    "form-action": frozenset({"'none'"}),
+    "child-src": frozenset({"'none'"}),
+    "frame-src": frozenset({"'none'"}),
+    "frame-ancestors": frozenset({"'none'"}),
+    "worker-src": frozenset({"'none'"}),
+    "media-src": frozenset({"'none'"}),
+    "manifest-src": frozenset({"'none'"}),
+    "prefetch-src": frozenset({"'none'"}),
+    "navigate-to": frozenset({"'none'"}),
+}
+HTML_FONT_FACE_PROPERTIES = frozenset(
+    {
+        "font-family", "font-weight", "font-style", "font-stretch", "font-display",
+        "font-variant", "font-feature-settings", "font-variation-settings", "unicode-range",
+        "size-adjust", "ascent-override", "descent-override", "line-gap-override", "src",
+    }
+)
+HTML_CSS_PROPERTIES = frozenset(
+    {
+        "accent-color", "align-items", "background", "background-color", "border",
+        "border-color", "border-radius", "border-width", "box-shadow", "color",
+        "display", "fill", "flex", "flex-direction", "font-family", "font-size",
+        "font-weight", "gap", "grid-column", "grid-template-columns", "height",
+        "justify-content", "letter-spacing", "line-height", "margin", "max-height",
+        "max-width", "min-height", "min-width", "opacity", "overflow", "padding",
+        "position", "right", "scroll-behavior", "stroke", "stroke-width", "text-align", "top",
+        "transform", "vertical-align", "white-space", "width",
+    }
+)
+HTML_SVG_NAMESPACE = "http://www.w3.org/2000/svg"
+HTML_SAFE_SVG_ELEMENTS = frozenset(
+    {
+        "svg", "title", "desc", "defs", "marker", "path", "rect", "text", "line",
+        "g", "pattern", "polygon", "polyline", "ellipse", "circle", "style",
+    }
+)
 
 
 CSS_ESCAPE_RE = re.compile(r"\\([0-9a-fA-F]{1,6})(?:\s)?|\\([^\r\n])")
@@ -135,6 +205,287 @@ def is_safe_svg_paint_value(value: str) -> bool:
     if tokens is None or not re.search(r"url\s*\(", tokens, re.IGNORECASE):
         return tokens is not None
     return bool(re.fullmatch(r"url\(\s*#[A-Za-z][A-Za-z0-9_-]*\s*\)", tokens.strip(), re.IGNORECASE))
+
+
+def _validate_css_safety(value: str, *, inline: bool = False) -> None:
+    """Reject CSS constructs that can load, execute, or hide plan content.
+
+    The plan renderer is intentionally not a general-purpose CSS engine.  Its
+    stylesheet support is for finite, local mock styling only.  Keep this
+    check independent from the HTML parser so the same policy applies to a
+    ``style`` attribute and to a head stylesheet.
+    """
+    encoded = value.encode("utf-8")
+    limit = HTML_MAX_INLINE_STYLE_BYTES if inline else HTML_MAX_HEAD_STYLE_BYTES
+    if len(encoded) > limit:
+        raise PlanContractError("HTML CSS is too large")
+    tokens = _normalized_css_tokens(value)
+    if tokens is None:
+        raise PlanContractError("HTML CSS contains an unsafe escape")
+    if css_has_external_load(tokens):
+        raise PlanContractError("HTML CSS cannot load external resources")
+    if re.search(
+        r"(?i)(?:expression\s*\(|javascript\s*:|vbscript\s*:|data\s*:|(?<![A-Za-z0-9_-])behavior\s*:|-moz-binding\s*:|@(?:font-face|namespace|charset)\b)",
+        tokens,
+    ):
+        raise PlanContractError("HTML CSS contains an unsafe construct")
+    if any((ord(char) < 0x20 and char not in "\t\n\r") or ord(char) == 0x7F for char in tokens):
+        raise PlanContractError("HTML CSS contains a control character")
+
+
+def _validate_inline_css(value: str) -> None:
+    """Validate an inline declaration list against a finite property set."""
+    _validate_css_safety(value, inline=True)
+    # A style attribute is a declaration list, not a stylesheet.  Empty
+    # declarations are harmless and make authoring trailing semicolons easy.
+    for declaration in value.split(";"):
+        declaration = declaration.strip()
+        if not declaration:
+            continue
+        if ":" not in declaration:
+            raise PlanContractError("inline HTML style must contain declarations")
+        property_name, property_value = declaration.split(":", 1)
+        property_name = property_name.strip().casefold()
+        property_value = property_value.strip()
+        if property_name not in HTML_CSS_PROPERTIES or not property_value:
+            raise PlanContractError(f"inline HTML style property is not allowed: {property_name}")
+        if "!important" in property_value.casefold() or any(
+            char in property_value for char in "{}<>"
+        ):
+            raise PlanContractError("inline HTML style value is not allowed")
+
+
+def validate_html_inline_style(value: str) -> None:
+    """Apply the canonical finite-property policy to a safe-tree style value."""
+    _validate_inline_css(value)
+
+
+def validate_html_head_style(value: str) -> None:
+    """Apply the shared no-load CSS policy to a complete stylesheet."""
+    _validate_css_safety(value)
+
+
+def _validate_content_security_policy(value: str) -> None:
+    """Validate the narrow CSP accepted by a standalone HTML plan."""
+    if not value.strip():
+        raise PlanContractError("Content-Security-Policy cannot be empty")
+    directives: set[str] = set()
+    parts = value.split(";")
+    for index, part in enumerate(parts):
+        text = part.strip()
+        if not text:
+            if index == len(parts) - 1:
+                continue
+            raise PlanContractError("Content-Security-Policy contains an empty directive")
+        tokens = text.split()
+        name = tokens[0].casefold()
+        if name not in CSP_DIRECTIVE_RULES:
+            raise PlanContractError(f"Content-Security-Policy directive is not allowed: {name}")
+        if name in directives:
+            raise PlanContractError(f"duplicate Content-Security-Policy directive: {name}")
+        directives.add(name)
+        allowed_values = CSP_DIRECTIVE_RULES[name]
+        if len(tokens) != 2 or tokens[1].casefold() not in allowed_values:
+            raise PlanContractError(f"Content-Security-Policy values are not allowed: {name}")
+    if "default-src" not in directives:
+        raise PlanContractError("Content-Security-Policy requires default-src 'none'")
+
+
+def validate_html_content_security_policy(value: str) -> None:
+    """Apply the canonical finite CSP policy to an existing HTML meta value."""
+    _validate_content_security_policy(value)
+
+
+FONT_FACE_RE = re.compile(r"@font-face\b", re.IGNORECASE)
+FONT_LOCAL_SOURCE_RE = re.compile(
+    r"local\(\s*(?:'[^'\\\r\n]+'|\"[^\"\\\r\n]+\")\s*\)",
+    re.IGNORECASE,
+)
+FONT_FAMILY_VALUE_RE = re.compile(
+    r"(?:'[^'\\\r\n]+'|\"[^\"\\\r\n]+\"|[A-Za-z][A-Za-z0-9 _-]*)(?:\s*,\s*(?:'[^'\\\r\n]+'|\"[^\"\\\r\n]+\"|[A-Za-z][A-Za-z0-9 _-]*))*"
+)
+
+
+def _validate_font_face_value(property_name: str, value: str) -> None:
+    if not value or any(ord(char) < 0x20 and char not in "\t\n\r" for char in value):
+        raise PlanContractError("embedded SVG @font-face contains an invalid value")
+    if any(token in value.casefold() for token in ("url(", "@import", "javascript:", "vbscript:", "data:")):
+        raise PlanContractError("embedded SVG @font-face cannot load external resources")
+    if property_name == "src":
+        pieces = [piece.strip() for piece in value.split(",")]
+        if not pieces or any(
+            not piece or not FONT_LOCAL_SOURCE_RE.fullmatch(piece)
+            for piece in pieces
+        ):
+            raise PlanContractError("embedded SVG @font-face src must use local() only")
+        return
+    if property_name == "font-family":
+        if not FONT_FAMILY_VALUE_RE.fullmatch(value.strip()):
+            raise PlanContractError("embedded SVG @font-face font-family is not finite")
+        return
+    if property_name == "font-weight":
+        if not re.fullmatch(r"(?:normal|bold|bolder|lighter|[1-9][0-9]{0,2}|1000)", value.strip(), re.I):
+            raise PlanContractError("embedded SVG @font-face font-weight is not finite")
+        return
+    if property_name == "font-style":
+        if not re.fullmatch(r"(?:normal|italic|oblique(?:\s+(?:-?[0-9]+(?:\.[0-9]+)?)deg)?)", value.strip(), re.I):
+            raise PlanContractError("embedded SVG @font-face font-style is not finite")
+        return
+    if property_name == "font-stretch":
+        if not re.fullmatch(r"(?:normal|ultra-condensed|extra-condensed|condensed|semi-condensed|semi-expanded|expanded|extra-expanded|ultra-expanded|[0-9]+(?:\.[0-9]+)?%)", value.strip(), re.I):
+            raise PlanContractError("embedded SVG @font-face font-stretch is not finite")
+        return
+    if property_name == "font-display":
+        if value.strip().casefold() not in {"auto", "block", "swap", "fallback", "optional"}:
+            raise PlanContractError("embedded SVG @font-face font-display is not finite")
+        return
+    if property_name == "unicode-range":
+        if not re.fullmatch(r"[Uu]\+[0-9A-Fa-f?]{1,6}(?:-[0-9A-Fa-f]{1,6})?(?:\s*,\s*[Uu]\+[0-9A-Fa-f?]{1,6}(?:-[0-9A-Fa-f]{1,6})?)*", value.strip()):
+            raise PlanContractError("embedded SVG @font-face unicode-range is not finite")
+        return
+    if property_name in {"font-variant", "font-feature-settings", "font-variation-settings"}:
+        if not re.fullmatch(r"[A-Za-z0-9_.,'\" -]+", value.strip()):
+            raise PlanContractError("embedded SVG @font-face font setting is not finite")
+        return
+    if property_name in {"size-adjust", "ascent-override", "descent-override", "line-gap-override"}:
+        if not re.fullmatch(r"(?:normal|[0-9]+(?:\.[0-9]+)?%)(?:\s+[0-9]+(?:\.[0-9]+)?%)?", value.strip(), re.I):
+            raise PlanContractError("embedded SVG @font-face metric is not finite")
+        return
+    raise PlanContractError(f"embedded SVG @font-face property is not allowed: {property_name}")
+
+
+def _validate_embedded_font_face(body: str) -> None:
+    declarations = [declaration.strip() for declaration in body.split(";") if declaration.strip()]
+    if not declarations:
+        raise PlanContractError("embedded SVG @font-face must contain declarations")
+    for declaration in declarations:
+        if ":" not in declaration:
+            raise PlanContractError("embedded SVG @font-face declaration is invalid")
+        property_name, property_value = declaration.split(":", 1)
+        _validate_font_face_value(property_name.strip().casefold(), property_value.strip())
+
+
+def _validate_embedded_svg_style(value: str) -> None:
+    """Allow only local-font @font-face blocks in an embedded SVG stylesheet."""
+    if len(value.encode("utf-8")) > HTML_MAX_HEAD_STYLE_BYTES:
+        raise PlanContractError("embedded SVG CSS is too large")
+    tokens = _normalized_css_tokens(value)
+    if tokens is None:
+        raise PlanContractError("embedded SVG CSS contains an unsafe escape")
+    remaining: list[str] = []
+    cursor = 0
+    for match in FONT_FACE_RE.finditer(tokens):
+        open_index = tokens.find("{", match.end())
+        if open_index < 0 or tokens[match.end() : open_index].strip():
+            # Leave malformed/non-local declarations for the common checker,
+            # which deliberately rejects @font-face outside this path.
+            continue
+        depth = 1
+        close_index = open_index + 1
+        while close_index < len(tokens) and depth:
+            if tokens[close_index] == "{":
+                depth += 1
+            elif tokens[close_index] == "}":
+                depth -= 1
+            close_index += 1
+        if depth:
+            continue
+        remaining.append(tokens[cursor : match.start()])
+        _validate_embedded_font_face(tokens[open_index + 1 : close_index - 1])
+        cursor = close_index
+    remaining.append(tokens[cursor:])
+    _validate_css_safety("".join(remaining))
+
+
+def _validate_embedded_svg(raw: bytes) -> None:
+    """Validate a base64 SVG image without executing or fetching it."""
+    # ElementTree does not need declarations for the bounded architecture
+    # artwork.  Reject them before parsing so external/internal entities can
+    # never become an XML expansion or resource-loading surface.
+    if re.search(rb"<!", raw):
+        raise PlanContractError("embedded SVG image declarations are not allowed")
+    # ElementTree silently discards processing instructions.  Do this check
+    # before parsing so xml-stylesheet and other PIs cannot smuggle a network
+    # load through an otherwise safe-looking architecture image.  A leading
+    # XML declaration is the one permitted processing instruction.
+    xml_declaration = re.compile(
+        rb"\A(?:\xef\xbb\xbf)?<\?xml(?:[ \t\r\n]+[^?]*)?\?>",
+        re.IGNORECASE | re.DOTALL,
+    )
+    processing_instruction = re.compile(rb"<\?(?:[^?]|\?(?!>))*\?>", re.DOTALL)
+    allowed_xml_declaration = xml_declaration.match(raw)
+    allowed_xml_declaration_start = (
+        3 if raw.startswith(b"\xef\xbb\xbf") else 0
+    )
+    for marker in re.finditer(rb"<\?", raw):
+        match = processing_instruction.match(raw, marker.start())
+        if match is None:
+            raise PlanContractError("embedded SVG image processing instructions are not allowed")
+        if (
+            allowed_xml_declaration is not None
+            and match.start() == allowed_xml_declaration_start
+            and match.end() == allowed_xml_declaration.end()
+            and match.group().lower().startswith(b"<?xml")
+        ):
+            continue
+        raise PlanContractError("embedded SVG image processing instructions are not allowed")
+    try:
+        root = ET.fromstring(raw)
+    except (UnicodeDecodeError, ET.ParseError) as exc:
+        raise PlanContractError("embedded SVG image is not well formed") from exc
+    if root.tag != f"{{{HTML_SVG_NAMESPACE}}}svg":
+        raise PlanContractError("embedded SVG image must have the SVG namespace")
+    for element in root.iter():
+        if not isinstance(element.tag, str):
+            raise PlanContractError("embedded SVG image contains an invalid element")
+        if element.tag.rsplit("}", 1)[-1].casefold() not in HTML_SAFE_SVG_ELEMENTS:
+            raise PlanContractError("embedded SVG image contains an unsafe element")
+        for raw_name, raw_value in element.attrib.items():
+            name = raw_name.rsplit("}", 1)[-1].casefold()
+            value = str(raw_value)
+            if name.startswith("on"):
+                raise PlanContractError("embedded SVG image cannot contain event handlers")
+            if name in {"href", "src", "action", "resource", "xlink:href"} and not value.startswith("#"):
+                raise PlanContractError("embedded SVG image cannot load external resources")
+            if re.search(r"(?i)(?:javascript\s*:|data\s*:|file\s*:|https?\s*:|//|url\s*\()", value):
+                # Fragment paint references such as url(#arrow) are local;
+                # permit those while rejecting all external/data references.
+                if not re.fullmatch(r"url\(\s*#[A-Za-z][A-Za-z0-9_.:-]*\s*\)", value.strip(), re.I):
+                    raise PlanContractError("embedded SVG image cannot load external resources")
+            if name == "style":
+                _validate_css_safety(value, inline=True)
+        if element.tag.rsplit("}", 1)[-1].casefold() == "style":
+            text = "".join(element.itertext())
+            _validate_embedded_svg_style(text)
+
+
+def _validate_embedded_image(value: str) -> None:
+    """Accept only bounded base64 PNG/JPEG/SVG data images."""
+    match = re.fullmatch(
+        r"data:image/(png|jpe?g|svg\+xml)(?:;[A-Za-z0-9._=-]+)*;base64,([A-Za-z0-9+/]+={0,2})",
+        value,
+        re.IGNORECASE,
+    )
+    if not match:
+        raise PlanContractError("img src must be a base64 PNG, JPEG, or SVG data URL")
+    try:
+        raw = base64.b64decode(match.group(2), validate=True)
+    except (ValueError, binascii.Error) as exc:
+        raise PlanContractError("embedded image data is not valid base64") from exc
+    if not raw or len(raw) > HTML_MAX_IMAGE_BYTES:
+        raise PlanContractError("embedded image exceeds the allowed size")
+    media_type = match.group(1).casefold()
+    if media_type == "png" and not raw.startswith(b"\x89PNG\r\n\x1a\n"):
+        raise PlanContractError("embedded PNG image has an invalid signature")
+    if media_type in {"jpg", "jpeg"} and not raw.startswith(b"\xff\xd8\xff"):
+        raise PlanContractError("embedded JPEG image has an invalid signature")
+    if media_type == "svg+xml":
+        _validate_embedded_svg(raw)
+
+
+def validate_html_embedded_image(value: str) -> None:
+    """Apply the canonical embedded PNG/JPEG/SVG data-image policy."""
+    _validate_embedded_image(value)
 
 
 LOCAL_HREF_RE = re.compile(r"(?:#[A-Za-z0-9_.:-]+|(?:\./)?[A-Za-z0-9_.~/-]+(?:#[A-Za-z0-9_.:-]+)?)")
@@ -582,6 +933,7 @@ class _HTMLPlanParser(HTMLParser):
         self.seen_head = False
         self.seen_body = False
         self.doctype_seen = False
+        self.csp_seen = False
 
     @staticmethod
     def _line(parser: "_HTMLPlanParser") -> int:
@@ -602,10 +954,17 @@ class _HTMLPlanParser(HTMLParser):
             if name not in allowed_for_tag and not name.startswith("aria-"):
                 raise PlanContractError(f"HTML attribute is not allowed: {name}")
             value = "" if raw_value is None else str(raw_value)
-            if "\x00" in value or len(value) > 8192:
+            value_limit = (
+                HTML_MAX_IMAGE_ATTR_CHARS
+                if tag == "img" and name == "src"
+                else 8192
+            )
+            if "\x00" in value or len(value) > value_limit:
                 raise PlanContractError(f"invalid HTML attribute value: {name}")
             if name.startswith("data-") and name not in HTML_COMMON_ATTRS:
                 raise PlanContractError(f"HTML data attribute is not allowed: {name}")
+            if name == "data-ui-side" and value.casefold() not in {"before", "after"}:
+                raise PlanContractError("data-ui-side must be before or after")
             if name == "target" and value not in {"_self", "_blank"}:
                 raise PlanContractError("HTML target must be _self or _blank")
             if name == "aria-hidden" and value.casefold() == "true":
@@ -616,11 +975,35 @@ class _HTMLPlanParser(HTMLParser):
                 raise PlanContractError("HTML SVG namespace is not allowed")
             if name in {"fill", "stroke", "marker-end", "marker-start"} and not is_safe_svg_paint_value(value):
                 raise PlanContractError("external SVG resource is not allowed")
+            if name == "style":
+                _validate_inline_css(value)
             if name in {"data-task-id", "data-task-ref", "data-step-index", "data-done", "data-total", "data-progress-done", "data-progress-total"} and not value.strip():
                 raise PlanContractError(f"empty HTML attribute value: {name}")
             attrs[name] = value
-        if tag == "input" and attrs.get("type", "checkbox").casefold() != "checkbox":
-            raise PlanContractError("only checkbox inputs are allowed in a plan")
+        if tag == "input":
+            input_type = attrs.get("type", "checkbox").casefold()
+            if input_type not in {"checkbox", *HTML_UI_INPUT_TYPES}:
+                raise PlanContractError("only checkbox, text, or search inputs are allowed in a plan")
+            if input_type in HTML_UI_INPUT_TYPES and not ({"disabled", "readonly"} & set(attrs)):
+                raise PlanContractError("UI text/search inputs must be disabled or readonly")
+        if tag == "button":
+            if attrs.get("type", "button").casefold() != "button":
+                raise PlanContractError("UI buttons must use type=button")
+            if "disabled" not in attrs:
+                raise PlanContractError("UI buttons must be disabled")
+        if tag == "select" and "disabled" not in attrs:
+            raise PlanContractError("UI select controls must be disabled")
+        if tag == "textarea" and not ({"disabled", "readonly"} & set(attrs)):
+            raise PlanContractError("UI textarea controls must be disabled or readonly")
+        if tag == "img":
+            src = attrs.get("src")
+            if not src:
+                raise PlanContractError("img requires an embedded data URL")
+            _validate_embedded_image(src)
+        if tag == "option" and self._parent_tag() != "select":
+            raise PlanContractError("option is only allowed inside select")
+        if tag == "select" and self._parent_tag() == "option":
+            raise PlanContractError("select cannot be nested inside option")
         if tag == "a" and "href" not in attrs:
             raise PlanContractError("plan links require a safe href")
         if "href" in attrs and not is_safe_html_href(attrs["href"], tag=tag, attrs=attrs):
@@ -692,6 +1075,10 @@ class _HTMLPlanParser(HTMLParser):
         normalized = self._validate_attrs(name, attrs)
         if name == "meta":
             self._validate_meta_attrs(normalized)
+            if normalized.get("http-equiv", "").casefold() == "content-security-policy":
+                if self.csp_seen:
+                    raise PlanContractError("duplicate Content-Security-Policy meta tags are not allowed")
+                self.csp_seen = True
         node = self._new_node(name, normalized)
         self.stack[-1]["children"].append(node)
         if name not in HTML_VOID_TAGS:
@@ -706,6 +1093,7 @@ class _HTMLPlanParser(HTMLParser):
         if "http-equiv" in attrs:
             if set(attrs) - {"http-equiv", "content"} or attrs["http-equiv"].casefold() != "content-security-policy" or not attrs.get("content"):
                 raise PlanContractError("meta http-equiv is limited to Content-Security-Policy")
+            _validate_content_security_policy(attrs["content"])
             return
         if "name" not in attrs or not attrs["name"].strip():
             raise PlanContractError("meta is limited to charset, name, or Content-Security-Policy")
@@ -721,8 +1109,8 @@ class _HTMLPlanParser(HTMLParser):
             raise PlanContractError(f"unbalanced HTML closing element: {name}")
         node = self.stack.pop()
         node["lineEnd"] = self._line(self)
-        if name == "style" and css_has_external_load(str(node.get("raw", ""))):
-            raise PlanContractError("head style cannot load external resources")
+        if name == "style":
+            _validate_css_safety(str(node.get("raw", "")))
         if name == "script":
             raw = str(node.get("raw", ""))
             if len(raw.encode("utf-8")) > HTML_MAX_FRAGMENT_BYTES:
@@ -840,7 +1228,12 @@ def _html_safe_tree(node: object, *, inside_svg: bool = False) -> dict[str, Any]
             "preserveaspectratio": "preserveAspectRatio", "strokelinecap": "stroke-linecap",
             "strokelinejoin": "stroke-linejoin", "fillrule": "fill-rule", "cliprule": "clip-rule",
         }.get(key, key)
-        attrs[str(key)] = "true" if tag == "input" and key == "checked" else str(value)
+        attrs[str(key)] = "true" if key in HTML_BOOLEAN_ATTRS else str(value)
+    if tag in HTML_UI_CONTROL_TAGS or (tag == "input" and attrs.get("type", "checkbox").casefold() in HTML_UI_INPUT_TYPES):
+        # These controls are visual evidence only.  The marker lets the
+        # renderer keep them inert even if a future consumer adds form-like
+        # layout support to the semantic tree.
+        attrs["data-ui-control"] = "true"
     children: list[dict[str, Any]] = []
     is_svg = inside_svg or tag == "svg"
     for child in node.get("children", []):
@@ -1384,7 +1777,7 @@ def parse_html_plan_contract(
         fragments = scripts_by_task.get(id(task_node), [])
         ui_blocks = [dict(script.get("value", {})) for script in fragments if script.get("fragment") == "ui-preview"]
         for block in ui_blocks:
-            if block.get("version") != 1 or str(block.get("taskNumber")) != number or not isinstance(block.get("previews"), list) or not block.get("previews"):
+            if type(block.get("version")) is not int or block.get("version") not in {1, 2} or str(block.get("taskNumber")) != number or not isinstance(block.get("previews"), list) or not block.get("previews"):
                 raise PlanContractError(f"invalid ui-preview fragment in Task {number}")
         diagrams = [dict(script.get("value", {})) for script in fragments if script.get("fragment") == "diagram"]
         task_source = {

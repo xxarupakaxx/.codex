@@ -575,81 +575,14 @@ Keep the legacy parser.
         self.assertEqual(snapshot["files"]["90_verification.md"], "# Verification\n")
         self.assertEqual(snapshot["files"]["graph-map.md"], "# Graph\n")
 
-    def test_snapshot_embeds_fresh_codemap_as_workspace_view(self) -> None:
-        codemap_snapshot = {
-            "schemaVersion": 1,
-            "version": 1,
-            "kind": "codemap",
-            "title": "Task code map",
-            "generatedAt": "2026-08-16T00:00:00+00:00",
-            "sourceFingerprint": "abc123",
-            "scope": {"include": ["src/*.py"], "exclude": []},
-            "lanes": [{"id": "runtime", "title": "Runtime", "order": 0}],
-            "nodes": [{"id": "entry", "title": "Entry", "kind": "module", "lane": "runtime"}],
-            "edges": [],
-            "counts": {"lanes": 1, "nodes": 1, "edges": 0, "unknown": 0},
-        }
-        with mock.patch.object(
-            roadmap,
-            "load_codemap_state",
-            return_value={"status": "fresh", "snapshot": codemap_snapshot},
-        ):
-            snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root)
-
-        self.assertEqual(snapshot["codemapStatus"], "fresh")
-        self.assertEqual(snapshot["codemap"]["kind"], "codemap")
-        self.assertEqual(snapshot["codemap"]["nodes"][0]["id"], "entry")
-
-    def test_snapshot_keeps_codemap_failure_visible_without_topology(self) -> None:
-        with mock.patch.object(
-            roadmap,
-            "load_codemap_state",
-            return_value={"status": "stale", "message": "source fingerprint mismatch"},
-        ):
-            snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root)
-
-        self.assertEqual(snapshot["codemapStatus"], "stale")
+    def test_snapshot_ignores_retired_codemap(self) -> None:
+        (self.task_dir / "codemap.json").write_text("invalid legacy map")
+        (self.task_dir / "codemap.lock").write_text("stale")
+        snapshot = roadmap.build_snapshot(self.task_dir, source_root=self.root)
+        self.assertEqual(snapshot["codemapStatus"], "not-applicable")
         self.assertNotIn("codemap", snapshot)
-        self.assertEqual(snapshot["codemapMessage"], "source fingerprint mismatch")
-
-    def test_code_change_without_codemap_is_blocking_missing(self) -> None:
-        (self.task_dir / "task-meta.json").write_text(
-            json.dumps({"code_change": True})
-        )
-
-        state = roadmap.load_codemap_state(self.task_dir, self.root)
-
-        self.assertEqual(state["status"], "missing")
-        self.assertIn("required", state["message"])
-
-    def test_codemap_mismatch_is_not_collapsed_into_stale(self) -> None:
-        for name in ("codemap.source.json", "codemap.json", "codemap.lock"):
-            (self.task_dir / name).write_text("{}")
-        checker = mock.Mock()
-        checker.check.side_effect = RuntimeError("map fingerprint mismatch")
-        module_spec = mock.Mock(loader=mock.Mock())
-        with mock.patch.object(roadmap.importlib.util, "spec_from_file_location", return_value=module_spec), mock.patch.object(
-            roadmap.importlib.util, "module_from_spec", return_value=checker
-        ):
-            state = roadmap.load_codemap_state(self.task_dir, self.root)
-
-        self.assertEqual(state["status"], "mismatch")
-
-    def test_codemap_unknown_relationships_are_insufficient(self) -> None:
-        for name in ("codemap.source.json", "codemap.json", "codemap.lock"):
-            (self.task_dir / name).write_text("{}")
-        (self.task_dir / "codemap.json").write_text(
-            json.dumps({"counts": {"unknown": 1}})
-        )
-        checker = mock.Mock()
-        checker.check.return_value = {"status": "fresh"}
-        module_spec = mock.Mock(loader=mock.Mock())
-        with mock.patch.object(roadmap.importlib.util, "spec_from_file_location", return_value=module_spec), mock.patch.object(
-            roadmap.importlib.util, "module_from_spec", return_value=checker
-        ):
-            state = roadmap.load_codemap_state(self.task_dir, self.root)
-
-        self.assertEqual(state["status"], "insufficient")
+        self.assertNotIn("codemapMessage", snapshot)
+        self.assertFalse(any(item["name"].startswith("codemap.") for item in snapshot["artifacts"]))
 
     def test_snapshot_title_uses_task_directory_name_without_date_prefix(self) -> None:
         task_dir = self.root / "260719_emilkowalski_skills_roadmap_ui"

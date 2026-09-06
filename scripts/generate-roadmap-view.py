@@ -16,7 +16,9 @@ import threading
 import time
 import webbrowser
 from datetime import datetime, timezone
+from html.parser import HTMLParser
 from pathlib import Path
+from types import SimpleNamespace
 
 
 ROOT = Path(__file__).resolve().parents[1]
@@ -40,6 +42,7 @@ DEFAULT_FILES = [
 ]
 
 OUTPUT_NAMES = {"roadmap.html", "roadmap-snapshot.json"}
+RETIRED_CODEMAP_NAMES = {"codemap.source.json", "codemap.json", "codemap.lock", "codemap.html"}
 PLAN_CONTRACT = ROOT / "scripts" / "roadmap_plan_contract.py"
 EMBEDDED_SNAPSHOT_RE = re.compile(
     r'<script\b(?=[^>]*\bid=["\']embedded-snapshot["\'])[^>]*>(.*?)</script\s*>',
@@ -801,7 +804,11 @@ def preview_text_record(
     *,
     remaining_bytes: int,
     evidence_revision: str | None = None,
+    max_lines: int = MAX_PREVIEW_LINES,
+    max_bytes: int = MAX_PREVIEW_BYTES,
 ) -> dict[str, object]:
+    if type(max_lines) is not int or not 1 <= max_lines <= 256 or type(max_bytes) is not int or not 1 <= max_bytes <= 64 * 1024:
+        raise ValueError("source excerpt limits are out of bounds")
     if markdown_disallows_automation(text, relative_path):
         return source_preview_record(
             task_number,
@@ -828,7 +835,7 @@ def preview_text_record(
                 evidence_revision=evidence_revision,
             )
         start_line = requested_start
-        end_line = min(requested_end, len(lines), start_line + MAX_PREVIEW_LINES - 1)
+        end_line = min(requested_end, len(lines), start_line + max_lines - 1)
         truncated = end_line < requested_end
     else:
         start_index = next(
@@ -845,7 +852,7 @@ def preview_text_record(
                 evidence_revision=evidence_revision,
             )
         start_line = start_index + 1
-        end_line = min(len(lines), start_line + MAX_PREVIEW_LINES - 1)
+        end_line = min(len(lines), start_line + max_lines - 1)
         truncated = end_line < len(lines)
 
     code = "\n".join(lines[start_line - 1 : end_line])
@@ -859,7 +866,7 @@ def preview_text_record(
             evidence_revision=evidence_revision,
         )
 
-    code, preview_truncated = truncate_utf8(code, MAX_PREVIEW_BYTES)
+    code, preview_truncated = truncate_utf8(code, max_bytes)
     truncated = truncated or preview_truncated
     if remaining_bytes <= 0:
         return source_preview_record(
@@ -1073,6 +1080,8 @@ def extract_git_source_preview(
     evidence_revision: str | None,
     base_ref_message: str,
     git_blob_cache: dict[tuple[str, str], tuple[bytes | None, str, str]] | None = None,
+    max_lines: int = MAX_PREVIEW_LINES,
+    max_bytes: int = MAX_PREVIEW_BYTES,
 ) -> dict[str, object]:
     relative_path, anchor = split_source_reference(reference)
     if evidence_revision is None or source_root is None:
@@ -1135,6 +1144,8 @@ def extract_git_source_preview(
         text,
         remaining_bytes=remaining_bytes,
         evidence_revision=evidence_revision,
+        max_lines=max_lines,
+        max_bytes=max_bytes,
     )
 
 
@@ -1466,7 +1477,16 @@ def collect_ui_previews(
             else None
         )
         allowed_prefixes = normalize_source_prefixes(source_allow_prefixes)
-        previews: list[dict[str, object]] = []
+        previews: list[dict[str, object]] = load_plan_support("plan_ui_preview").collect_html_ui_previews(
+            plan_model,
+            generator=SimpleNamespace(
+                normalize_source_prefixes=normalize_source_prefixes,
+                extract_git_source_preview=extract_git_source_preview,
+            ),
+            source_root=source_root,
+            source_allow_prefixes=source_allow_prefixes,
+            base_ref=base_ref,
+        )
         used_bytes = 0
         for task in plan_model.get("tasks", []):
             if not isinstance(task, dict):
@@ -1474,6 +1494,8 @@ def collect_ui_previews(
             task_number = str(task.get("number", ""))
             for block in task.get("uiPreviewBlocks", []):
                 if not isinstance(block, dict):
+                    continue
+                if block.get("version") == 2:
                     continue
                 try:
                     candidates = normalize_ui_preview_block(
@@ -1631,7 +1653,7 @@ def collect_artifacts(task_dir: Path, output: Path | None = None) -> list[dict[s
         )
         for name in sorted(file_names):
             path = current_dir / name
-            if path.is_symlink() or name in OUTPUT_NAMES or is_temporary_file(path):
+            if path.is_symlink() or name in OUTPUT_NAMES | RETIRED_CODEMAP_NAMES or is_temporary_file(path):
                 continue
             if path == task_dir / "30_plan.md" and ((task_dir / "30_plan.html").exists() or (task_dir / "30_plan.html").is_symlink()):
                 continue
@@ -1665,7 +1687,6 @@ def build_fingerprint(
     artifacts: list[dict[str, object]],
     source_previews: list[dict[str, object]] | None = None,
     ui_previews: list[dict[str, object]] | None = None,
-    codemap_state: dict[str, object] | None = None,
     plan_model: dict[str, object] | None = None,
     timeline: list[dict[str, object]] | None = None,
 ) -> str:
@@ -1674,7 +1695,6 @@ def build_fingerprint(
         "artifacts": artifacts,
         "sourcePreviews": source_previews or [],
         "uiPreviews": ui_previews or [],
-        "codemap": codemap_state or {},
         "plan": plan_model or {},
         "timeline": timeline or [],
     }
@@ -1816,96 +1836,17 @@ def infer_title(
     return "Roadmap"
 
 
-def load_task_meta(task_dir: Path) -> dict[str, object]:
-    path = task_dir / "task-meta.json"
-    if not path.is_file() or path.is_symlink():
-        return {}
-    try:
-        value = json.loads(path.read_text(encoding="utf-8"))
-    except (OSError, json.JSONDecodeError):
-        return {}
-    return value if isinstance(value, dict) else {}
-
-
-def load_codemap_state(task_dir: Path, source_root: Path) -> dict[str, object]:
-    source = task_dir / "codemap.source.json"
-    map_path = task_dir / "codemap.json"
-    lock_path = task_dir / "codemap.lock"
-    code_change = load_task_meta(task_dir).get("code_change") is True
-    if not source.is_file() and not map_path.is_file() and not lock_path.is_file():
-        if code_change:
-            return {
-                "status": "missing",
-                "message": "Codemap is required for this code-change task. Run refresh, then check.",
-            }
-        return {"status": "not-applicable"}
-    if not source.is_file() or not map_path.is_file() or not lock_path.is_file():
-        return {"status": "missing", "message": "Codemap artifact is incomplete."}
-
-    module_path = Path(__file__).with_name("generate-codemap.py")
-    spec = importlib.util.spec_from_file_location("task_codemap_checker", module_path)
+@functools.lru_cache(maxsize=2)
+def load_plan_support(name: str) -> object:
+    if name not in {"plan_ui_preview", "plan_architecture"}:
+        raise ValueError("unknown plan support module")
+    spec = importlib.util.spec_from_file_location(name, ROOT / "scripts" / f"{name}.py")
     if spec is None or spec.loader is None:
-        return {"status": "error", "message": "Codemap checker could not be loaded."}
-    module = importlib.util.module_from_spec(spec)
-    spec.loader.exec_module(module)
-    try:
-        result = module.check(source_root, artifact_dir=task_dir)
-        snapshot = json.loads(map_path.read_text(encoding="utf-8"))
-    except (OSError, ValueError, RuntimeError) as error:
-        message = str(error)
-        if "missing" in message.lower():
-            status = "missing"
-        elif "mismatch" in message.lower():
-            status = "mismatch"
-        else:
-            status = "stale"
-        return {"status": status, "message": message}
-    counts = snapshot.get("counts")
-    if isinstance(counts, dict) and int(counts.get("unknown", 0) or 0) > 0:
-        return {
-            "status": "insufficient",
-            "message": "Codemap still contains unknown relationships.",
-            "snapshot": snapshot,
-        }
-    return {
-        "status": str(result.get("status", "fresh")),
-        "snapshot": snapshot,
-    }
-
-
-@functools.lru_cache(maxsize=1)
-def load_archify_adapter() -> object:
-    path = ROOT / "scripts" / "archify_plan.py"
-    spec = importlib.util.spec_from_file_location("archify_html_plan_adapter", path)
-    if spec is None or spec.loader is None:
-        raise ValueError("Archifyの生成処理を読み込めません。")
+        raise ValueError(f"計画の検査機能を読み込めません: {name}")
     module = importlib.util.module_from_spec(spec)
     sys.modules[spec.name] = module
     spec.loader.exec_module(module)
     return module
-
-
-def build_archify_payload(task_dir: Path, source_name: str, model: dict[str, object]) -> dict[str, object]:
-    if source_name not in {"30_plan.html", "30_plan.md"}:
-        raise ValueError("計画の正本名が不正です。")
-    source_path = task_dir / source_name
-    sources = model.get("sources")
-    if not isinstance(sources, dict) or Path(str(sources.get("plan", ""))) != source_path:
-        raise ValueError("計画の正本pathが一致しません。")
-    expected = model.get("planSourceRawSha256")
-    if not isinstance(expected, str) or not re.fullmatch(r"[0-9a-f]{64}", expected):
-        raise ValueError("計画の元バイト列hashがありません。")
-    adapter = load_archify_adapter()
-    descriptor = os.open(source_path, os.O_RDONLY | os.O_NOFOLLOW)
-    with os.fdopen(descriptor, "rb") as stream:
-        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
-            raise ValueError("計画の正本は通常ファイルで指定してください。")
-        raw = stream.read(adapter.RAW_PLAN_LIMIT + 1)
-    if len(raw) > adapter.RAW_PLAN_LIMIT:
-        raise ValueError("計画の正本が生成処理のサイズ上限を超えています。")
-    if hashlib.sha256(raw).hexdigest() != expected:
-        raise ValueError("計画の正本が検証後に変更されました。再生成してください。")
-    return adapter.archify_for_plan(raw.decode("utf-8"), plan_model=model)
 
 
 def build_snapshot(
@@ -1987,7 +1928,17 @@ def build_snapshot(
         plan_model=plan_model,
     )
     validate_declared_ui_previews(plan, ui_previews, plan_model)
-    codemap_state = load_codemap_state(task_dir, effective_source_root)
+    architecture = None
+    if has_html_source and any(
+        isinstance(block, dict) and block.get("kind") == "architecture"
+        for task in plan_model.get("tasks", [])
+        for block in task.get("diagramData", [])
+    ):
+        architecture = load_plan_support("plan_architecture").check_architecture(task_dir)
+        if architecture.get("status") != "verified":
+            raise ValueError("実装構成図を確認できません: " + str(architecture.get("message", "unknown")))
+        if architecture.get("sourceSha256") != plan_model.get("planSourceRawSha256"):
+            raise ValueError("実装構成図の検査中に計画HTMLが変更されました。再生成してください。")
     fingerprint_files = dict(files)
     if has_html_source:
         # A legacy sibling is retained for compatibility and ledger display,
@@ -1998,7 +1949,6 @@ def build_snapshot(
         artifacts,
         source_previews,
         ui_previews,
-        codemap_state,
         plan_model,
         timeline,
     )
@@ -2018,10 +1968,11 @@ def build_snapshot(
         "artifacts": artifacts,
         "sourcePreviews": source_previews,
         "uiPreviews": ui_previews,
-        "codemapStatus": codemap_state["status"],
+        "codemapStatus": "not-applicable",
         "plan": plan_model,
         "planSource": plan_source_name,
-        "archify": build_archify_payload(task_dir, plan_source_name, plan_model),
+        **({"renderMode": "standalone"} if has_html_source else {}),
+        **({"architecture": architecture} if architecture is not None else {}),
         **({"requiredSources": plan_model.get("requiredSources", [])} if has_html_source else {}),
         **({"planDocument": plan_model.get("planDocument")} if has_html_source and plan_model.get("planDocument") else {}),
         "timeline": timeline,
@@ -2032,16 +1983,12 @@ def build_snapshot(
             ).hexdigest(),
         },
     }
-    codemap_snapshot = codemap_state.get("snapshot")
-    if isinstance(codemap_snapshot, dict):
-        snapshot["codemap"] = codemap_snapshot
-    codemap_message = codemap_state.get("message")
-    if isinstance(codemap_message, str) and codemap_message:
-        snapshot["codemapMessage"] = codemap_message
     return snapshot
 
 
 def render_html(snapshot: dict[str, object]) -> str:
+    if snapshot.get("planSource") == "30_plan.html":
+        return render_standalone_plan(snapshot)
     template = TEMPLATE.read_text()
     if PLACEHOLDER not in template:
         raise ValueError(f"placeholder not found in {TEMPLATE}")
@@ -2049,13 +1996,39 @@ def render_html(snapshot: dict[str, object]) -> str:
     return apply_roadmap_static_contract_meta(template.replace(PLACEHOLDER, payload, 1))
 
 
-def apply_roadmap_static_contract_meta(html: str) -> str:
+def render_standalone_plan(snapshot: dict[str, object]) -> str:
+    """Publish the authored document, preserving its DOM and styles verbatim.
+
+    The inert snapshot is for synchronization and agent indexing only. No
+    browser runtime rebuilds, reorders, or adds prose to the visible document.
+    """
+    files = snapshot.get("files")
+    raw = files.get("30_plan.html") if isinstance(files, dict) else None
+    if not isinstance(raw, str) or not raw.strip():
+        raise ValueError("自己完結した30_plan.htmlがありません。")
+    parsed = load_plan_contract_module().parse_html_plan_contract(raw)
+    expected = snapshot.get("planSourceRawSha256")
+    if expected != parsed.get("planSourceRawSha256"):
+        raise ValueError("30_plan.htmlの本文とsnapshotのhashが一致しません。")
+    if EMBEDDED_SNAPSHOT_RE.search(raw):
+        raise ValueError("計画の正本に派生snapshotを含めることはできません。")
+    closing_body = list(re.finditer(r"</body\s*>", raw, re.IGNORECASE))
+    if len(closing_body) != 1:
+        raise ValueError("30_plan.htmlはheadとbodyを持つ完成したHTML文書にしてください。")
+    payload = json.dumps(snapshot, ensure_ascii=False).replace("<", "\\u003c").replace(">", "\\u003e").replace("&", "\\u0026")
+    metadata = '<script id="embedded-snapshot" type="application/json">' + payload + '</script>\n'
+    position = closing_body[0].start()
+    csp = ROADMAP_CSP.replace("script-src 'unsafe-inline'", "script-src 'none'").replace("connect-src 'self'", "connect-src 'none'")
+    return apply_roadmap_static_contract_meta(raw[:position] + metadata + raw[position:], csp=csp)
+
+
+def apply_roadmap_static_contract_meta(html: str, *, csp: str = ROADMAP_CSP) -> str:
     additions: list[str] = []
     if not ARTIFACT_KIND_META_RE.search(html):
         additions.append('  <meta name="artifact-kind" content="html-plan">')
     if not CSP_META_RE.search(html):
         additions.append(
-            f'  <meta http-equiv="Content-Security-Policy" content="{ROADMAP_CSP}">'
+            f'  <meta http-equiv="Content-Security-Policy" content="{csp}">'
         )
     if not additions:
         return html
@@ -2065,7 +2038,49 @@ def apply_roadmap_static_contract_meta(html: str) -> str:
     return html[: match.end()] + "\n" + "\n".join(additions) + html[match.end() :]
 
 
-def validate_roadmap_html(html: str, output: Path) -> None:
+class GeneratedPlanResources(HTMLParser):
+    """Check resource payloads even when an alternate generator produced HTML."""
+
+    def __init__(self, *, standalone: bool) -> None:
+        super().__init__(convert_charrefs=True)
+        self.contract = load_plan_contract_module()
+        self.standalone = standalone
+        self.csp_count = 0
+        self.styles: list[str] | None = None
+
+    def handle_starttag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        values = dict(attrs)
+        if tag == "meta" and str(values.get("http-equiv", "")).casefold() == "content-security-policy":
+            self.csp_count += 1
+            policy = str(values.get("content", ""))
+            if self.csp_count > 1:
+                raise ValueError("duplicate generated Content-Security-Policy")
+            if self.standalone or policy != ROADMAP_CSP:
+                self.contract.validate_html_content_security_policy(policy)
+        if tag == "script" and self.standalone and values.get("type") != "application/json":
+            raise ValueError("standalone generated HTML cannot execute scripts")
+        if tag == "style":
+            self.styles = []
+        if "style" in values:
+            self.contract.validate_html_inline_style(str(values["style"]))
+        if tag == "img":
+            self.contract.validate_html_embedded_image(str(values.get("src", "")))
+
+    def handle_startendtag(self, tag: str, attrs: list[tuple[str, str | None]]) -> None:
+        self.handle_starttag(tag, attrs)
+        self.handle_endtag(tag)
+
+    def handle_data(self, data: str) -> None:
+        if self.styles is not None:
+            self.styles.append(data)
+
+    def handle_endtag(self, tag: str) -> None:
+        if tag == "style" and self.styles is not None:
+            self.contract.validate_html_head_style("".join(self.styles))
+            self.styles = None
+
+
+def validate_roadmap_html(html: str, output: Path, *, standalone: bool = False) -> None:
     spec = importlib.util.spec_from_file_location("html_artifact_contract", HTML_CONTRACT)
     if spec is None or spec.loader is None:
         raise ValueError(f"cannot load HTML artifact contract: {HTML_CONTRACT}")
@@ -2079,6 +2094,11 @@ def validate_roadmap_html(html: str, output: Path) -> None:
             path=str(output),
             expected_artifact_kind="html-plan",
         )
+        resources = GeneratedPlanResources(standalone=standalone)
+        resources.feed(html)
+        resources.close()
+        if resources.styles is not None:
+            raise ValueError("unclosed generated stylesheet")
     except Exception as error:
         raise ValueError(f"roadmap output failed static HTML contract: {error}") from error
 
@@ -2116,6 +2136,25 @@ def previous_generated_at(
         if isinstance(generated_at, str) and generated_at:
             return generated_at
     return None
+
+
+def read_regular_artifact(path: Path, limit: int = 32 * 1024 * 1024) -> bytes:
+    """Read a bounded regular file without following a replaced symlink."""
+    descriptor = os.open(path, os.O_RDONLY | os.O_NOFOLLOW | os.O_NONBLOCK)
+    with os.fdopen(descriptor, "rb") as stream:
+        if not stat.S_ISREG(os.fstat(stream.fileno()).st_mode):
+            raise ValueError("artifact must be a regular file")
+        raw = stream.read(limit + 1)
+    if len(raw) > limit:
+        raise ValueError("artifact exceeds the size limit")
+    return raw
+
+
+def assert_plan_source_current(task_dir: Path, name: str, expected_sha: str) -> None:
+    html = task_dir / "30_plan.html"
+    current_name = "30_plan.html" if html.exists() or html.is_symlink() else "30_plan.md"
+    if name != current_name or hashlib.sha256(read_regular_artifact(task_dir / current_name)).hexdigest() != expected_sha:
+        raise ValueError("plan source changed during generation")
 
 
 def write_outputs(
@@ -2157,7 +2196,9 @@ def write_outputs(
         snapshot["generatedAt"] = previous_timestamp
 
     rendered_html = render_html(snapshot)
-    validate_roadmap_html(rendered_html, output)
+    validate_roadmap_html(rendered_html, output, standalone=snapshot.get("planSource") == "30_plan.html")
+    if snapshot.get("planSource") in snapshot.get("files", {}):
+        assert_plan_source_current(task_dir, str(snapshot["planSource"]), str(snapshot["planSourceRawSha256"]))
     if write_json:
         json_text = json.dumps(snapshot, ensure_ascii=False, indent=2)
         publish_output_pair(

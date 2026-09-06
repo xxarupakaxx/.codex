@@ -30,7 +30,7 @@ routeがlog-onlyなら、05_log.md以外のartifactを必須にしない。roadm
 
 ## task metadataとsession復元
 
-task-meta.jsonはgeneratorが管理するmachine-owned manifestである。人がPhaseやCodemap状態を重複管理しない。
+task-meta.jsonはgeneratorが管理するmachine-owned manifestである。人がPhaseや派生snapshotの状態を重複管理しない。
 
     {"schema_version":1,"task_id":"YYMMDD_task","task_title":"表示名",
      "thread_id":"...","session_id":"...","project_path":"/abs/project",
@@ -67,16 +67,16 @@ task-meta.jsonはgeneratorが管理するmachine-owned manifestである。人�
 
 00_spec.mdは概要、背景・目的、現在の事実、採用判断、未確定、必須/任意要件、非機能要件、制約を持つ。
 
-新規計画の正本はUTF-8の`30_plan.html`であり、`30_plan.md`を新しく作らない。背景・目的・到達点・全体の進め方を先に示し、Taskは成果物や判断のまとまりとして書く。file単位や一操作ごとに分割せず、細かな作業はTask内のチェックリストに置く。
+新規計画の正本はUTF-8の完成済み`30_plan.html`であり、`30_plan.md`を新しく作らない。head・style・bodyを持つ自己完結したHTML文書として、背景・目的（why）・到達点（outcome）・全体の進め方を先に示す。Taskは成果物や判断のまとまりで書き、file単位や一操作ごとに分割せず、細かな手順はTask内のチェックリストに置く。
 
-見えるsemantic HTMLが本文を所有する。Taskは`data-task-id`を持つsectionと見出し、項目は`data-field`で結ぶ。`purpose`、`targets`、`implementation`、`outputs`、`verification`が基本項目で、`acceptance`、`required-sources`、`implementation-evidence`、`blocked-by`を必要に応じて加える。本文をJSONや隠れたMarkdownへ重複保存しない。
+見えるsemantic HTMLが本文を所有する。計画にはwhy、outcome、変更対象、実装するコードとarchitecture/data flow、実装根拠（evidence）、成果物、verificationを読める形で置く。Taskは`data-task-id`を持つsectionと見出し、項目は`data-field`で結ぶ。`purpose`、`targets`、`implementation`、`outputs`、`verification`が基本項目で、`acceptance`、`required-sources`、`implementation-evidence`、`blocked-by`を必要に応じて加える。本文をJSONや隠れたMarkdownへ重複保存しない。
 
 本文の最小構成例（headにはcharset・viewport・title・artifact-kind・CSPと必要なinline CSSを置く）:
 
 ```html
 <main id="plan-document" data-plan-schema="2">
   <h1 data-plan-title>計画の題名</h1>
-  <p data-plan-intro>背景と到達点を具体的に書く。</p>
+  <p data-plan-intro>なぜ行うか、到達点、全体の進め方を書く。</p>
   <section data-field="required-sources">
     <ul>
       <li data-source-ref="task:30_plan.html">計画の正本</li>
@@ -88,7 +88,10 @@ task-meta.jsonはgeneratorが管理するmachine-owned manifestである。人�
     <section data-field="purpose"><h3>目的</h3><p>達成する状態。</p></section>
     <section data-field="targets"><h3>変更対象</h3><p>src/example.py</p></section>
     <section data-field="implementation"><h3>実装</h3>
-      <ul><li><input type="checkbox" disabled>必要な手順。</li></ul>
+      <ul><li><input type="checkbox" disabled>実装するコードと構造を、対象sourceとともに書く。</li></ul>
+    </section>
+    <section data-field="implementation-evidence"><h3>実装根拠</h3>
+      <p data-source-ref="workspace:src/example.py">変更理由と実際のsource位置。</p>
     </section>
     <section data-field="outputs"><h3>成果物</h3><p>確認できる出力。</p></section>
     <section data-field="verification"><h3>検証</h3><p>実際に確かめる方法。</p></section>
@@ -101,9 +104,9 @@ task-meta.jsonはgeneratorが管理するmachine-owned manifestである。人�
 
 チェック状態はnative checkboxの`checked`または`data-complete`へ置く。Task statusとdone/totalを明示する場合は実際のstepsと一致させる。依存は`data-task-ref`、acceptanceは`data-acceptance-id`、根拠は`data-source-ref`に記録し、並びから推測しない。HTML形式では進捗もHTMLが所有し、`40_progress.md`は任意の作業メモであって状態を上書きしない。
 
-UI変更のTaskは`data-ui-change="true"`と同じTask内の`script[type="application/json"][data-plan-fragment="ui-preview"]`を使う。payload・固定baseRef・Before/After・uncertaintyの規則はviewing-plansのui-change-preview.mdへ集約する。implementation diagramは同じ型の`data-plan-fragment="diagram"`。実行script・event handler・外部resource・本文の隠蔽を許可しない。機械用JSONで`<`を含む値を書く場合はscript終端を作らないようUnicode escapeする。
+UI変更のTaskは`data-ui-change="true"`と同じTask内の`script[type="application/json"][data-plan-fragment="ui-preview"]`を使う。新しいHTML authoringのv2 payloadは本文に見えるBefore / After mockのanchorだけを持ち、DOM、control、label、styleをJSONへ複製しない。既存HTMLとlegacy Markdownのv1は互換入力として読む。固定baseRef、provenance、`data-ui-side="before|after"`、uncertaintyの規則は`skills/viewing-plans/references/ui-change-preview.md`へ集約する。architecture/data flowを図示するTaskは`data-plan-fragment="diagram"`の明示fragment（`kind: "architecture"`、`diagramData`）を置き、authoring中に`plan_architecture.py`でmatching figureへ検証済みSVGを書き込む。`plan_architecture.py --check`とsyncはfragmentとSVGをread-onlyで検証する。機械用JSONに`<`を含む値を書く場合はscript終端を作らないようUnicode escapeする。
 
-HTMLの解釈、許可要素・属性・値・サイズ上限の正本は`scripts/roadmap_plan_contract.py`。全consumerはこのresolver/modelを使い、HTMLをMarkdownへ変換して旧parserへ渡さない。authorがDOM hashを手で管理する必要はない。正本のraw UTF-8 bytesからhashを計算し、生成SVGやreceiptを同じsourceへ埋めて自己参照させない。`planSourceRawSha256`は両形式のraw bytesを照合する共通fieldであり、legacyの改行正規化済み`sourceHashes`とは区別する。
+HTMLの解釈、許可要素・属性・値・サイズ上限の正本は`scripts/roadmap_plan_contract.py`。全consumerはこのresolver/modelを使い、HTMLをMarkdownへ変換して旧parserへ渡さない。authorがDOM hashを手で管理する必要はない。正本のraw UTF-8 bytesからhashを計算し、生成SVGやreceiptを同じsourceへ埋めて自己参照させない。architecture inputのhashは計画全体のraw hashと分離する。`planSourceRawSha256`は両形式のraw bytesを照合する共通fieldであり、legacyの改行正規化済み`sourceHashes`とは区別する。
 
 Phase 5では`required-sources`に最低限`task:30_plan.html`と、実装・検証に使う一つ以上の`task:`または`workspace:<repo-relative-file>`を列挙する。checkpointが存在するときだけその参照とID/hashも加える。Evidence Bundleのsource_fingerprintsは、この宣言と完全一致するcanonical keyのSHA-256を持つ。log-onlyにはこのcompletion契約を強制しない。
 
@@ -112,17 +115,17 @@ checkpoint.mdのIDは `- [x] A1: 確認内容` のような明示的な箇条書
 
 ### 既存Markdownとの互換
 
-既存taskはHTMLがない場合だけ`30_plan.md`を従来どおり読み、`40_progress.md`の既存挙動・hash・completion条件も維持する。両方存在すればHTMLだけを使い、MD siblingの変更で新しい計画の内容やhashを変えない。不正HTMLをvalidなMDで隠さない。個別移行ではHTMLを追加し、元MDを削除・改名・自動更新しない。全taskの一括移行はしない。 他Skillの過去例に30_plan.mdの参照が残っていても、新規計画は共通resolverが選ぶ30_plan.htmlを使う。
+既存taskはHTMLがない場合だけ`30_plan.md`を従来どおり読み、`40_progress.md`の既存挙動・hash・completion条件も維持する。両方存在すればHTMLだけを使い、MD siblingの変更で新しい計画の内容やhashを変えない。不正HTMLをvalidなMDで隠さない。個別移行ではHTMLを追加し、元MDを削除・改名・自動更新しない。全taskの一括移行はしない。他Skillの過去例に30_plan.mdの参照が残っていても、新規計画は共通resolverが選ぶ30_plan.htmlを使う。
 
 legacy MDのTask heading/required_sources/ui-preview-jsonは過去入力の互換契約であり、新規authoring手順ではない。legacyだけは`task:30_plan.md`と`task:40_progress.md`をmandatory sourceとして扱う。
 
-実装根拠は`repo:<relative-path>#<anchor-or-Lx-Ly>`で明示する。bare/absolute path、traversal、symlink、secret、binaryを解決しない。新しい図の正本はSVGで、MarkdownへMermaidを追加しない。
+実装根拠は`repo:<relative-path>#<anchor-or-Lx-Ly>`、または計画で許可された`workspace:<repo-relative-file>`で明示する。bare/absolute path、traversal、symlink、secret、binaryを解決しない。新しい図の正本はSVGで、MarkdownへMermaidを追加しない。
 
 ## Roadmap snapshot v2
 
-30_plan.htmlが正本で、roadmap.htmlとroadmap-snapshot.jsonは共通parser / generatorから作る派生viewである。派生物を手で直さず、正本を編集したら同じ入力で再生成する。snapshotには選択したplanSourceと、表示用のsafe semantic treeであるplanDocumentを持つ。
+`30_plan.html`が正本である。syncは完成済みHTMLのDOM、head CSS、visible mock、図を保ったまま`roadmap.html`へコピーし、末尾へ不活性な`<script id="embedded-snapshot" type="application/json">`だけを追加する。`roadmap-snapshot.json`は共通parserが作るTask、進捗、source、fragment、検証結果の機械用indexであり、計画本文や章立てを複製・再構成するviewではない。派生物を手で直さず、正本を編集したら同じ入力で再生成する。
 
-Plan解釈は scripts/roadmap_plan_contract.py に一本化する。v2がある場合に構造エラーをv1で隠さない。v1 fallbackはplanを持たない古いsnapshotだけに限る。必須Task、section、source hash、依存が不正なら停止する。
+Plan解釈は`scripts/roadmap_plan_contract.py`に一本化する。v2がある場合に構造エラーをv1で隠さない。v1 fallbackはplanを持たない古いsnapshot、HTMLのないlegacy Markdown、または既存HTML内のv1 UI fragmentの互換読込に限る。必須Task、section、source hash、依存、UI anchor、architecture fragmentが不正なら停止する。
 
     {
       "schemaVersion": 2,
@@ -141,7 +144,7 @@ Plan解釈は scripts/roadmap_plan_contract.py に一本化する。v2がある�
       "sources": {"plan": "30_plan.html", "progress": "30_plan.html"}
     }
 
-Task graph（tasks / edges）、progress、timeline（05_log.md等の明示イベント）は別の関係として表示する。Task順やmtimeから時系列、完了、担当、期限を推測しない。source lineから正本へ戻れることを表示の完了条件にする。roadmap.html、roadmap-snapshot.json、temporary output、symlinkはartifact metadataのhash対象から除外する。
+snapshotのTask index、progress、timeline（05_log.md等の明示イベント）は機械用の別fieldである。Task順やmtimeから時系列、完了、担当、期限、architecture edgeを推測しない。visible本文から正本へ戻れることを表示の完了条件にする。roadmap.html、roadmap-snapshot.json、temporary output、symlinkはartifact metadataのhash対象から除外する。
 
 ## Delivery lifecycle artifacts
 

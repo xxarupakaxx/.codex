@@ -20,8 +20,8 @@
 
 完了条件に沿って実装し、変更に対応する既存の検証を行い、その変更に起因する失敗を修正する。実行や画面確認を含む依頼では、起動・結果の確認・必要な修正まで続ける。調査・計画だけの依頼はその成果で完了する。
 
-- 作業記録は会話の要点と最終報告で足りる。memory directory、Phaseごとのartifact、Delegation Decision、Codemap生成、Roadmap同期を一律には要求しない。
-- code変更では呼出元・影響先・関連testを必要な範囲で確認する。この範囲が把握できなければ調査し、複数moduleの関係を保持する地図が必要なら管理する作業へ移る。
+- 作業記録は会話の要点と最終報告で足りる。memory directory、Phaseごとのartifact、Delegation Decision、派生図生成、Roadmap同期を一律には要求しない。
+- code変更では呼出元・影響先・関連testを必要な範囲で確認する。この範囲が把握できなければ調査し、複数moduleのarchitecture/data flowを計画へ残す必要があれば、明示fragmentとArchify figureへ記録する。
 - testは変更箇所と影響先に合わせて選ぶ。全suiteはprojectの必須条件、共通基盤への影響、関連検証だけでは解消できない懸念がある場合に実行する。文書だけの変更には差分・参照・内容の確認を使う。
 - 新しい変更、失敗、未解消の懸念がなければ、合格済みの検証を繰り返さない。必要な独立reviewは具体的なriskに対応させる。
 - 変更量は`rules/complexity-budget.md`に従って判断・報告する。通常作業に専用の計画artifactは要求しない。
@@ -32,7 +32,7 @@
 
 [workflow-phases.md](workflow-phases.md)に既存のPhase 0–5.5、log-only / roadmap / explicit-roadmap、Acceptance Contract、Delivery lifecycleを置く。`log-only`は記録を管理するrouteであり、通常作業の別名ではない。通常作業用のroute値を既存CLIへ渡さない。
 
-管理する作業では、[memory-file-formats.md](memory-file-formats.md)のartifactと[agent-team-routing.md](agent-team-routing.md)の委譲契約を使う。code変更の地図は[codemap.md](codemap.md)、計画表示は`skills/viewing-plans/SKILL.md`を参照する。
+管理する作業では、[memory-file-formats.md](memory-file-formats.md)のartifactと[agent-team-routing.md](agent-team-routing.md)の委譲契約を使う。code変更の影響は対象source、呼出元・呼出先、直接import、style、testを確認し、architecture/data flowを計画へ載せる場合だけ明示fragmentを作る。計画表示は`skills/viewing-plans/SKILL.md`を参照する。
 
 ## Delivery lifecycleと自律LOOP
 

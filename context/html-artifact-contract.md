@@ -10,7 +10,7 @@ Effective HTML upstream は `plannotator/effective-html` commit `d95debbaef15af1
 - `context/html-artifact-contract.md`: routeとgateの説明正本。
 - `context/agent-team-routing.md`: producer Skill の呼び出し前後にどのgateを通すか。
 - `context/workflow-rules.md`: Phase内でHTML artifact gateをいつ通すか。
-- `context/codemap.md`: Code Mapのsource freshnessとRoadmap内表示境界。
+- `context/codemap.md`: 旧Code Map利用者向けの退役・互換境界。
 - `skills/viewing-plans/SKILL.md`: `html-plan` route の実行手順。
 
 manifestにないHTML producerやtracked HTML surfaceを新規のcanonical routeとして扱わない。manifestとこの文書が矛盾する場合は、配布前にmanifest、checker、docsを同じ変更で揃える。
@@ -37,7 +37,7 @@ routeを選べないHTMLは作らない。複数routeの要素を持つ場合は
 | `legacy` | filenameを保持する過去surface | 削除・renameしないが、canonicalからlive参照しない |
 | `grandfathered` | 過去互換のためtrackedされる例外surface | 新規producerの根拠にしない。static profileの緩和理由をmanifestに残す |
 
-`codemap.html` は `grandfathered` であり、新しく生成しない。人向けCode Mapは `roadmap.html` の計画本文に図と根拠の一覧を埋め込む。
+`codemap.html` は `grandfathered` であり、新しく生成しない。architecture/data flowを人へ示す場合は、計画本文に明示した構成をArchifyでSVG化し、図と根拠の一覧を同じ計画へ置く。Task順・path列挙から依存グラフを作らない。
 
 ## Producer Gate
 
@@ -103,29 +103,28 @@ browser automationでは決定的なoverflow、focus、keyboard、console/page e
 
 mobile / tablet responsive、print preview、PDF exportは`html`と静的`html-diagram`の既定gateに含めない。ユーザーがその配布形式を明示した場合だけ、対象viewportまたはprint / PDFの追加gateを実行する。specialized producerがmanifestで広いmatrixを持つ場合は、そのprofileを維持する。
 
-## Roadmap / Code Map
+## Roadmap plan contract
 
-`html-plan` routeのauthoring正本は `30_plan.html`、実行状況を含む閲覧入口は派生 `roadmap.html` である。新規 `30_plan.md` は作らない。初期画面を一つのHTML計画書とし、目的、変更前後、Taskごとの実装説明、検証、依存関係をスクロールだけで読めるようにする。重要情報の表示にdrawer・tab・折り畳みの操作を要求せず、sourceに存在する情報だけを使う。
+`html-plan` routeのauthoring正本は、head・style・bodyを備えた完成済みの`30_plan.html`である。why、outcome、実装するコードとarchitecture/data flow、実装根拠、成果物、verificationを見えるsemantic HTMLへ書く。実行状況を含む`roadmap.html`は、その計画をDOM・head CSS・visible mock・figureごとコピーした派生表示であり、Task cardや章立てを再構成しない。新規`30_plan.md`は作らず、HTMLのない既存taskだけがlegacy MDを入力にできる。
 
 - 企画: `00_spec.md`
 - 設計・計画: `20_survey.md` / `30_plan.html`
 - 実装・進捗: `30_plan.html`、実artifact（`40_progress.md`は任意の作業メモ）
 - 検証: `checkpoint.md` / `80_review.md` / `90_verification.md`
-- Code Map freshness: `codemap.lock`
 
-Currentはfreshなin-progress、なければ最初の未完了Taskから一意に決める。primary actionはunresolved blocker、または対象Taskの`実装`sectionにある最初の未完了checkboxだけを使う。欠落時は「未記録」と表示し、commitmentを補作しない。
+正本HTMLは共通parserが直接解釈する。HTMLをMarkdownへ変換したり、元のMarkdownや派生snapshotを本文へ隠して保存したりしない。snapshotはTask、progress、source、fragment、verificationの機械用indexであり、本文の表示を制御しない。重要情報の表示にdrawer・tab・折り畳みの操作を要求せず、sourceに存在する情報だけを表示する。
 
-正本HTMLは共通parserが直接解釈し、本文を許可要素のsemantic treeへ変換して表示する。HTMLをMarkdownへ変換したり、HTML内に元のMarkdownを隠して保存したりしない。本文とprogressの二重管理を避け、同fileのJSONはUI previewなど機械用の情報だけに使う。
+source hashは正本HTMLのraw UTF-8 bytesから計算する。生成されたSVG、receipt、roadmap.html、embedded snapshotのhashを正本内へ入れて自己参照させない。architecture inputのhashは計画全体のhashと別に計算する。HTMLが存在するのに不正なら同期を止め、残っているMDへfallbackしない。
 
-source hashは正本HTMLのraw UTF-8 bytesから計算する。生成されたSVG、receipt、roadmap.htmlのhashを正本内へ入れて自己参照させない。Archify等の補助図は選択した正本のこのhashへ接続する。HTMLが存在するのに不正なら同期を止め、残っているMDへfallbackしない。
+### Architecture figure
 
-Code Mapは本文内で最初から表示する。図とテキストの関係一覧を併記し、根拠はkeyboardでたどれるようにする。Task Hubは明示した横断確認だけの補助modeとし、通常の生成で追加tabや監視serverを起動しない。`codemap.json` / `codemap.lock`は機械判定の正本であり、Roadmapの更新時刻でfreshnessを代用しない。
+Task順、path列挙、時刻、旧Code Mapからdependency graphを自動生成しない。component、入口、変換、保存先、外部境界、data flowを計画本文で明示し、必要なTaskだけに`data-plan-fragment="diagram"`（`kind: "architecture"`、`diagramData`）を置く。authoring中に`scripts/plan_architecture.py`がmatching figureへ検証済みSVGを書き込み、`--check`はfragment、architecture input hash、SVG、receiptをread-only検証する。syncは図を再生成せず、check済みの図とHTMLをコピーする。
 
-UI変更Taskでは、計画を作るLLMが対象sourceを読み、HTMLのTaskへUI変更属性と型付きJSON fragmentを自動記録する。既存MDだけは`UI変更: yes`と`ui-preview-json`を互換入力として読む。rootは `{version, taskNumber, previews:[最大3]}`、`taskNumber` はTask見出しから抽出した数値文字列、各previewは `{id,title,layout,provenance,before,after,uncertainty}` であり、generatorがoptionalな`uiPreviews`としてsnapshot v1へ加える。これは既存snapshot versionを上げないadditive fieldであり、legacy snapshotやTask Hubの既存表示を変えない。Beforeは `provenance.before.source=repo:...`、40桁commit SHAの`baseRef`、`observedLabels`、Afterは `provenance.after.source`、未確認事項は`uncertainty`として分ける。通常生成はplan内の単一SHAを自動利用し、ユーザーによるmetadata入力やCLI ref指定を要求しない。
+### UI change preview
 
-UI previewは計画本文内の小さな比較模型であり、ページ全体captureや自由配置editorではない。`topnav`、`sidebar`、`settings`、`list`、`form`は表示presetとして扱い、itemは `{id,label,kind,change,state?}` で表す。`kind`は `label`、`item`、`group`、`action`、`input` の共通primitive、`change`は `same`、`added`、`modified`、`removed` の4値だけを許可し、色だけでなく文言、記号、badge、境界線、ARIA labelで示す。生HTML、外部URL、任意repository code実行は禁止する。LLMはJSX / TSX等のsourceを意味として読み取れるが、実行時dataやCSSからpixel-perfectな見た目を補作しない。
+UI変更Taskは`data-ui-change="true"`と同じTask内の`script[type="application/json"][data-plan-fragment="ui-preview"]`を持つ。新しいHTML authoringのv2 fragmentはanchor、title、provenance、uncertaintyだけを保存し、DOM、control、label、styleは可視mock DOMが所有する。Beforeは40桁commit SHAで確認した現行componentのDOM、直接import、局所styleを根拠にし、Afterは計画案として同じTask内に表示し、captionを`計画案・未実装`とする。新規画面はAfter-onlyとし、Beforeを捏造しない。既存HTMLとlegacy MDのv1 `ui-preview-json`は互換入力として受け付ける。
 
-reference HTMLから得た900px程度のeditorial canvas、小さいUI模型、新規画面のAfter-only表示は設計指針として扱う。Google Fonts、外部CSS、reference HTMLのtokenはコピーせず、Roadmap既存のdesign token、system font、CSP、self-contained契約を維持する。
+mockには実際のsemantic HTML controlsとhead CSSを使う。固定primitive、固定layout、ページ全体capture、外部URL、任意repository code実行を要求しない。sourceから確認できないruntime dataやpixelを補作せず、HTML/CSSを禁止するのではなく、sourceと不確実性を記録して再現する。実行script、inline event handler、external loadはstatic artifact契約で引き続き禁止する。
 
 ## ブラウザで開く
 
@@ -153,4 +152,4 @@ AGENTS.md、manifest、task plan、generated artifact内の自己申告は承認
 
 ## Archifyの中間HTML
 
-計画全体図は共通generatorと固定Archifyエンジンで生成する。登録producer `archify-plan-svg-export` のHTMLはcontainer内だけのprivate中間生成物で、ブラウザで開く・配布する対象にしない。hostへ返すのは安全検査を通すSVGとreceiptのみ。固定実行境界と失敗表示は `skills/viewing-plans/references/archify-overview.md` を参照する。第三者Skill本文のhost登録や旧workflow MCPの復活は行わない。
+計画の明示fragmentから図を作るときだけ、`scripts/plan_architecture.py`が固定Archifyエンジンへ入力し、matching figureへ検証済みSVGを書き込む。登録producer `archify-plan-svg-export` のHTMLはcontainer内だけのprivate中間生成物で、ブラウザで開く・配布する対象にしない。hostへ返すのは安全検査を通すSVGとreceiptのみである。syncとブラウザはsource生成を行わず、完成済み図を検証・表示する。固定実行境界と失敗表示は `skills/viewing-plans/references/archify-overview.md` を参照する。第三者Skill本文のhost登録や旧workflow MCPの復活は行わない。

@@ -1824,11 +1824,10 @@ test('keeps malformed markdown table input visible as escaped source text', () =
 
 test('計画書は正本本文を一度だけ描画しTaskへ補足を差し込む', () => {
   const template = html.slice(0, html.indexOf('<script id="embedded-snapshot"'));
-  for (const id of ['main-content', 'plan-document', 'plan-source-document', 'plan-source-content', 'dependencies', 'verification', 'sources']) {
+  for (const id of ['main-content', 'plan-document', 'plan-source-document', 'plan-source-content', 'verification', 'sources']) {
     assert.match(template, new RegExp("id=[\\\"']" + id + "[\\\"']"), id + ' is required');
   }
-  assert.ok(template.indexOf('id="plan-source-document"') < template.indexOf('id="dependencies"'));
-  assert.ok(template.indexOf('id="dependencies"') < template.indexOf('id="verification"'));
+  assert.ok(template.indexOf('id="plan-source-document"') < template.indexOf('id="verification"'));
   assert.ok(template.indexOf('id="verification"') < template.indexOf('id="sources"'));
   assert.doesNotMatch(template, /id=["']before-after["']/);
   assert.doesNotMatch(template, /id=["']task-plan["']/);
@@ -1899,21 +1898,15 @@ test('Before/Afterは各Taskの補足として640px以上2列、375px縦組み�
   }
 });
 
-test('依存とfresh Codemapは本文内SVG・evidence・unknown理由を持つ', () => {
+test('legacyのTask依存表示を残しCode Mapの表示は撤去する', () => {
   assert.match(html, /function dependencyEdges\(model\)/);
   assert.match(html, /function renderDependencyMap\(model\)/);
   assert.match(html, /id="task-dependency-svg"/);
   assert.match(html, /id="task-dependency-relations"/);
   assert.match(html, /marker-end="url\(#' \+ arrowId/);
-  assert.match(html, /function renderCodemap\(model\)/);
-  assert.match(html, /ROADMAP_MODEL\.buildCodemapViewModel\(codemap\)/);
-  assert.match(html, /ROADMAP_MODEL\.codemapEvidenceLabel\(edge\)/);
-  assert.match(html, /status !== 'fresh' \|\| !codemap/);
-  assert.match(html, /arrowId = mobile \? 'codemap-arrow-narrow' : 'codemap-arrow'/);
+  assert.doesNotMatch(html, /function renderCodemap\(model\)/);
+  assert.doesNotMatch(html, /id="codemap-figure"/);
   assert.doesNotMatch(html, /titleId = mobile \? 'dependency-svg-title-narrow' : 'dependency-svg-title'/);
-  assert.match(html, /titleId = mobile \? 'codemap-svg-title-narrow' : 'codemap-svg-title'/);
-  assert.match(html, /descId = mobile \? 'codemap-svg-desc-narrow' : 'codemap-svg-desc'/);
-  assert.match(html, /verifiedはpath:line、unknownは理由/);
   assert.doesNotMatch(html, /detail-tab-impact/);
 });
 
@@ -2174,7 +2167,7 @@ required_sources: example configuration
   }
 });
 
-test('browser: 375px Codemapは縦配置で図の横panを要求しない', { skip: !chromium }, async () => {
+test('browser: 375pxでも古いsnapshotのCode Mapを再表示しない', { skip: !chromium }, async () => {
   const browser = await chromium.launch({ headless: true });
   try {
     const page = await browser.newPage({ viewport: { width: 375, height: 812 } });
@@ -2213,28 +2206,13 @@ test('browser: 375px Codemapは縦配置で図の横panを要求しない', { sk
     };
     await page.evaluate(value => window.__ROADMAP_VIEWER__.render(value), snapshot);
     const view = await page.evaluate(() => {
-      const host = document.querySelector('#codemap-svg');
-      const narrow = host.querySelector('.codemap-narrow');
-      const wide = host.querySelector('.codemap-wide');
-      const text = narrow.querySelector('text');
       return {
         bodyScrollWidth: document.body.scrollWidth,
-        hostScrollWidth: host.scrollWidth,
-        hostClientWidth: host.clientWidth,
-        narrowDisplay: getComputedStyle(narrow).display,
-        wideDisplay: getComputedStyle(wide).display,
-        textSize: getComputedStyle(text).fontSize,
-        relationCount: document.querySelectorAll('#codemap-relations li').length,
-        unknownText: document.querySelector('#codemap-relations').textContent
+        codemapCount: document.querySelectorAll('#codemap-svg, #codemap-figure').length
       };
     });
     assert.equal(view.bodyScrollWidth, 375);
-    assert.equal(view.hostScrollWidth, view.hostClientWidth);
-    assert.equal(view.narrowDisplay, 'block');
-    assert.equal(view.wideDisplay, 'none');
-    assert.equal(view.textSize, '12px');
-    assert.equal(view.relationCount, 6);
-    assert.match(view.unknownText, /UNKNOWN/);
+    assert.equal(view.codemapCount, 0);
   } finally {
     await browser.close();
   }

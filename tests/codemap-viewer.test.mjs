@@ -144,21 +144,9 @@ test('roadmap snapshots preserve an embedded codemap workspace view', () => {
   }));
 });
 
-test('Code Map is an inline SVG supplement with lane and evidence text', () => {
-  assert.match(html, /id="dependencies"/);
-  assert.match(html, /id="codemap-figure"/);
-  assert.match(html, /id="codemap-status"/);
-  assert.match(html, /id="codemap-svg"/);
-  assert.match(html, /id="codemap-relations"/);
-  assert.match(html, /function renderCodemap\(model\)/);
-  assert.match(html, /ROADMAP_MODEL\.buildCodemapViewModel\(codemap\)/);
-  assert.match(html, /ROADMAP_MODEL\.codemapEvidenceLabel\(edge\)/);
-  assert.match(html, /titleId = mobile \? 'codemap-svg-title-narrow' : 'codemap-svg-title'/);
-  assert.match(html, /descId = mobile \? 'codemap-svg-desc-narrow' : 'codemap-svg-desc'/);
-  assert.match(html, /status !== 'fresh' \|\| !codemap/);
-  assert.match(html, /class="svg-edge' \+ unknown/);
-  assert.match(html, /class="unknown"/);
-  assert.match(html, /verifiedはpath:line、unknownは理由/);
+test('retired Code Map has no visible surface or renderer', () => {
+  assert.doesNotMatch(html, /id="codemap-(figure|status|svg|relations)"/);
+  assert.doesNotMatch(html, /function (renderCodemap|codemapSvg)\(/);
   assert.doesNotMatch(html, /detail-tab-impact/);
   assert.doesNotMatch(html, /id="workspace-view-code"/);
 });

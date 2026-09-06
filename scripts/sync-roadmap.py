@@ -22,7 +22,7 @@ try:
     from roadmap_plan_contract import (
         PlanContractError, parse_plan_contract, parse_plan_files, resolve_plan_source,
         parse_html_plan_contract, strict_json_loads, is_safe_html_href, HTML_VISIBLE_TAGS,
-        is_safe_svg_paint_value,
+        is_safe_svg_paint_value, validate_html_inline_style, validate_html_embedded_image,
         HTML_COMMON_ATTRS, HTML_TAG_ATTRS,
     )
 except ModuleNotFoundError:
@@ -45,6 +45,8 @@ except ModuleNotFoundError:
     HTML_COMMON_ATTRS = _PLAN_CONTRACT_MODULE.HTML_COMMON_ATTRS
     HTML_TAG_ATTRS = _PLAN_CONTRACT_MODULE.HTML_TAG_ATTRS
     is_safe_svg_paint_value = _PLAN_CONTRACT_MODULE.is_safe_svg_paint_value
+    validate_html_inline_style = _PLAN_CONTRACT_MODULE.validate_html_inline_style
+    validate_html_embedded_image = _PLAN_CONTRACT_MODULE.validate_html_embedded_image
 
 
 try:
@@ -247,7 +249,7 @@ def validate_ui_preview_authoring(
                 continue
             if len(blocks) != 1 or any(
                 not isinstance(block, dict)
-                or block.get("version") != 1
+                or block.get("version") not in {1, 2}
                 or str(block.get("taskNumber")) != number
                 or not isinstance(block.get("previews"), list)
                 or not block.get("previews")
@@ -756,10 +758,17 @@ def _plan_document_valid(value: object) -> bool:
         allowed_attrs = HTML_COMMON_ATTRS | HTML_TAG_ATTRS.get(tag.casefold(), frozenset())
         if not isinstance(attrs, dict) or any(
             not isinstance(key, str) or not isinstance(item, str)
-            or key.casefold().startswith("on") or key.casefold() == "style"
+            or key.casefold().startswith("on")
             or (key.casefold() not in allowed_attrs and not key.casefold().startswith("aria-"))
             for key, item in attrs.items()
         ):
+            return False
+        try:
+            if "style" in attrs:
+                validate_html_inline_style(attrs["style"])
+            if tag.casefold() == "img":
+                validate_html_embedded_image(attrs.get("src", ""))
+        except PlanContractError:
             return False
         schema = attrs.get("data-plan-schema")
         if schema is not None and schema != "2":
@@ -1064,7 +1073,7 @@ def synchronize(
             },
         )
     artifacts = (task_dir / "roadmap.html", task_dir / "roadmap-snapshot.json")
-    missing = [str(path) for path in artifacts if not path.is_file()]
+    missing = [str(path) for path in artifacts if path.is_symlink() or not path.is_file()]
     if missing:
         return _failed_after_generation(
             task_dir,
@@ -1077,6 +1086,17 @@ def synchronize(
                 "missing": missing,
             },
         )
+    try:
+        validator = _load_roadmap_generator()
+        validator.assert_plan_source_current(task_dir, source_path.name, str(plan_model["planSourceRawSha256"]))
+        generated_html = validator.read_regular_artifact(artifacts[0]).decode("utf-8")
+        validator.read_regular_artifact(artifacts[1])
+        validator.validate_roadmap_html(generated_html, artifacts[0], standalone=plan_model.get("sourceKind") == "html")
+    except (OSError, UnicodeError, ValueError) as exc:
+        return _failed_after_generation(task_dir, output_backups, 2, {
+            "status": "failed", "route": route,
+            "reason": "roadmap_publication_invalid", "error": str(exc),
+        })
     snapshot_error = validate_generated_snapshot(
         task_dir / "roadmap-snapshot.json",
         task_dir,
@@ -1125,6 +1145,15 @@ def synchronize(
             2,
             {"status": "failed", "reason": metadata_error},
         )
+    try:
+        validator.assert_plan_source_current(task_dir, source_path.name, str(plan_model["planSourceRawSha256"]))
+        if any(path.is_symlink() or not path.is_file() for path in (*artifacts, task_dir / "task-meta.json") if path.exists() or path.is_symlink()):
+            raise ValueError("published artifact is not a regular file")
+    except (OSError, ValueError) as exc:
+        return _failed_after_generation(task_dir, output_backups, 2, {
+            "status": "failed", "route": route,
+            "reason": "roadmap_publication_invalid", "error": str(exc),
+        })
     return 0, {
         "status": "synchronized",
         "route": route,

@@ -93,11 +93,11 @@ Workflow routeとLocal / Fast / Standard / Heavy / Judgmentのcapability class�
 - 調査不足: research / iterative-retrieval / search-first。
 - 実装: implementing-work、必要ならtddまたはdiagnosing-bugs。
 - 品質: verification-loop、reviewing-code、リスクに合うchecker。
-- 計画表示: viewing-plans。html-plan route、manifest、Codemap freshness、static/browser gateを先に確認する。
+- 計画表示: viewing-plans。html-plan route、manifest、standalone HTML、static/browser gateを先に確認する。
 - 複数turn協調: team-run。graph-engineeringは複数loop、typed state、異なるauthorityが必要な場合だけ使う。
 - architecture: modeling-domains / designing-codebases / improving-architectureを対象範囲に応じて使う。
 
-HTMLを生成・更新・配布する場合は context/html-artifact-contract.md と config/html-surfaces.jsonを確認し、登録済みproducerだけを使う。新しい図の正本はSVGで、MarkdownへMermaidを生成しない。計画は30_plan.htmlを編集し、`~/.codex/scripts/sync-roadmap.py`で検査・生成・atomic publishする。派生roadmap.htmlの手編集やstale source fallbackはしない。
+HTMLを生成・更新・配布する場合は context/html-artifact-contract.md と config/html-surfaces.jsonを確認し、登録済みproducerだけを使う。新しい図の正本はSVGで、MarkdownへMermaidを生成しない。計画は完成済みのstandalone `30_plan.html`を編集し、architecture figureがある場合は明示fragmentを`plan_architecture.py`へ渡して`--check`を通す。その後`~/.codex/scripts/sync-roadmap.py`が完成済みHTMLをread-only検証し、DOM/CSSごとatomic publishする。派生roadmap.htmlの手編集やstale source fallbackはしない。
 
 ## 改善候補の扱い
 

@@ -160,8 +160,37 @@ class _RendererBlocked(_ProducerError):
 
 
 class _RendererFailure(_ProducerError):
-    def __init__(self, message: str) -> None:
-        super().__init__(message, status="error")
+    def __init__(self, message: str, *, status: str = "error") -> None:
+        super().__init__(message, status=status)
+
+
+_SAFE_CONTAINER_FAILURES = {
+    "invalidInput": "Container input was rejected.",
+    "invalidInvocation": "Container invocation was rejected.",
+    "sandboxRequired": "Container sandbox attestation was rejected.",
+    "sourceTamper": "Fixed container runtime integrity check failed.",
+    "missingChrome": "Fixed container Chrome is unavailable.",
+    "missingPlaywright": "Fixed container Playwright is unavailable.",
+    "timeout": "Container export exceeded its deadline.",
+    "outputLimit": "Container output exceeded its limit.",
+    "exportFailure": "SVG export failed.",
+    "internalFailure": "Container export failed.",
+}
+
+
+def _container_failure_diagnostic(*streams: bytes) -> tuple[str, str]:
+    """Extract only the bridge's fixed code/message from bounded output."""
+    for stream in streams:
+        try:
+            value = json.loads(stream.decode("utf-8"))
+        except (UnicodeDecodeError, json.JSONDecodeError):
+            continue
+        if not isinstance(value, dict):
+            continue
+        code = value.get("code")
+        if isinstance(code, str) and code in _SAFE_CONTAINER_FAILURES:
+            return code, _SAFE_CONTAINER_FAILURES[code]
+    return "exportFailure", _SAFE_CONTAINER_FAILURES["exportFailure"]
 
 
 def _canonical_json(value: Any) -> str:
@@ -370,7 +399,12 @@ def project_plan(plan_text: str, plan_model: dict[str, Any] | None = None) -> di
     return _prepare_projection(plan_text, plan_model)
 
 
-def _workflow_spec(projection: dict[str, Any]) -> dict[str, Any]:
+def _workflow_spec(projection: dict[str, Any], explicit_spec: dict[str, Any] | None = None) -> dict[str, Any]:
+    if explicit_spec is not None:
+        _validate_workflow_spec(explicit_spec)
+        if len(_canonical_json(explicit_spec).encode("utf-8")) > HTML_LIMIT:
+            raise _ProducerError("Archify workflow入力が8 MiBの上限を超えています。", status="invalid")
+        return explicit_spec
     tasks = projection["overviewModel"]["tasks"]
     edges = projection["overviewModel"]["edges"]
     numbers = projection["taskIds"]
@@ -485,7 +519,9 @@ def _validate_workflow_spec(spec: dict[str, Any]) -> None:
         node_id = node.get("id")
         if not isinstance(node_id, str) or not ID_RE.fullmatch(node_id) or node_id in node_ids:
             raise _ProducerError("workflow spec node IDが不正です。", status="error")
-        if node.get("lane") not in lane_ids or node.get("type") != "external":
+        if node.get("lane") not in lane_ids or node.get("type") not in {
+            "frontend", "backend", "database", "cloud", "security", "messagebus", "external"
+        }:
             raise _ProducerError("workflow spec nodeのlane/typeが不正です。", status="error")
         if not isinstance(node.get("col"), int) or not 0 <= node["col"] <= 5:
             raise _ProducerError("workflow spec nodeのcolが不正です。", status="error")
@@ -1134,7 +1170,12 @@ def _invoke_renderer(
             stderr_limit=CONTAINER_STDERR_LIMIT,
         )
         if return_code != 0:
-            raise _RendererFailure("Archify renderer containerが失敗しました。")
+            code, message = _container_failure_diagnostic(stdout, _stderr)
+            status = "blocked" if code in {"invalidInput", "invalidInvocation", "sandboxRequired", "sourceTamper", "missingChrome", "missingPlaywright"} else "error"
+            raise _RendererFailure(
+                f"Archify renderer containerが失敗しました。({code}: {message})",
+                status=status,
+            )
         receipt, raw_bytes = _decode_container_envelope(stdout, renderer_config)
         if revision is not None and receipt.get("revision") != revision:
             raise _RendererFailure("renderer receiptのrevisionが一致しません。")
@@ -1647,7 +1688,8 @@ def _cache_lock(timeout: float = RENDER_DEADLINE) -> Iterator[None]:
 
 
 def _cache_hit(
-    projection: dict[str, Any], revision: str, renderer_config: dict[str, Any] | None = None
+    projection: dict[str, Any], revision: str, renderer_config: dict[str, Any] | None = None,
+    explicit_spec: dict[str, Any] | None = None,
 ) -> dict[str, Any] | None:
     directory, bundle_path, svg_path = _cache_paths(revision, projection["planSha256"])
     if not directory.is_dir() or directory.is_symlink() or not bundle_path.is_file() or not svg_path.is_file():
@@ -1704,7 +1746,7 @@ def _cache_hit(
         _validate_renderer_receipt(
             renderer_receipt,
             projection,
-            _workflow_spec(projection),
+            _workflow_spec(projection, explicit_spec),
             raw_bytes,
             revision=revision,
         )
@@ -1829,9 +1871,9 @@ def _cleanup_staging_directory(temp_root: Path) -> None:
 
 def _render_payload(
     projection: dict[str, Any], revision: str, renderer_config: dict[str, Any] | Path,
-    *, deadline: float = RENDER_DEADLINE
+    *, deadline: float = RENDER_DEADLINE, explicit_spec: dict[str, Any] | None = None
 ) -> tuple[dict[str, Any], bytes, bytes, dict[str, Any]]:
-    spec = _workflow_spec(projection)
+    spec = _workflow_spec(projection, explicit_spec)
     temp_root = Path(tempfile.mkdtemp(prefix="archify-plan-"))
     os.chmod(temp_root, 0o700)
     run_dir = temp_root / "run"
@@ -1883,6 +1925,70 @@ def _invalid_payload(plan_text: Any, message: str) -> dict[str, Any]:
         "parserVersion": "",
     }
     return _base_payload(projection, "unknown", "invalid", message)
+
+
+def _spec_projection(spec: dict[str, Any], source_hash: str) -> dict[str, Any]:
+    """Bind an explicit workflow spec to the existing cache/receipt contract."""
+    nodes = spec.get("nodes", [])
+    edges = spec.get("edges", [])
+    model = {
+        "tasks": [{"number": node["id"], "title": node["label"]} for node in nodes],
+        "edges": [{"from": edge["from"], "to": edge["to"]} for edge in edges],
+    }
+    return {
+        "rawBytes": b"",
+        "planSha256": source_hash,
+        "overviewModel": model,
+        "overviewModelSha256": _sha256_json(model),
+        "edgeSha256": _sha256_json(model["edges"]),
+        "taskIds": [node["id"] for node in nodes],
+        "parserVersion": "architecture-v1",
+    }
+
+
+def archify_for_spec(spec: dict[str, Any], source_hash: str, *, cache_only: bool = False) -> dict[str, Any]:
+    """Render an explicit architecture spec through the reviewed Archify path.
+
+    ``cache_only`` is used by validation/snapshot checks: a cache miss is an
+    explicit error and never starts Docker or publishes a new asset.
+    """
+    if not isinstance(spec, dict) or not SHA256_RE.fullmatch(str(source_hash)):
+        return {"provider": "archify", "revision": "unknown", "adapterVersion": ADAPTER_VERSION, "status": "invalid", "message": "architecture specまたはsource hashが不正です。"}
+    try:
+        _validate_workflow_spec(spec)
+        projection = _spec_projection(spec, source_hash)
+        revision, renderer_config = _load_config()
+    except _RendererBlocked as error:
+        return _base_payload(_spec_projection(spec, source_hash), error.revision, "blocked", str(error))
+    except _ProducerError as error:
+        return _base_payload(_spec_projection(spec, source_hash), "unknown", error.status, str(error))
+    try:
+        deadline = time.monotonic() + RENDER_DEADLINE
+        with _cache_lock(max(0.0, deadline - time.monotonic())):
+            cached = _cache_hit(projection, revision, renderer_config, spec)
+            if cached is not None:
+                return cached
+            if cache_only:
+                return _base_payload(
+                    projection,
+                    revision,
+                    "error",
+                    "architectureの検証済みcacheがありません。authoringで図を生成してください。",
+                )
+            payload, svg_bytes, raw_bytes, renderer_receipt = _render_payload(
+                projection, revision, renderer_config, deadline=deadline, explicit_spec=spec
+            )
+            _publish_cache(
+                payload, svg_bytes, revision, source_hash,
+                raw_bytes=raw_bytes, renderer_receipt=renderer_receipt,
+            )
+            return payload
+    except _RendererBlocked as error:
+        return _base_payload(projection, revision, "blocked", str(error))
+    except _ProducerError as error:
+        return _base_payload(projection, revision, error.status, str(error))
+    except (OSError, RuntimeError):
+        return _base_payload(projection, revision, "error", "Archify architecture生成に失敗しました。")
 
 
 def archify_for_plan(plan_text: str, plan_model: dict[str, Any] | None = None) -> dict[str, Any]:
