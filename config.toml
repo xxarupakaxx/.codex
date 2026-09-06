@@ -7,12 +7,12 @@ approvals_reviewer = "user"
 [marketplaces.openai-bundled]
 last_updated = "2026-08-01T04:07:50Z"
 source_type = "local"
-source = '\\?\C:\Users\arupa\.codex\.tmp\bundled-marketplaces\openai-bundled'
+source = "/Users/yoshiki/ghq/github.com/xxarupakaxx/.codex/.tmp/bundled-marketplaces/openai-bundled"
 
 [marketplaces.openai-primary-runtime]
 last_updated = "2026-08-01T22:05:33Z"
 source_type = "local"
-source = '\\?\C:\Users\arupa\.cache\codex-runtimes\codex-primary-runtime\plugins\openai-primary-runtime'
+source = "/Users/yoshiki/.cache/codex-runtimes/codex-primary-runtime/plugins/openai-primary-runtime"
 
 [plugins."visualize@openai-bundled"]
 enabled = true
@@ -60,7 +60,7 @@ default_subagent_reasoning_effort = "max"
 
 [mcp_servers.node_repl]
 args = []
-command = 'C:\Users\arupa\AppData\Local\OpenAI\Codex\runtimes\cua_node\fb8898c05a62885e\bin\node_repl.exe'
+command = "/Applications/ChatGPT.app/Contents/Resources/cua_node/bin/node_repl"
 startup_timeout_sec = 120
 
 [mcp_servers.node_repl.env]

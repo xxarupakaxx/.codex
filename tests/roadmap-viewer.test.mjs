@@ -10,6 +10,12 @@ let chromium = null;
 if (existsSync(playwrightModule)) {
   try { ({ chromium } = require(playwrightModule)); } catch { chromium = null; }
 }
+const chromiumExecutable = process.env.CODEX_PLAYWRIGHT_EXECUTABLE || '';
+const launchChromium = () => chromium.launch({
+  headless: true,
+  args: ['--no-default-browser-check'],
+  ...(chromiumExecutable ? { executablePath: chromiumExecutable } : {})
+});
 
 const html = readFileSync(new URL('../tools/roadmap_viewer.html', import.meta.url), 'utf8');
 const viewingPlansSkill = readFileSync(new URL('../skills/viewing-plans/SKILL.md', import.meta.url), 'utf8');
@@ -782,6 +788,65 @@ test('uiPreviewsはsnapshot v1のoptional additive fieldとして許可fieldだ�
 
   const legacy = model.normalizeSnapshot({ version: 1, files: {} });
   assert.deepEqual(JSON.parse(JSON.stringify(legacy.uiPreviews)), []);
+});
+
+test('uiPreviewのparentIdとslotは安全な構造だけを保持する', () => {
+  const normalized = model.normalizeSnapshot({
+    version: 1,
+    files: { '30_plan.md': '# Plan\n\n## Task 1: UI' },
+    uiPreviews: [{
+      version: 1,
+      taskNumber: '1',
+      layout: 'settings',
+      title: '共有ドライブ',
+      before: { items: [] },
+      after: { items: [
+        { id: 'header', label: '連携フォルダ', kind: 'group', change: 'same', slot: 'header' },
+        { id: 'folder', label: '提案資料', kind: 'item', change: 'same', parentId: 'header' },
+        { id: 'open', label: 'Drive で開く', kind: 'action', change: 'same', parentId: 'header', slot: 'actions' },
+        { id: 'add', label: 'フォルダ追加', kind: 'action', change: 'added', slot: 'actions' },
+        { id: 'orphan', label: '孤立', kind: 'item', change: 'same', parentId: 'missing' },
+        { id: 'unknown-slot', label: '不明slot', kind: 'item', change: 'same', slot: 'canvas' }
+      ] },
+      provenance: { after: { source: 'Task 1' } }
+    }]
+  });
+  const items = normalized.uiPreviews[0].after.items;
+
+  assert.equal(items.find(item => item.id === 'header').slot, 'header');
+  assert.equal(items.find(item => item.id === 'folder').parentId, 'header');
+  assert.equal(items.find(item => item.id === 'open').parentId, 'header');
+  assert.equal(items.find(item => item.id === 'open').slot, undefined);
+  assert.equal(items.find(item => item.id === 'orphan').parentId, undefined);
+  assert.equal(items.find(item => item.id === 'unknown-slot').slot, undefined);
+});
+
+test('uiPreviewの配置変更は内容が同じでもmodified差分になる', () => {
+  const normalized = model.normalizeSnapshot({
+    version: 1,
+    generatedAt,
+    files: { '30_plan.md': '# Plan\n\n## Task 1: UI' },
+    uiPreviews: [{
+      version: 1,
+      taskNumber: '1',
+      layout: 'settings',
+      title: '配置変更',
+      before: { items: [
+        { id: 'header', label: 'Header', kind: 'group', change: 'same', slot: 'header' },
+        { id: 'item', label: 'Item', kind: 'item', change: 'same', parentId: 'header' }
+      ] },
+      after: { items: [
+        { id: 'main', label: 'Main', kind: 'group', change: 'same', slot: 'main' },
+        { id: 'item', label: 'Item', kind: 'item', change: 'same', parentId: 'main' }
+      ] },
+      provenance: { before: { source: 'repo:src/ui.tsx#UI' }, after: { source: 'Task 1' } }
+    }]
+  });
+  const result = model.buildModel(normalized, { nowMs });
+  const brief = model.buildExecutionBrief(result, '1');
+  const pair = brief.selectedUiPreviews[0].pairs.find(item => item.id === 'item');
+
+  assert.equal(pair.change, 'modified');
 });
 
 test('generator exact-shapeのuiPreviewはsourceとprovenance.beforeからViewer modelへ適合すべき', () => {
@@ -2008,8 +2073,158 @@ test('SVG・keyboard・responsive・forced colorsの安全な表示契約を持�
   assert.doesNotMatch(html, /transition:\s*all/);
 });
 
+test('UI previewは5 layoutを同じ縦一覧へ潰さずprimitiveとstable IDを描画へ渡す', () => {
+  assert.match(html, /data-layout="' \+ escapeHtml\(preview\.layout\) \+ '"/);
+  assert.match(html, /data-item-id="' \+ escapeHtml\(pair\.id\) \+ '"/);
+  assert.match(html, /data-kind="' \+ escapeHtml\(kind\) \+ '"/);
+  assert.match(html, /class="change-primitive"/);
+  for (const layout of ['topnav', 'sidebar', 'settings', 'list', 'form']) {
+    assert.match(html, new RegExp('\\.compare-panel\\[data-layout="' + layout + '"\\]'));
+  }
+  assert.match(html, /data-layout="topnav"\][\s\S]*\.change-list\s*\{[\s\S]*display:\s*flex/);
+  assert.match(html, /data-layout="sidebar"\][\s\S]*\.change-list\s*\{[\s\S]*border-left:/);
+  assert.match(html, /data-layout="settings"\][\s\S]*data-kind="input"\][\s\S]*\.change-primitive/);
+  assert.match(html, /data-layout="form"\][\s\S]*data-kind="input"\][\s\S]*\.change-primitive/);
+  assert.match(html, /function renderStructuredUiSurface\(preview, side\)/);
+  assert.match(html, /class="ui-app-surface"/);
+  assert.match(html, /class="ui-delta-list"/);
+  assert.match(html, /source準拠の構造模型/);
+  assert.match(html, /計画準拠の構造模型/);
+  assert.match(html, /data-structured="' \+ structured \+ '"/);
+});
+
+test('browser: 構造付きUI模型は画面文脈と差分注釈を分けて縦比較する', { skip: !chromium }, async () => {
+  const browser = await launchChromium();
+  try {
+    const page = await browser.newPage({ viewport: { width: 1440, height: 1000 } });
+    await page.goto(new URL('../tools/roadmap_viewer.html', import.meta.url).href);
+    const structuredPreview = {
+      version: 1,
+      taskNumber: '1',
+      layout: 'settings',
+      title: '共有ドライブ',
+      status: 'verified',
+      provenance: { before: { source: 'repo:src/drive-folder-section.tsx#DriveFolderSection', baseRef: 'a'.repeat(40) }, after: { source: 'Task 1' } },
+      before: { status: 'verified', items: [
+        { id: 'header', label: '共有ドライブ', kind: 'group', change: 'same', slot: 'header' },
+        { id: 'folder', label: '提案資料', kind: 'item', change: 'same', parentId: 'header' },
+        { id: 'open', label: 'Drive で開く', kind: 'action', change: 'same', parentId: 'header' },
+        { id: 'change', label: '変更', kind: 'action', change: 'same', slot: 'actions' },
+        { id: 'remove', label: '解除', kind: 'action', change: 'removed', slot: 'actions' }
+      ] },
+      after: { status: 'planned', items: [
+        { id: 'header', label: '連携フォルダ', kind: 'group', change: 'modified', slot: 'header' },
+        { id: 'folder', label: '提案資料', kind: 'item', change: 'same', parentId: 'header' },
+        { id: 'open', label: 'Drive で開く', kind: 'action', change: 'same', parentId: 'header' },
+        { id: 'add', label: 'フォルダ追加', kind: 'action', change: 'added', slot: 'actions' }
+      ] }
+    };
+    await page.evaluate(preview => window.__ROADMAP_VIEWER__.render({
+      version: 1,
+      title: '構造付きUI模型',
+      generatedAt: new Date().toISOString(),
+      files: { '30_plan.md': '# Plan\n\n## Task 1: UI' },
+      uiPreviews: [preview]
+    }), structuredPreview);
+    const result = await page.evaluate(() => {
+      const section = document.querySelector('.task-change[data-structured="true"]');
+      const panels = [...section.querySelectorAll('.compare-panel')].map(panel => panel.getBoundingClientRect());
+      return {
+        surfaces: section.querySelectorAll('.ui-app-surface').length,
+        headerSlots: section.querySelectorAll('.ui-surface-slot[data-slot="header"]').length,
+        actionSlots: section.querySelectorAll('.ui-surface-slot[data-slot="actions"]').length,
+        nestedFolder: Boolean(section.querySelector('[data-item-id="header"] [data-item-id="folder"]')),
+        flatLists: section.querySelectorAll('.change-list').length,
+        deltaText: section.querySelector('.ui-delta-list')?.textContent || '',
+        stacked: panels.length === 2 && Math.abs(panels[0].x - panels[1].x) < 1 && panels[1].y > panels[0].bottom,
+        overflow: document.body.scrollWidth > window.innerWidth
+      };
+    });
+
+    assert.equal(result.surfaces, 2);
+    assert.equal(result.headerSlots, 2);
+    assert.equal(result.actionSlots, 2);
+    assert.equal(result.nestedFolder, true);
+    assert.equal(result.flatLists, 0);
+    assert.match(result.deltaText, /追加|変更|削除/);
+    assert.equal(result.stacked, true);
+    assert.equal(result.overflow, false);
+  } finally {
+    await browser.close();
+  }
+});
+
+test('browser: 5 layoutのUI模型はviewportごとに構造差を保つ', { skip: !chromium }, async () => {
+  const browser = await launchChromium();
+  try {
+    const layouts = ['topnav', 'sidebar', 'settings', 'list', 'form'];
+    const files = { '30_plan.md': '# UI模型\n\n' + layouts.map((layout, index) => `## Task ${index + 1}: ${layout}`).join('\n\n') };
+    const uiPreviews = layouts.map((layout, index) => ({
+      version: 1,
+      taskNumber: String(index + 1),
+      layout,
+      title: layout,
+      provenance: { before: { source: `repo:src/${layout}.tsx#root`, baseRef: 'a'.repeat(40) }, after: { source: `Task ${index + 1}` } },
+      before: { items: [{ id: `${layout}-main`, label: 'Main', kind: layout === 'form' || layout === 'settings' ? 'input' : 'item', change: 'same' }] },
+      after: { items: [
+        { id: `${layout}-main`, label: 'Main', kind: layout === 'form' || layout === 'settings' ? 'input' : 'item', change: 'same' },
+        { id: `${layout}-next`, label: 'Next', kind: layout === 'form' ? 'action' : 'item', change: 'added' }
+      ] }
+    }));
+    for (const width of [375, 768, 1440]) {
+      const page = await browser.newPage({ viewport: { width, height: 900 } });
+      const errors = [];
+      page.on('pageerror', error => errors.push(error.message));
+      page.on('console', message => { if (message.type() === 'error') errors.push(message.text()); });
+      await page.goto(new URL('../tools/roadmap_viewer.html', import.meta.url).href);
+      await page.evaluate(snapshot => window.__ROADMAP_VIEWER__.render(snapshot), { version: 1, title: 'UI模型', generatedAt: new Date().toISOString(), files, uiPreviews });
+      await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'reduce' });
+      await page.keyboard.press('Tab');
+      const result = await page.evaluate(() => ({
+        overflow: document.body.scrollWidth > window.innerWidth,
+        focus: document.activeElement?.id || '',
+        layouts: [...document.querySelectorAll('.compare-panel[data-side="after"]')].map(panel => {
+          const list = panel.querySelector('.change-list');
+          const primitive = panel.querySelector('.change-primitive');
+          return {
+            layout: panel.dataset.layout,
+            display: getComputedStyle(list).display,
+            leftBorder: parseFloat(getComputedStyle(list).borderLeftWidth),
+            topBorder: parseFloat(getComputedStyle(list).borderTopWidth),
+            primitive: primitive ? getComputedStyle(primitive).display : 'none'
+          };
+        })
+      }));
+      assert.deepEqual(errors, []);
+      assert.equal(result.overflow, false, `${width}px must not overflow`);
+      assert.equal(result.focus, 'skip-link');
+      assert.deepEqual(result.layouts.map(item => item.layout), layouts);
+      assert.equal(result.layouts[0].display, 'flex');
+      assert.ok(result.layouts[1].leftBorder > 0);
+      assert.equal(result.layouts[2].primitive, 'block');
+      assert.ok(result.layouts[3].topBorder > 0);
+      assert.equal(result.layouts[4].primitive, 'block');
+      await page.close();
+    }
+    const zoomPage = await browser.newPage({ viewport: { width: 768, height: 900 } });
+    await zoomPage.goto(new URL('../tools/roadmap_viewer.html', import.meta.url).href);
+    await zoomPage.evaluate(snapshot => window.__ROADMAP_VIEWER__.render(snapshot), { version: 1, title: 'UI模型', generatedAt: new Date().toISOString(), files, uiPreviews });
+    const session = await zoomPage.context().newCDPSession(zoomPage);
+    await session.send('Emulation.setPageScaleFactor', { pageScaleFactor: 2 });
+    const zoomResult = await zoomPage.evaluate(() => ({
+      scale: window.visualViewport?.scale || 1,
+      overflow: document.body.scrollWidth > document.documentElement.clientWidth
+    }));
+    assert.equal(zoomResult.scale, 2);
+    assert.equal(zoomResult.overflow, false, '200% zoom must not overflow');
+    await zoomPage.close();
+  } finally {
+    await browser.close();
+  }
+});
+
 test('browser: Task本文一度・任意section保持・比較layout・scroll復元', { skip: !chromium }, async () => {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchChromium();
   try {
   const page = await browser.newPage({ viewport: { width: 768, height: 900 } });
   const errors = [];
@@ -2168,7 +2383,7 @@ required_sources: example configuration
 });
 
 test('browser: 375pxでも古いsnapshotのCode Mapを再表示しない', { skip: !chromium }, async () => {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchChromium();
   try {
     const page = await browser.newPage({ viewport: { width: 375, height: 812 } });
     await page.goto(new URL('../tools/roadmap_viewer.html', import.meta.url).href);
@@ -2219,7 +2434,7 @@ test('browser: 375pxでも古いsnapshotのCode Mapを再表示しない', { ski
 });
 
 test('browser: source付き空Beforeは未確認として表示し新規画面扱いにしない', { skip: !chromium }, async () => {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchChromium();
   try {
     const page = await browser.newPage({ viewport: { width: 768, height: 812 } });
     await page.goto(new URL('../tools/roadmap_viewer.html', import.meta.url).href);
@@ -2262,7 +2477,7 @@ test('browser: source付き空Beforeは未確認として表示し新規画面�
 });
 
 test('browser: 末尾Taskの補足は本文の目的・実装の後ろへ置く', { skip: !chromium }, async () => {
-  const browser = await chromium.launch({ headless: true });
+  const browser = await launchChromium();
   try {
     const page = await browser.newPage({ viewport: { width: 768, height: 812 } });
     await page.goto(new URL('../tools/roadmap_viewer.html', import.meta.url).href);
