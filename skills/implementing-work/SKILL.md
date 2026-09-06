@@ -20,6 +20,6 @@ Work Packetを使うrouteでは、scope、acceptance、constraints、capability 
 
 ## 終了
 
-通常作業では変更、検証、残課題を報告する。管理する作業では`context/workflow-phases.md`のreview・Evidence・completion targetまで満たす。code変更量は`rules/complexity-budget.md`に従う。
+通常作業では変更、検証、残課題を報告する。管理する作業では`context/workflow-rules.md`から該当する工程へ進み、review・Evidence・completion targetまで満たす。code変更量は`rules/complexity-budget.md`に従う。
 
 commitとpushはproject policyと承認範囲に従い、自分の変更だけを対象にする。権限・外部write・不可逆操作の境界は共通ルールを使う。
