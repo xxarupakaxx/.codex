@@ -74,6 +74,12 @@ goals = true
 memories = true
 personality = true
 enable_request_compression = true
+
+[features.multi_agent_v2]
+enabled = true
+min_wait_timeout_ms = 120000
+default_wait_timeout_ms = 120000
+
 [mcp_servers.node_repl]
 args = []
 command = "/Applications/Codex.app/Contents/Resources/cua_node/bin/node_repl"
