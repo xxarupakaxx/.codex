@@ -36,6 +36,10 @@ Skillやテンプレートの定型を理由に、この原則に反する加筆
 - 調査・計画だけの依頼では変更しない。実装済みと動作確認済み、機械検査の成功とユーザーの目的達成を区別する。
 - 主経路の失敗を暗黙fallbackで隠さない。長時間・外部通信を伴うscriptは開始、retry、完了、失敗をsecretなしで記録する。
 
+## UI 変更時の fresh review
+
+UI の新規画面・コンポーネント追加、またはユーザーが観察できる挙動・レイアウト構造を変える実装を終えたら、`rules/ui-fresh-review.md` に従う。余白・色・既存文言の微修正など、挙動や構造を変えない変更には適用しない。
+
 ## 必要な場面で読む正本
 
 | 場面 | 正本 |
@@ -46,6 +50,7 @@ Skillやテンプレートの定型を理由に、この原則に反する加筆
 | 複数moduleの影響を地図で追う | `context/codemap.md` |
 | 計画を表示・同期する | `skills/viewing-plans/SKILL.md`、`scripts/sync-roadmap.py` |
 | Team Runを使う | `context/team-run.md`、`skills/team-run/SKILL.md` |
+| UI変更後の独立レビュー | `rules/ui-fresh-review.md` |
 | code変更量・重要設計判断を扱う | `rules/complexity-budget.md`、`rules/adr-criteria.md` |
 | secretや対象pathを扱う | `rules/security.md` |
 | Git操作・code reviewを行う | `rules/common-git-workflow.md`、`rules/code-review-philosophy.md` |
