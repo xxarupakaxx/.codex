@@ -1785,6 +1785,7 @@ def parse_html_plan_contract(
             "lineStart": int(task_node.get("lineStart", 1)),
             "lineEnd": int(task_node.get("lineEnd", task_node.get("lineStart", 1))),
             "anchor": str(attrs.get("id") or f"task-{number}"),
+            "taskIdAttribute": attrs.get("data-task-id"),
         }
         tasks.append(
             {
@@ -1809,6 +1810,7 @@ def parse_html_plan_contract(
                 "sourceRefs": source_refs,
                 "uiChange": _html_bool(attrs.get("data-ui-change"), default=False, field="ui-change"),
                 "uiPreviewBlocks": ui_blocks,
+                "executionContract": {name: _html_field_text(fields.get(name, [])) for name in ("decision-boundaries", "stop-conditions", "negative-paths")},
                 "diagramData": diagrams,
             }
         )
@@ -1867,6 +1869,9 @@ def parse_html_plan_contract(
         "sources": {"plan": plan_source, "progress": plan_source},
         "requiredSources": list(dict.fromkeys(all_required_sources)),
         "planDocument": {"format": "html", "title": title or "Roadmap", "nodes": safe_nodes},
+        "executionContractVersion": _html_field_text(_html_fields(content_roots[0]).get("execution-contract-version", [])),
+        "planPresentation": [node for node in _html_walk(document) if node.get("tag") in {"style", "meta"}],
+        "executionContract": {name: " ".join(_html_field_text(_html_fields(root).get(name, [])) for root in content_roots).strip() for name in ("intent", "assumptions", "approach", "success-scenarios")},
     }
 
 

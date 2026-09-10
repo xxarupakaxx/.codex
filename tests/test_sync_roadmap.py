@@ -7,6 +7,7 @@ import copy
 import json
 import tempfile
 import unittest
+from unittest import mock
 from pathlib import Path
 
 
@@ -44,6 +45,10 @@ def snapshot_document(encoded: str) -> str:
 
 class SyncRoadmapTest(unittest.TestCase):
     def setUp(self) -> None:
+        # These legacy fixtures exercise downstream publication/completion.
+        # Real execution gate integration is tested in test_plan_execution_contract.
+        self.addCleanup(mock.patch.stopall)
+        mock.patch.object(MODULE, "readiness", return_value={"canImplement": True}).start()
         self.temp = tempfile.TemporaryDirectory()
         self.workspace = Path(self.temp.name)
         self.root = self.workspace / ".local" / "memory"

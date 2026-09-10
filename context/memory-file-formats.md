@@ -63,6 +63,10 @@ task-meta.jsonはgeneratorが管理するmachine-owned manifestである。人�
 
 管理するtaskのPhase 2 artifact保存後は、全routeで `~/.codex/scripts/sync-roadmap.py` の検査結果を記録する。Phase 3/4/5も同じTASK、root、run-idでphaseだけを変える。log-onlyではRoadmap生成skipを記録する。通常作業には同期やskip証跡を要求しない。
 
+## 実装へ渡す計画の追加契約
+
+roadmapの実装開始には[計画から実装への判断契約](plan-execution-contract.md)を適用する。元依頼は00_request.md、判断と手順は30_plan.htmlの見える本文、独立審査記録はplan-review.jsonに置く。閲覧用briefと実行用`--execution`を区別し、実行用には手順・制約を短縮しない。
+
 ## 00_spec.md と30_plan.html
 
 00_spec.mdは概要、背景・目的、現在の事実、採用判断、未確定、必須/任意要件、非機能要件、制約を持つ。
@@ -76,6 +80,11 @@ task-meta.jsonはgeneratorが管理するmachine-owned manifestである。人�
 ```html
 <main id="plan-document" data-plan-schema="2">
   <h1 data-plan-title>計画の題名</h1>
+  <section data-field="execution-contract-version"><h2>実行契約の版</h2><p>1</p></section>
+  <section data-field="intent"><h2>目的</h2><p>元の依頼にある困り事と解消する状態。</p></section>
+  <section data-field="assumptions"><h2>前提</h2><p>確認したsourceと事実、未確認事項、再確認する条件。</p></section>
+  <section data-field="approach"><h2>方針</h2><p>採用案、他案と比較した理由、対象外。</p></section>
+  <section data-field="success-scenarios"><h2>成功場面</h2><p>利用開始の状態、操作、観測する結果。</p></section>
   <p data-plan-intro>なぜ行うか、到達点、全体の進め方を書く。</p>
   <section data-field="required-sources">
     <ul>
@@ -93,6 +102,9 @@ task-meta.jsonはgeneratorが管理するmachine-owned manifestである。人�
     <section data-field="implementation-evidence"><h3>実装根拠</h3>
       <p data-source-ref="workspace:src/example.py">変更理由と実際のsource位置。</p>
     </section>
+    <section data-field="decision-boundaries"><h3>判断境界</h3><p>実装者が選べることと変更してはいけないこと。</p></section>
+    <section data-field="stop-conditions"><h3>停止条件</h3><p>想定とsourceが違う場合の停止と戻り先。</p></section>
+    <section data-field="negative-paths"><h3>失敗例</h3><p>仕様に合っても目的を満たさない例とその検出方法。</p></section>
     <section data-field="outputs"><h3>成果物</h3><p>確認できる出力。</p></section>
     <section data-field="verification"><h3>検証</h3><p>実際に確かめる方法。</p></section>
     <section data-field="acceptance"><h3>受入条件</h3>
@@ -115,7 +127,7 @@ checkpoint.mdのIDは `- [x] A1: 確認内容` のような明示的な箇条書
 
 ### 既存Markdownとの互換
 
-既存taskはHTMLがない場合だけ`30_plan.md`を従来どおり読み、`40_progress.md`の既存挙動・hash・completion条件も維持する。両方存在すればHTMLだけを使い、MD siblingの変更で新しい計画の内容やhashを変えない。不正HTMLをvalidなMDで隠さない。個別移行ではHTMLを追加し、元MDを削除・改名・自動更新しない。全taskの一括移行はしない。他Skillの過去例に30_plan.mdの参照が残っていても、新規計画は共通resolverが選ぶ30_plan.htmlを使う。
+既存taskはHTMLがない場合だけ`30_plan.md`を従来どおり読み、`40_progress.md`の既存挙動・hashと下流のcompletion形式も互換維持する。ただし実装再開とPhase 3–5への遷移には追加の実行契約を適用し、HTML契約と審査が揃うまで停止する。両方存在すればHTMLだけを使い、MD siblingの変更で新しい計画の内容やhashを変えない。不正HTMLをvalidなMDで隠さない。個別移行ではHTMLを追加し、元MDを削除・改名・自動更新しない。全taskの一括移行はしない。他Skillの過去例に30_plan.mdの参照が残っていても、新規計画は共通resolverが選ぶ30_plan.htmlを使う。
 
 legacy MDのTask heading/required_sources/ui-preview-jsonは過去入力の互換契約であり、新規authoring手順ではない。legacyだけは`task:30_plan.md`と`task:40_progress.md`をmandatory sourceとして扱う。
 
@@ -222,8 +234,9 @@ solutionsの必須frontmatterは title と created。新規memories / solutions�
 
     python3 ~/.codex/scripts/task-context.py list --memory-root ROOT --limit N
     python3 ~/.codex/scripts/task-context.py brief TASK --memory-root ROOT [--task-id ID]
+    python3 ~/.codex/scripts/task-context.py brief TASK --memory-root ROOT --task-id ID --execution
 
-listの`--memory-root ROOT`は繰り返し指定でき、briefの`--task-id ID`は任意である。
+listの`--memory-root ROOT`は繰り返し指定でき、閲覧用briefの`--task-id ID`は任意である。実装へ渡す場合は最後の`--execution`形式を使い、非zeroなら停止する。
 
 tokenとload量は単位を分けて記録する。
 

@@ -115,3 +115,7 @@ commit / PR文案だけは、価値がある場合に`~/.codex/scripts/draft_del
 intentの詳細な組合せは、対象Skill、projectのAGENTS.md、team-run / HTML / securityの正本を参照する。routeが重なるときはuser-visible deliverableを所有するrouteをprimaryにし、他をsourceまたはreviewへ限定する。
 
 Skill、plugin、collaboration capabilityが使えないときは存在を捏造しない。local fallbackまたはlead逐次実行へ戻し、同じacceptance・安全境界・fresh検証を維持する。主経路の失敗を旧generatorや別CLIへ黙ってfallbackしない。
+
+## 計画から実装への遷移
+
+roadmapの実装と委譲は[計画から実装への判断契約](plan-execution-contract.md)に従う。元の依頼と前提の独立審査、次に計画の実行可能性の審査を行う。`~/.codex/scripts/task-context.py brief TASK --memory-root ROOT --task-id ID --execution`の非zeroは実装停止とする。成功したexecutionBriefを全文で渡し、閲覧用の短縮selectedTaskを実装契約に使わない。sourceと前提の不一致はleadへ戻し、実装者が受入条件を弱めない。

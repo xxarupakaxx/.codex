@@ -41,6 +41,10 @@ UI変更のBefore / Afterは同じTask内の実際のHTML mockを表示する。
 
 計画のarchitecture図はTask順や旧Codemapから自動生成しない。実際のcomponentとdata flowを表す明示fragmentだけをArchifyへ渡す。入力、固定runtime、cache、失敗時の表示は[Archify overview contract](references/archify-overview.md)に従う。旧`codemap.*`は履歴互換用であり、新しい計画の入力・preflight・図には使わない。
 
+## 実装へ渡す前の確認
+
+表示成功は実装開始条件を満たした意味ではない。[計画から実装への判断契約](../../context/plan-execution-contract.md)の本文fieldと独立審査を用意し、task-context.pyの`--execution`で確認する。未審査でもPhase 2で表示して計画をレビューできる。
+
 ## 表示完了の確認
 
 - **機械判定**: parser、schema、raw source hash、UI anchor、architecture `--check`、sync、static gate。

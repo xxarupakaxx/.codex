@@ -42,7 +42,7 @@ Roadmapのschema、v2とlegacyの境界、source hash、timeline、invalid時の
 
 コード変更では、rules/complexity-budget.mdの方法で要素ごとのtargetを記録し、実装時actualとreview時varianceを更新する。targetはsoft goalであり、必要な機能・安全性・testを行数合わせで削らない。materialな技術判断だけADR criteriaに従って記録する。deepening-planは追加調査で計画が変わる場合だけ使う。
 
-計画reviewはリスクに応じた最小の独立checkerを選ぶ。固定全員reviewや固定roundを要求しない。CRITICAL、正しさに関わるIMPORTANT / MINORを修正し、未解決findingが残る場合は修正→fresh検証→必要なreviewを続ける。
+計画reviewは[計画から実装への判断契約](plan-execution-contract.md)に従い、元の依頼・目的・前提の審査を先に行い、その後に計画の実行可能性を審査する。必要な本文fieldとplan-review.jsonを保存する。リスクに応じた最小の独立checkerを選ぶ。固定全員reviewや固定roundを要求しない。CRITICAL、正しさに関わるIMPORTANT / MINORを修正し、未解決findingが残る場合は修正→fresh検証→必要なreviewを続ける。
 
 ### Phase 2.5: Acceptance Contract
 
@@ -50,7 +50,7 @@ roadmap routeでは、各Taskのacceptanceをcheckpointまたは同等のartifac
 
 ### Phase 3: 実装
 
-開始前に最新のDelegation Decision、route、acceptance、write scopeを照合する。独立した実装単位は条件が揃うときだけworker / implementerへ渡し、同じfileを複数writerに割り当てない。小さく密結合した作業はleadが逐次実装する。
+開始前に最新のDelegation Decision、route、acceptance、write scopeを照合する。roadmapでは対象sourceへの最初のwriteより前にPhase 3 syncとtask-context.py briefの`--execution`を実行し、終了コード0かつexecutionReadiness.canImplementがtrueのexecutionBriefを使う。未審査・差戻し・stale・契約欠落ならPhase 2へ戻す。独立した実装単位は条件が揃うときだけworker / implementerへ渡し、同じfileを複数writerに割り当てない。小さく密結合した作業はleadが逐次実装する。
 
 実装者にはJIT briefだけを渡す。briefは目的、次の未完了Task、対象、依存、検証、決定、不明点、source参照を含み、会話全文やsecretを含めない。task-contextは`~/.codex/scripts/task-context.py`を明示root・task付きで使い、引数と出力schemaはそのhelperの実装とtestを正本として扱う。ここで別schemaを発明せず、要求外の抽象化、設定、refactor、外部write、policy promotionを追加しない。
 
@@ -58,7 +58,7 @@ roadmap routeでは、各Taskのacceptanceをcheckpointまたは同等のartifac
 
 freshな直接検証を先に行い、対象のAGENTS.md、test、lint、typecheck、HTML artifact gateを実行する。architecture figureがある場合は、fragmentとmatching SVGの`plan_architecture.py --check`も実行する。roadmap routeのcompletion検査は既存syncとEvidence Bundle validatorへ接続し、log-onlyにEvidence Bundleを強制しない。構造検査は意味的なuser outcomeの代替ではない。
 
-変更リスクに応じて最小の独立checkerを選ぶ。レビュー結果を05_log.mdへ全件記録し、CRITICALと正しさに関わる指摘は修正する。LLMだけの反復を無制限に続けず、必要なら静的検査、外部feedback、人間gateを挟む。未解決finding、stale source、対応しないacceptance、計画外のwriteがあればPhase 2または3へ戻す。
+最終reviewも元の依頼・目的・前提から入り、成果物が成功場面を満たすかを内部品質より先に判定する。仕様に合うだけでは合格にしない。変更リスクに応じて最小の独立checkerを選ぶ。レビュー結果を05_log.mdへ全件記録し、CRITICALと正しさに関わる指摘は修正する。LLMだけの反復を無制限に続けず、必要なら静的検査、外部feedback、人間gateを挟む。未解決finding、stale source、対応しないacceptance、計画外のwriteがあればPhase 2または3へ戻す。
 
 ### Phase 4.5: 引継ぎ
 

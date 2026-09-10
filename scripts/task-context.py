@@ -27,6 +27,16 @@ except ModuleNotFoundError:
     resolve_plan_source = parser_module.resolve_plan_source
 
 
+try:
+    from plan_execution_contract import readiness, execution_brief
+except ModuleNotFoundError:
+    execution_spec = importlib.util.spec_from_file_location("plan_execution_contract", Path(__file__).with_name("plan_execution_contract.py"))
+    execution_module = importlib.util.module_from_spec(execution_spec)
+    execution_spec.loader.exec_module(execution_module)
+    readiness = execution_module.readiness
+    execution_brief = execution_module.execution_brief
+
+
 SCHEMA_VERSION = 1
 DEFAULT_LIMIT = 25
 MAX_LIMIT = 100
@@ -364,7 +374,7 @@ def list_context(memory_roots: Sequence[str | Path], *, limit: int = DEFAULT_LIM
     }
 
 
-def brief_context(task_path: str | Path, *, memory_roots: Sequence[str | Path] | None = None, task_id: str | None = None) -> dict[str, Any]:
+def brief_context(task_path: str | Path, *, memory_roots: Sequence[str | Path] | None = None, task_id: str | None = None, execution: bool = False) -> dict[str, Any]:
     """Brief one explicitly named task, using the canonical plan parser."""
     if memory_roots:
         roots = [_root(value) for value in memory_roots]
@@ -383,7 +393,8 @@ def brief_context(task_path: str | Path, *, memory_roots: Sequence[str | Path] |
         "htmlPath": refs["roadmap.html"]["path"], "htmlExists": refs["roadmap.html"]["exists"],
         "planSource": "30_plan.html" if refs["30_plan.html"]["exists"] else ("30_plan.md" if refs["30_plan.md"]["exists"] else ""),
         "sourceRefs": {name: refs[name] for name in ARTIFACTS if name not in {"roadmap.html", "roadmap-snapshot.json"}},
-        "limitations": "briefは要約と正本参照を返すだけで、要件・制約全文の充足を保証しません。",
+        "executionReadiness": {"canImplement": False, "blockers": ["plan_missing_or_invalid"]},
+        "limitations": "briefは閲覧用。実装には--executionを使う。要約と正本参照を返すだけで、要件・制約全文の充足を保証しません。",
     }
     if metadata.get("metadataError"):
         result["metadataError"] = metadata["metadataError"]
@@ -437,6 +448,13 @@ def brief_context(task_path: str | Path, *, memory_roots: Sequence[str | Path] |
         "constraints": _section(spec, ("制約事項", "制約")), "acceptanceIds": acceptance_ids, "acceptanceIdCount": acceptance_count, "acceptanceIdsTruncated": acceptance_truncated,
         "nextReads": [{"name": name, "reason": reason} for name, reason in (("00_spec.md", "goal・scope・制約"), ("30_plan.html" if refs["30_plan.html"]["exists"] else "30_plan.md", "Taskの正本"), ("40_progress.md", "進捗の補足"), ("checkpoint.md", "acceptanceの正本"), ("80_review.md", "reviewと残課題"), ("90_verification.md", "検証結果")) if refs[name]["exists"]],
     })
+    result["executionReadiness"] = readiness(task, model)
+    if execution:
+        result["executionBrief"] = execution_brief(task, model, chosen)
+        result["executionReadiness"] = result["executionBrief"]["gate"]
+        result["state"] = "execution-ready" if result["executionReadiness"]["canImplement"] else "execution-blocked"
+        if not result["executionReadiness"]["canImplement"]:
+            result["selectedTask"] = None
     return result
 
 
@@ -450,14 +468,15 @@ def main(argv: Sequence[str] | None = None) -> int:
     brief_parser.add_argument("task_path")
     brief_parser.add_argument("--memory-root", action="append", default=[], dest="memory_roots")
     brief_parser.add_argument("--task-id")
+    brief_parser.add_argument("--execution", action="store_true", help="require reviewed execution contract; fail closed")
     args = parser.parse_args(argv)
     try:
-        result = list_context(args.memory_roots, limit=args.limit) if args.command == "list" else brief_context(args.task_path, memory_roots=args.memory_roots, task_id=args.task_id)
+        result = list_context(args.memory_roots, limit=args.limit) if args.command == "list" else brief_context(args.task_path, memory_roots=args.memory_roots, task_id=args.task_id, execution=args.execution)
     except (ContextError, OSError) as exc:
         print(json.dumps({"schemaVersion": SCHEMA_VERSION, "status": "error", "error": _compact(exc)}, ensure_ascii=False), file=sys.stderr)
         return 2
     print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
-    return 0
+    return 2 if args.command == "brief" and args.execution and not result.get("executionReadiness", {}).get("canImplement") else 0
 
 
 if __name__ == "__main__":

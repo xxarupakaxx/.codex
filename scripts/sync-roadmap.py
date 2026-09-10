@@ -65,6 +65,15 @@ except ModuleNotFoundError:
     validate_phase5_completion = _TASK_COMPLETION_MODULE.validate_phase5_completion
 
 
+try:
+    from plan_execution_contract import readiness
+except ModuleNotFoundError:
+    execution_spec = importlib.util.spec_from_file_location("plan_execution_contract", Path(__file__).with_name("plan_execution_contract.py"))
+    execution_module = importlib.util.module_from_spec(execution_spec)
+    execution_spec.loader.exec_module(execution_module)
+    readiness = execution_module.readiness
+
+
 ELIGIBLE_ROUTES = {"explicit-roadmap", "roadmap"}
 ROUTE_PATTERN = re.compile(
     r"roadmap_route:\s*(explicit-roadmap|roadmap|log-only)(?=[：:\s`]|$)"
@@ -986,6 +995,11 @@ def synchronize(
                 "reason": "plan_diagnostics_present",
                 "diagnostics": diagnostics,
             }
+    if phase in {"3", "4", "5"}:
+        execution_gate = readiness(task_dir, plan_model)
+        if not execution_gate["canImplement"]:
+            return 2, {"status": "failed", "route": route, "phase": phase,
+                       "reason": "plan_execution_blocked", "execution_gate": execution_gate}
     completion_gate: dict[str, object] | None = None
     if phase == "5":
         try:
@@ -1147,6 +1161,10 @@ def synchronize(
         )
     try:
         validator.assert_plan_source_current(task_dir, source_path.name, str(plan_model["planSourceRawSha256"]))
+        if phase in {"3", "4", "5"}:
+            current_gate = readiness(task_dir, plan_model)
+            if not current_gate["canImplement"] or current_gate.get("reviewReceiptSha256") != execution_gate.get("reviewReceiptSha256"):
+                raise ValueError("plan execution review changed during generation")
         if any(path.is_symlink() or not path.is_file() for path in (*artifacts, task_dir / "task-meta.json") if path.exists() or path.is_symlink()):
             raise ValueError("published artifact is not a regular file")
     except (OSError, ValueError) as exc:
