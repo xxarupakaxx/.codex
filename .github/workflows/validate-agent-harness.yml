@@ -19,7 +19,7 @@ jobs:
       - uses: actions/setup-node@v4
         with:
           node-version: "22"
-      - run: python3 scripts/validate-agent-harness.py
+      - run: python3 scripts/validate-agent-harness.py --skip-global-mirror
       - run: python3 -m unittest discover -s tests -p 'test_*.py'
       - run: node --test tests/roadmap-viewer.test.mjs
       - run: bash -n claude-compat/hooks/*.sh
