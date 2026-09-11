@@ -21,6 +21,7 @@ Skillやテンプレートの定型を理由に、この原則に反する加筆
 ## 作業の進め方
 
 - 日本語で応答する。変更依頼では、実装、必要な検証、その変更に起因する不具合の修正まで進める。結果と残課題を簡潔に報告する。
+- **IMPORTANT:** 変更依頼は、実装と必要な検証が完了したら、自分の変更だけを論理単位でコミットしてから報告する。user由来のdirty stateは含めず、コミット不能なら理由を報告する。push・PR作成は明示依頼時のみ行う。
 - 最初に目的、完了条件、対象範囲を把握し、`context/workflow-rules.md`のPhase 0で必要な作業規模を選ぶ。通常の局所作業は、対象と必要な依存を確認して直接進める。
 - 未確定な点は結果への影響で判断する。低riskの選択は合理的な仮定を明示して進め、依頼範囲を大きく変える選択だけ確認する。
 - 現在の要求を満たす最小の変更を選ぶ。追加の調査・test・reviewは、未達の完了条件や具体的な不明点を解消するときに行う。
@@ -36,6 +37,10 @@ Skillやテンプレートの定型を理由に、この原則に反する加筆
 - 調査・計画だけの依頼では変更しない。実装済みと動作確認済み、機械検査の成功とユーザーの目的達成を区別する。
 - 主経路の失敗を暗黙fallbackで隠さない。長時間・外部通信を伴うscriptは開始、retry、完了、失敗をsecretなしで記録する。
 
+## UI 変更時の fresh review
+
+UI の新規画面・コンポーネント追加、またはユーザーが観察できる挙動・レイアウト構造を変える実装を終えたら、`rules/ui-fresh-review.md` に従う。余白・色・既存文言の微修正など、挙動や構造を変えない変更には適用しない。
+
 ## 必要な場面で読む正本
 
 | 場面 | 正本 |
@@ -46,6 +51,7 @@ Skillやテンプレートの定型を理由に、この原則に反する加筆
 | 複数moduleの影響を地図で追う | `context/codemap.md` |
 | 計画を表示・同期する | `skills/viewing-plans/SKILL.md`、`scripts/sync-roadmap.py` |
 | Team Runを使う | `context/team-run.md`、`skills/team-run/SKILL.md` |
+| UI変更後の独立レビュー | `rules/ui-fresh-review.md` |
 | code変更量・重要設計判断を扱う | `rules/complexity-budget.md`、`rules/adr-criteria.md` |
 | secretや対象pathを扱う | `rules/security.md` |
 | Git操作・code reviewを行う | `rules/common-git-workflow.md`、`rules/code-review-philosophy.md` |
