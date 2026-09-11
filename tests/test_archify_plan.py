@@ -174,7 +174,7 @@ def fake_container_inspect() -> dict[str, object]:
 class ArchifyPlanTests(unittest.TestCase):
     def invoke_with_fake(self, fake, callback):
         with TemporaryDirectory(prefix="archify-plan-test-") as directory:
-            with mock.patch.object(MODULE, "CACHE_ROOT", Path(directory)), mock.patch.object(
+            with mock.patch.object(MODULE, "CACHE_ROOT", Path(directory) / "cache"), mock.patch.object(
                 MODULE, "_load_config", return_value=("revision-test", fake_descriptor())
             ), mock.patch.object(MODULE, "_invoke_renderer", side_effect=fake):
                 return callback()
