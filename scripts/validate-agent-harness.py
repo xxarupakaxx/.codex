@@ -37,6 +37,7 @@ REQUIRED_GLOBAL_MIRRORS = (
     "AGENTS.md",
     *REQUIRED_ROLE_FILES,
     "scripts/sync-roadmap.py",
+    "scripts/validate-durable-workflow-evidence.py",
     "scripts/validate-agent-harness.py",
     "skills/lfg/SKILL.md",
     "workflows/implementation-drive.js",
@@ -53,6 +54,7 @@ REQUIRED_REFERENCES = (
     "rules/security.md",
     "rules/common-git-workflow.md",
     "rules/code-review-philosophy.md",
+    "rules/durable-workflow-safety.md",
     "skills/team-run/SKILL.md",
     "scripts/sync-roadmap.py",
 )
@@ -173,12 +175,34 @@ LIFECYCLE_REQUIRED_MARKERS = {
         "writes_performed",
         "approval evidence",
     ),
+    "rules/durable-workflow-safety.md": (
+        "max_cardinality",
+        "serialized_bytes",
+        "history_growth",
+        "rate_limit_scope",
+        "terminal_convergence",
+        "pollingは全終端状態で停止する",
+        "dry-runは副作用がないことを示す機能",
+        "scripts/validate-durable-workflow-evidence.py",
+    ),
     "skills/compounding-knowledge/SKILL.md": (
         "L0はrecordのみ",
         "replayで元の失敗を防げた場合だけ",
         "levelに関係なく人間承認",
     ),
 }
+HARNESS_IMPROVER_REQUIRED_MARKERS = (
+    "~/.codex/sessions/YYYY/MM/DD/*.jsonl",
+    "Escaped Defect Record",
+    "earliest_preventable_gate",
+    "replayが旧ハーネスでは通過し、新ハーネスでは失敗する",
+    "重大なescaped defectへ「3回以上」の閾値を要求しない",
+)
+HARNESS_IMPROVER_FORBIDDEN_MARKERS = (
+    ".claude/projects",
+    "~/.claude/CLAUDE.md",
+    "~/.claude/rules/",
+)
 LIFECYCLE_FORBIDDEN_MARKERS = {
     "scheduled-tasks/pr-review/SKILL.md": (
         "~/.claude",
@@ -560,6 +584,26 @@ def validate_lifecycle_contract(repo_root: Path) -> list[str]:
     return errors
 
 
+def validate_harness_improver_contract(repo_root: Path) -> list[str]:
+    relative = "agents/harness-improver.toml"
+    path = repo_root / relative
+    if not path.is_file():
+        return [f"missing harness improver role: {relative}"]
+    role, errors = load_toml(path)
+    if role is None:
+        return errors
+    instructions = role.get("developer_instructions")
+    if not isinstance(instructions, str):
+        return [f"{relative}: developer_instructions must be a string"]
+    for marker in HARNESS_IMPROVER_REQUIRED_MARKERS:
+        if marker not in instructions:
+            errors.append(f"{relative} missing contract marker: {marker}")
+    for marker in HARNESS_IMPROVER_FORBIDDEN_MARKERS:
+        if marker in instructions:
+            errors.append(f"{relative} contains stale Claude path: {marker}")
+    return errors
+
+
 def validate_full_replay(repo_root: Path | None = None) -> list[str]:
     root = repo_root or Path(__file__).resolve().parents[1]
     fixture_dir = root / "tests" / "fixtures" / "delivery-lifecycle"
@@ -632,6 +676,7 @@ def main() -> int:
         errors.extend(validate_artifact_dir(artifact_dir.resolve()))
     if args.contracts or args.full_replay:
         errors.extend(validate_lifecycle_contract(repo_root))
+        errors.extend(validate_harness_improver_contract(repo_root))
     if args.full_replay:
         errors.extend(validate_full_replay(repo_root))
 

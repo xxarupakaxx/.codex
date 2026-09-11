@@ -53,6 +53,7 @@ UI の新規画面・コンポーネント追加、またはユーザーが観�
 | Team Runを使う | `context/team-run.md`、`skills/team-run/SKILL.md` |
 | UI変更後の独立レビュー | `rules/ui-fresh-review.md` |
 | code変更量・重要設計判断を扱う | `rules/complexity-budget.md`、`rules/adr-criteria.md` |
+| batch・queue・durable workflow・pollingを変更する | `rules/durable-workflow-safety.md` |
 | secretや対象pathを扱う | `rules/security.md` |
 | Git操作・code reviewを行う | `rules/common-git-workflow.md`、`rules/code-review-philosophy.md` |
 

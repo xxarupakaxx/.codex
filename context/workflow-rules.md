@@ -22,6 +22,7 @@
 
 - 作業記録は会話の要点と最終報告で足りる。memory directory、Phaseごとのartifact、Delegation Decision、派生図生成、Roadmap同期を一律には要求しない。
 - code変更では呼出元・影響先・関連testを必要な範囲で確認する。この範囲が把握できなければ調査し、複数moduleのarchitecture/data flowを計画へ残す必要があれば、明示fragmentとArchify figureへ記録する。
+- batch、queue、durable workflow、外部API同期、pollingを変更する場合は、`rules/durable-workflow-safety.md`で最大件数時のpayload、履歴増加、rate limit、全終端状態の収束を検証する。dry-runの非更新性だけで処理容量や停止性を合格扱いにしない。
 - testは変更箇所と影響先に合わせて選ぶ。全suiteはprojectの必須条件、共通基盤への影響、関連検証だけでは解消できない懸念がある場合に実行する。文書だけの変更には差分・参照・内容の確認を使う。
 - 新しい変更、失敗、未解消の懸念がなければ、合格済みの検証を繰り返さない。必要な独立reviewは具体的なriskに対応させる。
 - 変更量は`rules/complexity-budget.md`に従って判断・報告する。通常作業に専用の計画artifactは要求しない。

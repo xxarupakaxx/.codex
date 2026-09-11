@@ -416,6 +416,25 @@ class ValidateAgentHarnessTest(unittest.TestCase):
             errors,
         )
 
+    def test_harness_improver_uses_codex_sessions_and_replay(self) -> None:
+        self.write(
+            "agents/harness-improver.toml",
+            "developer_instructions = '''"
+            + "\n".join(MODULE.HARNESS_IMPROVER_REQUIRED_MARKERS)
+            + "'''\n",
+        )
+
+        self.assertEqual(MODULE.validate_harness_improver_contract(self.root), [])
+
+        self.write(
+            "agents/harness-improver.toml",
+            "developer_instructions = '''.claude/projects'''\n",
+        )
+        errors = MODULE.validate_harness_improver_contract(self.root)
+
+        self.assertTrue(any("stale Claude path" in error for error in errors))
+        self.assertTrue(any("missing contract marker" in error for error in errors))
+
 
 if __name__ == "__main__":
     unittest.main()
