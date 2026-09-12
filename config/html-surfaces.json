@@ -347,6 +347,7 @@
     }
   ],
   "literalExceptions": [
+    {"path": "scripts/decision_explanations.py", "contains": "30_plan.html", "reason": "read-only canonical-plan reference in diagnostic guidance, not an HTML producer", "removeWhen": "helper stops referencing this plan or begins producing HTML"},
     {"path": "claude-compat/mcp-servers/workflow-html-app/server.ts", "contains": ".html", "reason": "Retired workflow-html-app source retained as legacy; not registered or built by the live display workflow.", "removeWhen": "Historical source is removed with explicit approval."},
     {"path": "mcp-servers/workflow-html-app/server.ts", "contains": ".html", "reason": "Retired workflow-html-app source retained as legacy; not registered or built by the live display workflow.", "removeWhen": "Historical source is removed with explicit approval."},
     {"path": "scripts/task-context.py", "contains": "roadmap.html", "reason": "read-only task artifact reference, not a producer", "removeWhen": "consumer stops referencing Roadmap or begins producing HTML"},

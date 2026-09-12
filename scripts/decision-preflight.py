@@ -12,7 +12,26 @@ from typing import Any, Sequence
 sys.dont_write_bytecode = True
 
 from decision_evidence import ID_RE, MAX_BYTES, evaluate_decision_evidence
+from decision_explanations import explain_argument_error, explain_decision_result, explain_input_error
 from roadmap_plan_contract import PlanContractError, resolve_plan_source
+
+
+class _ArgumentParser(argparse.ArgumentParser):
+    safe_errors = False
+
+    def error(self, message: str) -> None:
+        if self.safe_errors:
+            print(explain_argument_error(), file=sys.stderr)
+            raise SystemExit(2)
+        super().error(message)
+
+
+def _requests_explanation(argv: Sequence[str]) -> bool:
+    for value in argv:
+        option = value.partition("=")[0]
+        if len(option) > 2 and "--explain".startswith(option):
+            return True
+    return False
 
 
 def _task_inputs(task_value: str) -> tuple[Path, list[str], str]:
@@ -60,17 +79,24 @@ def _template(acceptance: list[str], request_sha256: str) -> dict[str, Any]:
 
 
 def main(argv: Sequence[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description=__doc__)
+    raw_argv = list(sys.argv[1:] if argv is None else argv)
+    parser = _ArgumentParser(description=__doc__)
+    parser.safe_errors = _requests_explanation(raw_argv)
     parser.add_argument("task", help="existing task directory containing the plan and request")
-    parser.add_argument("--template", action="store_true", help="print an incomplete record for the user to fill")
-    args = parser.parse_args(argv)
+    output = parser.add_mutually_exclusive_group()
+    output.add_argument("--template", action="store_true", help="print an incomplete record for the user to fill")
+    output.add_argument("--explain", action="store_true", help="explain the existing result in Japanese")
+    args = parser.parse_args(raw_argv)
     try:
         task, acceptance, request_sha256 = _task_inputs(args.task)
         result = _template(acceptance, request_sha256) if args.template else evaluate_decision_evidence(task, acceptance, request_sha256)
     except (OSError, RuntimeError, TypeError, ValueError, PlanContractError) as exc:
-        print(json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False, sort_keys=True), file=sys.stderr)
+        if args.explain:
+            print(explain_input_error(), file=sys.stderr)
+        else:
+            print(json.dumps({"status": "error", "error": str(exc)}, ensure_ascii=False, sort_keys=True), file=sys.stderr)
         return 2
-    print(json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
+    print(explain_decision_result(result) if args.explain else json.dumps(result, ensure_ascii=False, indent=2, sort_keys=True))
     return 0 if args.template or result["readyForReview"] else 1
 
 

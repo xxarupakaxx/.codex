@@ -13,7 +13,7 @@
 1. taskの`00_request.md`に元の依頼を保存する。`30_plan.html`の受入条件へIDを付け、`execution-contract-version`を`2`にする。
 2. `python3 ~/.codex/scripts/decision-preflight.py TASK --template`で未記入の雛形を表示する。この操作ではファイルを作らない。対象taskに新しく`decision-evidence.json`を開き、表示されたJSONを貼り付けて保存する。既存の記録があれば上書きせず読み直す。内容を実際の観測結果で埋める。雛形は合格例ではない。
 3. 根拠の抜粋と観測方法を`decision-sources/observation.md`へ保存する。個人情報・secret・認証sessionを入れない。URLは出典の記録であり、検査中に取得しない。`shasum -a 256 "TASK/decision-sources/observation.md"`で表示される先頭の64桁を、その資料の`sha256`へ記録する。
-4. `python3 ~/.codex/scripts/decision-preflight.py TASK`で対応漏れや期限切れを確認する。不足があれば資料や要件へ戻る。
+4. `python3 ~/.codex/scripts/decision-preflight.py TASK`で対応漏れや期限切れを確認する。不足があれば資料や要件へ戻る。診断codeから確認先を読み取りにくい場合は、`--explain`を付けると、同じ判定を理由・確認する記録・次の確認に分けて日本語で表示する。どちらも記録を変更しない。
 5. makerから独立したcheckerが元依頼、前提、資料の内容を審査し、その後に計画を審査する。leadは実際の出力を照合し、`plan-review.json`の`decisionEvidenceSha256`へ審査したJSONのSHA-256を記録する。
 6. `python3 ~/.codex/scripts/task-context.py brief TASK --task-id ID --execution`で開始可否を確認する。`readyForReview`だけで実装を開始しない。
 
@@ -46,6 +46,8 @@ JSONの最上位は`schemaVersion: 1`、元依頼の`requestSha256`、`claims`�
 | `readyForReview: true` | 構造と参照が揃った状態。独立した目的・計画reviewへ進む |
 | `warnings`あり | 重要ではない未確認の前提などをreviewで確認し、残す理由を説明する |
 | `canImplement: false` | 既存の実装開始検査で示された不足へ戻る。審査済みの根拠が変更された場合も再審査する |
+
+`--explain`はblockersとwarningsを分けて表示する。warningsは停止理由でも承認でもない。表示が長い場合は20件で区切り、省略件数を示す。診断codeをすべて確認するときは`--explain`を外した既定JSONを使う。説明は記録本文や任意のfieldを転載せず、未知の診断は未分類として残す。壊れたJSONや入力不備を成功扱いにはしない。`--template`とは同時に指定できない。
 
 すべての受入条件を少なくとも一つのclaimへ結ぶ。少なくとも一つは`critical: true`にする。重要なclaimは`status: supported`と実在する非syntheticの根拠を必要とし、反証の調査が未実施・未解決なら停止する。AIが作った想定インタビューを実在の利用者の証言として扱わない。
 
