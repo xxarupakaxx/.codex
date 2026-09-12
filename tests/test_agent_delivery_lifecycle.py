@@ -52,7 +52,7 @@ def valid_work_packet() -> dict[str, object]:
 def valid_evidence_bundle() -> dict[str, object]:
     return {
         "artifact_id": "eb-1", "source_hash": "abc",
-        "acceptance_evidence": ["A1:unit-test"],
+        "acceptance_evidence": ["A1|PASS|source:task:90_verification.md#L1"],
         "tests": ["python3 -m unittest tests.test_agent_delivery_lifecycle"],
         "findings": [], "residual_risks": [],
         "writes_performed": ["core"],
@@ -590,6 +590,56 @@ class ArtifactContractTest(unittest.TestCase):
                     validate_artifact("work_packet", payload),
                 )
 
+    def test_scope_globs_have_portable_star_and_globstar_semantics(self) -> None:
+        cases = (
+            ("src/*.py", "src/a.py", False),
+            ("src/*.py", "src/nested/a.py", True),
+            ("src/**", "src/nested/a.py", False),
+            (".", "src/nested/a.py", False),
+            ("*", "src/nested/a.py", False),
+            ("./src/**", "src/nested/a.py", False),
+        )
+        for scope, owned, outside in cases:
+            with self.subTest(scope=scope, owned=owned):
+                errors = validate_artifact(
+                    "work_packet",
+                    {**valid_work_packet(), "scope": [scope], "owned_paths": [owned]},
+                )
+                self.assertEqual(
+                    any(error.startswith("owned_paths must be within scope") for error in errors),
+                    outside,
+                )
+
+    def test_scope_and_owned_directory_allow_one_trailing_slash(self) -> None:
+        payload = {
+            **valid_work_packet(),
+            "scope": ["src/"],
+            "owned_paths": ["src/package/"],
+        }
+
+        self.assertEqual(validate_artifact("work_packet", payload), [])
+
+    def test_scope_and_owned_paths_reject_nonportable_or_ambiguous_paths(self) -> None:
+        for field, path in (
+            ("scope", "src/?.py"),
+            ("scope", "src/[ab].py"),
+            ("scope", "src/{a,b}.py"),
+            ("scope", "src/***.py"),
+            ("scope", "src//a.py"),
+            ("scope", "src//"),
+            ("scope", "src///"),
+            ("scope", "././src"),
+            ("owned_paths", "src/*.py"),
+            ("owned_paths", "src//a.py"),
+            ("owned_paths", "src//"),
+            ("owned_paths", "././src/a.py"),
+        ):
+            with self.subTest(field=field, path=path):
+                errors = validate_artifact(
+                    "work_packet", {**valid_work_packet(), field: [path]}
+                )
+                self.assertIn(f"{field} must contain safe relative paths", errors)
+
     def test_work_packet_rejects_unknown_completion_target(self) -> None:
         payload = {**valid_work_packet(), "completion_target": "demoed"}
 
@@ -850,6 +900,80 @@ class LoopTransitionTest(unittest.TestCase):
         })
         self.assertEqual(decision.action, "IMPLEMENT")
 
+    def test_prd_flow_rebuilds_packet_with_unrelated_or_duplicate_acceptance(self) -> None:
+        for acceptance_ids in (["A2"], ["A1", "A1"]):
+            with self.subTest(acceptance_ids=acceptance_ids):
+                decision = next_action({
+                    "state": "SURVEYED", "route_id": "prd-flow",
+                    "artifact_payloads": {
+                        "approved_prd": self.valid_prd(),
+                        "work_packet": {
+                            **self.valid_work_packet(),
+                            "acceptance_ids": acceptance_ids,
+                        },
+                    },
+                })
+
+                self.assertEqual(decision.action, "CREATE_WORK_PACKET")
+
+        duplicate_prd = {**self.valid_prd(), "acceptance_ids": ["A1", "A1"]}
+        decision = next_action({
+            "state": "SURVEYED", "route_id": "prd-flow",
+            "artifact_payloads": {
+                "approved_prd": duplicate_prd,
+                "work_packet": self.valid_work_packet(),
+            },
+        })
+        self.assertEqual(decision.action, "CREATE_WORK_PACKET")
+
+    def test_prd_flow_binds_packet_scope_and_explicit_exclusions(self) -> None:
+        cases = (
+            ({"scope": ["other"], "owned_paths": ["other/file.py"]}, "outside"),
+            ({"scope": ["core"], "owned_paths": ["core/private.py"]}, "excluded"),
+            ({"scope": ["core/private.py"], "owned_paths": ["core/private.py"]}, "glob excluded"),
+        )
+        for packet_updates, label in cases:
+            with self.subTest(label=label):
+                exclusion = "path:core/*.py" if label == "glob excluded" else "core/private.py"
+                prd = {**self.valid_prd(), "out_of_scope": [exclusion]}
+                packet = {**self.valid_work_packet(), **packet_updates}
+                decision = next_action({
+                    "state": "SURVEYED", "route_id": "prd-flow",
+                    "artifact_payloads": {"approved_prd": prd, "work_packet": packet},
+                })
+                self.assertEqual(decision.action, "CREATE_WORK_PACKET")
+
+    def test_prd_flow_ignores_prose_out_of_scope_and_does_not_bind_source_hashes(self) -> None:
+        prd = {
+            **self.valid_prd(),
+            "source_hash": "prd-own-source",
+            "out_of_scope": ["N/A: 認証や課金は今回の対象外"],
+        }
+        decision = next_action({
+            "state": "SURVEYED", "route_id": "multi-packet-flow",
+            "artifact_payloads": {
+                "approved_prd": prd,
+                "work_packet": self.valid_work_packet(),
+            },
+        })
+
+        self.assertEqual(decision.action, "IMPLEMENT")
+
+    def test_prd_flow_rejects_unsupported_out_of_scope_glob(self) -> None:
+        for exclusion in ("path:core/?.py", "path:core/[ab].py", "path:core/{a,b}.py"):
+            with self.subTest(exclusion=exclusion):
+                decision = next_action({
+                    "state": "SURVEYED", "route_id": "prd-flow",
+                    "artifact_payloads": {
+                        "approved_prd": {
+                            **self.valid_prd(),
+                            "out_of_scope": [exclusion],
+                        },
+                        "work_packet": self.valid_work_packet(),
+                    },
+                })
+                self.assertEqual(decision.action, "CREATE_WORK_PACKET")
+
     def test_safety_change_waits_for_human(self) -> None:
         decision = next_action({"state": "SURVEYED", "safety_trigger": True, "approval_state": "pending"})
         self.assertEqual(decision.status, "WAITING_HUMAN")
@@ -942,6 +1066,67 @@ class LoopTransitionTest(unittest.TestCase):
             "artifact_payloads": {
                 "work_packet": {**self.valid_work_packet(), "completion_target": "piloted"},
                 "evidence_bundle": {**self.valid_evidence_bundle(), "completion_state": "piloted"},
+            },
+        })
+
+        self.assertEqual(decision.action, "DELIVER")
+
+    def test_reviewed_rebuilds_bundle_for_noncanonical_or_wrong_acceptance(self) -> None:
+        cases = (
+            ["A1: verified"],
+            ["A1|FAIL|source:task:90_verification.md#L1"],
+            ["UNRELATED|PASS|source:task:proof.md#L1"],
+            ["A1|PASS|source:task:proof/*.md#L1"],
+            ["A1|PASS|source:task:././proof.md#L1"],
+            [
+                "A1|PASS|source:task:90_verification.md#L1",
+                "A1|PASS|source:task:90_verification.md#L2",
+            ],
+        )
+        for acceptance_evidence in cases:
+            with self.subTest(acceptance_evidence=acceptance_evidence):
+                decision = next_action({
+                    "state": "REVIEWED", "high_findings": 0,
+                    "artifact_payloads": {
+                        "work_packet": self.valid_work_packet(),
+                        "evidence_bundle": {
+                            **self.valid_evidence_bundle(),
+                            "acceptance_evidence": acceptance_evidence,
+                        },
+                    },
+                })
+                self.assertEqual(decision.action, "BUILD_EVIDENCE_BUNDLE")
+
+    def test_reviewed_rebuilds_bundle_for_wrong_lineage_safety_or_write_scope(self) -> None:
+        cases = (
+            {"lineage": ["another-packet"]},
+            {"safety_decision_id": "safe-other"},
+            {"writes_performed": ["core-other/file.py"]},
+            {"writes_performed": ["N/A: no workspace writes", "core"]},
+        )
+        for evidence_updates in cases:
+            with self.subTest(evidence_updates=evidence_updates):
+                decision = next_action({
+                    "state": "REVIEWED", "high_findings": 0,
+                    "artifact_payloads": {
+                        "work_packet": self.valid_work_packet(),
+                        "evidence_bundle": {
+                            **self.valid_evidence_bundle(),
+                            **evidence_updates,
+                        },
+                    },
+                })
+                self.assertEqual(decision.action, "BUILD_EVIDENCE_BUNDLE")
+
+    def test_reviewed_accepts_canonical_no_workspace_write_evidence(self) -> None:
+        decision = next_action({
+            "state": "REVIEWED", "high_findings": 0,
+            "artifact_payloads": {
+                "work_packet": self.valid_work_packet(),
+                "evidence_bundle": {
+                    **self.valid_evidence_bundle(),
+                    "writes_performed": ["N/A: no workspace writes"],
+                },
             },
         })
 

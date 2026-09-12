@@ -65,7 +65,7 @@
         "artifact_id": "eb-runtime-truth",
         "source_hash": "abc",
         "acceptance_evidence": [
-          "A1:fixture replay passes"
+          "A1|PASS|source:task:90_verification.md#L1"
         ],
         "tests": [
           "python3 -m unittest discover -s tests -p test_validate_agent_harness.py"

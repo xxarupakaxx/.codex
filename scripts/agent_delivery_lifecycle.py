@@ -204,6 +204,11 @@ POLICY_PROMOTION_PREFIXES = (
 APPROVAL_EVIDENCE = re.compile(
     r"^(?:human-approved|user-validation):[A-Za-z0-9._/-]+#[a-f0-9]{8,64}$"
 )
+ACCEPTANCE_EVIDENCE = re.compile(
+    r"^(?P<id>[A-Za-z0-9][A-Za-z0-9._-]*)\|PASS\|source:"
+    r"(?:task|workspace):(?P<path>[^|#\x00]+)#L[1-9]\d*(?:-L[1-9]\d*)?$"
+)
+NO_WORKSPACE_WRITES = "N/A: no workspace writes"
 COMMIT_TYPES = {"feat", "fix", "docs", "refactor", "test", "chore", "perf", "build", "ci"}
 PR_SECTIONS = {"summary", "why", "trade_off", "out_of_scope", "impact", "tests", "residual_risks"}
 DRAFT_PRIVILEGED_FIELDS = {
@@ -361,40 +366,76 @@ def _list_item_errors(payload: Mapping[str, Any], fields: set[str]) -> list[str]
     ]
 
 
-def _normalize_artifact_path(path: str) -> str:
-    return path.removeprefix("./").rstrip("/")
+def _normalize_artifact_path(path: str, *, allow_directory: bool = False) -> str:
+    normalized = path.removeprefix("./")
+    if allow_directory and normalized.endswith("/") and not normalized.endswith("//"):
+        return normalized[:-1]
+    return normalized
+
+
+def _artifact_path_is_safe(
+    path: Any,
+    *,
+    allow_glob: bool,
+    allow_root: bool,
+    allow_directory: bool = False,
+) -> bool:
+    if not isinstance(path, str) or not path or path != path.strip():
+        return False
+    if "\x00" in path or "\\" in path or path.startswith("/"):
+        return False
+    normalized = _normalize_artifact_path(path, allow_directory=allow_directory)
+    if normalized in {".", "*"}:
+        return allow_root
+    if not normalized or any(part in {"", ".", ".."} for part in normalized.split("/")):
+        return False
+    if re.search(r"[?\[\]{}]", normalized):
+        return False
+    star_runs = re.findall(r"\*+", normalized)
+    return (allow_glob or not star_runs) and all(len(run) <= 2 for run in star_runs)
 
 
 def _unsafe_relative_paths(payload: Mapping[str, Any], field: str) -> list[str]:
-    from pathlib import PurePosixPath
-
     value = payload.get(field)
     if not isinstance(value, list):
         return []
-    unsafe: list[str] = []
-    for item in value:
-        if not isinstance(item, str) or not item.strip():
-            continue
-        path = item.strip()
-        relative = PurePosixPath(path)
-        if (
-            "\x00" in path
-            or "\\" in path
-            or relative.is_absolute()
-            or ".." in relative.parts
-            or (field == "owned_paths" and path in {".", "*"})
-        ):
-            unsafe.append(item)
-    return unsafe
+    return [
+        item
+        for item in value
+        if isinstance(item, str)
+        and item.strip()
+        and not _artifact_path_is_safe(
+            item,
+            allow_glob=field == "scope",
+            allow_root=field == "scope",
+            allow_directory=True,
+        )
+    ]
+
+
+def _scope_pattern_matches(pattern: str, path: str) -> bool:
+    regex: list[str] = []
+    index = 0
+    while index < len(pattern):
+        if pattern.startswith("**", index):
+            regex.append(".*")
+            index += 2
+        elif pattern[index] == "*":
+            regex.append("[^/]*")
+            index += 1
+        else:
+            regex.append(re.escape(pattern[index]))
+            index += 1
+    return re.fullmatch("".join(regex), path) is not None
 
 
 def _scope_entry_covers_owned_path(scope_entry: str, owned_path: str) -> bool:
-    import fnmatch
-
-    scope_entry = _normalize_artifact_path(scope_entry)
-    owned_path = _normalize_artifact_path(owned_path)
-    if scope_entry in {".", "*"} or fnmatch.fnmatch(owned_path, scope_entry):
+    scope_entry = _normalize_artifact_path(scope_entry, allow_directory=True)
+    owned_path = _normalize_artifact_path(owned_path, allow_directory=True)
+    if scope_entry in {".", "*"}:
         return True
+    if "*" in scope_entry:
+        return _scope_pattern_matches(scope_entry, owned_path)
     return owned_path == scope_entry or owned_path.startswith(f"{scope_entry}/")
 
 
@@ -414,6 +455,169 @@ def _owned_paths_outside_scope(payload: Mapping[str, Any]) -> list[str]:
             for scope_entry in scope_entries
         )
     )
+
+
+def _duplicates(value: Any) -> list[str]:
+    if not isinstance(value, list):
+        return []
+    seen: set[str] = set()
+    duplicates: set[str] = set()
+    for item in value:
+        if not isinstance(item, str):
+            continue
+        if item in seen:
+            duplicates.add(item)
+        seen.add(item)
+    return sorted(duplicates)
+
+
+def _explicit_out_of_scope_path(value: Any) -> tuple[str | None, bool]:
+    """Return an explicit path restriction without interpreting prose as a path."""
+    if not isinstance(value, str):
+        return None, False
+    text = value.strip()
+    if text.startswith("N/A:"):
+        return None, True
+    if text.startswith("path:"):
+        candidate = text.removeprefix("path:").strip()
+        return candidate, bool(candidate) and not _unsafe_relative_paths(
+            {"scope": [candidate]}, "scope"
+        )
+    path_like = bool(
+        re.fullmatch(r"[A-Za-z0-9._*?{}\[\]/-]+", text)
+        and ("/" in text or "." in text or any(mark in text for mark in "*?[]{}"))
+    )
+    if not path_like:
+        return None, True
+    return text, not _unsafe_relative_paths({"scope": [text]}, "scope")
+
+
+def validate_prd_work_packet_pair(
+    approved_prd: Mapping[str, Any], work_packet: Mapping[str, Any]
+) -> list[str]:
+    """Validate the requirement-to-packet projection using snapshot data only."""
+    errors: list[str] = []
+    prd_ids = approved_prd.get("acceptance_ids")
+    packet_ids = work_packet.get("acceptance_ids")
+    for label, value in (("approved_prd", prd_ids), ("work_packet", packet_ids)):
+        duplicates = _duplicates(value)
+        if duplicates:
+            errors.append(f"{label} acceptance_ids contain duplicates: {', '.join(duplicates)}")
+    if isinstance(prd_ids, list) and isinstance(packet_ids, list):
+        outside = sorted(set(packet_ids) - set(prd_ids))
+        if outside:
+            errors.append(f"work_packet acceptance_ids are outside approved_prd: {', '.join(outside)}")
+
+    prd_scope = approved_prd.get("scope")
+    packet_scope = work_packet.get("scope")
+    if _unsafe_relative_paths(approved_prd, "scope"):
+        errors.append("approved_prd scope must contain safe relative paths")
+    if isinstance(prd_scope, list) and isinstance(packet_scope, list):
+        allowed = [item for item in prd_scope if isinstance(item, str) and item.strip()]
+        outside_scope = sorted(
+            item
+            for item in packet_scope
+            if isinstance(item, str)
+            and item.strip()
+            and not any(_scope_entry_covers_owned_path(scope, item) for scope in allowed)
+        )
+        if outside_scope:
+            errors.append(f"work_packet scope is outside approved_prd: {', '.join(outside_scope)}")
+
+    exclusions: list[str] = []
+    for value in approved_prd.get("out_of_scope", []):
+        restriction, valid = _explicit_out_of_scope_path(value)
+        if restriction is not None and not valid:
+            errors.append(f"approved_prd out_of_scope path is unsafe: {value}")
+        elif restriction is not None:
+            exclusions.append(restriction)
+    owned_paths = work_packet.get("owned_paths")
+    if isinstance(packet_scope, list):
+        conflicting_scope = sorted(
+            item
+            for item in packet_scope
+            if isinstance(item, str)
+            and any(
+                _scope_entry_covers_owned_path(path, item)
+                or _scope_entry_covers_owned_path(item, path)
+                for path in exclusions
+            )
+        )
+        if conflicting_scope:
+            errors.append(
+                f"work_packet scope conflicts with approved_prd out_of_scope: "
+                f"{', '.join(conflicting_scope)}"
+            )
+    if isinstance(owned_paths, list):
+        excluded = sorted(
+            item
+            for item in owned_paths
+            if isinstance(item, str)
+            and any(_scope_entry_covers_owned_path(path, item) for path in exclusions)
+        )
+        if excluded:
+            errors.append(f"work_packet owned_paths are excluded by approved_prd: {', '.join(excluded)}")
+    return errors
+
+
+def validate_work_packet_evidence_pair(
+    work_packet: Mapping[str, Any], evidence_bundle: Mapping[str, Any]
+) -> list[str]:
+    """Validate packet-to-evidence lineage without reading evidence files."""
+    errors: list[str] = []
+    if work_packet.get("source_hash") != evidence_bundle.get("source_hash"):
+        errors.append("source_hash mismatch")
+    if work_packet.get("safety_decision_id") != evidence_bundle.get("safety_decision_id"):
+        errors.append("safety_decision_id mismatch")
+
+    packet_ids = work_packet.get("acceptance_ids")
+    duplicates = _duplicates(packet_ids)
+    if duplicates:
+        errors.append(f"work_packet acceptance_ids contain duplicates: {', '.join(duplicates)}")
+    evidence_ids: list[str] = []
+    entries = evidence_bundle.get("acceptance_evidence")
+    if isinstance(entries, list):
+        for entry in entries:
+            match = ACCEPTANCE_EVIDENCE.fullmatch(entry) if isinstance(entry, str) else None
+            if not match or not _artifact_path_is_safe(
+                match.group("path"),
+                allow_glob=False,
+                allow_root=False,
+            ):
+                errors.append(f"acceptance_evidence is not canonical: {entry}")
+                continue
+            evidence_ids.append(match.group("id"))
+    evidence_duplicates = _duplicates(evidence_ids)
+    if evidence_duplicates:
+        errors.append(f"acceptance_evidence contains duplicate IDs: {', '.join(evidence_duplicates)}")
+    if isinstance(packet_ids, list) and set(evidence_ids) != set(packet_ids):
+        errors.append("acceptance_evidence IDs must exactly match work_packet acceptance_ids")
+
+    lineage = evidence_bundle.get("lineage")
+    if isinstance(lineage, list) and work_packet.get("artifact_id") not in lineage:
+        errors.append("lineage does not include work_packet artifact_id")
+
+    writes = evidence_bundle.get("writes_performed")
+    owned_paths = work_packet.get("owned_paths")
+    if isinstance(writes, list) and isinstance(owned_paths, list):
+        if NO_WORKSPACE_WRITES in writes:
+            if writes != [NO_WORKSPACE_WRITES]:
+                errors.append("no-workspace-writes marker must not be mixed with paths")
+        else:
+            if _duplicates(writes):
+                errors.append("writes_performed contains duplicate paths")
+            invalid_writes = sorted(
+                item
+                for item in writes
+                if isinstance(item, str)
+                and (
+                    bool(_unsafe_relative_paths({"owned_paths": [item]}, "owned_paths"))
+                    or not any(_scope_entry_covers_owned_path(path, item) for path in owned_paths)
+                )
+            )
+            if invalid_writes:
+                errors.append(f"writes_performed must be within owned_paths: {', '.join(invalid_writes)}")
+    return errors
 
 
 def _completion_value_error(field: str, value: Any) -> str | None:
@@ -840,6 +1044,13 @@ def next_action(
             return TransitionDecision("RUNNING", action, "approved PRD is required")
         if not _validated_artifact(snapshot, "work_packet", verified_approval_evidence):
             return TransitionDecision("RUNNING", "CREATE_WORK_PACKET", "implementation contract is missing")
+        if route_id != "fast-track":
+            payloads = snapshot.get("artifact_payloads", {})
+            approved_prd = payloads.get("approved_prd") if isinstance(payloads, Mapping) else {}
+            work_packet = payloads.get("work_packet") if isinstance(payloads, Mapping) else {}
+            pair_errors = validate_prd_work_packet_pair(approved_prd, work_packet)
+            if pair_errors:
+                return TransitionDecision("RUNNING", "CREATE_WORK_PACKET", pair_errors[0])
         return TransitionDecision("RUNNING", "IMPLEMENT", "implementation contract is ready")
     if state == "IMPLEMENTED":
         return TransitionDecision("RUNNING", "REVIEW", "independent review is required")
@@ -857,11 +1068,15 @@ def next_action(
         work_packet = payloads.get("work_packet") if isinstance(payloads, Mapping) else {}
         evidence_bundle = payloads.get("evidence_bundle") if isinstance(payloads, Mapping) else {}
         if isinstance(work_packet, Mapping) and isinstance(evidence_bundle, Mapping):
-            if work_packet.get("source_hash") != evidence_bundle.get("source_hash"):
+            pair_errors = validate_work_packet_evidence_pair(work_packet, evidence_bundle)
+            if pair_errors:
+                reason = pair_errors[0]
+                if reason == "source_hash mismatch":
+                    reason = "work_packet and evidence_bundle source_hash mismatch"
                 return TransitionDecision(
                     "RUNNING",
                     "BUILD_EVIDENCE_BUNDLE",
-                    "work_packet and evidence_bundle source_hash mismatch",
+                    reason,
                 )
             completion_action = _completion_gap_action(
                 evidence_bundle.get("completion_state"),

@@ -69,7 +69,7 @@ class TaskCompletionTest(unittest.TestCase):
             "writes_performed": ["src.py"],
             "safety_decision_id": "safe-fixture",
             "policy_source": "AGENTS.md",
-            "lineage": ["fixture"],
+            "lineage": ["wp-fixture"],
             "journey_evidence": ["fixture journey"],
             "negative_path_evidence": ["fixture negative path"],
             "completion_state": "implemented",
@@ -90,6 +90,26 @@ class TaskCompletionTest(unittest.TestCase):
         (self.task / "evidence-bundle.json").write_text(
             json.dumps(payload, ensure_ascii=False), encoding="utf-8"
         )
+
+    def write_packet(self, **overrides: object) -> dict[str, object]:
+        packet: dict[str, object] = {
+            "artifact_id": "wp-fixture", "source_hash": self.model()["sourceHash"],
+            "objective": "fixture", "scope": ["src.py"], "out_of_scope": ["docs"],
+            "owned_paths": ["src.py"], "acceptance_ids": ["AC1"], "constraints": [],
+            "capability_class": "Fast", "safety_decision_id": "safe-fixture",
+            "side_effects_requested": [], "external_write_targets": [],
+            "approval_required": False, "approval_evidence": [], "dry_run_required": False,
+            "baseline": ["fixture"], "reality_contract": ["fixture"],
+            "verification": ["fixture"], "dependencies": ["none"],
+            "handoff_requirements": ["fixture"], "reviewer_focus": ["fixture"],
+            "journey_scenarios": ["fixture"], "negative_paths": ["fixture"],
+            "completion_target": "implemented",
+        }
+        packet.update(overrides)
+        (self.task / "work-packet.json").write_text(
+            json.dumps(packet), encoding="utf-8"
+        )
+        return packet
 
     def validate(self, payload: dict[str, object] | None = None) -> dict[str, object]:
         if payload is not None:
@@ -169,6 +189,30 @@ class TaskCompletionTest(unittest.TestCase):
             self.bundle(acceptance_evidence=["AC2|PASS|source:task:90_verification.md#L1"]),
         )
 
+    def test_acceptance_evidence_requires_canonical_source_with_or_without_packet(self) -> None:
+        for with_packet in (False, True):
+            for entry, reason in (
+                ("AC1|PASS|task:90_verification.md#L1", "completion_acceptance_mismatch"),
+                ("AC1|PASS|source:task:90_verification*.md#L1", "completion_source_path_invalid"),
+                ("AC1|PASS|source:task:././90_verification.md#L1", "completion_source_path_invalid"),
+                ("AC1|PASS|source:task:90_verification.md/#L1", "completion_source_path_invalid"),
+            ):
+                with self.subTest(with_packet=with_packet, entry=entry):
+                    if with_packet:
+                        self.write_packet()
+                    elif (self.task / "work-packet.json").exists():
+                        (self.task / "work-packet.json").unlink()
+                    self.assert_reason(
+                        reason,
+                        self.bundle(acceptance_evidence=[entry]),
+                    )
+
+    def test_acceptance_evidence_normalizes_one_leading_dot_segment(self) -> None:
+        result = self.validate(self.bundle(
+            acceptance_evidence=["AC1|PASS|source:task:./90_verification.md#L1"]
+        ))
+        self.assertEqual(result["evidence_acceptance_ids"], ["AC1"])
+
     def test_source_fingerprint_drift_fails(self) -> None:
         payload = self.bundle()
         self.source.write_text("changed\n", encoding="utf-8")
@@ -183,6 +227,11 @@ class TaskCompletionTest(unittest.TestCase):
 
     def test_unsafe_source_and_evidence_paths_are_rejected(self) -> None:
         self.plan = self.plan.replace("workspace:src.py", "workspace:../secret.txt")
+        (self.task / "30_plan.md").write_text(self.plan, encoding="utf-8")
+        self.assert_reason("completion_source_path_invalid", self.bundle())
+
+    def test_source_manifest_rejects_directory_reference(self) -> None:
+        self.plan = self.plan.replace("workspace:src.py", "workspace:src.py/")
         (self.task / "30_plan.md").write_text(self.plan, encoding="utf-8")
         self.assert_reason("completion_source_path_invalid", self.bundle())
 
@@ -299,28 +348,25 @@ class TaskCompletionTest(unittest.TestCase):
         self.assertEqual(context.exception.reason, "completion_plan_diagnostics_present")
 
     def test_packet_owned_paths_bound_writes_and_target(self) -> None:
-        packet = {
-            "artifact_id": "wp-fixture", "source_hash": self.model()["sourceHash"],
-            "objective": "fixture", "scope": ["src.py"], "out_of_scope": ["docs"],
-            "owned_paths": ["src.py"], "acceptance_ids": ["AC1"], "constraints": [],
-            "capability_class": "Fast", "safety_decision_id": "safe-fixture",
-            "side_effects_requested": [], "external_write_targets": [],
-            "approval_required": False, "approval_evidence": [], "dry_run_required": False,
-            "baseline": ["fixture"], "reality_contract": ["fixture"],
-            "verification": ["fixture"], "dependencies": ["none"],
-            "handoff_requirements": ["fixture"], "reviewer_focus": ["fixture"],
-            "journey_scenarios": ["fixture"], "negative_paths": ["fixture"],
-            "completion_target": "implemented",
-        }
-        (self.task / "work-packet.json").write_text(
-            json.dumps(packet), encoding="utf-8"
-        )
+        self.write_packet()
         result = self.validate(self.bundle())
         self.assertEqual(result["completion_target"], "implemented")
         self.assert_reason(
             "completion_write_scope_invalid",
             self.bundle(writes_performed=["other.py"]),
         )
+
+    def test_packet_bundle_pair_is_enforced_at_phase5(self) -> None:
+        self.write_packet()
+        for updates in (
+            {"lineage": ["different-packet"]},
+            {"safety_decision_id": "safe-other"},
+        ):
+            with self.subTest(updates=updates):
+                self.assert_reason(
+                    "completion_work_packet_mismatch",
+                    self.bundle(**updates),
+                )
 
     def test_no_workspace_writes_sentinel_is_accepted(self) -> None:
         result = self.validate(

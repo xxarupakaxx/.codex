@@ -12,7 +12,14 @@ from pathlib import Path, PurePosixPath
 from typing import Any, Mapping
 
 try:
-    from agent_delivery_lifecycle import COMPLETION_ORDER, validate_artifact
+    from agent_delivery_lifecycle import (
+        ACCEPTANCE_EVIDENCE,
+        COMPLETION_ORDER,
+        _artifact_path_is_safe,
+        _normalize_artifact_path,
+        validate_artifact,
+        validate_work_packet_evidence_pair,
+    )
 except ModuleNotFoundError:
     _spec = importlib.util.spec_from_file_location(
         "agent_delivery_lifecycle", Path(__file__).with_name("agent_delivery_lifecycle.py")
@@ -22,8 +29,12 @@ except ModuleNotFoundError:
     _lifecycle = importlib.util.module_from_spec(_spec)
     sys.modules[_spec.name] = _lifecycle
     _spec.loader.exec_module(_lifecycle)
+    ACCEPTANCE_EVIDENCE = _lifecycle.ACCEPTANCE_EVIDENCE
     COMPLETION_ORDER = _lifecycle.COMPLETION_ORDER
+    _artifact_path_is_safe = _lifecycle._artifact_path_is_safe
+    _normalize_artifact_path = _lifecycle._normalize_artifact_path
     validate_artifact = _lifecycle.validate_artifact
+    validate_work_packet_evidence_pair = _lifecycle.validate_work_packet_evidence_pair
 
 
 SHA256 = re.compile(r"[0-9a-f]{64}\Z")
@@ -97,11 +108,10 @@ def _optional(root: Path, names: tuple[str, ...], reason: str) -> Path | None:
 
 
 def _safe(path: str, *, reserved: bool = True) -> str:
-    if not isinstance(path, str) or not path or "\x00" in path or "\\" in path:
+    if not _artifact_path_is_safe(path, allow_glob=False, allow_root=False):
         _fail("completion_source_path_invalid", path=path)
-    if any(part in {".", ".."} for part in path.split("/")):
-        _fail("completion_source_path_invalid", path=path)
-    parsed = PurePosixPath(path)
+    normalized = _normalize_artifact_path(path)
+    parsed = PurePosixPath(normalized)
     if parsed.is_absolute() or not parsed.parts or any(part in {".", ".."} for part in parsed.parts):
         _fail("completion_source_path_invalid", path=path)
     lowered = [part.casefold() for part in parsed.parts]
@@ -114,7 +124,7 @@ def _safe(path: str, *, reserved: bool = True) -> str:
         _fail("completion_secret_path_rejected", path=path)
     if reserved and parsed.name.casefold() in RESERVED:
         _fail("completion_self_reference_rejected", path=path)
-    return path
+    return normalized
 
 
 def _ref(value: str, *, default: str | None = None, fragment: bool = False) -> tuple[str, str, str, str | None]:
@@ -335,28 +345,15 @@ def _evidence_refs(bundle: Mapping[str, Any], planned: list[str]) -> dict[str, s
         _fail("completion_acceptance_mismatch")
     refs: dict[str, str] = {}
     for entry in entries:
-        if not isinstance(entry, str):
-            _fail("completion_acceptance_mismatch")
-        parts = entry.split("|")
-        if len(parts) < 3 or parts[0] != parts[0].strip() or parts[1] != "PASS":
+        match = ACCEPTANCE_EVIDENCE.fullmatch(entry) if isinstance(entry, str) else None
+        if match is None:
             _fail("completion_acceptance_mismatch", entry=entry)
-        acceptance_id = parts[0]
+        acceptance_id = match.group("id")
         if acceptance_id in refs:
             _fail("completion_acceptance_duplicate", ids=[acceptance_id])
         if acceptance_id not in planned:
             _fail("completion_acceptance_mismatch", unknown=[acceptance_id])
-        path_refs = [
-            part[len(prefix):] if part.startswith(prefix) else part
-            for part in parts[2:]
-            for prefix in ("source:", "evidence:")
-            if part.startswith(prefix)
-        ]
-        path_refs.extend(
-            part for part in parts[2:] if part.startswith("task:") or part.startswith("workspace:")
-        )
-        if len(path_refs) != 1 or not path_refs[0]:
-            _fail("completion_acceptance_mismatch", entry=entry)
-        refs[acceptance_id] = path_refs[0]
+        refs[acceptance_id] = entry.split("|source:", 1)[1]
     if set(refs) != set(planned):
         _fail(
             "completion_acceptance_mismatch",
@@ -436,13 +433,17 @@ def _packet_and_writes(
     if NO_WORKSPACE_WRITES in writes:
         if writes != [NO_WORKSPACE_WRITES]:
             _fail("completion_write_scope_invalid", path=NO_WORKSPACE_WRITES)
-        return target if packet_path is not None else "implemented"
-    for write in writes:
-        path = _workspace_path(write)
-        if path not in allowed:
-            _fail("completion_write_scope_invalid", path=write)
-        if _has_symlink(workspace, path):
-            _fail("completion_source_symlink_rejected", path=path)
+    else:
+        for write in writes:
+            path = _workspace_path(write)
+            if path not in allowed:
+                _fail("completion_write_scope_invalid", path=write)
+            if _has_symlink(workspace, path):
+                _fail("completion_source_symlink_rejected", path=path)
+    if packet_path is not None:
+        pair_errors = validate_work_packet_evidence_pair(packet, bundle)
+        if pair_errors:
+            _fail("completion_work_packet_mismatch", errors=pair_errors)
     return target if packet_path is not None else "implemented"
 
 

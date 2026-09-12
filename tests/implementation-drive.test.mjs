@@ -58,7 +58,7 @@ function validEvidenceBundle(packet = validPacket(), overrides = {}) {
   return {
     artifact_id: `eb-${packet.artifact_id}`,
     source_hash: packet.source_hash,
-    acceptance_evidence: packet.acceptance_ids.map((id) => `${id}: verified`),
+    acceptance_evidence: packet.acceptance_ids.map((id) => `${id}|PASS|source:task:90_verification.md#L1`),
     tests: ['node --test tests/implementation-drive.test.mjs'],
     findings: [],
     residual_risks: ['none'],
@@ -81,7 +81,9 @@ async function run(workPlan, options = {}) {
     'args', 'phase', 'log', 'agent', 'workflow', 'pipeline',
     source,
   );
-  const responses = [options.analysis ?? analysis, prdDraft, approvedPrd, workPlan];
+  const draft = options.prdDraft ?? prdDraft;
+  const reviewed = options.approvedPrd ?? approvedPrd;
+  const responses = [options.analysis ?? analysis, draft, reviewed, workPlan];
   const result = await execute(
     {
       ticketKey: 'AI-1',
@@ -120,13 +122,18 @@ async function run(workPlan, options = {}) {
   return { result, calls, workflowCalls, pipelineCalls };
 }
 
-async function runInvalid(workPlan) {
+async function runInvalid(workPlan, options = {}) {
   const calls = [];
   const execute = new AsyncFunction(
     'args', 'phase', 'log', 'agent', 'workflow', 'pipeline',
     source,
   );
-  const responses = [analysis, prdDraft, approvedPrd, workPlan];
+  const responses = [
+    analysis,
+    options.prdDraft ?? prdDraft,
+    options.approvedPrd ?? approvedPrd,
+    workPlan,
+  ];
   const result = await execute(
     { ticketKey: 'AI-1', activeRunId: 'run-1', routingDecision },
     () => {}, () => {},
@@ -192,6 +199,63 @@ test('implementation drive rejects unsafe and out-of-scope owned paths', async (
   assert.equal(outside.result.reason, 'WORK_PACKET_INVALID');
 });
 
+test('implementation drive uses portable star and globstar scope semantics', async () => {
+  const cases = [
+    { scope: 'src/*.js', owned: 'src/a.js', success: true },
+    { scope: 'src/*.js', owned: 'src/nested/a.js', success: false },
+    { scope: 'src/**', owned: 'src/nested/a.js', success: true },
+    { scope: '.', owned: 'src/nested/a.js', success: true },
+    { scope: '*', owned: 'src/nested/a.js', success: true },
+    { scope: './src/**', owned: 'src/nested/a.js', success: true },
+  ];
+  for (const item of cases) {
+    const packet = validPacket({ scope: [item.scope], owned_paths: [item.owned] });
+    const options = {
+      withRoadmap: item.success,
+      approvedPrd: { ...approvedPrd, scope: [item.scope], out_of_scope: [] },
+    };
+    const { result } = item.success
+      ? await run(plan([packet]), options)
+      : await runInvalid(plan([packet]), options);
+    assert.equal(result.success === true, item.success);
+  }
+});
+
+test('implementation drive accepts one trailing slash for scope and owned directories', async () => {
+  const packet = validPacket({ scope: ['src/'], owned_paths: ['src/package/'] });
+  const { result } = await run(plan([packet]), {
+    withRoadmap: true,
+    approvedPrd: { ...approvedPrd, scope: ['src/'], out_of_scope: [] },
+  });
+
+  assert.equal(result.success, true);
+});
+
+test('implementation drive rejects nonportable and ambiguous scope, owned, and evidence paths', async () => {
+  for (const scope of ['src/?.js', 'src/[ab].js', 'src/{a,b}.js', 'src/***.js', 'src//a.js', 'src//', 'src///', '././src']) {
+    const { result } = await runInvalid(plan([validPacket({ scope: [scope] })]), {
+      approvedPrd: { ...approvedPrd, scope: [scope], out_of_scope: [] },
+    });
+    assert.equal(result.reason, 'WORK_PACKET_INVALID');
+  }
+  for (const owned_paths of [['src/*.js'], ['src//a.js'], ['src//'], ['././src/a.js']]) {
+    const { result } = await runInvalid(plan([validPacket({ owned_paths })]));
+    assert.equal(result.reason, 'WORK_PACKET_INVALID');
+  }
+  for (const acceptance_evidence of [
+    ['A1|PASS|source:task:proof/*.md#L1'],
+    ['A1|PASS|source:task:././proof.md#L1'],
+    ['A1|PASS|source:task:proof.md/#L1'],
+  ]) {
+    const packet = validPacket();
+    const { result } = await run(plan([packet]), {
+      withRoadmap: true,
+      implementerResult: validEvidenceBundle(packet, { acceptance_evidence }),
+    });
+    assert.equal(result.reason, 'EVIDENCE_BUNDLE_INVALID');
+  }
+});
+
 test('implementation drive rejects packet owned paths outside the Approved PRD scope or inside PRD out_of_scope', async () => {
   const outsidePrdScope = await runInvalid(plan([validPacket({
     scope: ['other/a.js'],
@@ -204,6 +268,81 @@ test('implementation drive rejects packet owned paths outside the Approved PRD s
 
   assert.equal(outsidePrdScope.result.reason, 'WORK_PACKET_INVALID');
   assert.equal(insidePrdOutOfScope.result.reason, 'WORK_PACKET_INVALID');
+});
+
+test('implementation drive binds packet acceptance to the Approved PRD without binding source hashes', async () => {
+  const unrelated = await runInvalid(plan([validPacket({ acceptance_ids: ['A2'] })]));
+  const duplicate = await runInvalid(plan([validPacket({ acceptance_ids: ['A1', 'A1'] })]));
+  const duplicatePrd = await runInvalid(plan([validPacket()]), {
+    approvedPrd: { ...approvedPrd, acceptance_ids: ['A1', 'A1'] },
+  });
+  const differentSource = await run(plan([validPacket()]), {
+    withRoadmap: true,
+    approvedPrd: { ...approvedPrd, source_hash: 'prd-own-source' },
+  });
+
+  assert.equal(unrelated.result.reason, 'WORK_PACKET_INVALID');
+  assert.equal(duplicate.result.reason, 'WORK_PACKET_INVALID');
+  assert.equal(duplicatePrd.result.reason, 'WORK_PACKET_INVALID');
+  assert.equal(differentSource.result.success, true);
+});
+
+test('implementation drive preserves distinct PRD acceptance subsets across multiple packets', async () => {
+  const first = validPacket({ artifact_id: 'wp-a', acceptance_ids: ['A1'] });
+  const second = validPacket({
+    artifact_id: 'wp-b',
+    scope: ['src/c.js'],
+    owned_paths: ['src/c.js'],
+    acceptance_ids: ['A2'],
+    dependencies: ['wp-a'],
+  });
+  const { result } = await run(plan([first, second]), {
+    withRoadmap: true,
+    approvedPrd: { ...approvedPrd, acceptance_ids: ['A1', 'A2'] },
+  });
+
+  assert.equal(result.success, true);
+});
+
+test('implementation drive ignores prose PRD exclusions and enforces explicit safe path restrictions', async () => {
+  const prosePrd = {
+    ...approvedPrd,
+    out_of_scope: ['N/A: 認証と課金は対象外'],
+  };
+  const explicitPrd = {
+    ...approvedPrd,
+    out_of_scope: ['path:src/private'],
+  };
+  const globPrd = {
+    ...approvedPrd,
+    out_of_scope: ['path:src/private/*.js'],
+  };
+  const prose = await run(plan([validPacket()]), {
+    withRoadmap: true,
+    approvedPrd: prosePrd,
+  });
+  const excluded = await runInvalid(plan([validPacket({
+    scope: ['src/private/a.js'],
+    owned_paths: ['src/private/a.js'],
+  })]), { approvedPrd: explicitPrd });
+  const unsafe = await runInvalid(plan([validPacket()]), {
+    approvedPrd: { ...approvedPrd, out_of_scope: ['path:../outside'] },
+  });
+  const globExcluded = await runInvalid(plan([validPacket({
+    scope: ['src/private/a.js'],
+    owned_paths: ['src/private/a.js'],
+  })]), { approvedPrd: globPrd });
+
+  assert.equal(prose.result.success, true);
+  assert.equal(excluded.result.reason, 'WORK_PACKET_INVALID');
+  assert.equal(unsafe.result.reason, 'WORK_PACKET_INVALID');
+  assert.equal(globExcluded.result.reason, 'WORK_PACKET_INVALID');
+  for (const out_of_scope of [['path:src/?.js'], ['path:src/[ab].js'], ['path:src/{a,b}.js']]) {
+    const invalid = await runInvalid(plan([validPacket()]), {
+      approvedPrd: { ...approvedPrd, out_of_scope },
+    });
+    assert.equal(invalid.result.reason, 'WORK_PACKET_INVALID');
+  }
 });
 
 test('implementation drive rejects duplicate artifact IDs and overlapping owned paths', async () => {
@@ -396,6 +535,53 @@ test('implementation drive rejects implementer results that are not packet-speci
   assert.equal(missingEvidence.result.reason, 'EVIDENCE_BUNDLE_INVALID');
   assert.equal(wrongHash.result.reason, 'EVIDENCE_BUNDLE_INVALID');
   assert.equal(wrongLineage.result.reason, 'EVIDENCE_BUNDLE_INVALID');
+});
+
+test('implementation drive requires exact canonical PASS evidence for every packet acceptance', async () => {
+  const packet = validPacket();
+  for (const acceptance_evidence of [
+    ['A1: verified'],
+    ['A1|FAIL|source:task:90_verification.md#L1'],
+    ['UNRELATED|PASS|source:task:proof.md#L1'],
+    [
+      'A1|PASS|source:task:90_verification.md#L1',
+      'A1|PASS|source:task:90_verification.md#L2',
+    ],
+  ]) {
+    const { result } = await run(plan([packet]), {
+      withRoadmap: true,
+      implementerResult: validEvidenceBundle(packet, { acceptance_evidence }),
+    });
+    assert.equal(result.reason, 'EVIDENCE_BUNDLE_INVALID');
+  }
+});
+
+test('implementation drive binds evidence safety and writes to the packet', async () => {
+  const packet = validPacket();
+  for (const evidence of [
+    validEvidenceBundle(packet, { safety_decision_id: 'safe-other' }),
+    validEvidenceBundle(packet, { writes_performed: ['src/a.js-other'] }),
+    validEvidenceBundle(packet, { writes_performed: ['N/A: no workspace writes', 'src/a.js'] }),
+  ]) {
+    const { result } = await run(plan([packet]), {
+      withRoadmap: true,
+      implementerResult: evidence,
+    });
+    assert.equal(result.reason, 'EVIDENCE_BUNDLE_INVALID');
+  }
+});
+
+test('implementation drive accepts a canonical no-workspace-write marker', async () => {
+  const packet = validPacket();
+  const { result } = await run(plan([packet]), {
+    withRoadmap: true,
+    implementerResult: validEvidenceBundle(packet, {
+      acceptance_evidence: ['A1|PASS|source:task:./90_verification.md#L1'],
+      writes_performed: ['N/A: no workspace writes'],
+    }),
+  });
+
+  assert.equal(result.success, true);
 });
 
 test('implementation drive routes unmet completion maturity before reporting success', async () => {

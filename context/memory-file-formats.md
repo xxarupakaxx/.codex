@@ -164,7 +164,7 @@ Evidenceは要件から実行結果へIDとsource hashで結ぶ。下流artifact
 
 ### Approved PRD
 
-prd-flow / multi-packet-flowの要件契約。必須fieldは artifact_id、source_hash、objective、scope、out_of_scope、acceptance_ids、review_status。review_statusがpassでない場合は実装へ進めない。reviewerはread-onlyである。
+prd-flow / multi-packet-flowの要件契約。必須fieldは artifact_id、source_hash、objective、scope、out_of_scope、acceptance_ids、review_status。review_statusがpassでない場合は実装へ進めない。reviewerはread-onlyである。SURVEYEDから実装へ進む前に、各Work Packetのacceptance_idsが重複なくPRDの部分集合であり、packetのscopeとowned_pathsがPRDのscope内にあることを検査する。multi-packet-flowではpacketごとに異なる部分集合を持てる。
 
 ### Work Packet
 
@@ -177,7 +177,7 @@ prd-flow / multi-packet-flowの要件契約。必須fieldは artifact_id、sourc
     reality_contract, verification, dependencies, handoff_requirements,
     reviewer_focus, journey_scenarios, negative_paths, completion_target
 
-owned_pathsはscope内に限定し、同一roundでwriterを一人に固定する。該当しない項目は空欄でなく N/A: <理由> と書く。reality_contractはsource model、legacy data、production topology、MUST / MUST NOT、認証・PII・external writeを明示する。completion_targetは implemented / wired / piloted / effective / adopted のいずれかである。approval_requiredがtrueなら、trusted runtimeがapproval_evidenceの実在とhashを検査する。
+owned_pathsはscope内に限定し、同一roundでwriterを一人に固定する。scopeで使えるglobは`*`と`**`だけで、`*`はslashを跨がず、`**`は跨ぐ。単独の`.`と`*`はroot全体を指す。PRDのout_of_scopeでpathを制限するときは`path:<repo-relative-path>`と書き、scopeと同じglobを使える。`?`、`[]`、`{}`は使えない。owned_pathsはglobを許さない。pathの先頭にある一つの`./`は取り除いて照合する。scopeとdirectoryを指すowned_pathsでは単一末尾slashも取り除く。複数末尾slash、中間の空segment、残る`.`と`..`のsegmentは拒否する。証拠pathとPhase 5の実FILE参照では末尾slashを許さない。`src/private`や`src/private.py`のようにpathと判別できる値も制限として扱うが、`N/A: <理由>`や一般の説明文をpathの前方一致へ流用しない。該当しない項目は空欄でなく N/A: <理由> と書く。reality_contractはsource model、legacy data、production topology、MUST / MUST NOT、認証・PII・external writeを明示する。completion_targetは implemented / wired / piloted / effective / adopted のいずれかである。approval_requiredがtrueなら、trusted runtimeがapproval_evidenceの実在とhashを検査する。
 
 ### Evidence Bundle
 
@@ -191,7 +191,9 @@ makerがdraftを作り、独立checkerがreview sectionを完成させる。必�
 
 completion_stateは実測した段階だけにする。implementedはcode / schema / docsと直接test、wiredはruntime entrypoint到達、pilotedは実sample、effectiveはbaseline比の改善、adoptedはowner・人間承認・rollback・review dateを意味する。effective / adoptedを主張する場合だけ、labelではなくsource-bound completion_evidence（status: pass、state / source_hash一致、checks非空）を要求する。Work Packetのcompletion_target未達ならdeliveryせず WIRE / PILOT / MEASURE / ADOPT へ戻す。
 
-`acceptance_evidence`は各IDを`<ID>|PASS|source:task:90_verification.md#L1`の形で一件ずつ結び、同じverification fileで複数IDを証明してよい。`evidence_fingerprints`のkeyはfragmentなしのcanonical source fileとし、同一fileは一keyにまとめてsha256を記録する。`work-packet.json`がある場合、`owned_paths`は`required_sources`に含まれるrepo-relative FILE pathだけにする（required_sourcesにはread-only依存も含め得る）。`writes_performed`はその宣言済みworkspace pathだけにする。workspaceを書かなかった場合だけ`writes_performed`を厳密に`["N/A: no workspace writes"]`とでき、混在や別の自由文は許可しない。packetがないcompletionは`implemented`だけを許可する。
+`acceptance_evidence`は各IDを`<ID>|PASS|source:task:90_verification.md#L1`の形で一件ずつ結び、同じverification fileで複数IDを証明してよい。証拠pathはglobを含まないrepo相対pathとする。IDは重複させず、Work Packetのacceptance_idsと集合を一致させる。`A1: verified`のように判定や参照先が曖昧な旧表記、FAIL、packetにないIDは納品へ進めない。Evidence BundleはWork Packetと同じsource_hashとsafety_decision_idを持ち、lineageにpacketのartifact_idを含める。Phase 5もpacketがある場合はこの対応を共通検査へ渡し、packetがなくてもcanonicalなacceptance_evidenceを要求する。source_hashは各producerが定める正本へのbindingであり、PRDとWork Packetの異なるartifact同士には同値を要求しない。
+
+`evidence_fingerprints`のkeyはfragmentなしのcanonical source fileとし、同一fileは一keyにまとめてsha256を記録する。`work-packet.json`がある場合、`owned_paths`は`required_sources`に含まれるrepo-relative FILE pathだけにする（required_sourcesにはread-only依存も含め得る）。`writes_performed`はその宣言済みworkspace pathだけにする。workspaceを書かなかった場合だけ`writes_performed`を厳密に`["N/A: no workspace writes"]`とでき、混在や別の自由文は許可しない。snapshot間の遷移検査はpathとIDの対応だけを扱い、実ファイルとhashの照合はPhase 5で行う。packetがないcompletionは`implemented`だけを許可する。
 
 ### Delivery Draft Input
 

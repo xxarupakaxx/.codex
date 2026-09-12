@@ -96,13 +96,42 @@ const completionTargetAction = new Map([
   ['adopted', 'ADOPT'],
 ])
 const highCompletionStates = new Set(['effective', 'adopted'])
-const normalizeRelativePath = (value) => String(value).replace(/^(\.\/)+/, '').replace(/\/+$/, '')
+const normalizeRelativePath = (value, { allowDirectory = false } = {}) => {
+  const normalized = String(value).replace(/^\.\//, '')
+  return allowDirectory && normalized.endsWith('/') && !normalized.endsWith('//')
+    ? normalized.slice(0, -1)
+    : normalized
+}
+const noWorkspaceWrites = 'N/A: no workspace writes'
+const hasDuplicates = (items) => new Set(items).size !== items.length
+const safeArtifactPath = (value, { allowGlob, allowRoot, allowDirectory = false }) => {
+  if (!nonEmptyText(value) || value !== value.trim() || value.includes('\\') || value.startsWith('/') || value.includes('\0')) return false
+  const normalized = normalizeRelativePath(value, { allowDirectory })
+  if (normalized === '.' || normalized === '*') return allowRoot
+  if (!normalized || normalized.split('/').some((segment) => !segment || segment === '.' || segment === '..')) return false
+  if (/[?\[\]{}]/.test(normalized)) return false
+  const starRuns = normalized.match(/\*+/g) ?? []
+  return (allowGlob || starRuns.length === 0) && starRuns.every((run) => run.length <= 2)
+}
+const safeScopePath = (value) => safeArtifactPath(value, {
+  allowGlob: true,
+  allowRoot: true,
+  allowDirectory: true,
+})
 const safeOwnedPath = (value) => {
-  if (!nonEmptyText(value) || value.includes('\\') || value.startsWith('/')) return false
-  const normalized = normalizeRelativePath(value)
-  if (!normalized || normalized === '.' || normalized.startsWith('../') || normalized.includes('/../')) return false
-  if (normalized.split('/').some((segment) => !segment || segment === '.' || segment === '..')) return false
-  return !/[*?[\]{}]/.test(normalized)
+  return safeArtifactPath(value, { allowGlob: false, allowRoot: false, allowDirectory: true })
+}
+const safeFilePath = (value) => safeArtifactPath(value, { allowGlob: false, allowRoot: false })
+const explicitOutOfScopePath = (value) => {
+  if (!nonEmptyText(value) || value.trim().startsWith('N/A:')) return { path: null, valid: true }
+  const text = value.trim()
+  if (text.startsWith('path:')) {
+    const path = text.slice('path:'.length).trim()
+    return { path, valid: safeScopePath(path) }
+  }
+  const pathLike = /^[A-Za-z0-9._*?{}[\]/-]+$/.test(text)
+    && (text.includes('/') || text.includes('.') || /[*?{}[\]]/.test(text))
+  return pathLike ? { path: text, valid: safeScopePath(text) } : { path: null, valid: true }
 }
 const escapeRegExp = (value) => value.replace(/[.+?^${}()|[\]\\]/g, '\\$&')
 const globToRegExp = (pattern) => {
@@ -122,20 +151,20 @@ const globToRegExp = (pattern) => {
 }
 const scopeCoversOwnedPath = (scopeEntry, ownedPath) => {
   if (!nonEmptyText(scopeEntry)) return false
-  const scope = normalizeRelativePath(scopeEntry)
-  const owned = normalizeRelativePath(ownedPath)
+  const scope = normalizeRelativePath(scopeEntry, { allowDirectory: true })
+  const owned = normalizeRelativePath(ownedPath, { allowDirectory: true })
   if (scope === '*' || scope === '.') return true
   if (scope.includes('*')) return globToRegExp(scope).test(owned)
   return owned === scope || owned.startsWith(`${scope}/`)
 }
 const ownedPathsOverlap = (left, right) => {
-  const a = normalizeRelativePath(left)
-  const b = normalizeRelativePath(right)
+  const a = normalizeRelativePath(left, { allowDirectory: true })
+  const b = normalizeRelativePath(right, { allowDirectory: true })
   return a === b || a.startsWith(`${b}/`) || b.startsWith(`${a}/`)
 }
 const pathWithinOwnedPath = (ownedPath, writePath) => {
-  const owned = normalizeRelativePath(ownedPath)
-  const write = normalizeRelativePath(writePath)
+  const owned = normalizeRelativePath(ownedPath, { allowDirectory: true })
+  const write = normalizeRelativePath(writePath, { allowDirectory: true })
   return write === owned || write.startsWith(`${owned}/`)
 }
 const evidenceBundleFields = [
@@ -160,6 +189,11 @@ const validCompletionEvidence = (evidence) => {
     && listOfText(completionEvidence.checks)
     && completionEvidence.checks.length > 0
 }
+const acceptanceEvidence = (value) => {
+  if (!nonEmptyText(value)) return null
+  const match = value.match(/^([A-Za-z0-9][A-Za-z0-9._-]*)\|PASS\|source:(?:task|workspace):([^|#\0]+)#L[1-9]\d*(?:-L[1-9]\d*)?$/)
+  return match && safeFilePath(match[2]) ? { id: match[1], source: match[2] } : null
+}
 const validateEvidenceBundle = (packet, evidence) => {
   const hasShape = evidence
     && evidenceBundleFields.every((field) => Object.prototype.hasOwnProperty.call(evidence, field))
@@ -171,16 +205,29 @@ const validateEvidenceBundle = (packet, evidence) => {
   if (highCompletionStates.has(evidence.completion_state) && !validCompletionEvidence(evidence)) {
     return { ok: false, reason: 'COMPLETION_EVIDENCE_REQUIRED' }
   }
-  const sourceBound = evidence.source_hash === packet.source_hash
-    && evidence.safety_decision_id === packet.safety_decision_id
-    && evidence.lineage.includes(packet.artifact_id)
-    && packet.acceptance_ids.every((id) => (
-      evidence.acceptance_evidence.some((item) => item === id || item.startsWith(`${id}:`) || item.startsWith(`${id} `))
-    ))
+  const acceptance = evidence.acceptance_evidence.map(acceptanceEvidence)
+  const evidenceIds = acceptance.filter(Boolean).map((item) => item.id)
+  const packetIds = packet.acceptance_ids
+  const exactAcceptance = acceptance.every(Boolean)
+    && !hasDuplicates(packetIds)
+    && !hasDuplicates(evidenceIds)
+    && packetIds.length === evidenceIds.length
+    && packetIds.every((id) => evidenceIds.includes(id))
+  const noWrites = evidence.writes_performed.length === 1
+    && evidence.writes_performed[0] === noWorkspaceWrites
+  const safeWrites = noWrites || (
+    !evidence.writes_performed.includes(noWorkspaceWrites)
+    && !hasDuplicates(evidence.writes_performed)
     && evidence.writes_performed.every((path) => (
       safeOwnedPath(path)
       && packet.owned_paths.some((ownedPath) => pathWithinOwnedPath(ownedPath, path))
     ))
+  )
+  const sourceBound = evidence.source_hash === packet.source_hash
+    && evidence.safety_decision_id === packet.safety_decision_id
+    && evidence.lineage.includes(packet.artifact_id)
+    && exactAcceptance
+    && safeWrites
   if (!sourceBound) return { ok: false, reason: 'EVIDENCE_BUNDLE_INVALID' }
   if (completionRank.get(evidence.completion_state) < completionRank.get(packet.completion_target)) {
     return {
@@ -346,7 +393,19 @@ const approvalGatedEffects = new Set([
   'destructive_action', 'runtime_policy_change', 'go_nogo_decision',
 ])
 const artifactIds = new Set()
-let invalidPacket
+const prdAcceptanceIds = Array.isArray(prdReview.acceptance_ids) ? prdReview.acceptance_ids : []
+const prdExclusions = Array.isArray(prdReview.out_of_scope)
+  ? prdReview.out_of_scope.map(explicitOutOfScopePath)
+  : []
+const validPrdContract = listOfText(prdReview.scope)
+  && prdReview.scope.length > 0
+  && listOfText(prdReview.out_of_scope)
+  && listOfText(prdReview.acceptance_ids)
+  && prdReview.acceptance_ids.length > 0
+  && !hasDuplicates(prdReview.acceptance_ids)
+  && prdReview.scope.every(safeScopePath)
+  && prdExclusions.every((entry) => entry.valid)
+let invalidPacket = validPrdContract ? undefined : workPlan.packets[0]
 for (const packet of workPlan.packets) {
   if (!nonEmptyText(packet?.artifact_id) || artifactIds.has(packet.artifact_id)) {
     invalidPacket = packet
@@ -369,10 +428,19 @@ if (!invalidPacket) {
     if (nonEmptyContractLists.some((field) => packet[field].length === 0)) return true
     if (packet.capability_class !== routingDecision.capability_class) return true
     if (packet.side_effects_requested.some((effect) => !approvalGatedEffects.has(effect))) return true
+    if (hasDuplicates(packet.acceptance_ids)) return true
+    if (!packet.acceptance_ids.every((id) => prdAcceptanceIds.includes(id))) return true
+    if (!packet.scope.every(safeScopePath)) return true
+    if (!packet.scope.every((path) => prdReview.scope.some((scope) => scopeCoversOwnedPath(scope, path)))) return true
     if (!packet.owned_paths.every(safeOwnedPath)) return true
     if (!packet.owned_paths.every((path) => packet.scope.some((scope) => scopeCoversOwnedPath(scope, path)))) return true
     if (!packet.owned_paths.every((path) => prdReview.scope.some((scope) => scopeCoversOwnedPath(scope, path)))) return true
-    if (packet.owned_paths.some((path) => prdReview.out_of_scope.some((scope) => scopeCoversOwnedPath(scope, path)))) return true
+    if (packet.scope.some((scope) => prdExclusions.some((entry) => entry.path && (
+      scopeCoversOwnedPath(entry.path, scope) || scopeCoversOwnedPath(scope, entry.path)
+    )))) return true
+    if (packet.owned_paths.some((path) => prdExclusions.some((entry) => (
+      entry.path && scopeCoversOwnedPath(entry.path, path)
+    )))) return true
     const dependencyIds = packet.dependencies.filter((dependency) => dependency !== 'none')
     if (packet.dependencies.includes('none') && packet.dependencies.length > 1) return true
     if (dependencyIds.some((dependency) => (
