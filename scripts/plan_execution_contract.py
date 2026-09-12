@@ -2,8 +2,22 @@
 from __future__ import annotations
 
 import hashlib
+import importlib.util
 import json
 from pathlib import Path
+
+try:
+    from decision_evidence import evaluate_decision_evidence
+except ModuleNotFoundError as exc:
+    if exc.name != "decision_evidence":
+        raise
+    # Callers also load this module by absolute path outside the scripts directory.
+    spec = importlib.util.spec_from_file_location("decision_evidence", Path(__file__).with_name("decision_evidence.py"))
+    if spec is None or spec.loader is None:
+        raise
+    module = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(module)
+    evaluate_decision_evidence = module.evaluate_decision_evidence
 
 GLOBAL_FIELDS = ("intent", "assumptions", "approach", "success-scenarios")
 TASK_FIELDS = ("decision-boundaries", "stop-conditions", "negative-paths")
@@ -57,8 +71,9 @@ def readiness(task_dir: Path, model: dict) -> dict:
     contract = model.get("executionContract", {})
     if model.get("sourceKind") != "html":
         errors.append("legacy_plan_requires_execution_contract")
-    if model.get("executionContractVersion") != "1":
-        errors.append("execution_contract_version_required:1")
+    version = model.get("executionContractVersion")
+    if version not in {"1", "2"}:
+        errors.append("execution_contract_version_required:1_or_2")
     for field in GLOBAL_FIELDS:
         if not contract.get(field, "").strip():
             errors.append(f"missing_plan_field:{field}")
@@ -74,11 +89,19 @@ def readiness(task_dir: Path, model: dict) -> dict:
     fingerprints = {"planDesignSha256": design_hash(model)}
     try:
         request = _read_local(task_dir, "00_request.md")
+        if b"\x00" in request:
+            raise ValueError("invalid request source: NUL")
         if not request.decode("utf-8").strip():
             raise ValueError("empty request source")
         fingerprints["requestSha256"] = _digest(request)
     except (OSError, ValueError) as exc:
         errors.append(str(exc))
+    decision = None
+    if version == "2":
+        acceptance = [item for task in model.get("tasks", []) for item in task.get("acceptanceIds", [])]
+        decision = evaluate_decision_evidence(task_dir, acceptance, fingerprints.get("requestSha256", ""))
+        errors.extend(f"decision_evidence:{item}" for item in decision["blockers"])
+        fingerprints["decisionEvidenceSha256"] = decision["decisionEvidenceSha256"]
     receipt_hash = None
     try:
         receipt_bytes = _read_local(task_dir, "plan-review.json")
@@ -123,6 +146,7 @@ def readiness(task_dir: Path, model: dict) -> dict:
     except (OSError, ValueError, TypeError) as exc:
         errors.append(str(exc))
     return {"canImplement": not errors, "blockers": errors, **fingerprints,
+            **({"decisionEvidence": decision} if decision is not None else {}),
             "reviewReceipt": str(task_dir / "plan-review.json"), "reviewReceiptSha256": receipt_hash,
             "limitations": "構造と記録の整合性検査。reviewer本人性・意味的正しさ・ユーザー承認の証明ではない。leadが実際の独立review出力を照合する。"}
 

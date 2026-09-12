@@ -139,7 +139,7 @@ class ExecutionContractTest(unittest.TestCase):
 
     def test_version_and_evidence_are_required(self):
         model = parse_html_plan_contract(self.html.replace('execution-contract-version', 'unversioned'))
-        self.assertIn('execution_contract_version_required:1', readiness(self.task, model)['blockers'])
+        self.assertIn('execution_contract_version_required:1_or_2', readiness(self.task, model)['blockers'])
         (self.task/'intent-review.md').write_text('changed review')
         self.assertIn('review_evidence_mismatch:intent', readiness(self.task, self.model)['blockers'])
 
@@ -211,6 +211,138 @@ class ExecutionContractTest(unittest.TestCase):
             self.assertEqual(code, 2)
             self.assertEqual(result['reason'], 'plan_execution_blocked')
         self.assertFalse((self.task/'roadmap.html').exists())
+
+    def prepare_v2(self):
+        from datetime import datetime, timezone
+        self.html = self.html.replace('execution-contract-version"><p>1', 'execution-contract-version"><p>2')
+        self.model = parse_html_plan_contract(self.html)
+        (self.task/'30_plan.html').write_text(self.html)
+        self.receipt = write_receipt(self.task, self.model)
+        (self.task/'decision-sources').mkdir()
+        source = self.task/'decision-sources/observation.md'
+        source.write_text('SOURCE BODY MUST NOT ENTER EXECUTION BRIEF\n')
+        day = datetime.now(timezone.utc).date().isoformat()
+        self.decision = {
+            'schemaVersion': 1, 'requestSha256': self.receipt['requestSha256'],
+            'claims': [{'id': 'H1', 'statement': 'An observed defect warrants repair',
+                'why': 'The defect prevents the requested journey', 'acceptanceIds': ['A1'],
+                'critical': True, 'status': 'supported', 'evidenceIds': ['E1'],
+                'falsification': 'The same journey already succeeds',
+                'counterevidence': {'status': 'none-found', 'evidenceIds': [], 'rationale': 'Reproduced the failed journey'}}],
+            'evidence': [{'id': 'E1', 'kind': 'repository', 'path': 'decision-sources/observation.md',
+                'sha256': hashlib.sha256(source.read_bytes()).hexdigest(),
+                'observedAt': day, 'validUntil': day, 'source': 'repo:fixture'}],
+            'market': {'applicability': 'not-applicable', 'rationale': 'Internal fixture', 'claimIds': [], 'alternatives': []},
+        }
+        self.bind_v2_fixture()
+
+    def bind_v2_fixture(self):
+        path = self.task/'decision-evidence.json'
+        path.write_text(json.dumps(self.decision))
+        self.receipt['decisionEvidenceSha256'] = hashlib.sha256(path.read_bytes()).hexdigest()
+        (self.task/'plan-review.json').write_text(json.dumps(self.receipt))
+
+    def test_v2_cli_contains_checked_evidence_references_without_source_body(self):
+        self.prepare_v2()
+        result = subprocess.run([sys.executable, str(ROOT/'scripts/task-context.py'), 'brief', str(self.task), '--execution'], capture_output=True, text=True)
+        self.assertEqual(result.returncode, 0, result.stderr)
+        brief = json.loads(result.stdout)['executionBrief']
+        self.assertTrue(brief['gate']['canImplement'])
+        self.assertEqual(brief['gate']['decisionEvidence']['record'], self.decision)
+        self.assertNotIn('SOURCE BODY MUST NOT ENTER EXECUTION BRIEF', result.stdout)
+
+    def test_v2_rejects_missing_artifact_and_missing_review_digest(self):
+        self.prepare_v2()
+        del self.receipt['decisionEvidenceSha256']
+        (self.task/'plan-review.json').write_text(json.dumps(self.receipt))
+        self.assertIn('stale_review:decisionEvidenceSha256', readiness(self.task, self.model)['blockers'])
+        (self.task/'decision-evidence.json').unlink()
+        self.assertFalse(readiness(self.task, self.model)['canImplement'])
+
+    def test_v2_requires_re_review_after_valid_decision_record_change(self):
+        self.prepare_v2()
+        self.decision['claims'][0]['why'] = 'A different but structurally valid reason'
+        (self.task/'decision-evidence.json').write_text(json.dumps(self.decision))
+        gate = readiness(self.task, self.model)
+        self.assertTrue(gate['decisionEvidence']['readyForReview'])
+        self.assertIn('stale_review:decisionEvidenceSha256', gate['blockers'])
+
+    def test_v2_review_cannot_override_failed_evidence_or_stale_source(self):
+        from datetime import date, timedelta
+        self.prepare_v2()
+        original = json.loads(json.dumps(self.decision))
+        for mutation, marker in (
+            (lambda: self.decision['claims'][0].update(status='unknown'), 'claim_unknown:H1'),
+            (lambda: self.decision['evidence'][0].update(validUntil=(date.fromisoformat(original['evidence'][0]['observedAt'])-timedelta(days=1)).isoformat()), 'expired_evidence:E1'),
+            (lambda: (self.task/'decision-sources/observation.md').write_text('tampered'), 'evidence_hash_mismatch:E1'),
+        ):
+            with self.subTest(marker=marker):
+                self.decision = json.loads(json.dumps(original))
+                mutation()
+                self.bind_v2_fixture()
+                gate = readiness(self.task, self.model)
+                self.assertFalse(gate['canImplement'])
+                self.assertIn(f'decision_evidence:{marker}', gate['blockers'])
+
+    def test_v2_source_change_during_generation_restores_previous_output(self):
+        self.prepare_v2()
+        spec = importlib.util.spec_from_file_location('decision_sync_race', ROOT/'scripts/sync-roadmap.py')
+        sync = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sync)
+        html = ('<!DOCTYPE html><html lang="ja"><head><meta charset="UTF-8">'
+                '<meta name="viewport" content="width=device-width, initial-scale=1">'
+                '<meta name="artifact-kind" content="html-plan">'
+                '<meta http-equiv="Content-Security-Policy" content="' + "default-src 'none'; script-src 'none'; style-src 'unsafe-inline'; img-src data:; connect-src 'none'; base-uri 'none'; form-action 'none'" + '">'
+                '<title>Decision fixture</title><style>body{color:black}</style></head><body>' + self.html + '</body></html>')
+        (self.task/'30_plan.html').write_text(html)
+        self.receipt = write_receipt(self.task, parse_html_plan_contract(html))
+        self.bind_v2_fixture()
+        args = (self.task, ROOT/'scripts/generate-roadmap-view.py', '3', self.task.parent, 'fixture')
+        kwargs = dict(memory_root=self.task.parent, headless=True)
+        code, result = sync.synchronize(*args, **kwargs)
+        self.assertEqual(code, 0, result)
+        previous = (self.task/'roadmap.html').read_bytes()
+        original_run = subprocess.run
+        def change_source(*args, **kwargs):
+            result = original_run(*args, **kwargs)
+            (self.task/'decision-sources/observation.md').write_text('changed during generation')
+            return result
+        with mock.patch.object(sync.subprocess, 'run', side_effect=change_source):
+            code, result = sync.synchronize(*args, **kwargs)
+        self.assertEqual(code, 2, result)
+        self.assertIn('review changed', result.get('error', ''))
+        self.assertEqual((self.task/'roadmap.html').read_bytes(), previous)
+
+    def test_absolute_path_import_works_without_scripts_on_sys_path(self):
+        code = """import importlib.util, pathlib, sys
+path=pathlib.Path(sys.argv[1])
+spec=importlib.util.spec_from_file_location('isolated_entry',path)
+module=importlib.util.module_from_spec(spec)
+spec.loader.exec_module(module)
+assert callable(module.readiness)
+"""
+        for name in ('task-context.py', 'sync-roadmap.py'):
+            with self.subTest(entry=name):
+                result = subprocess.run([sys.executable, '-I', '-c', code, str(ROOT/'scripts'/name)], cwd=self.task, capture_output=True, text=True)
+                self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_nul_request_blocks_both_execution_and_sync(self):
+        (self.task/'00_request.md').write_bytes(b'Original\x00request')
+        spec = importlib.util.spec_from_file_location('nul_request_sync', ROOT/'scripts/sync-roadmap.py')
+        sync = importlib.util.module_from_spec(spec)
+        spec.loader.exec_module(sync)
+        for version in ('1', '2'):
+            with self.subTest(version=version):
+                if version == '2':
+                    self.prepare_v2()
+                else:
+                    self.receipt = write_receipt(self.task, self.model)
+                result = subprocess.run([sys.executable, str(ROOT/'scripts/task-context.py'), 'brief', str(self.task), '--execution'], capture_output=True, text=True)
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertIn('invalid request source: NUL', json.loads(result.stdout)['executionReadiness']['blockers'])
+                code, result = sync.synchronize(self.task, ROOT/'scripts/generate-roadmap-view.py', '3', self.task.parent, 'fixture', memory_root=self.task.parent, dry_run=True, headless=True)
+                self.assertEqual(code, 2, result)
+                self.assertEqual(result['reason'], 'plan_execution_blocked')
 
 if __name__ == '__main__':
     unittest.main()

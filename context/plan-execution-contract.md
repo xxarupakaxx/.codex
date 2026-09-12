@@ -21,7 +21,7 @@
 
 ユーザーの依頼と、その後の目的・範囲を変える追加指示の該当箇所をtaskの`00_request.md`へ保存し、引用と解釈を区別する。secretや無関係な会話を含めない。makerの都合で書き換えない。ユーザーの追加指示で目的が変わった場合は出典と変更を残し、再審査する。
 
-`30_plan.html`を人とLLM共通の正本にする。全体に`data-field="execution-contract-version"`のsectionを置き、本文値を`1`にする。snapshotのschema 2とは別の実行契約versionである。さらに次の`data-field`を持つsectionを置く。本文を別JSONへ複製しない。
+`30_plan.html`を人とLLM共通の正本にする。全体に`data-field="execution-contract-version"`のsectionを置き、本文値を`1`または`2`にする。version 2は[判断根拠の検査](decision-evidence.md)を追加し、重要な前提の未確認、期限切れ、資料の不一致も開始条件として扱う。version 1は従来の検査を維持する。snapshotのschema 2とは別の実行契約versionである。さらに次の`data-field`を持つsectionを置く。本文を別JSONへ複製しない。
 
 | field | 本文に書く内容 |
 |---|---|
@@ -76,6 +76,8 @@ UI mockだけでは手順にならない。画面操作から状態変更・処�
 ```
 
 実際の目的審査出力を`intent-review.md`、計画審査出力を`plan-review.md`へ保存し、それぞれのraw bytesのhashを結ぶ。目的審査がpassになった後に計画審査を行い、planのintentReviewSha256にはintent objectを`json.dumps(ensure_ascii=False, sort_keys=True, separators=(",", ":"))`で符号化したUTF-8 bytesのSHA-256を記録する。証拠の改変や審査結果の差替えは失効する。
+
+version 2では、独立checkerが実際に審査した`decision-evidence.json`のraw bytesのSHA-256を、receiptのtop-level `decisionEvidenceSha256`へ追加する。共通readinessは現在の根拠資料を読み直し、JSONのdigestと審査記録も照合する。`executionBrief.gate.decisionEvidence`に検査結果と記録の構造・参照が入り、根拠Markdownの本文は含めない。根拠の検査が通っていても、digestが変われば再審査が必要になる。
 
 verdictは`pass`、`revise`、`blocked`を使う。未解決の正しさに関するfindingはopenFindingsへ残し、passで隠さない。leadが独立checkerの実際の出力と元sourceを照合して記録する。名前の文字列やhashは本人性、意味的正しさ、ユーザー承認の証明ではない。fixtureで作ったpassを実taskへ流用しない。
 
