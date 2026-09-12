@@ -1,6 +1,6 @@
 ---
 name: config-mirror-sync
-description: "`~/.codex`・`~/.claude`の変更をObsidianボルトへ反映する。Markdown抜粋ミラー（`_shared-ai/mirrors/`）とgit submodule（`.codex`/`.claude-global`）の両方が対象。「vaultに同期して」「obsidianに反映して」「ミラー更新して」等の依頼時、またはhome側でコミット・pushした直後にvault側も最新化したい場合に使用。**除外**: PJ内ドキュメント整合はproject-sync、単一ファイルの一時的なコピーは対象外。"
+description: "`~/.codex`・`~/.claude`の変更をObsidianボルトのMarkdownミラーとgit submoduleへ同期する。『vaultに同期』『obsidianに反映』などの明示依頼、またはhome側を更新した直後に使う。PJ文書整合や一時コピーには使わない。"
 ---
 
 # Config Mirror Sync — Obsidianボルトへの反映

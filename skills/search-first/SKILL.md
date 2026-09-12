@@ -1,6 +1,6 @@
 ---
 name: search-first
-description: "コード実装前にnpm/PyPI/GitHub/MCP/既存スキルを検索し、既存ツールがあれば利用を推奨する「車輪の再発明防止」スキル。brainstormingやPhase 1の調査で併用。"
+description: "新しいユーティリティや外部依存の実装前にrepo・既存Skill/agent・npm/PyPI/GitHub/MCPを比較し、再利用候補とリスクを記録する。車輪の再発明を避ける調査、または`/search-first`に使い、単純な局所編集には使わない。"
 ---
 
 # Search First — 既存ツール優先ワークフロー

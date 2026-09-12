@@ -1,137 +1,85 @@
 ---
 name: orchestrate
-description: "エージェントチェーンを順次実行するオーケストレーター。feature/bugfix/refactor/security等のワークフロー種別に応じて、専門エージェントをハンドオフドキュメント付きでチェーン実行する。"
+description: ユーザーが `/orchestrate` を明示したとき、workflow種別に合う専門agentを依存順に実行し、構造化handoffで次へ渡す。feature、bugfix、refactor、security、customの逐次chainが必要なときに使い、単一文脈の局所作業には使わない。
 ---
 
 # エージェントオーケストレーション
 
-## 概要
+各agentの成果物を次のagentの入力にする逐次chain。開始前に変更範囲、依存、合格基準、外部writeの承認、コード変更ならComplexity Budgetを確定する。現在のsessionが提供するcollaboration capabilityを使い、固定API名・固定roster・legacy modelを仮定しない。
 
-タスク種別に応じた専門エージェントチェーンを順次実行する。
-各エージェントは構造化されたハンドオフドキュメントで次のエージェントに引き継ぐ。
-
-## 使い方
-
-```
+```text
 /orchestrate <workflow-type> "<タスク説明>"
+/orchestrate custom "agent1,agent2,agent3" "<タスク説明>"
 ```
 
-## ワークフロー種別
+## 標準chain
 
-### `feature` — 新機能開発
-チェーン: `requirement-parser` → `prd-reviewer` → Approved PRD gate → `implementation-planner` → Work Packet配車 → 実装 → Evidence Bundle → `test-reviewer` + risk-based reviewer
+| type | chain |
+| --- | --- |
+| `feature` | `requirement-parser` → `prd-reviewer` → Approved PRD gate → `implementation-planner` → Work Packet → implementation → Evidence Bundle → `test-reviewer` + risk-based review |
+| `bugfix` | `data-flow-tracer` → fix implementation → `test-reviewer` |
+| `refactor` | `architecture-explorer` → `arch-reviewer` → implementation → `code-quality-reviewer` |
+| `security` | `security-reviewer` → fix implementation → `security-reviewer` recheck |
+| `custom` | ユーザー指定順（依存を満たす場合のみ） |
 
-### `bugfix` — バグ修正
-チェーン: `data-flow-tracer`（原因調査） → 修正実装 → `test-reviewer`
+featureはPRD reviewerの `pass` まで実装へ進めない。Work Packetのmodel/service tierは `rules/model-routing.md` のsix-axis routerで解決し、必要なrouteがなければ `ROUTING_BLOCKED` として停止する。
 
-### `refactor` — リファクタリング
-チェーン: `architecture-explorer` → `arch-reviewer`（改善提案） → 実装 → `code-quality-reviewer`
+## 実行と分岐
 
-### `security` — セキュリティ強化
-チェーン: `security-reviewer`（脆弱性スキャン） → 修正実装 → `security-reviewer`（再検証）
+1. PJの `AGENTS.md`、`context/workflow-rules.md`、`context/agent-team-routing.md`を読み、必要な正本だけを各agentへ渡す。
+2. 最初のagentを起動し、入力とowned pathsを限定する。
+3. 成果物、findings、変更file、検証、open questions、次のacceptanceをhandoffへ記録する。code変更では担当要素のtarget・actual・varianceも記録する。
+4. 次のagentへhandoffを渡し、依存が満たされるまで開始しない。独立したreviewだけは同じ段階で並列化できる。
+5. reviewerが不合格にしたら、原因を記録して該当agentへ戻す。外部write、仕様変更、破壊的操作、広範囲変更、commit/pushは承認gateを通す。
+6. 全chainの検証とholistic checkが通るまで完了扱いにしない。ブロッカーはchainを止め、残課題と必要な判断を報告する。
 
-### `custom` — カスタムチェーン
-```
-/orchestrate custom "agent1,agent2,agent3" "タスク説明"
-```
-
-## 実行フロー
-
-各エージェントに対して:
-
-1. **コンテキスト注入**: タスク説明 + 前のエージェントのハンドオフドキュメント。コード変更では `rules/complexity-budget.md` の要素別target、除外、超過時の再計画条件も渡す
-2. **エージェント実行**: `multi_agent_v1.spawn_agent(agent_type: "...")` で実行
-3. **ハンドオフ生成**: 結果を構造化ドキュメントとして整理し、担当要素のactualとvarianceを記録
-4. **次のエージェントへ引き継ぎ**
-
-feature chainは`prd-reviewer`が`pass`を返すまで実装へ進めない。
-
-Work Packetのmodelは`rules/model-routing.md`のsix-axis routerで解決し、必要modelがなければ`ROUTING_BLOCKED`で停止する。
-
-## ハンドオフドキュメント形式
-
-各エージェント間で以下の形式で情報を引き継ぐ:
+## Handoff形式
 
 ```markdown
-## HANDOFF: [前のエージェント] → [次のエージェント]
+## HANDOFF: <前のagent> → <次のagent>
 
 ### Context
-[実行した内容の要約]
-
+<今回確認した範囲>
 ### Findings
-[発見事項・判断・決定事項]
-
+<根拠付きの発見、決定、未確認>
 ### Files Modified
-[変更したファイルのリスト（パス付き）]
-
+<絶対またはrepo相対path>
+### Verification
+<コマンドと結果>
 ### Open Questions
-[未解決の事項・次のエージェントへの質問]
-
+<次のagentまたはユーザーの判断>
 ### Recommendations
-[推奨される次のステップ]
-
+<次のagentが行うこと>
 ### Complexity Budget
-- Target: [production / test / config・migration]
-- Actual: [同じ区分]
-- Variance / reason: [within target / justified variance / scope drift]
+- Target: <production / test / config・migration>
+- Actual: <同じ区分>
+- Variance / reason: <within target / justified variance / scope drift>
 ```
 
-## 最終レポート形式
+## 機構の使い分け
 
-全エージェント完了後に以下を生成:
+| 機構 | 用途 |
+| --- | --- |
+| `multi_tool_use.parallel` / session collaboration | 独立した短命の調査・レビュー・A/B・fan-out |
+| `/team-run` | Goal、Team Journal、Review Heatを持つ複数roundの協働 |
+| `/orchestrate` | 順序が重要なagent chain |
+| `/lfg` | Phase 0〜5.5を一つのタスクとして通す |
+| `blueprint` | 多session・多PRの設計図 |
+
+同じ問いをchainとteam-runで二重実行しない。詳細な実行モデルは `context/loop-engineering.md`、routeは `context/agent-team-routing.md`、phaseと承認は `context/workflow-rules.md` を正本とする。
+
+## 最終報告
 
 ```markdown
 # ORCHESTRATION REPORT
-
-## Overview
-- **Workflow**: [種別]
-- **Task**: [タスク説明]
-- **Agents**: [チェーン]
-
-## Summary
-[1段落の要約]
-
-## Agent Outputs
-### [Agent 1]
-[要約]
-### [Agent 2]
-[要約]
-...
-
-## Files Changed
-[全変更ファイルリスト]
-
-## Test Results
-[テスト結果サマリー]
-
-変更量：[想定内 / 計画超過（計画値、実績、差分、理由）]
-
-## Recommendation
-[SHIP / NEEDS WORK / BLOCKED]
+- Workflow: <種別>
+- Task: <説明>
+- Agents: <chain>
+- Summary: <短い要約>
+- Files Changed: [...]
+- Verification: [...]
+- Complexity Budget: <target / actual / variance / reason またはN/A>
+- Recommendation: SHIP | NEEDS_WORK | BLOCKED
 ```
 
-計画内なら `変更量：想定内` の一行だけを書く。計画超過時だけ括弧内に計画値、実績、差分、理由を書く。コード変更がない場合は変更量を記載しない。
-
-## オーケストレーション機構の使い分け（正典）
-
-| 機構 | 性質 | 使う場面 |
-|------|------|---------|
-| **`multi_tool_use.parallel` / `multi_agent_v1.spawn_agent`** | 親が一括投入するfan-out（独立・短命ワーカー） | レビュー/調査/A-B/パイプライン。**大半はこれ（既定）** |
-| **team-run skill** (`/team-run` shim) | Goal + Team Journal + Review Heat + `spawn_agent` で状態共有しながら自律協調 | 複数ターンに渡る協働、FE/BE並行 |
-| **`/orchestrate`** (本コマンド) | Codexランタイムでの逐次エージェントチェーン（ハンドオフ文書） | Codex主体で順序が重要なチェーン |
-| **`/lfg`** | Phase 0-5.5 の全フェーズを自律チェーン実行 | 1タスクを最初から最後まで通す（包括的） |
-| **`blueprint`** | 多セッション・多PRの設計図生成 | 大規模・長期タスクの分解 |
-
-> 正典の詳細は `context/loop-engineering.md`「実行モデル」。`/orchestrate` は `/lfg` のPhase内で部分的に使うことも、独立して使うことも可能。
-
-## 並列実行
-
-独立したエージェントは並列起動可能。例:
-- `feature`の`test-reviewer` + `security-reviewer`は並列実行
-- `security`の初回スキャンと修正は順次実行
-
-## 注意事項
-
-- 各エージェントのハンドオフは05_log.mdにも記録する
-- チェーン中にブロッカーが出たら中断してユーザーに報告
-- agent_type と model/service_tier は `context/agent-team-routing.md` と `rules/model-routing.md` に準拠
+05_log.mdへ各handoffとブロッカーを記録する。chainを完了しただけでSHIPとせず、検証結果と未解決の判断を分けて報告する。

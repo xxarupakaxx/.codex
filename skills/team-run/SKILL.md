@@ -1,210 +1,114 @@
 ---
 name: team-run
-description: "team-run を起動すると Codex の goal と session-provided collaboration capability を使い、Delegation Gate を通る専門 sub-agent だけを割り当て、合格基準を満たすまで loop engineering で回す。共有メモリ(Team Journal)で周をまたいだ失敗原因を持ち越す。並列の幅が要る高価値タスク限定。"
+description: ユーザーが `/team-run` またはTeam Runを明示したとき、goal・合格基準・Team Journalを共有し、独立した専門sub-agentを必要な範囲だけ並列化して検証まで回す。単一ファイル・密結合・低価値の作業には使わない。
 ---
 
-# /team-run — Codex Agent Team を loop engineering で回す
+# /team-run
 
-**メインセッション（あなた）= team-lead。全 sub-agent はメインセッションが直接 spawn する。**
+メインセッションが team-lead となり、session-provided collaboration capability の sub-agent を使って、調査・実装・検証を独立に進める。価値は起動数ではなく、機械判定可能な合格基準、独立レビュー、失敗時の止め方に置く。
 
-Codex では `goal` で長い作業の目的を固定し、必要な skill で計画/検証/レビューのゲートを強化する。
-sub-agent は、現在の session が提供する collaboration capability を使い、Delegation Gate を通る場合だけ起動する。
+## 起動判断
 
-## 使う前に — 本当にチームが要るか
+| 状況 | 経路 |
+| --- | --- |
+| 逐次依存、同一ファイル、密結合、低価値 | leadが単独で実行 |
+| 独立した読み取り | `multi_tool_use.parallel` |
+| 独立した調査・実装・レビュー | sessionのcollaboration capability |
+| 複数ターンで目的・失敗原因・レビューを持ち越す高価値作業 | `/team-run` |
 
-マルチの本当のコストは金銭・トークンではなく、**文脈分断**（sub-agent は lead の会話履歴を持たず、結果は要約で戻る）と**無駄撃ち**（価値を生まない起動）にある。独立した作業幅・隔離された専門知識・独立検証のいずれかに価値があれば躊躇なく使い、無いのに同じ文脈を分業させない。基準は単一セッション + 良い文脈、並列の幅が本当に要る時だけ team-run。
+起動前に L0 local（`rg`、既存スクリプト、並列読み取り）で足りるか確認する。専門性が必要ならL2 role、GO/NO-GO・セキュリティ・重要設計・複雑実装ならL3 heavyを使う。定型要約やcommit文案だけは、現在の `rules/model-routing.md` で解決できるFast classをL1として使える。Fast classで不確実性、矛盾、複数ファイル判断、ユーザー影響が出たらそのroundを止め、role既定へ戻す。model、service tier、roleは固定値を書かず、同ファイルの許可集合に従う。
 
-| 状況 | 使うもの |
-|------|---------|
-| 逐次依存・同一ファイル・密結合・低価値 | 単一セッション |
-| 独立したローカル調査・ファイル読み取り | `multi_tool_use.parallel` |
-| 独立した調査/実装/レビューを並列化したい | session-provided collaboration capability |
-| 複数ターンで目的・失敗原因・レビューを持ち越す高価値タスク | `/team-run` |
+## 5つの共有成果物
 
-## loop engineering の形
+- **Goal**: 目的、Done、停止条件。長い作業は `create_goal` で固定し、完了または同じブロッカーが3回続いたときだけ `update_goal(status="complete"|"blocked")` を使う。
+- **Sprint Contract**: 機械判定可能な受入条件。`checkpoint.md` に保存する。
+- **Outcome Trace**: Goal outcome と acceptance/evidence の対応。未対応項目を残さない。
+- **Team Journal**: 現在地、決定、失敗の原因、次の担当をround間で共有する。
+- **Review Heat / Complexity Budget**: 変更リスクに応じたchecker/judgeと、コード変更のtarget・actual・varianceを記録する。
 
-```text
-draft objective → evidence pass → Goal Quality Gate → goalを作る → Sprint ContractとOutcome Traceを定義 → [割り当て→実行→検証] を合格まで回す → update_goalで完了/ブロックを記録
-```
+Goalは完了証明ではない。成果物と検証結果をOutcome Traceで結び、makerの自己申告だけで完了にしない。
 
-価値は「回すこと」ではなく、合格基準（検証器）の固さ、独立レビュー、止め方にある。
+## 開始時の読み込み
 
-## team-run の芯
+global `context/workflow-rules.md` のPhase 0を先に満たし、PJの `AGENTS.md`、`context/agent-team-routing.md`、`context/team-run.md` を現在の順序と境界の正本として読む。PJ側の同名contextは、globalの一般規則を壊さない範囲でroute/team-run固有の上書きとして扱う。
 
-`goal` は Done を固定する背骨だが、team-run の完了証明ではない。長い作業では以下を分けて扱う:
+開始時に次をTeam Journalへ記録する。
 
-- Goal: 目的・Done・停止条件。
-- Sprint Contract: 機械判定できる合格基準。
-- Outcome Trace: Goal outcome と acceptance / evidence の対応。
-- Team Journal: 周回をまたぐ現在地・決定・失敗原因。
-- Review Heat: 変更リスクに応じた checker / judge の選択。
-- Complexity Budget: コード変更の要素別target / actual / varianceを追跡するソフト予算（詳細は `rules/complexity-budget.md`）。
+- draft objective と Goal Quality Gate の状態
+- lane、sub-agentを省略した理由、model route、budget route
+- 合格基準、owned paths、外部副作用の承認状態
+- Complexity Budget（コード変更時）と初期Review Heat
 
-チーム構成、レビュー熱量、終了判定の詳細は `context/team-run.md` を読む。Phase 順序やレビュー戦略の SSoT は引き続き `context/workflow-rules.md`。
+Goal Quality Gateは `skills/goal-setter/SKILL.md`、Phaseの正式な順序・必須ゲート・roadmap表示は `context/workflow-rules.md` に従う。ここで複製した規則より正本を優先する。
 
-## Codex 前提（CRITICAL）
+## ループ
 
-- `config.toml` の default model は `gpt-5.5`、`service_tier = "priority"`。
-- `features.goals = true` を有効化し、長い team-run は `create_goal` / `update_goal` を使う。
-- Superpowers plugin が使える環境では、関連スキルをゲートとして使う。
-- plugin / skill / agent role の選択は `context/agent-team-routing.md` を参照し、Phase順序やmodel方針は重複定義しない。
-- session-provided collaboration capability は role 既定の model/service_tier を優先する。
-- custom/default sub-agent に model を明示する場合は `rules/model-routing.md` の許可モデル集合に従い、必ず `service_tier = "priority"` をセットする。
-- Fast classは、現セッションのmetadataで`rules/model-routing.md`のcurrent runtime resolutionを解決できる場合に限り、commit文案、短い要約、定型整形など、toolなしでleadが即検査できるdefault/custom作業に使える。利用できない場合は弱いmodelへfallbackせずleadへ戻す。
-- Codex で無効な model 名は prompts/examples に書かない。
-- 同時 sub-agent は4件目安。cleanup API がある場合だけ完了済み agent を閉じる。
-- sub-agent は lead の会話履歴を持たない。状態は Team Journal に逃がす。
+1. **調査**: local-firstで既存コード・資料・履歴を調べ、必要な外部参照とGO/NO-GO根拠を記録する。必要なら検索専任を委譲する。
+2. **計画**: Goal Gateを通過させ、`create_goal`、Sprint Contract、Outcome Trace、roadmap、Team Journalを整える。依存・acceptance・risk・write scopeを確定する。
+3. **割り当て**: 依存のない仕事だけを並列化する。write scopeが重なる仕事を同時に渡さない。各sub-agentには目的、scope、acceptance、既知の失敗原因、短い出力形式を渡す。
+4. **実行**: makerは明示したdisjoint write scopeだけを変更する。explorerは必要な箇所だけ読む。leadは結果をEvidence BundleとJournalへ要約し、失敗を症状でなく原因としてAttributionに残す。
+5. **レビュー**: 変更リスクに応じて最小のchecker/judgeを選ぶ。CRITICALは修正、IMPORTANTを見送る場合は理由をJournalに残す。testのskip・緩和・削除、検証コマンドの形骸化を通さない。重要設計や高リスク変更だけadversarial/auditor reviewを追加する。
+6. **検証**: 個別タスク、統合後のtest/typecheck/lint/buildまたは実行確認、holisticなGoal outcomeの順に確認する。失敗時は原因をJournalに記録し、write scopeと受入条件を保った小さい修正へ戻す。
+7. **終了**: Outcome Traceに未対応がなく、freshな検証が通り、Exit Gateを満たしてから `update_goal(status="complete")`。同一ブロッカーが3回連続した場合だけ `blocked` とし、残課題を報告する。cleanup capabilityは提供される場合だけ使う。
 
-## Cost/Budget Gate
+Phase 0〜5.5の正式な作業、承認、レビュー、material changeの再計画は `context/workflow-rules.md` を優先する。コード変更では `rules/complexity-budget.md` のtarget・根拠・超過時の再計画条件を計画と報告へ含める。外部write、仕様変更、破壊的操作、広範囲変更は承認gateを通す。
 
-team-run のコストは文脈分断と調整オーバーヘッドにある（金銭・トークンは本質ではない）。無駄撃ちを避けるため、起動前に次を順に確認する。
+## Capability adapter と役割
 
-1. **L0 local で足りるか**: `rg`、`git diff`、既存スクリプト、`multi_tool_use.parallel` で独立読み取りを処理できるなら sub-agent を起動しない。
-2. **L1 Fast classで足りるか**: commit文案、短いログ要約、定型整形、重複検出だけなら、必要時のみ`default`へ委譲し、modelとeffortは`rules/model-routing.md`から解決する。tool、approval、external writeは渡さない。利用不可なら弱いmodelへfallbackせずleadへ戻す。
-3. **L2 role 既定が必要か**: 専門 role で表現できる調査・レビューは role 既定を使う。
-4. **L3 heavy が必要か**: GO/NO-GO、セキュリティ、重要設計、複雑実装は heavy role に任せる。mini に落とさない。
+固定APIや固定rosterを仮定しない。capabilityがあればその現在の起動・待機・メッセージ手段を使い、なければleadが逐次実行する。`multi_agent_v1` は旧表記であり、利用可否を推測しない。全sub-agentをleadが直接管理し、同時数は依存とreview熱量に応じて最小限（目安4）にする。
 
-Fast classで一度でも不確実性、矛盾、複数ファイル判断、ユーザー影響が出たら、そのroundは止めてrole既定へ昇格する。`service_tier`を落とすことをコスト最適化として扱わない。
-
-## Superpowers の使い所
-
-| 場面 | Superpowers skill |
-|------|-------------------|
-| 要求が曖昧・設計余地が大きい | `superpowers:brainstorming` |
-| 実装計画を固める | `superpowers:writing-plans` |
-| 独立タスクを並列委任する | `superpowers:dispatching-parallel-agents` / `superpowers:subagent-driven-development` |
-| バグ診断 | `superpowers:systematic-debugging` |
-| 実装完了前 | `superpowers:verification-before-completion` |
-| merge/PR 前 | `superpowers:requesting-code-review` / `superpowers:finishing-a-development-branch` |
-
-Codex 側ではスキル本文を読んでから、その指示を現在の tool 名に対応させる。
-
-## Capability Adapter
-
-この skill 内の role と code block は固定 API や固定 roster を要求しない。
-現在の session に collaboration capability があれば、Role / write scope / acceptance を明示して使う。
-なければ lead が逐次実行し、Goal、Sprint Contract、Outcome Trace、Review Heat の基準を下げない。
-`multi_agent_v1` は旧環境の表記例であり、利用可否を仮定しない。
-
-## Codex 実行プリミティブ
-
-| 必要なこと | Codex で使うもの |
-|----------|------------------|
-| 長い作業の目的固定 | `create_goal` / `update_goal` |
-| sub-agent 起動 | session-provided collaboration capability |
-| sub-agent 結果待ち | session-provided wait / message capability |
-| 完了済み agent の整理 | 提供される場合だけ cleanup capability |
-| 進捗・失敗原因の共有 | Team Journal と計画チェックリスト |
-| 独立したローカルfan-out | `multi_tool_use.parallel` |
-| プロセス規律 | Superpowers skills を読んで Codex tool に対応させる |
-
-## Agent Role Routing
-
-`rules/model-routing.md` を model / service_tier / agent_type 対応の SSoT とする。plugin / skill / agent role の選択は `context/agent-team-routing.md` を参照する。ここでは team-run 内の役割ラベルだけを示す。
-
-| team-run label | 役割 |
-|----------------|------|
-| planner | タスク分解、依存関係、合格基準案 |
-| plan-reviewer | YAGNI、依存矛盾、実現可能性レビュー |
+| label | 担当 |
+| --- | --- |
+| planner | 分解、依存、合格基準案 |
+| plan-reviewer | YAGNI、依存矛盾、実現可能性 |
 | explorer | 検索ファーストのコード調査 |
-| maker | disjoint write scope 内の実装 |
+| maker | disjoint scope内の実装 |
 | checker | 成果物ベースの独立レビュー |
-| final judge | GO/NO-GO、採否判定 |
+| final judge | GO/NO-GOと採否 |
 
-## コンテキスト保護（CRITICAL）
+必要なSuperpowers skillがある場合は、brainstorming（曖昧な設計）、writing-plans/dispatching-parallel-agents（計画と委譲）、systematic-debugging（診断）、verification-before-completion（完了前）、requesting-code-review/finishing-a-development-branch（merge前）を読み、現在のCodex toolへ対応させる。routeの選択は `context/agent-team-routing.md` に戻す。
 
-全 sub-agent への指示に必ず含める:
+## Sub-agentの文脈契約
+
+指示には次を含める。
 
 ```text
-- lead への最終報告は 1-3 行の compact サマリーのみ
-- 詳細は変更ファイル、検証コマンド、レビュー観点の箇条書きに分ける
-- コードブロック・巨大 diff・長いログは最終報告に含めない
-- JSON を返す場合も 200 字程度に抑える
-- ユーザーが逐語で読むべき成果物（計画・重要 findings・生成文書）は、ファイルに書き、その path を最終報告に含める
-- 他 agent / user の変更を revert しない
+objective: 今回完了すべき仕事
+scope: 読む/書く対象、owned paths、触らない境界
+acceptance: 機械検証またはreview観点
+prior failure: 直近の失敗原因
+output: 変更ファイル、検証、短い所見だけ
 ```
 
-lead は、sub-agent から path 付きで届いた user-facing 成果物（ユーザーが逐語で読むべき計画・重要 findings・生成文書）を自分で読み、要約せず原文をユーザーへの報告に含める。
+最終報告は1〜3行のcompact summaryにし、巨大diff・長いログ・base64・不要な全文を返さない。逐語で読むべき計画やfindingsはファイルへ書き、そのpathを返す。他agentやuserの変更をrevertしない。leadはpath付き成果物を自分で読み、必要な原文をユーザーへ引き継ぐ。
 
-### Context Slimming
+## Team Journalの最小形式
 
-sub-agent へ渡す文脈は、全文ではなく次の薄い束にする。
+```markdown
+# Team Journal: <task-name>
 
-- objective: 今回の subtask で完了すべきこと。
-- scope: 読む/書く対象パス、触ってよい境界、触らない境界。
-- acceptance: 機械検証または reviewer 観点。
-- prior failure: 直近の失敗原因。症状だけを書かない。
-- output: 期待する短い報告形式。
+## 定位置
+- Goal: ...
+- Goal Gate: draft | PASS | NEEDS_CLARIFICATION
+- Lane / 省略理由: ...
+- Outcome Trace: 未対応 _ / holistic pending|PASS|FAIL
+- 合格基準: 機械判定 ... / 判断ベース ...
+- Complexity Budget: code|non-code / target ... / actual ... / variance ...
+- Budget: sub-agent _/4 / 差し戻し _/3 / 連続失敗 _
+- 現在のround / 直近の失敗原因: ...
 
-Team Journal と 05_log.md が正本なので、同じ背景説明を毎回貼り直さない。
+## Decision Log
+| 時刻 | agent | 決定 | 理由 |
 
-## フロー
+## Trace
+### <agent>
+- 成果物 path:line / 検証 / 申し送り / blocker
 
-このフローは `context/workflow-rules.md` の Phase 0-5.5 上で動く **team-run 固有の orchestration overlay**。Phase の正式順序・必須ゲート・05_log.md 更新ルールは常に `context/workflow-rules.md` を優先する。以下は各Phase内で追加する team-run 手順であり、global workflow の代替ではない。
+## Attribution
+| agent | task | 失敗内容 | 原因 | round |
+```
 
-### Overlay A: global Phase 0 内 — PJ設定読込
-
-`context/workflow-rules.md` の Phase 0 を先に満たす。つまり、メモリディレクトリと05_log.mdを作成し、local-first で過去知見を検索して記録する。結果が不十分で Delegation Gate を通る場合だけ `learnings-researcher` を追加する。
-
-team-run を開始時から使う場合、この時点では Team Journal に draft objective と Goal Gate 未通過を記録する。Goal readiness の判定項目は `skills/goal-setter/SKILL.md`、Gate の Phase placement は `context/workflow-rules.md` を参照し、ここへ複製しない。
-
-そのうえで PJ `AGENTS.md` の一般制約を確認する。次にグローバルの `context/agent-team-routing.md` を baseline として読み、`context/team-run.md` を team-run policy として読む。PJ の `.codex/context/agent-team-routing.md` があれば routing override として重ねる。最後に PJ の `.codex/context/team-run.md` があれば team composition / review policy override として重ねる。両方ある場合、`.codex/context/team-run.md` は `/team-run` 固有事項にだけ適用し、一般 routing は `.codex/context/agent-team-routing.md` を優先する。
-
-### Overlay B: global Phase 1-2 内 — 起動・計画
-
-1. **global Phase 1 調査**: `context/workflow-rules.md` に従い、外部情報参照（deepwiki / WebSearch / Context7 の最低1つ）と既存コード確認、GO/NO-GO検証を05_log.mdに記録する。
-2. **Goal Quality Gate**: `context/workflow-rules.md` の placement と `skills/goal-setter/SKILL.md` の Readiness check に従う。PASS 後に `create_goal` で objective を固定する。Phase 3からteam-runを追加する場合は既存 Goal を audit し、material change が必要なら変更案をGateで再監査してからユーザーへ戻す。
-3. **Budget route 選択**: `rules/model-routing.md` の Cost Ladder で L0 local / L1 mini / L2 role / L3 heavy を選ぶ。選択理由を Team Journal に記録する。
-4. **Engineering / Plugin route 選択**: `context/agent-team-routing.md` の Engineering Flow Shape から lane を選び、Superpowers / Product Design / Data Analytics / Sites / Slack / GitHub などの router skill を必要に応じて読む。laneの判定条件はここへ複製しない。
-5. **Superpowers 確認**: 該当する Superpowers skill を読む。曖昧な設計なら brainstorming、明確な実装なら writing-plans / dispatching-parallel-agents を使う。
-6. **global Phase 2 計画**: `context/workflow-rules.md` に従い、30_plan.html を作成する。既存taskにHTMLがない場合だけ30_plan.mdを互換入力として読む。コード変更では `rules/complexity-budget.md` の要素別target、信頼度、根拠、超過時の再計画条件を計画へ含める。追加調査で判断が変わり得る場合だけ `deepening-plan` を使い、独立 plan review は Delegation Gate と変更リスクに応じて選ぶ。
-7. **Team Journal 更新**: `${MEMORY_DIR}/memory/YYMMDD_<task_name>/team-journal.md` に Goal Gate、選択 lane と省略理由、Budget、Complexity Budgetのtarget、leader 状態、plugin route、model route を書く。
-8. **計画書の表示**: 共通syncが生成した同じroadmap.htmlを通常ブラウザで確認する。更新ごとにtabを増やさず、watch・server・複数TaskのHubは明示した横断確認が必要な場合だけ使う。表示手順はviewing-plansへ戻る。
-9. **Review Heat 仮決定**: `context/team-run.md` の Heat ladder で checker / judge の初期セットを決め、Team Journal に記録する。
-10. **planner / plan-reviewer の選択**: lead の直接計画で不足し、独立した分解または検証が価値を生み、Delegation Gate を通る場合だけ起動する。planner には依存、acceptance、risk、write scope を、plan-reviewer には YAGNI、依存矛盾、実現可能性、検証可能性を渡す。
-
-12. **人間ゲート**: 仕様変更・外部副作用・破壊的操作・広範囲変更はユーザー承認を取る。既にユーザーが実行を明示し、変更がローカル設定/ドキュメントに閉じる場合は、計画をログに残して進めてよい。
-13. **Sprint Contract と Outcome Trace**: global Phase 2.5 に従って checkpoint.md を作る。trace schema と material change の再承認条件は `context/workflow-rules.md` を参照し、ここへ複製しない。
-
-### Overlay C: global Phase 3 内 — 実装ループ
-
-1. **割り当て**: 依存のないタスクだけ並列化する。write scope が重なるタスクは並列化しない。
-2. **explorer**: lead の local search で不足し、Delegation Gate を通る調査だけを `explorer` / `architecture-explorer` に渡す。検索ファーストで、必要箇所だけ読む。
-3. **implementer**: 独立した write scope がある場合だけ `implementer` / `worker` に渡す。複数ファイルや複雑実装では write scope、要素別Complexity Budget、境界を明示する。
-4. **Fast helper**: commit文案、短い要約、定型整形だけは、metadata で利用可能な場合に`rules/model-routing.md`のFast classを検討する。利用不可なら弱いmodelへfallbackせずleadへ戻す。実装、設計、最終レビューには使わない。
-5. **共有**: 各 sub-agent の結果を同じEvidence Bundle IDとTeam Journalへ要約し、失敗は症状ではなく原因でAttributionに残す。各要素のactualとvarianceも更新する。
-6. **Budget/Stop**: 差し戻しは最大3回、連続失敗2回で escalate。これを超える場合は `update_goal(status="blocked")` の対象。
-
-### Overlay D: global Phase 4 内 — レビュー
-
-実装完了後、maker の自己申告だけでは完了扱いにしない。成果物だけを見て checker が通す。
-
-`context/team-run.md` の Review Heat ladder と `context/workflow-rules.md` のレビューアー選択ガイドに従い、変更リスクで最小の checker を選ぶ。AGENTS/context/skills/commands 変更では `rule-validator`、`docs-reviewer`、`arch-reviewer` のうち必要な観点だけを選ぶ。固定の三 reviewer fan-out は行わない。
-
-- CRITICAL は必ず修正する。
-- IMPORTANT は原則修正する。見送る場合は理由を Team Journal に残す。
-- test の緩和、skip、削除、検証コマンドの形骸化は不合格。
-- コード変更では、target / actual / varianceを確認し、`within target` / `justified variance` / `scope drift` を判定する。行数だけで拒否せず、必要性と削減候補を根拠付きで記録する。
-- 重要判断やリスクが高い変更では `adversarial-review` / `auditor-reviewer` を追加する。
-- Superpowers の `requesting-code-review` が適用できる場合は使う。
-
-### Overlay E: global Phase 4 内 — 検証
-
-3段階で検証する。
-
-1. 各タスクが個別に合格基準を満たすか。
-2. 統合後に全体の test / typecheck / lint / build / 実行確認が通るか。
-3. 未対応 Goal outcome が0で、統合成果物の holistic check が通るか。
-
-不合格時の戻り先と material change の再承認は `context/workflow-rules.md` に従う。
-
-完了を主張する前に `superpowers:verification-before-completion` を使い、fresh な検証コマンドの出力を確認する。
-
-### Overlay F: global Phase 5 内 — 終了
-
-1. `context/team-run.md` の Exit Gate を確認してから `update_goal(status="complete")` を実行する。同じブロッカーが3回続いた場合のみ `blocked`。
-2. cleanup capability がある場合だけ完了済み sub-agent を閉じる。ない場合は Team Journal に終了状態を残す。
-3. Orchestration Report を出す。
+## Orchestration Report
 
 ```markdown
 ## Orchestration Report
@@ -215,47 +119,9 @@ team-run を開始時から使う場合、この時点では Team Journal に dr
 - Changed Files: [...]
 - Verification: [...]
 - Review Findings: [...]
-- Complexity Budget: target / actual / variance / reason（コード変更なしは N/A）
+- Complexity Budget: target / actual / variance / reason（コード変更なしはN/A）
 - Blockers: [...]
 - Live Roadmap: URL or path
 ```
 
-4. 価値ある知見・失敗パターンは `compounding-knowledge` で保存する。
-
-## Team Journal テンプレート
-
-```markdown
-# Team Journal: <task-name>
-> 使い方: turn 開始前に定位置と直近 Attribution を読む。turn 終了時に Trace へ append する。
-
-## 定位置（leader 単独が毎周更新）
-- Goal: ...
-- Goal Gate: draft | PASS | NEEDS_CLARIFICATION
-- Lane: ... / 省略: ...（理由）
-- Outcome Trace: 未対応 _ / holistic pending|PASS|FAIL
-- 合格基準: （機械判定: ... / 判断ベース: ...）
-- Complexity Budget: code | non-code / target ... / actual ... / variance ... / reason ...
-- Budget 残: sub-agent _/4 ・差し戻し _/3 ・連続失敗 _
-- 現在の周: N / 直近の失敗（原因）: ...
-
-## 決定ログ Decision Log
-| 時刻 | agent | 決定 | 理由 |
-
-## 軌跡 Trace
-### [agent-name]
-- やったこと / 成果物 file:line / 申し送り / ブロッカー
-
-## 失敗・差し戻し Attribution
-| agent | task | 失敗内容 | 原因 | ラウンド |
-```
-
-## 参照
-
-- `rules/model-routing.md` — Codex role/model/service_tier の SSoT
-- `context/agent-team-routing.md` — plugin / skill / agent role 選択の SSoT
-- `context/team-run.md` — team-run のチーム構成・レビュー熱量・終了判定
-- `skills/goal-setter/SKILL.md` — Goal readiness の SSoT
-- `skills/autonomous-loops/SKILL.md` — Budget/Stop とループ戦略
-- `skills/compounding-knowledge/SKILL.md` — 完了後の知見保存
-- `context/loop-engineering.md` — 実行モデル
-- `commands/pr-watch.md` — PR作成後のCI/レビュー継続監視
+関連正本: `context/team-run.md`（Heat、構成、Exit Gate）、`skills/goal-setter/SKILL.md`（Goal readiness）、`skills/autonomous-loops/SKILL.md`（loopのbudget/stop）、`skills/compounding-knowledge/SKILL.md`（知見保存）、`context/loop-engineering.md`（実行モデル）。

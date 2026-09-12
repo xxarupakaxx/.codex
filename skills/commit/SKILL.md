@@ -1,4 +1,5 @@
 ---
+name: commit
 allowed-tools: Bash(git:*), Bash(python3:*)
 argument-hint: [--push]
 description: 検証済みの変更だけをcommitし、必要時に文案をFast workerへ委譲

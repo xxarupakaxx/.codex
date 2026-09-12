@@ -1,132 +1,84 @@
 ---
 name: create-subagent
-description: 自然言語の要件から agents/<name>.toml 雛形を生成するメタスキル。TOML（name/description/model/service_tier/developer_instructions）+ 起動条件 + 出力フォーマット + Tier 1/2/3レビュー姿勢 + スコアリングルーブリックを含むベストプラクティス準拠の雛形を作る。使用タイミング: (1) 新しいサブエージェントを追加したいとき、(2) /create-subagent <要件> 実行時、(3) 「サブエージェントを作って」「専門エージェントを追加」「reviewer を作って」等の依頼時。create-skill の派生としてエージェント定義に特化。
+description: 自然言語の要件から `agents/<name>.toml` のsub-agent雛形を作る。reviewer、explorer、generatorの追加依頼で、起動条件・最小権限tools・model route・出力形式・評価基準を定義するときに使う。
 allowed-tools: Read, Write, Glob, Grep, AskUserQuestion
 ---
 
 # Create Subagent
 
-自然言語の要件から `agents/<name>.toml` 雛形を生成するメタスキル。
+自然言語の役割要件を、既存のagent定義と衝突しないTOMLへ変換するメタスキル。`agents/<name>.toml` 以外は書かず、既存ファイルを上書きするときはAskUserQuestionで確認する。
 
-## 既存設定との関係
+## 要件の確定
 
-- **rules/model-routing.md**: Agent Tool の model 選択方針に従う
-- **rules/architecture-language.md**: 用語統一（Module/Interface/Depth 等）
-- **create-skill**: スキル生成の姉妹スキル。本スキルはエージェント生成に特化
+`/create-subagent <要件>` または同等の依頼を受けたら、役割（review / exploration / generation / evaluation）、自動または手動の起動条件、入力、出力（issue file / inline / structured JSON）、write scope、外部情報の要否を整理する。不明点でagentの境界や副作用が変わる場合だけ確認する。既存 `agents/` はGlobで調べて重複を避ける。
 
-## ワークフロー
+## Tierとmodel route
 
-### Step 1: 要件パース
+modelとservice tierは `rules/model-routing.md` のcurrent runtime resolutionを正本にし、通常は両方をTOMLから省略して親session/role既定を継承する。
 
+| Tier | 例 | 方針 |
+| --- | --- | --- |
+| 1 | 標準のarchitecture/performance review | role既定を継承 |
+| 2 | quality/test/observability/a11y review | 必要なときだけ追加 |
+| 3 | security、PRD、複雑な判断 | heavy roleを選ぶ |
+| Explorer | file検索、pattern調査 | 既存explorer roleを優先 |
+| Fast helper | commit文案、短い要約、定型整形 | toolなしでleadが即検査できる場合だけ |
+
+Fast helperで不確実性、矛盾、複数ファイル判断、ユーザー影響が出たらleadへ戻す。固定のlegacy model slugや `service_tier` をこのSkillへ複製しない。
+
+## nameとdescription
+
+- nameは小文字、数字、hyphenを使う64文字以下の識別名（例 `api-contract-reviewer`）。
+- descriptionは第三者の文で1024文字以内にし、「何を」「いつ」「どのtrigger語で」呼ぶかを含める。XMLタグ、1人称、責務外の一般論を入れない。
+
+## TOMLの生成
+
+`references/agent-template.md` を読み、必要な項目だけを埋める。
+
+```toml
+name = "<kebab-case-name>"
+description = "<役割・起動条件・trigger語>"
+# model / service_tier は rules/model-routing.md に沿って必要な場合だけ指定
+
+developer_instructions = """
+# <Agent Display Name>
+
+<役割と完了条件>
+
+## 起動条件
+- 自動: <workflow/phase/状況>
+- 手動: <明示呼び出し>
+
+## 入力
+- <データと参照path>
+
+## 出力
+- <形式、保存先、短い最終報告>
+
+## 境界
+- <owned paths、触らないpath、外部writeの承認>
+"""
 ```
-入力: /create-subagent dependency-graph を可視化する専門エージェント
-→ 名称候補: dependency-graph-visualizer
-→ 役割: 依存グラフ抽出 + 可視化
-→ tier 判定（後述）
-```
 
-不明点があれば AskUserQuestion で確認:
-- 役割（レビュー / 探索 / 生成 / 評価）
-- 起動条件（自動 / 明示呼び出し）
-- 出力形式（issue file / inline summary / structured JSON）
+reviewer系には次をdeveloper instructionsへ含める。
 
-### Step 2: Tier 判定（CRITICAL）
+- コード冒頭のコメントを信頼せず実装で検証する `Do Not Trust Preamble`。
+- evidence、見逃しコスト、誤検知のconfidence（0〜1）を明記する。
+- CRITICAL / IMPORTANT / MINORの優先度と、観点・重み・1/3/5基準のルーブリックを定義する。
+- 他agentとの並列可否、入力依存、issue fileまたはinlineの出力形式を定義する。
 
-| Tier | 役割例 | model 指定 |
-|------|--------|-------|
-| Tier 1 | アーキ/性能レビュー（標準・常時呼ばれる） | 省略（親セッション継承） |
-| Tier 2 | 品質・テスト・観測性・a11y 等の追加レビュー | 省略（親セッション継承） |
-| Tier 3 | セキュリティ・PRDレビュー・複雑判断 | custom時のみ `model = "gpt-5.5"` + `service_tier = "priority"` を検討 |
-| Explorer | ファイル検索・パターンマッチ | 既存 `explorer` / `architecture-explorer` role を優先。custom時は `model = "gpt-5.4"` + `service_tier = "priority"` |
-| Fast helper | commit文案・短い要約・定型整形 | toolなしでleadが即検査できる場合のみ、`rules/model-routing.md`のFast classを検討。model slugをこのSkillへ複製しない |
+探索系は `Read, Grep, Glob`、レビュー系は必要に応じて `Read, Grep, Glob, WebSearch, Write`、生成・編集系は `Read, Write, Edit` を最小単位で選ぶ。Bashを漫然と付与しない。外部情報が必要なときだけ `WebSearch` / `WebFetch` を含め、credentialsや秘密をagent promptへ渡さない。
 
-判定指針: `rules/model-routing.md` を参照。
+## 配置と報告
 
-### Step 3: name / description 設計
+生成先は `agents/<name>.toml`。起動には現在のsessionのcollaboration capabilityを使い、固定API名を仮定しない。必要なら既存roleの起動例だけを報告する。
 
-**name 規約:**
-- 小文字・ハイフン・数字のみ（64文字以下）
-- 役割を即座に判別できる名前（例: `dependency-mapper`, `api-contract-reviewer`）
-- 既存 `agents/` と重複しないこと（Glob で確認）
+作成後に次を確認する。
 
-**description 規約（CRITICAL）:**
-- 3人称・1024文字以内・XMLタグ不可
-- 「何を」「いつ呼ばれるか」「トリガー語」を含める
-- 例: `セキュリティ観点でコードをレビュー。SQLインジェクション、XSS、CSRF、認証・認可の不備、機密情報のハードコード等を検出。`
+- nameが既存agentと衝突しない。
+- descriptionが役割・trigger・実行時期を識別できる。
+- model route、service tier、toolsが最小権限である。
+- reviewerならDo Not Trust Preamble、ルーブリック、3階級、出力形式がある。
+- writerのowned paths、外部write、承認、秘密境界が明記されている。
 
-### Step 4: 雛形生成
-
-`Read references/agent-template.md` を参照しテンプレートを取得し、以下を埋める:
-
-1. **TOML metadata**: name / description / model（省略可）/ service_tier（model明示時は必須）
-1. **developer_instructions**: 起動条件・入力・出力・評価姿勢を含む本文
-2. **Do Not Trust Preamble**: レビュー系エージェントには必ず挿入
-3. **評価姿勢セクション**: 懐疑姿勢・見逃しコスト・自作物への甘さ排除・証拠主義
-4. **スコアリングルーブリック**: 観点 × 重み × 1/3/5 評価基準（レビュー系のみ）
-5. **レビュー項目 or 実行手順**
-6. **優先度判断基準**: CRITICAL / IMPORTANT / MINOR
-7. **出力形式**: issue file path or inline format
-
-### Step 5: 配置と確認
-
-- 配置先: `agents/<name>.toml`
-- 既存ファイル上書き時は AskUserQuestion で確認
-- 作成後、起動方法（`multi_agent_v1.spawn_agent(agent_type: "<name>")` 指定例）を報告
-
-## 設計原則
-
-### Tools 選定（最小権限）
-
-| 役割 | 推奨tools |
-|------|-----------|
-| レビュー専門 | `Read, Grep, Glob, WebSearch, Write` |
-| 探索専門 | `Read, Grep, Glob` |
-| 生成・編集 | `Read, Write, Edit` |
-| 外部情報必要 | 上記 + `WebSearch, WebFetch` |
-
-**禁止**: 不要に `Bash` を含めない（権限最小化）。
-
-### color 規約（視認性）
-
-| 系統 | color |
-|------|-------|
-| セキュリティ・破壊系 | red |
-| アーキ・設計 | purple |
-| 性能・最適化 | yellow |
-| 探索・調査 | blue |
-| 品質・テスト | green |
-
-### memory: user vs project
-
-- ユーザー横断で再利用 → `user`
-- PJ固有のルールを内包 → `project`
-
-## Anti-Patterns
-
-- **Tool の取りすぎ**: `Bash` を漫然と付与しない（最小権限）
-- **description に1人称**: "I can review..." は不可。3人称で記述
-- **トリガー曖昧**: 「いつ呼ばれるか」が読み手に伝わらない description
-- **model の不要な明示指定**: 通常は `model` を省略し親セッションのモデルを継承させる
-- **Do Not Trust Preamble 省略**: レビュー系エージェントでは必須
-- **スコアリングルーブリック欠如**: レビュー系で「主観評価のみ」は禁止
-- **既存と重複**: 同名・同責務エージェントを増殖させない
-
-## チェックリスト
-
-- [ ] name は小文字ハイフン形式・既存と衝突なし
-- [ ] description は3人称・1024文字以内・トリガー語を含む
-- [ ] model 指定（省略含む）は rules/model-routing.md に整合
-- [ ] tools は最小権限
-- [ ] レビュー系は Do Not Trust Preamble を含む
-- [ ] レビュー系はスコアリングルーブリックを含む
-- [ ] 優先度判断基準（CRITICAL/IMPORTANT/MINOR）を含む
-- [ ] 出力形式が明示されている
-
-## 関連スキル・ルール
-
-- `create-skill` — スキル生成の姉妹（本スキルはエージェント生成版）
-- `create-hook` — Hook 雛形生成
-- `create-mcp-server` — MCPサーバ雛形生成
-- `rules/model-routing.md` — model override 判断基準
-- `context/agent-team-routing.md` — role / skill routing の共通語彙
-- 既存例: `~/.codex/agents/security-reviewer.toml`, `~/.codex/agents/arch-reviewer.toml`
+既存と重複する責務、曖昧なtrigger、不要なmodel固定、toolの取りすぎ、レビュー系の主観採点だけは不合格とする。関連する正本は `rules/model-routing.md`、`context/agent-team-routing.md`、`create-skill`、`create-hook`、`create-mcp-server`。
