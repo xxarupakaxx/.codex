@@ -1,13 +1,13 @@
 ---
 name: daily-curator
-description: 一日分の写真・Gmail・カレンダー・Slack・Driveを横断収集し、Daily/ノート/知見/議事録としてObsidianに整理してリンクする日次キュレーター（Routineのエントリポイント）
+description: 明示された `/daily-curator` または既存の scheduled run で、写真・Gmail・カレンダー・Slack・Driveの指定窓を source 別に収集し、Obsidian の Daily と関連ノートへ追記する。通常のノート編集や外部への返信には使わない。
 ---
 
 # /daily-curator — Obsidian Vault 日次キュレーター
 
-あなたはこの Obsidian Vault の常駐キュレーター。**まず `AGENTS.md` を読み、絶対ルール（リネーム禁止・削除禁止・既存は追記のみ・新規はInbox配下・wikilinkはファイル名ベース）を厳守すること。** 詳細な役割定義は `Inbox/automation/playbooks/` を参照（[[AI-Bullpen-Vault]]）。
+この Obsidian Vault の日次整理を、明示された実行または既存 scheduled run の範囲で行う。**まず `AGENTS.md` を読み、絶対ルール（リネーム禁止・削除禁止・既存は追記のみ・新規はInbox配下・wikilinkはファイル名ベース）を厳守すること。** 詳細な役割定義は `Inbox/automation/playbooks/` を参照（[[AI-Bullpen-Vault]]）。
 
-目的: **すべての情報をObsidianに集約し、AIができる範囲は自動で捌いて整理し、人間が判断すべきものだけをDailyに浮かせて検知させる。**
+目的: **指定された情報源をObsidianに集約し、取得・保存できた範囲と、人間が判断すべきものをDailyへ追記して可視化する。**
 
 ## 0. 準備
 - 今日の日付（JST, Asia/Tokyo）を確定。`Daily/YYYY-MM-DD.md` が無ければ `templates/daily.md` を元に作成（`<% %>` は実値に置換。前後リンクはその日付基準）。
@@ -81,18 +81,16 @@ description: 一日分の写真・Gmail・カレンダー・Slack・Driveを横�
 ## 8. ゲート & コミット
 - [[03_guardian]]: `git status --porcelain` を監査。`R`(リネーム)/`D`(削除)、Inbox外の新規、AGENTS.md/README変更があれば中止して該当作業を差し戻す。
 - [[04_verifier]]: 新規/変更ノートの YAML・frontmatterスキーマ・`<% %>`残り・wikilink実在・`![[]]`埋め込み実在を検証。
-- `main` にコミットし、`origin/main` へpushする。
+- 検証後の commit、push、同期先は、Vault と project の git policy、現在の write scope、ユーザーが指定した gate に従う。自動で `main` へ commit / push しない。
 - Vault外アクション（Slack返信/カレンダー登録/メール送信）は実行せず、Dailyの`[ ]`と backlog `[!]` で人間に提示する。
 
 ## 9. 報告
 - 追加した: ジャーナル件数 / ノート / 知見 / 議事録、Dailyに浮かせたToDo数、`[!]`要判断、digestリンク、concept sketchリンク。
 - 時間切替した場合は、何を省略したか、代替成果物をどこに残したか、次回必要なら何を再開すべきかを1行で報告する。
 
-## ⏰ スケジュール設定
-- **モード: scheduled（無人）**。これが定期実行の本命。
-  - prompt: `/daily-curator` ／ repo: `obsidian-vault`
-  - cadence: **毎朝 08:00**（必須）。任意で夜 21:00 にもう1回（その日の写真・後で読むの取りこぼし回収）。
-    - `/schedule daily at 8am, run /daily-curator on the obsidian-vault repo`
-  - connectors: **Calendar / Gmail / Drive / Slack**（全部）／ network: **Full**（URL要約・読書補完のため）／ model: `gpt-5.5` / service_tier: `priority`
-- ここに書かれたcadenceやconnector設定は起動設定の案内であり、登録済み・起動済み・取得済み・保存済み・通知済みの証明ではない。各状態を実際のrun記録で分けて報告する。
+## ⏰ スケジュール設定（依頼された場合のみ）
+
+- 定期実行の prompt、repo、cadence、connector、network、model は、ユーザーと既存設定で確定してから登録する。固定で 08:00、全 connector、`Full` network、`gpt-5.5` / `priority` を要求しない。
+- 例: `/schedule daily at 8am, run /daily-curator on the obsidian-vault repo`
+- cadence や connector の案内は、登録済み・起動済み・取得済み・保存済み・通知済みの証明ではない。各状態を実際の run 記録で分けて報告する。
 - 各コマンドの一覧・cron例 → [[SCHEDULES]]

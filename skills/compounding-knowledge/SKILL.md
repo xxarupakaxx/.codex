@@ -1,13 +1,10 @@
 ---
 name: compounding-knowledge
 description: |
-  解決済み問題・知見を構造化ドキュメントとして自動キャプチャし、
-  solutions/に保存するCompound Engineeringスキル。
-  タスク完了後（Phase 5後）に使用。
-  「知見を保存して」「解決策を記録して」「compoundして」等の依頼に対応。
-  memories/のインデックスより詳細な、再利用可能なソリューションドキュメントを生成。
-  **技術調査で得た知見（SDK API発見、ライブラリ挙動、設計パターン等）も
-  solutions/technical-learnings/ に保存する。**
+  解決済み問題や技術調査の知見を、根拠と再発条件つきの構造化文書として solutions/ に保存するスキル。
+  `/compounding-knowledge` や「知見を保存して」「解決策を記録して」などの明示依頼で使う。
+  Phase 5.5の条件、デバッグ成功、ADR後、またはレビューの再発パターンに該当する場合だけ自動実行を提案する。
+  SDK APIの発見やライブラリ挙動は solutions/technical-learnings/ に分類する。
 ---
 
 # Compounding Knowledge
