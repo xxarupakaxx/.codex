@@ -190,13 +190,17 @@ class TaskCompletionTest(unittest.TestCase):
         )
 
     def test_acceptance_evidence_requires_canonical_source_with_or_without_packet(self) -> None:
+        control_entries = tuple(
+            (f"AC1|PASS|source:task:proof{chr(codepoint)}.md#L1", "completion_source_path_invalid")
+            for codepoint in (0x0D, 0x1F, 0x7F, 0x85, 0x9F, 0x2028, 0x2029, 0xFEFF)
+        )
         for with_packet in (False, True):
             for entry, reason in (
                 ("AC1|PASS|task:90_verification.md#L1", "completion_acceptance_mismatch"),
                 ("AC1|PASS|source:task:90_verification*.md#L1", "completion_source_path_invalid"),
                 ("AC1|PASS|source:task:././90_verification.md#L1", "completion_source_path_invalid"),
                 ("AC1|PASS|source:task:90_verification.md/#L1", "completion_source_path_invalid"),
-            ):
+            ) + control_entries:
                 with self.subTest(with_packet=with_packet, entry=entry):
                     if with_packet:
                         self.write_packet()
@@ -234,6 +238,15 @@ class TaskCompletionTest(unittest.TestCase):
         self.plan = self.plan.replace("workspace:src.py", "workspace:src.py/")
         (self.task / "30_plan.md").write_text(self.plan, encoding="utf-8")
         self.assert_reason("completion_source_path_invalid", self.bundle())
+
+    def test_phase5_file_paths_reject_controls_at_every_position(self) -> None:
+        for codepoint in (0x00, 0x0D, 0x1F, 0x7F, 0x85, 0x9F, 0x2028, 0x2029, 0xFEFF):
+            char = chr(codepoint)
+            for path in (f"{char}src.py", f"src{char}.py", f"src.py{char}"):
+                with self.subTest(codepoint=codepoint, path=path):
+                    with self.assertRaises(MODULE.CompletionValidationError) as context:
+                        MODULE._safe(path)
+                    self.assertEqual(context.exception.reason, "completion_source_path_invalid")
 
     def test_source_manifest_rejects_self_reference(self) -> None:
         self.plan = self.plan.replace("workspace:src.py", "task:evidence-bundle.json")

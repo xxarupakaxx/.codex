@@ -207,6 +207,7 @@ test('implementation drive uses portable star and globstar scope semantics', asy
     { scope: '.', owned: 'src/nested/a.js', success: true },
     { scope: '*', owned: 'src/nested/a.js', success: true },
     { scope: './src/**', owned: 'src/nested/a.js', success: true },
+    { scope: 'src/**', owned: 'src/日本語 file.js', success: true },
   ];
   for (const item of cases) {
     const packet = validPacket({ scope: [item.scope], owned_paths: [item.owned] });
@@ -252,6 +253,27 @@ test('implementation drive rejects nonportable and ambiguous scope, owned, and e
       withRoadmap: true,
       implementerResult: validEvidenceBundle(packet, { acceptance_evidence }),
     });
+    assert.equal(result.reason, 'EVIDENCE_BUNDLE_INVALID');
+  }
+});
+
+test('implementation drive rejects controls in scope, owned, and evidence paths', async () => {
+  const characters = [0x00, 0x0d, 0x1f, 0x7f, 0x85, 0x9f, 0x2028, 0x2029, 0xfeff]
+    .map((codepoint) => String.fromCodePoint(codepoint));
+  for (const character of characters) {
+    for (const path of [`${character}src/a.js`, `src/a${character}b.js`, `src/a.js${character}`]) {
+      const scope = await runInvalid(plan([validPacket({ scope: [path] })]), {
+        approvedPrd: { ...approvedPrd, scope: [path], out_of_scope: [] },
+      });
+      const owned = await runInvalid(plan([validPacket({ owned_paths: [path] })]));
+      assert.equal(scope.result.reason, 'WORK_PACKET_INVALID');
+      assert.equal(owned.result.reason, 'WORK_PACKET_INVALID');
+    }
+    const packet = validPacket();
+    const evidence = validEvidenceBundle(packet, {
+      acceptance_evidence: [`A1|PASS|source:task:proof${character}.md#L1`],
+    });
+    const { result } = await run(plan([packet]), { withRoadmap: true, implementerResult: evidence });
     assert.equal(result.reason, 'EVIDENCE_BUNDLE_INVALID');
   }
 });
@@ -307,7 +329,7 @@ test('implementation drive preserves distinct PRD acceptance subsets across mult
 test('implementation drive ignores prose PRD exclusions and enforces explicit safe path restrictions', async () => {
   const prosePrd = {
     ...approvedPrd,
-    out_of_scope: ['N/A: 認証と課金は対象外'],
+    out_of_scope: ['\x85N/A: 認証と\r課金は対象外', '\ufeffN/A: 通常の説明文'],
   };
   const explicitPrd = {
     ...approvedPrd,
@@ -337,6 +359,12 @@ test('implementation drive ignores prose PRD exclusions and enforces explicit sa
   assert.equal(excluded.result.reason, 'WORK_PACKET_INVALID');
   assert.equal(unsafe.result.reason, 'WORK_PACKET_INVALID');
   assert.equal(globExcluded.result.reason, 'WORK_PACKET_INVALID');
+  for (const out_of_scope of [['path:src/a\x85'], ['path: \x1csrc/a'], ['src/a\ufeff']]) {
+    const invalid = await runInvalid(plan([validPacket()]), {
+      approvedPrd: { ...approvedPrd, out_of_scope },
+    });
+    assert.equal(invalid.result.reason, 'WORK_PACKET_INVALID');
+  }
   for (const out_of_scope of [['path:src/?.js'], ['path:src/[ab].js'], ['path:src/{a,b}.js']]) {
     const invalid = await runInvalid(plan([validPacket()]), {
       approvedPrd: { ...approvedPrd, out_of_scope },

@@ -103,9 +103,10 @@ const normalizeRelativePath = (value, { allowDirectory = false } = {}) => {
     : normalized
 }
 const noWorkspaceWrites = 'N/A: no workspace writes'
+const unsafeArtifactCharacters = /[\u0000-\u001f\u007f-\u009f\u2028\u2029\ufeff]/
 const hasDuplicates = (items) => new Set(items).size !== items.length
 const safeArtifactPath = (value, { allowGlob, allowRoot, allowDirectory = false }) => {
-  if (!nonEmptyText(value) || value !== value.trim() || value.includes('\\') || value.startsWith('/') || value.includes('\0')) return false
+  if (!nonEmptyText(value) || value !== value.trim() || value.includes('\\') || value.startsWith('/') || unsafeArtifactCharacters.test(value)) return false
   const normalized = normalizeRelativePath(value, { allowDirectory })
   if (normalized === '.' || normalized === '*') return allowRoot
   if (!normalized || normalized.split('/').some((segment) => !segment || segment === '.' || segment === '..')) return false
@@ -123,8 +124,9 @@ const safeOwnedPath = (value) => {
 }
 const safeFilePath = (value) => safeArtifactPath(value, { allowGlob: false, allowRoot: false })
 const explicitOutOfScopePath = (value) => {
-  if (!nonEmptyText(value) || value.trim().startsWith('N/A:')) return { path: null, valid: true }
+  if (!nonEmptyText(value) || /^[\s\u001c-\u001f\u0085]*N\/A:/.test(value)) return { path: null, valid: true }
   const text = value.trim()
+  if (unsafeArtifactCharacters.test(value)) return { path: text, valid: false }
   if (text.startsWith('path:')) {
     const path = text.slice('path:'.length).trim()
     return { path, valid: safeScopePath(path) }
@@ -139,7 +141,7 @@ const globToRegExp = (pattern) => {
   const input = String(pattern)
   for (let index = 0; index < input.length; index += 1) {
     if (input[index] === '*' && input[index + 1] === '*') {
-      regex += '.*'
+      regex += '[\\s\\S]*'
       index += 1
     } else if (input[index] === '*') {
       regex += '[^/]*'

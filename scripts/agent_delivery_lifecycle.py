@@ -209,6 +209,9 @@ ACCEPTANCE_EVIDENCE = re.compile(
     r"(?:task|workspace):(?P<path>[^|#\x00]+)#L[1-9]\d*(?:-L[1-9]\d*)?$"
 )
 NO_WORKSPACE_WRITES = "N/A: no workspace writes"
+UNSAFE_ARTIFACT_CHARACTERS = re.compile(
+    r"[\x00-\x1f\x7f-\x9f\u2028\u2029\ufeff]"
+)
 COMMIT_TYPES = {"feat", "fix", "docs", "refactor", "test", "chore", "perf", "build", "ci"}
 PR_SECTIONS = {"summary", "why", "trade_off", "out_of_scope", "impact", "tests", "residual_risks"}
 DRAFT_PRIVILEGED_FIELDS = {
@@ -382,7 +385,7 @@ def _artifact_path_is_safe(
 ) -> bool:
     if not isinstance(path, str) or not path or path != path.strip():
         return False
-    if "\x00" in path or "\\" in path or path.startswith("/"):
+    if UNSAFE_ARTIFACT_CHARACTERS.search(path) or "\\" in path or path.startswith("/"):
         return False
     normalized = _normalize_artifact_path(path, allow_directory=allow_directory)
     if normalized in {".", "*"}:
@@ -418,7 +421,7 @@ def _scope_pattern_matches(pattern: str, path: str) -> bool:
     index = 0
     while index < len(pattern):
         if pattern.startswith("**", index):
-            regex.append(".*")
+            regex.append(r"[\s\S]*")
             index += 2
         elif pattern[index] == "*":
             regex.append("[^/]*")
@@ -476,8 +479,10 @@ def _explicit_out_of_scope_path(value: Any) -> tuple[str | None, bool]:
     if not isinstance(value, str):
         return None, False
     text = value.strip()
-    if text.startswith("N/A:"):
+    if re.match(r"^[\s\ufeff]*N/A:", value):
         return None, True
+    if UNSAFE_ARTIFACT_CHARACTERS.search(value):
+        return text, False
     if text.startswith("path:"):
         candidate = text.removeprefix("path:").strip()
         return candidate, bool(candidate) and not _unsafe_relative_paths(

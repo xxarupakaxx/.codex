@@ -598,6 +598,7 @@ class ArtifactContractTest(unittest.TestCase):
             (".", "src/nested/a.py", False),
             ("*", "src/nested/a.py", False),
             ("./src/**", "src/nested/a.py", False),
+            ("src/**", "src/日本語 file.py", False),
         )
         for scope, owned, outside in cases:
             with self.subTest(scope=scope, owned=owned):
@@ -639,6 +640,18 @@ class ArtifactContractTest(unittest.TestCase):
                     "work_packet", {**valid_work_packet(), field: [path]}
                 )
                 self.assertIn(f"{field} must contain safe relative paths", errors)
+
+    def test_scope_and_owned_paths_reject_controls_at_every_position(self) -> None:
+        codepoints = (0x00, 0x0D, 0x1F, 0x7F, 0x85, 0x9F, 0x2028, 0x2029, 0xFEFF)
+        for field in ("scope", "owned_paths"):
+            for codepoint in codepoints:
+                char = chr(codepoint)
+                for path in (f"{char}src/a.py", f"src/a{char}b.py", f"src/a.py{char}"):
+                    with self.subTest(field=field, codepoint=codepoint, path=path):
+                        errors = validate_artifact(
+                            "work_packet", {**valid_work_packet(), field: [path]}
+                        )
+                        self.assertIn(f"{field} must contain safe relative paths", errors)
 
     def test_work_packet_rejects_unknown_completion_target(self) -> None:
         payload = {**valid_work_packet(), "completion_target": "demoed"}
@@ -947,7 +960,10 @@ class LoopTransitionTest(unittest.TestCase):
         prd = {
             **self.valid_prd(),
             "source_hash": "prd-own-source",
-            "out_of_scope": ["N/A: 認証や課金は今回の対象外"],
+            "out_of_scope": [
+                "\x85N/A: 認証や\r課金は今回の対象外",
+                "\ufeffN/A: 通常の説明文",
+            ],
         }
         decision = next_action({
             "state": "SURVEYED", "route_id": "multi-packet-flow",
@@ -958,6 +974,18 @@ class LoopTransitionTest(unittest.TestCase):
         })
 
         self.assertEqual(decision.action, "IMPLEMENT")
+
+    def test_prd_flow_rejects_controls_in_explicit_out_of_scope_before_stripping(self) -> None:
+        for exclusion in ("path:core/a\x85", "path: \x1ccore/a", "core/a\ufeff"):
+            with self.subTest(exclusion=exclusion):
+                decision = next_action({
+                    "state": "SURVEYED", "route_id": "prd-flow",
+                    "artifact_payloads": {
+                        "approved_prd": {**self.valid_prd(), "out_of_scope": [exclusion]},
+                        "work_packet": self.valid_work_packet(),
+                    },
+                })
+                self.assertEqual(decision.action, "CREATE_WORK_PACKET")
 
     def test_prd_flow_rejects_unsupported_out_of_scope_glob(self) -> None:
         for exclusion in ("path:core/?.py", "path:core/[ab].py", "path:core/{a,b}.py"):
@@ -1082,6 +1110,9 @@ class LoopTransitionTest(unittest.TestCase):
                 "A1|PASS|source:task:90_verification.md#L1",
                 "A1|PASS|source:task:90_verification.md#L2",
             ],
+        ) + tuple(
+            [f"A1|PASS|source:task:proof{chr(codepoint)}.md#L1"]
+            for codepoint in (0x0D, 0x1F, 0x7F, 0x85, 0x9F, 0x2028, 0x2029, 0xFEFF)
         )
         for acceptance_evidence in cases:
             with self.subTest(acceptance_evidence=acceptance_evidence):
