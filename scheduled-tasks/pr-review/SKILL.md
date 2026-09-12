@@ -1,6 +1,6 @@
 ---
 name: pr-review
-description: 設定済み監視対象のPRレビューをread-onlyで取得し、local review evidence collectorへ渡す。scheduler登録済みの場合だけ実行される
+description: 登録済み監視対象PRの新規レビューをread-onlyで取得し、local evidenceへ保存する。
 ---
 
 【目的】schedulerから明示起動された場合に、監視対象PRの新規review eventを取得し、外部writeなしでlocal evidenceへ保存する。このSkillの存在だけで毎時実行や自律稼働を保証しない。
