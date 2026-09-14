@@ -889,7 +889,7 @@ def synchronize(
     workspace_root: Path,
     run_id: str,
     memory_root: Path | None = None,
-    open_requested: bool = False,
+    open_requested: bool = True,
     headless: bool = False,
     dry_run: bool = False,
 ) -> tuple[int, dict[str, object]]:
@@ -1200,7 +1200,8 @@ def main() -> int:
     parser.add_argument("--run-id", required=True)
     parser.add_argument("--memory-root", type=Path)
     parser.add_argument("--phase", choices=sorted(PHASE_STATES), required=True)
-    parser.add_argument("--open", action="store_true", dest="open_requested")
+    parser.add_argument("--open", action="store_true", dest="open_requested", default=True)
+    parser.add_argument("--no-open", action="store_false", dest="open_requested")
     parser.add_argument("--headless", action="store_true")
     parser.add_argument("--dry-run", action="store_true")
     parser.add_argument(

@@ -271,6 +271,35 @@ class SyncRoadmapTest(unittest.TestCase):
         self.assertEqual(result["open_status"], "requested")
         self.assertIn("--open", result["command"])
 
+    def test_roadmap_route_opens_browser_by_default(self) -> None:
+        task = self.write_task("roadmap")
+        code, result = MODULE.synchronize(
+            task,
+            self.generator,
+            "2",
+            self.workspace,
+            "run-1",
+            dry_run=True,
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(result["open_status"], "requested")
+        self.assertIn("--open", result["command"])
+
+    def test_no_open_suppresses_default_browser_request(self) -> None:
+        task = self.write_task("roadmap")
+        code, result = MODULE.synchronize(
+            task,
+            self.generator,
+            "2",
+            self.workspace,
+            "run-1",
+            open_requested=False,
+            dry_run=True,
+        )
+        self.assertEqual(code, 0)
+        self.assertEqual(result["open_status"], "not_requested")
+        self.assertNotIn("--open", result["command"])
+
     def test_phase5_requires_evidence_before_generator(self) -> None:
         task = self.phase5_task()
         (task / "evidence-bundle.json").unlink()
