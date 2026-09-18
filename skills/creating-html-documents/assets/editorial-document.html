@@ -23,7 +23,7 @@
       --del-bg: #fdeceb;
       --del-ink: #a3302d;
       --radius: 12px;
-      --measure: 74ch;
+      --measure: 70em;
       --sans: -apple-system, BlinkMacSystemFont, "Hiragino Sans", "Yu Gothic UI", "Noto Sans JP", sans-serif;
       --mono: ui-monospace, "SFMono-Regular", Consolas, "Liberation Mono", monospace;
     }
@@ -31,7 +31,7 @@
     html { background: var(--paper); }
     body { margin: 0; background: var(--paper); color: var(--body); font-family: var(--sans); font-size: 16px; line-height: 1.9; text-rendering: optimizeLegibility; -webkit-text-size-adjust: 100%; }
     a { color: var(--link); text-underline-offset: .18em; }
-    a:focus-visible { outline: 3px solid var(--link); outline-offset: 3px; border-radius: 3px; }
+    a:focus-visible, summary:focus-visible { outline: 3px solid var(--link); outline-offset: 3px; border-radius: 3px; }
     code, pre { font-family: var(--mono); }
     :not(pre) > code { padding: .08em .34em; border-radius: 4px; background: #efeee9; font-size: .92em; }
     .page { width: min(1180px, 100%); margin: 0 auto; padding: 42px 48px 72px; }
@@ -44,7 +44,7 @@
     p { margin: 12px 0; }
     .lede { max-width: var(--measure); margin: 18px 0 0; font-size: 1.05rem; }
     .meta, .source-note { color: var(--muted); font-family: var(--mono); font-size: .76rem; }
-    .reading-layout { display: grid; grid-template-columns: minmax(0, 1fr) minmax(250px, 300px); gap: 56px; align-items: start; }
+    .reading-layout { display: block; }
     main { min-width: 0; }
     main > * { max-width: var(--measure); }
     main > .wide, main > section > .wide { max-width: none; }
@@ -101,7 +101,12 @@
     .line.add::before { content: "+"; }
     .line.delete { background: var(--del-bg); color: var(--del-ink); }
     .line.delete::before { content: "−"; }
-    .rail { position: sticky; top: 24px; max-height: calc(100vh - 48px); overflow: auto; padding-left: 24px; border-left: 1px solid var(--rule); }
+    .document-nav { margin: 0 0 24px; }
+    .document-nav > summary { width: fit-content; min-height: 44px; padding: 8px 14px; border: 1px solid var(--rule); background: var(--surface); color: var(--ink); cursor: pointer; font-weight: 600; }
+    .document-nav[open] > summary { margin-bottom: 12px; }
+    .nav-content { max-width: 30rem; text-align: left; padding: 16px 20px; border: 1px solid var(--rule); background: var(--surface); }
+    .nav-content nav a { display: block; width: fit-content; padding: 7px 0; }
+    .rail { margin-top: 16px; padding-top: 16px; border-top: 1px solid var(--rule); }
     .rail h2 { margin: 0 0 8px; padding: 0; border: 0; font-size: 1rem; }
     .rail dl { margin: 0; }
     .term { display: grid; grid-template-columns: minmax(82px, .7fr) minmax(0, 1.3fr); gap: 12px; padding: 12px 0; border-top: 1px solid var(--rule); }
@@ -111,8 +116,6 @@
     footer { margin-top: 64px; padding-top: 16px; border-top: 1px solid var(--rule); color: var(--muted); font-family: var(--mono); font-size: .72rem; }
     @media (max-width: 860px) {
       .page { padding: 28px 24px 56px; }
-      .reading-layout { grid-template-columns: minmax(0, 1fr); gap: 48px; }
-      .rail { position: static; max-height: none; overflow: visible; padding: 28px 0 0; border-left: 0; border-top: 2px solid var(--strong-rule); }
     }
     @media (max-width: 1040px) {
       .orientation-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); }
@@ -137,7 +140,6 @@
       html, body { background: #fff; font-size: 10.5pt; line-height: 1.6; }
       .page { width: auto; padding: 0; }
       .reading-layout { display: block; }
-      .rail { position: static; max-height: none; margin-top: 12mm; padding: 8mm 0 0; border: 0; border-top: 1.5pt solid #000; break-before: page; }
       h1, h2, h3 { break-after: avoid; }
       .decision-band, .wave, figure, .diff, table, tr { break-inside: avoid; }
       a { color: #000; }
@@ -152,6 +154,22 @@
       <p class="lede">{{CENTRAL_CLAIM}}</p>
       <p class="meta">{{SCOPE_AND_PROVENANCE}}</p>
     </header>
+    <details class="document-nav">
+      <summary>目次・用語</summary>
+      <div class="nav-content">
+        <nav aria-label="目次">
+          <a href="#section-one">{{SECTION_ONE_TITLE}}</a>
+          <a href="#section-two">{{SECTION_TWO_TITLE}}</a>
+        </nav>
+      <aside class="rail" aria-labelledby="rail-title">
+        <h2 id="rail-title">{{RAIL_TITLE}}</h2>
+        <dl>
+          <div class="term"><dt>{{TERM_ONE}}</dt><dd>{{TERM_ONE_DESCRIPTION}}</dd></div>
+          <div class="term"><dt>{{TERM_TWO}}</dt><dd>{{TERM_TWO_DESCRIPTION}}</dd></div>
+        </dl>
+      </aside>
+      </div>
+    </details>
     <div class="reading-layout">
       <main id="main-content">
         <div class="decision-band wide" aria-label="中心判断と現在地">
@@ -223,13 +241,7 @@
           <p>{{SECTION_TWO_LEDE}}</p>
         </section>
       </main>
-      <aside class="rail" aria-labelledby="rail-title">
-        <h2 id="rail-title">{{RAIL_TITLE}}</h2>
-        <dl>
-          <div class="term"><dt>{{TERM_ONE}}</dt><dd>{{TERM_ONE_DESCRIPTION}}</dd></div>
-          <div class="term"><dt>{{TERM_TWO}}</dt><dd>{{TERM_TWO_DESCRIPTION}}</dd></div>
-        </dl>
-      </aside>
+
     </div>
     <footer>{{DOCUMENT_FOOTER}}</footer>
   </div>

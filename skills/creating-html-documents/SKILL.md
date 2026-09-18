@@ -41,7 +41,7 @@ HTMLを書く前に次を一行ずつ確定する。
 - 絵としてのoverview: 箱と矢印の流れ図で終えず、登場人物・モノ・書類・お金・記録を描いた場面の絵にする。続けて「登場人物の地図」を置き、周辺の主体が中心の当事者のどの番号を手伝うか縛るかを章番号つきで示す。
 - 詳細章ごとに一枚: 各章の問いに合う型（同型並列、両端、昔と今の帯、ものさし、資金の穴、階段、before / afterの帯）を一枚ずつ差し込む。図番号は章番号ベースにする。
 - 代表ケース: 仮設と明示した数字で、1件が最後まで流れる時系列を追う。
-- 締め: 自己テストの問いと答え、用語集railを置く。
+- 締め: 自己テストの問いと答え、折りたたみの用語集を置く。
 
 実務者向けのchange-reviewやdecision-planには適用しない。読者が初学者かどうか判断できないときは、読者と目的の一文で決め、判断を文書のmetaに残す。
 
@@ -130,7 +130,7 @@ detailはoverviewと同じ名称、番号、境界名で接続する。overview�
 | どの順で進めるか | entry / work / exitを持つWave |
 | 合格したか | acceptance matrix、evidence table |
 | 正確な値は何か | table。必要時だけchartを添える |
-| 用語・出典を確認したい | evidence rail、脚注、source list |
+| 用語・出典を確認したい | 折りたたみの参照欄、脚注、source list |
 | 全体を一枚の絵で見たい | 場面の絵（scene overview）、登場人物の地図 |
 | 身近な例と同じ形か | 同型並列図 |
 | 昔と今で何が変わったか | 期間の帯比較 |
@@ -148,7 +148,7 @@ cardを先に並べない。同じ状態をbadge、card、summary、diagramで�
 5. 中心主張と現在地を最初のviewportに置く。背景説明から始めない。
 6. orientation triggerに該当する場合だけ、中心主張の直後に短いorientationとoverview SVGを置く。
 7. claim ledgerのdetail unitを本文へ展開する。重要な主張は具体例、境界、evidence、含意へ接続する。
-8. 本文をprimary surfaceにする。desktopでは約68–76字幅、補助railは250–310pxを目安にする。
+8. 本文をprimary surfaceとする一列のlayoutにする。目次・用語集は本文前の`details` / `summary`にまとめ、`open`属性を付けず初期状態を閉じる。常設sidebarや閉じた目次用の空き列を残さない。本文は日本語約68–76字幅を上限の目安とし、横に広げすぎない。
 9. 図はinline SVGを正本にし、`role="img"`、`title`、`desc`、captionを付ける。Mermaid runtimeを新規導入しない。
 10. codeはescapeし、言語classまたは明示labelを付ける。変更系文書では、変更理由の直後に関連diffを示す。
 11. 表は見出しcellへ`scope`を付ける。
@@ -156,6 +156,15 @@ cardを先に並べない。同じ状態をbadge、card、summary、diagramで�
 13. `references/validation.md` のgateを通す。SVGを含む文書では、図中textの重なり、囲みrectからのはみ出し、viewBox外を機械検査し、0にしてから目視する。
 14. 検証合格後、ユーザーが自動表示を不要と明示していなければ、生成fileの絶対pathをhostのplatform openerで開く。
 15. browser表示の成否、生成fileの絶対path、文書型、検証結果、残る制約を報告する。
+
+## 目次は必要なときに開く
+
+- 目次の入口は本文領域の左上、開いた一覧も左揃えにする。右sidebarや右上を目次の既定位置にしない。
+- 「目次・用語」など内容が分かる`summary`を使い、タップ・クリック・Enter・Spaceで開閉できるnativeな`details`を優先する。目次だけなら「目次」とする。
+- 目次の章リンクは`nav`にまとめる。用語や補足は別の領域に置き、主張の根拠・重要な留保は本文にも残す。
+- 展開内容は通常の文書flowで本文を下へ押し出す。本文に重なるoverlayや、別のscroll領域を既定にしない。閉じても本文幅は変えない。
+- 操作面は高さ44px以上、focusを可視化し、開閉状態はnativeのmarkerで示す。開いた後も同じ操作で閉じられるようにする。
+- 常設の目次はユーザーが明示した場合だけ採用する。本文内のレビュー順・依存関係など、説明そのものを担う索引とは区別する。
 
 ## 自己完結を既定にする
 
@@ -185,6 +194,7 @@ cardを先に並べない。同じ状態をbadge、card、summary、diagramで�
 - 3秒でpage purpose、中心主張、現在地を区別できる。
 - 1440x900で意図しない横overflow、text overlap、clipがない。
 - heading level skip、duplicate id、見出しなしtableが0。
+- 目次が初期状態で閉じ、空き列を残さない。タップ・keyboardで開閉し、展開後の章リンクが正しい見出しへ移動する。
 - keyboard focusが見え、主要情報がhover専用でない。
 - contrastと色以外の意味表示を考慮する。
 - 外部resourceは依頼で許可されたものだけ。既定は0。
