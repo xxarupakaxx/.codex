@@ -31,7 +31,10 @@ SVGを含む文書では、page上で次を機械検査し、いずれも0にし
 次を記録する。
 
 - viewport、document、bodyのscroll width。
-- layout columnとrailの位置。
+- 目次の入口と展開一覧が左側にあり、右sidebarを使っていないこと。
+- 本文が一列で、閉じた目次用の空き列がないこと。
+- 目次の初期状態が閉じていること、クリック・タップ・Enter・Spaceでの開閉、章リンクの移動先。
+- 開閉前後の本文幅、展開内容が本文と重ならないこと、再度閉じられること。
 - text overlap、clip、意図しない横scroll。
 - table、diff、figureのoverflow。
 - first viewportのpage purpose、中心主張、status。
@@ -39,7 +42,7 @@ SVGを含む文書では、page上で次を機械検査し、いずれも0にし
 ## Accessibility
 
 - keyboardだけでlinkとcontrolへ到達できる。
-- visible focusがある。
+- visible focusがある。目次のsummaryは高さ44px以上で、nativeの開閉markerが見える。
 - hoverだけで開示する主要情報がない。
 - text、border、statusのcontrastが十分である。
 - 色以外にlabel、記号、位置、形の手がかりがある。
