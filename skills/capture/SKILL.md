@@ -1,6 +1,6 @@
 ---
 name: capture
-description: 会話の読書感想・気づき・URLをreading/note/knowledgeへ分類し、必要な外部補完とDailyリンクを加えてObsidianへ保存する。`/capture`、またはDailyの未処理メモを拾うcapture-sweepで使う。
+description: 会話の読書感想・気づき・URLをreading/note/knowledgeへ分類し、必要な外部補完とDailyリンクを加えてObsidianへ保存する。「後で読む」は原文を開かず理解できる置換読書ノートとして処理する。`/capture`、またはDailyの未処理メモを拾うcapture-sweepで使う。
 ---
 
 # /capture
@@ -22,7 +22,7 @@ sweep開始時に `run_id`、対象Daily、処理window、前回marker/source位
 | --- | --- |
 | 書名・記事名と感想 | `type: reading`（Vaultのreading template） |
 | 書名なしの気づき・アイデア | `type: note`（Vaultのnote template） |
-| URLとコメント | `[[05_url-knowledge]]` のURL導線 |
+| URLとコメント | `[[05_url-knowledge]]` のURL導線。「後で読む」は置換読書ノートとして `researching-articles` へ渡す |
 | 調べて/まとめて/比較して等 | `[[09_daily-research-requests]]`。可能なら`Inbox/knowledge/`、本人アカウント・非公開情報が必要なら`[!]`で保留 |
 
 混在入力は単位ごとに分ける。書名や著者が必要だが不明なら1問だけ聞く。
@@ -33,7 +33,9 @@ sweep開始時に `run_id`、対象Daily、処理window、前回marker/source位
 
 本人が言った要点・感想だけを本人の層へ書き、AI補完を混ぜない。templateの `summary`（1行・引用符付き）と `related`（`"[[ノート名]]"` 配列）を埋める。knowledgeは `type: knowledge`、`depth: overview` を通常値とし、定義はVaultの拡張fieldを正本にする。
 
-技術URLや記事でflow・比較・architectureを示すと理解が上がる場合だけ、自己完結SVGを `attachments/` に置いて `![[ファイル名]]` で参照する。Mermaidは新規生成しない。
+「後で読む」は、原文をあとで開くための軽い要約ではなく、Obsidianだけで記事の主張、論理展開、具体例、根拠、制限、周辺知識をたどれる置換読書ノートを意味する。`[[05_url-knowledge]]` の完成契約に従い、`researching-articles` で本文と一次情報を調べる。主要論点をたどれる自己完結SVGを少なくとも1件 `attachments/` に置き、`![[ファイル名]]` で本文へ埋め込む。
+
+通常の技術URLや記事でも、flow・比較・architectureを示すと理解が上がる場合は自己完結SVGを使う。Mermaidは新規生成しない。
 
 ## 外部補完
 

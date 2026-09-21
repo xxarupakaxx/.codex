@@ -49,10 +49,10 @@ description: 明示された `/daily-curator` または既存の scheduled run �
   - **デイリーノート**（今日＋処理ウィンドウ内）の `## 💭 メモ` 等に人間が貼ったURL ← 最優先。
   - Slack/メール/議事録に現れた記事・ドキュメントURL。
 - **合図ワードで扱いを分ける**（URLの近く・同じ行/箇条書きを見る）:
-  - 「後で読む / あとで読む / 読みたい / later」→ 未読前提。**要点要約＋読む価値の判定**（"後で読む箱"）。tags に `あとで読む`。
+  - 「後で読む / あとで読む / 読みたい / later」→ `[[05_url-knowledge]]` の置換読書ノート契約で `researching-articles` を実行する。原文を開かず内容と周辺知識を理解できる記事本文と自己完結SVGを作り、tags に `あとで読む` を付ける。
   - 「読んだ / 読了 / 見た / read」→ 既読前提。**要点＋自分の業務/Vaultへの示唆＋引用候補**を残す。tags に `読了`。
   - 合図なし → デフォルトで要約してノート化。
-- 各URLを `WebFetch` で取得・要約 → `Inbox/knowledge/` に知見ノート新規作成（[[05_url-knowledge]]）。frontmatter: `type: reading`, `status`(want=後で読む / done=読了), `source`, `url`, `tags`。
+- 各URLを取得して `Inbox/knowledge/` に知見ノートを新規作成する（[[05_url-knowledge]]）。「後で読む」は `type: knowledge` と `depth` を使い、軽量経路は `type: reading`、`status`、`source`、`url`、`tags` を使う。
 - **デイリーへの戻し（追記のみ・上書き禁止）**: 元のURL行は消さず、その下に `    - → 要約済み [[ノート名]]` を**追記**。重複処理を避けるため、既に「要約済み」リンクが付いているURLは再処理しない。
 - ⚠️ ルーティン環境のネットワークが **Trusted** だと外部ドメインは403。任意URLを取りに行くには環境を **Full** か Custom許可ドメインに（[[SCHEDULER-SETUP]]）。取得失敗したURLは `[!]` でbacklogに残す。
 
