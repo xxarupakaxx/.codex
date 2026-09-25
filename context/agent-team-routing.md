@@ -98,7 +98,9 @@ Workflow routeとLocal / Fast / Standard / Heavy / Judgmentのcapability class�
 - 複数turn協調: team-run。graph-engineeringは複数loop、typed state、異なるauthorityが必要な場合だけ使う。
 - architecture: modeling-domains / designing-codebases / improving-architectureを対象範囲に応じて使う。
 
-HTMLを生成・更新・配布する場合は context/html-artifact-contract.md と config/html-surfaces.jsonを確認し、登録済みproducerだけを使う。新しい図の正本はSVGで、MarkdownへMermaidを生成しない。計画は完成済みのstandalone `30_plan.html`を編集し、architecture figureがある場合は明示fragmentを`plan_architecture.py`へ渡して`--check`を通す。その後`~/.codex/scripts/sync-roadmap.py`が完成済みHTMLをread-only検証し、DOM/CSSごとatomic publishする。派生roadmap.htmlの手編集やstale source fallbackはしない。
+HTMLを生成・更新・配布する場合は context/html-artifact-contract.md と config/html-surfaces.jsonを確認し、登録済みproducerだけを使う。毎セッションの表示は [session-dashboard](session-dashboard.md) に従い、`session-dashboard-authoring`で完成したHTMLを直接作成・更新する。固定テンプレート、旧Roadmapのsync・generator・Task Hubを自動実行しない。過去の計画・設計・検証記録は保持して参照する。図の正本はSVGで、MarkdownへMermaidを生成しない。
+
+新方式のbriefはダッシュボードのタスク詳細と必要な正本から作り、目的・範囲・計画・完了条件・依存・未完了gateを明示する。旧parserの機械形式や`task-context.py --execution`を新しいHTMLに強制しない。以下のroadmap実行契約は過去形式の互換記録であり、既存taskの未完了の実質的な審査・検証は新方式へ引き継ぐ。
 
 ## 改善候補の扱い
 

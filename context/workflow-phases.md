@@ -1,5 +1,11 @@
 # 管理する作業のPhase 0–5.5
 
+## 現行の表示方式
+
+新規・再開セッションの表示は[セッションダッシュボード](session-dashboard.md)に統一する。routeは`session-dashboard`。通常作業にも最初の依頼でHTMLを作成して開き、節目に更新する。旧Roadmapのsync、generator、Task Hub、snapshot生成、旧CLIへのroute入力は行わない。
+
+以下の`roadmap` / `explicit-roadmap`とその表示・同期・機械形式の説明は過去artifactを読むための互換記録であり、新規作成や自動実行の指示には使わない。既存の要件・承認・未完了gateは保持する。作業規模・実装・審査・検証の品質条件は引き続き適用し、新方式では計画・完了条件・根拠をHTMLと必要な正本へ記録する。ダッシュボードを作るだけで通常作業を大規模な管理工程へ変更しない。
+
 この文書は、context/workflow-rules.mdで管理対象と判断した作業の順序と遷移gateを定める。通常の局所作業には適用しない。スキルやコマンドはここを参照し、Phaseの説明を複製しない。artifactの形式は context/memory-file-formats.md、委譲とSkillの選択は context/agent-team-routing.md、条件付きgateは context/workflow-details.md、Task WorkspaceとHTML artifactは skills/viewing-plans/SKILL.md と context/html-artifact-contract.md を参照する。
 
 ## 既定lane

@@ -1,5 +1,11 @@
 # メモリとartifactの形式
 
+## 現行の表示方式
+
+新規・再開セッションの表示は[セッションダッシュボード](session-dashboard.md)に統一する。routeは`session-dashboard`。通常作業にも最初の依頼でHTMLを作成して開き、節目に更新する。旧Roadmapのsync、generator、Task Hub、snapshot生成、旧CLIへのroute入力は行わない。
+
+以下の`roadmap` / `explicit-roadmap`とその表示・同期・機械形式の説明は過去artifactを読むための互換記録であり、新規作成や自動実行の指示には使わない。既存の要件・承認・未完了gateは保持する。作業規模・実装・審査・検証の品質条件は引き続き適用し、新方式では計画・完了条件・根拠をHTMLと必要な正本へ記録する。ダッシュボードを作るだけで通常作業を大規模な管理工程へ変更しない。
+
 この文書は、task memory、Roadmap、delivery evidence、知識indexの形式を定める正本である。workflowの順序は context/workflow-rules.md、Skill・委譲は context/agent-team-routing.md、HTML表示は skills/viewing-plans/SKILL.md を参照する。
 
 context/workflow-rules.mdで管理対象と判断したtask、既存artifactの継続、または記録の明示要求がある場合に使う。通常の局所作業にmemory directoryや以下のartifactを新設する義務はない。

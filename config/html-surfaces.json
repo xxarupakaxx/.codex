@@ -44,11 +44,10 @@
       "id": "html-plan",
       "localOwner": "viewing-plans",
       "artifactKind": "html-plan",
-      "staticProfile": "roadmap-generated",
-      "browserProfile": "roadmap-matrix",
+      "staticProfile": "strict-self-contained",
+      "browserProfile": "html-document-matrix",
       "validationCommands": [
-        "python3 .codex/scripts/verify-html-surfaces.py",
-        "python3 .codex/scripts/generate-roadmap-view.py <task_dir> --json"
+        "python3 scripts/verify-html-surfaces.py"
       ]
     },
     {
@@ -128,6 +127,19 @@
     "diagram-matrix": ["375x812", "768x1024", "1440x900", "overflow", "keyboard", "focus", "svg-visible"]
   },
   "producers": [
+    {
+      "id": "session-dashboard-authoring",
+      "route": "html-plan",
+      "owner": "viewing-plans",
+      "source": "context/session-dashboard.md",
+      "templates": [],
+      "outputPatterns": [
+        ".local/dashboards/*/dashboard.html"
+      ],
+      "artifactKind": "html-plan",
+      "staticProfile": "strict-self-contained",
+      "browserProfile": "html-document-matrix"
+    },
     {
       "id": "archify-plan-svg-export",
       "route": "html-plan",
@@ -290,7 +302,7 @@
     }
   ],
   "surfaces": [
-    {"path": "tools/roadmap_viewer.html", "lifecycle": "canonical", "owner": "viewing-plans", "artifactKind": "html-plan", "staticProfile": "legacy-grandfathered", "browserProfile": "roadmap-matrix"},
+    {"path": "tools/roadmap_viewer.html", "lifecycle": "legacy", "owner": "viewing-plans", "artifactKind": "html-plan", "staticProfile": "legacy-grandfathered", "browserProfile": "roadmap-matrix"},
     {"path": "mcp-servers/workflow-html-app/ui/plan-viewer.html", "lifecycle": "legacy", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "roadmap-matrix"},
     {"path": "mcp-servers/workflow-html-app/ui/diagram-viewer.html", "lifecycle": "legacy", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "diagram-matrix"},
     {"path": "mcp-servers/workflow-html-app/ui/verification-viewer.html", "lifecycle": "legacy", "owner": "workflow-html-app", "artifactKind": "mcp-app-html", "staticProfile": "mcp-current", "browserProfile": "roadmap-matrix", "allowMissingInWorkingTree": true},
