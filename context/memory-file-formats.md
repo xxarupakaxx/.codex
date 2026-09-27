@@ -1,5 +1,7 @@
 # メモリとartifactの形式
 
+新規の作業計画全文とレビューの参照先は、[セッションダッシュボードの計画契約](session-dashboard.md#計画の正本とレビュー)に従う。計画の正本はHTML内の安定したanchorと版で指定し、目的・計画レビュー、実装、検証、完了レビューを同じ本文へ結ぶ。審査対象の本文と現行本文を実装前・完了前に照合する。以下の30_plan・旧CLI・機械審査形式は過去taskの互換記録であり、新方式の開始条件には使用しない。審査・承認・検証の実質的な条件は維持する。
+
 ## 現行の表示方式
 
 新規・再開セッションの表示は[セッションダッシュボード](session-dashboard.md)に統一する。routeは`session-dashboard`。通常作業にも最初の依頼でHTMLを作成して開き、節目に更新する。旧Roadmapのsync、generator、Task Hub、snapshot生成、旧CLIへのroute入力は行わない。
@@ -32,7 +34,7 @@ MEMORY_DIRはプロジェクトのAGENTS.mdで定め、未定義なら .local/ �
     ├── solutions/<category>/ # 再利用可能な解決策
     └── issues/                # review / defect record
 
-routeがlog-onlyなら、05_log.md以外のartifactを必須にしない。roadmap / explicit-roadmapでは30_plan.htmlとRoadmapを保存し、必要なacceptance・review・evidenceをrouteに応じて接続する。
+移行前タスクの旧routeがlog-onlyなら、05_log.md以外のartifactを必須にしない。roadmap / explicit-roadmapでは30_plan.htmlとRoadmapを保存し、必要なacceptance・review・evidenceをrouteに応じて接続する。
 
 ## task metadataとsession復元
 
@@ -67,17 +69,21 @@ task-meta.jsonはgeneratorが管理するmachine-owned manifestである。人�
     - supersedes: <日時またはnone>
     - lead_retains: integration, source verification, fresh validation, final decision, external write
 
-管理するtaskのPhase 2 artifact保存後は、全routeで `~/.codex/scripts/sync-roadmap.py` の検査結果を記録する。Phase 3/4/5も同じTASK、root、run-idでphaseだけを変える。log-onlyではRoadmap生成skipを記録する。通常作業には同期やskip証跡を要求しない。
+移行前タスクの旧形式に限り、Phase 2 artifact保存後は旧routeで `~/.codex/scripts/sync-roadmap.py` の検査結果を記録する。Phase 3/4/5も同じTASK、root、run-idでphaseだけを変える。log-onlyではRoadmap生成skipを記録する。通常作業には同期やskip証跡を要求しない。
 
 ## 実装へ渡す計画の追加契約
+
+この節の旧形式・機械属性・CLI手順は移行前タスク専用。新規session-dashboardは[計画とレビューの契約](session-dashboard.md#計画の正本とレビュー)を使う。旧計画・証拠・未完了gateは保持し、移行時の同一性確認なしに旧合格を再利用しない。
 
 roadmapの実装開始には[計画から実装への判断契約](plan-execution-contract.md)を適用する。元依頼は00_request.md、判断と手順は30_plan.htmlの見える本文、独立審査記録はplan-review.jsonに置く。閲覧用briefと実行用`--execution`を区別し、実行用には手順・制約を短縮しない。
 
 ## 00_spec.md と30_plan.html
 
+この節の旧形式・機械属性・CLI手順は移行前タスク専用。新規session-dashboardは[計画とレビューの契約](session-dashboard.md#計画の正本とレビュー)を使う。旧計画・証拠・未完了gateは保持し、移行時の同一性確認なしに旧合格を再利用しない。
+
 00_spec.mdは概要、背景・目的、現在の事実、採用判断、未確定、必須/任意要件、非機能要件、制約を持つ。
 
-新規計画の正本はUTF-8の完成済み`30_plan.html`であり、`30_plan.md`を新しく作らない。head・style・bodyを持つ自己完結したHTML文書として、背景・目的（why）・到達点（outcome）・全体の進め方を先に示す。Taskは成果物や判断のまとまりで書き、file単位や一操作ごとに分割せず、細かな手順はTask内のチェックリストに置く。
+移行前タスクの旧形式では計画の正本はUTF-8の完成済み`30_plan.html`であり、`30_plan.md`を新しく作らない。head・style・bodyを持つ自己完結したHTML文書として、背景・目的（why）・到達点（outcome）・全体の進め方を先に示す。Taskは成果物や判断のまとまりで書き、file単位や一操作ごとに分割せず、細かな手順はTask内のチェックリストに置く。
 
 見えるsemantic HTMLが本文を所有する。計画にはwhy、outcome、変更対象、実装するコードとarchitecture/data flow、実装根拠（evidence）、成果物、verificationを読める形で置く。Taskは`data-task-id`を持つsectionと見出し、項目は`data-field`で結ぶ。`purpose`、`targets`、`implementation`、`outputs`、`verification`が基本項目で、`acceptance`、`required-sources`、`implementation-evidence`、`blocked-by`を必要に応じて加える。本文をJSONや隠れたMarkdownへ重複保存しない。
 
@@ -133,13 +139,15 @@ checkpoint.mdのIDは `- [x] A1: 確認内容` のような明示的な箇条書
 
 ### 既存Markdownとの互換
 
-既存taskはHTMLがない場合だけ`30_plan.md`を従来どおり読み、`40_progress.md`の既存挙動・hashと下流のcompletion形式も互換維持する。ただし実装再開とPhase 3–5への遷移には追加の実行契約を適用し、HTML契約と審査が揃うまで停止する。両方存在すればHTMLだけを使い、MD siblingの変更で新しい計画の内容やhashを変えない。不正HTMLをvalidなMDで隠さない。個別移行ではHTMLを追加し、元MDを削除・改名・自動更新しない。全taskの一括移行はしない。他Skillの過去例に30_plan.mdの参照が残っていても、新規計画は共通resolverが選ぶ30_plan.htmlを使う。
+既存taskはHTMLがない場合だけ`30_plan.md`を従来どおり読み、`40_progress.md`の既存挙動・hashと下流のcompletion形式も互換維持する。ただし実装再開とPhase 3–5への遷移には追加の実行契約を適用し、HTML契約と審査が揃うまで停止する。両方存在すればHTMLだけを使い、MD siblingの変更で新しい計画の内容やhashを変えない。不正HTMLをvalidなMDで隠さない。個別移行ではHTMLを追加し、元MDを削除・改名・自動更新しない。全taskの一括移行はしない。旧形式を継続して参照する場合だけ共通resolverが選ぶ30_plan.htmlを使う。新規計画はダッシュボード内を正本とする。
 
 legacy MDのTask heading/required_sources/ui-preview-jsonは過去入力の互換契約であり、新規authoring手順ではない。legacyだけは`task:30_plan.md`と`task:40_progress.md`をmandatory sourceとして扱う。
 
 実装根拠は`repo:<relative-path>#<anchor-or-Lx-Ly>`、または計画で許可された`workspace:<repo-relative-file>`で明示する。bare/absolute path、traversal、symlink、secret、binaryを解決しない。新しい図の正本はSVGで、MarkdownへMermaidを追加しない。
 
 ## Roadmap snapshot v2
+
+この節の旧形式・機械属性・CLI手順は移行前タスク専用。新規session-dashboardは[計画とレビューの契約](session-dashboard.md#計画の正本とレビュー)を使う。旧計画・証拠・未完了gateは保持し、移行時の同一性確認なしに旧合格を再利用しない。
 
 `30_plan.html`が正本である。syncは完成済みHTMLのDOM、head CSS、visible mock、図を保ったまま`roadmap.html`へコピーし、末尾へ不活性な`<script id="embedded-snapshot" type="application/json">`だけを追加する。`roadmap-snapshot.json`は共通parserが作るTask、進捗、source、fragment、検証結果の機械用indexであり、計画本文や章立てを複製・再構成するviewではない。派生物を手で直さず、正本を編集したら同じ入力で再生成する。
 
@@ -219,6 +227,8 @@ delivery後の漏れを最初に防げたgateへ戻すrecord。必須fieldは re
 
 ## 40_progress / review / verification
 
+この節の旧形式・機械属性・CLI手順は移行前タスク専用。新規session-dashboardは[計画とレビューの契約](session-dashboard.md#計画の正本とレビュー)を使う。旧計画・証拠・未完了gateは保持し、移行時の同一性確認なしに旧合格を再利用しない。
+
 HTML計画では進捗を30_plan.htmlへ記録し、40_progress.mdは時刻や問題・対応を残す必要がある場合だけ使う。既存MD計画では40_progress.mdによる従来の進捗管理を維持する。80_review.md / 90_verification.mdは実行した検査、finding、判定、残課題と参照を持つ。log-onlyで不要なartifactを作らない。
 
 ## memories と solutions
@@ -237,6 +247,8 @@ solutionsの必須frontmatterは title と created。新規memories / solutions�
 検索は memories の summary / tags、solutions の title / tags / root_cause / component / problem_typeをrgで行う。SQLiteが有効な環境でもMarkdownが正本である。runtimeが無効なら自動保存・自動注入を実行済みと扱わない。
 
 ## JIT brief、token、共有
+
+この節の旧形式・機械属性・CLI手順は移行前タスク専用。新規session-dashboardは[計画とレビューの契約](session-dashboard.md#計画の正本とレビュー)を使う。旧計画・証拠・未完了gateは保持し、移行時の同一性確認なしに旧合格を再利用しない。
 
 再開時に実装者へ渡すJIT briefは、objective、次の未完了Task、targets、dependencies、verification、decisions、unknowns、source refsだけを含める。会話全文、secret、認証済みsession、tool output全文を渡さない。task-contextは`~/.codex/scripts/task-context.py`を明示root・指定task付きで使い、引数と出力schemaはそのhelperの実装・testを正本とし、この文書で捏造しない。list / brief helperはread-onlyに限定する。
 

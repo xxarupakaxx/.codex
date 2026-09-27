@@ -1,5 +1,11 @@
 # 計画から実装への判断契約
 
+## session-dashboardの計画契約（現行）
+
+新規の作業計画とレビューは[セッションダッシュボード](session-dashboard.md#計画の正本とレビュー)を正本とする。目的・前提→計画→成果物→内部品質の審査順と独立性は維持し、審査・実装は同じダッシュボードの計画全文を参照する。審査対象の版と本文証拠を記録し、実装前・完了前に現行本文と照合する。
+
+以下の30_plan.html、plan-review.json、旧parser、task-context.py --execution、sync-roadmap.pyに関する形式と起動条件は過去taskの互換記録であり、新規session-dashboardへ適用しない。移行前の旧計画・未完了gateは保持し、移行時は新正本への対応を確認する。指示による照合を自動強制済みとは扱わない。
+
 目的、前提、計画、実装、利用結果をこの順に照合する。仕様やテストがあること自体を、方針が正しい根拠にしない。適用対象は30_plan.htmlを持つroadmap / explicit-roadmapの実装。通常の局所作業には新しいartifactを強制しないが、目的の確認は省略しない。
 
 ## 審査の順序
@@ -18,6 +24,8 @@
 `receiving-code-review`は指摘を採用する前の検証規律。既存codebase全体の方案監査には`reviewing-codebases-architecture-first`がある。本契約はそれらの代わりに毎回大規模監査を起動せず、計画から実装への遷移を担当する。
 
 ## 計画の本文
+
+この節の旧形式・機械属性・CLI手順は移行前タスク専用。新規session-dashboardは[計画とレビューの契約](session-dashboard.md#計画の正本とレビュー)を使う。旧計画・証拠・未完了gateは保持し、移行時の同一性確認なしに旧合格を再利用しない。
 
 ユーザーの依頼と、その後の目的・範囲を変える追加指示の該当箇所をtaskの`00_request.md`へ保存し、引用と解釈を区別する。secretや無関係な会話を含めない。makerの都合で書き換えない。ユーザーの追加指示で目的が変わった場合は出典と変更を残し、再審査する。
 
@@ -42,6 +50,8 @@
 UI mockだけでは手順にならない。画面操作から状態変更・処理・表示結果までを記述する。verificationはコマンド名だけでなく期待結果を持ち、各acceptance IDと成功場面を対応させる。実装者は不明点を独自解釈で埋めず、stop-conditionsに従ってleadへ返す。
 
 ## 審査記録と開始検査
+
+この節の旧形式・機械属性・CLI手順は移行前タスク専用。新規session-dashboardは[計画とレビューの契約](session-dashboard.md#計画の正本とレビュー)を使う。旧計画・証拠・未完了gateは保持し、移行時の同一性確認なしに旧合格を再利用しない。
 
 共通実装は`~/.codex/scripts/plan_execution_contract.py`。計画は既存parserが抽出する。審査記録は同じtaskの`plan-review.json`に置く。
 

@@ -1,5 +1,7 @@
 # HTML Artifact Contract
 
+新規の作業計画全文とレビューの参照先は、[セッションダッシュボードの計画契約](session-dashboard.md#計画の正本とレビュー)に従う。計画の正本はHTML内の安定したanchorと版で指定し、目的・計画レビュー、実装、検証、完了レビューを同じ本文へ結ぶ。審査対象の本文と現行本文を実装前・完了前に照合する。以下の30_plan・旧CLI・機械審査形式は過去taskの互換記録であり、新方式の開始条件には使用しない。審査・承認・検証の実質的な条件は維持する。
+
 ## セッションダッシュボード（現行）
 
 `html-plan`の現行producerは`session-dashboard-authoring`。手順は[セッションダッシュボード](session-dashboard.md)を正本とし、runtime homeの`.local/dashboards/<session-id>/dashboard.html`を直接作成・更新する。固定テンプレート・generator・同期・常設serverは使わない。サマリー、タスク表、質問表、詳細プラン・設計への導線を持つ自己完結HTMLとする。
@@ -111,7 +113,9 @@ mobile / tablet responsive、print preview、PDF exportは`html`と静的`html-d
 
 ## Roadmap plan contract
 
-`html-plan` routeのauthoring正本は、head・style・bodyを備えた完成済みの`30_plan.html`である。why、outcome、実装するコードとarchitecture/data flow、実装根拠、成果物、verificationを見えるsemantic HTMLへ書く。実行状況を含む`roadmap.html`は、その計画をDOM・head CSS・visible mock・figureごとコピーした派生表示であり、Task cardや章立てを再構成しない。新規`30_plan.md`は作らず、HTMLのない既存taskだけがlegacy MDを入力にできる。
+この節の旧形式・機械属性・CLI手順は移行前タスク専用。新規session-dashboardは[計画とレビューの契約](session-dashboard.md#計画の正本とレビュー)を使う。旧計画・証拠・未完了gateは保持し、移行時の同一性確認なしに旧合格を再利用しない。
+
+移行前タスクの旧`html-plan`方式のauthoring正本は、head・style・bodyを備えた完成済みの`30_plan.html`である。why、outcome、実装するコードとarchitecture/data flow、実装根拠、成果物、verificationを見えるsemantic HTMLへ書く。実行状況を含む`roadmap.html`は、その計画をDOM・head CSS・visible mock・figureごとコピーした派生表示であり、Task cardや章立てを再構成しない。新規`30_plan.md`は作らず、HTMLのない既存taskだけがlegacy MDを入力にできる。
 
 - 企画: `00_spec.md`
 - 設計・計画: `20_survey.md` / `30_plan.html`
