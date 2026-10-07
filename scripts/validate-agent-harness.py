@@ -56,7 +56,7 @@ REQUIRED_REFERENCES = (
     "rules/code-review-philosophy.md",
     "rules/durable-workflow-safety.md",
     "skills/team-run/SKILL.md",
-    "scripts/sync-roadmap.py",
+    "context/session-dashboard.md",
 )
 ARTIFACT_NAME = re.compile(r"^\d{2}[-_].+\.md$")
 WORKFLOW_ARTIFACTS = {
