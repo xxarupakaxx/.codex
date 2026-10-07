@@ -371,6 +371,7 @@
     {"path": "skills/design-eval-loop/SKILL.md", "contains": "output.html", "reason": "browser validation example", "removeWhen": "example becomes command manifest"},
     {"path": "skills/viewing-plans/SKILL.md", "contains": "roadmap.html", "reason": "canonical producer documentation until WU-E centralizes docs", "removeWhen": "WU-E docs contract lands"},
     {"path": "skills/viewing-plans/SKILL.md", "contains": "30_plan.html", "reason": "canonical HTML plan source documentation", "removeWhen": "source contract is centralized in the producer manifest"},
+    {"path": "skills/viewing-plans/SKILL.md", "contains": "dashboard.html", "reason": "path placeholder for the session-dashboard-authoring output passed to open-default-browser.py, not a producer", "removeWhen": "the skill stops naming the dashboard output file"},
     {"path": "skills/autonomous-loops/SKILL.md", "contains": "30_plan.html", "reason": "read-only canonical-plan reference", "removeWhen": "source contract is centralized in the producer manifest"},
     {"path": "skills/creating-adr/SKILL.md", "contains": "30_plan.html", "reason": "read-only canonical-plan reference", "removeWhen": "source contract is centralized in the producer manifest"},
     {"path": "skills/summarizing-daily-work/SKILL.md", "contains": "30_plan.html", "reason": "read-only canonical-plan reference", "removeWhen": "source contract is centralized in the producer manifest"},
