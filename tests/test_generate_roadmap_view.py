@@ -567,15 +567,21 @@ Keep the legacy parser.
         self.assertNotIn("webbrowser.open(url)", source)
         self.assertNotIn("webbrowser.open(output.as_uri())", source)
 
-    def test_viewing_plans_requires_llm_authored_ui_preview_without_user_metadata(self) -> None:
-        skill = (ROOT / "skills" / "viewing-plans" / "SKILL.md").read_text()
+    def test_ui_change_preview_runbook_requires_llm_authoring_without_user_metadata(self) -> None:
         runbook = (
             ROOT / "skills" / "viewing-plans" / "references" / "ui-change-preview.md"
         ).read_text()
 
-        for phrase in ("LLM自身", "metadata入力", "40桁commit SHA"):
-            self.assertIn(phrase, skill)
-        for phrase in ("LLM Authoring Flow", "ユーザーへJSON", "JSX / TSX", "通常生成", "data-ui-change", "UI変更: yes"):
+        for phrase in (
+            "LLM Authoring Flow",
+            "40桁commit SHA",
+            "metadataやsource pathをユーザーへ入力させず",
+            "ユーザーへJSON",
+            "JSX / TSX",
+            "通常生成",
+            "data-ui-change",
+            "UI変更: yes",
+        ):
             self.assertIn(phrase, runbook)
 
     def test_hub_mode_rejects_task_dir(self) -> None:
