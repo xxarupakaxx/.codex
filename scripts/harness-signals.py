@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Claude Code の transcript から、本人の介入とツールの失敗を拾って Markdown で出す。
+"""Claude Code の transcript から、本人の介入、ツールの失敗、フックの失敗を拾って Markdown で出す。
 
 再発防止の材料を集める道具で、判定はしない。本当の訂正かどうか、原因が何かは、
 出力を読むエージェントと本人が判断する。抜粋はこの端末の外へ出さない。
@@ -14,6 +14,7 @@ import os
 import re
 import sys
 import time
+from datetime import datetime
 from pathlib import Path
 from typing import Optional
 
@@ -44,6 +45,12 @@ SECRET = re.compile(
     re.IGNORECASE,
 )
 VOLATILE = re.compile(r"(?:~|\.{0,2})/[\w@.+~/-]+|\b[0-9a-f]{7,}\b|\d+")
+# transcript の attachment に残るフックの記録。停止は、フックが操作を止めたもので、意図した停止も含む。
+HOOK_KINDS = {"hook_non_blocking_error": "失敗", "hook_cancelled": "中止", "hook_blocking_error": "停止"}
+# PreToolUse のフックが操作を止めた記録は attachment ではなく、ツールの結果に残る。
+PRE_TOOL_BLOCK = re.compile(r"^PreToolUse:\S+ hook error: \[(.*?)\]: (.*)", re.S)
+HOOK_NOISE = re.compile(r"^Failed with non-blocking status code:\s*|\btime=\S+\s*")
+HOME_PATH = re.compile(r"/(?:Users|home)/[^/\s'\"]+")
 
 
 def mask(text: str) -> str:
@@ -64,6 +71,30 @@ def failure_line(body: str) -> str:
     return VOLATILE.sub("<x>", mask(head)[:120])
 
 
+def hook_text(text) -> str:
+    """フックのコマンドか標準エラーの1行目。ホームのパスと鍵らしい文字列を伏せる。"""
+    lines = [line.strip() for line in str(text or "").splitlines() if line.strip()]
+    return mask(HOME_PATH.sub("~", HOOK_NOISE.sub("", lines[0])))[:EXCERPT_CHARS] if lines else ""
+
+
+def local_day(timestamp) -> str:
+    """ISO 8601 の時刻を、この端末の時間帯の日付にする。読めなければ先頭の10字を返す。"""
+    text = str(timestamp or "")
+    try:
+        return datetime.fromisoformat(text.replace("Z", "+00:00")).astimezone().strftime("%Y-%m-%d")
+    except ValueError:
+        return text[:10]
+
+
+def hook_signal(attachment: dict, kind: str):
+    """束ねる鍵（種類、イベント、コマンド、終了コード）と、1件ごとの説明を返す。"""
+    blocking = attachment.get("blockingError") if isinstance(attachment.get("blockingError"), dict) else {}
+    key = (kind, str(attachment.get("hookEvent")), hook_text(attachment.get("command") or blocking.get("command")), attachment.get("exitCode"))
+    if kind == "中止":
+        return key, f"{attachment.get('timeoutMs')} ms で時間切れ" if attachment.get("timedOut") else ""
+    return key, hook_text(blocking.get("blockingError") if kind == "停止" else attachment.get("stderr"))
+
+
 def block_text(body) -> str:
     if isinstance(body, list):
         return " ".join(part.get("text", "") for part in body if isinstance(part, dict))
@@ -82,6 +113,12 @@ def scan(path: Path, signals: dict) -> None:
                 continue
             if not isinstance(record, dict):
                 continue
+            attachment = record.get("attachment") if isinstance(record.get("attachment"), dict) else {}
+            hook_kind = HOOK_KINDS.get(attachment.get("type"))
+            if hook_kind:
+                key, detail = hook_signal(attachment, hook_kind)
+                signals["hook_failures"][key].append((str(record.get("timestamp") or ""), session, detail))
+                continue
             message = record.get("message") if isinstance(record.get("message"), dict) else {}
             content = message.get("content")
             blocks = [block for block in content if isinstance(block, dict)] if isinstance(content, list) else []
@@ -92,7 +129,7 @@ def scan(path: Path, signals: dict) -> None:
             if record.get("type") != "user":
                 continue
             project = project or Path(record.get("cwd") or "").name or path.parent.name[-30:]
-            where = f"{(record.get('timestamp') or '')[:10]} {project}/{session}"
+            where = f"{local_day(record.get('timestamp'))} {project}/{session}"
             text = content if isinstance(content, str) else block_text([b for b in blocks if b.get("type") == "text"])
             text = text.strip()
 
@@ -104,6 +141,11 @@ def scan(path: Path, signals: dict) -> None:
                 tool = tool_names.get(block.get("tool_use_id")) or "unknown"
                 if body.startswith(INTERRUPT):
                     continue  # 実行中の中断。下の中断のレコードで数える。
+                blocked = PRE_TOOL_BLOCK.match(body)
+                if blocked:
+                    key = ("停止", "PreToolUse", hook_text(blocked.group(1)), None)
+                    signals["hook_failures"][key].append((str(record.get("timestamp") or ""), session, hook_text(blocked.group(2))))
+                    continue
                 if body.startswith(REJECTIONS):
                     # 拒否と同時に本人が理由を書くと、tool_result の本文に入る。
                     said = body.partition("the user said:")[2].strip()
@@ -146,12 +188,19 @@ def render(signals: dict, days: int, files: int, seconds: float, show_all: bool)
         ),
         reverse=True,
     )
+    # 束ごとに、最後に起きた日、件数、セッション数、最後の1件の説明を出す。hits は (時刻, セッション, 説明)。
+    latest = {key: max(hits, key=lambda hit: hit[0]) for key, hits in signals["hook_failures"].items()}
+    hook_failures = sorted(
+        ((local_day(latest[key][0]), len(hits), len({hit[1] for hit in hits}), key, latest[key][2]) for key, hits in signals["hook_failures"].items()),
+        key=lambda item: item[:3],  # 鍵の終了コードは数と None が混ざるので、比較に入れない
+        reverse=True,
+    )
     out = [
         f"# ハーネスの信号（過去 {days} 日）",
         "",
         f"- 集計 {time.strftime('%Y-%m-%d %H:%M')}。transcript {files} 本、所要 {seconds:.1f} 秒。",
         "- 対象は ~/.claude/projects のセッションで、subagents は読まない。Codex のセッションは含まない。",
-        "- 期間はファイルの更新日時で絞る。再開したセッションでは、期間より前の発話も入る。",
+        "- 期間はファイルの更新日時で絞る。再開したセッションでは、期間より前の発話も入る。日付はこの端末の時間帯である。",
         f"- 本人の発話: 最初の依頼 {signals['first_prompts']} 件、続きの発話 {len(labelled) + len(unlabelled)} 件。"
         f"本人かどうか判別できないレコード {signals['undetermined']} 件。",
         "- ラベルは語彙の一致で付けた目印で、訂正と決まったわけではない。抜粋をこの端末の外へ転記しない。",
@@ -177,6 +226,18 @@ def render(signals: dict, days: int, files: int, seconds: float, show_all: bool)
         f"## ツールの失敗（{FAILURE_MIN_COUNT} 回以上、または {FAILURE_MIN_SESSIONS} セッション以上）",
         "",
         *[f"- {count} 回 / {sessions} セッション {tool}: {line}" for count, sessions, tool, line in failures],
+        "",
+        f"## フックの失敗・中止・停止 {sum(item[1] for item in hook_failures)} 件（最後に起きた日の新しい順）",
+        "",
+        "失敗は、失敗しても処理が続いたもの。中止は、時間切れなどで打ち切られたもの。停止は、フックが操作を止めたもので、意図した停止も含む。",
+        "最後に起きた日が古ければ、すでに直っている。",
+        "",
+        *[
+            f"- 最後 {last} / {count} 回 / {sessions} セッション [{kind}] {event}: {command}"
+            + (f"（終了コード {code}）" if code is not None else " ")
+            + detail
+            for last, count, sessions, (kind, event, command, code), detail in hook_failures
+        ],
     ]
     return "\n".join(out) + "\n"
 
@@ -193,6 +254,7 @@ def command_report(args) -> int:
         "labelled": [],
         "unlabelled": [],
         "failures": collections.defaultdict(list),
+        "hook_failures": collections.defaultdict(list),
         "first_prompts": 0,
         "undetermined": 0,
     }

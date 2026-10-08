@@ -41,6 +41,15 @@ def failed(tool_id, body):
     return user([{"type": "tool_result", "tool_use_id": tool_id, "is_error": True, "content": body}])
 
 
+def hook_record(kind, day="2026-10-01", event="Stop", clock="01:02:03", **fields):
+    attachment = dict({"type": kind, "hookEvent": event}, **fields)
+    return {"type": "attachment", "timestamp": f"{day}T{clock}.000Z", "attachment": attachment}
+
+
+def hook_failed(command, stderr, day="2026-10-01", event="Stop", code=1, **extra):
+    return hook_record("hook_non_blocking_error", day, event, command=command, exitCode=code, stderr=stderr, **extra)
+
+
 class HarnessSignalsTests(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory()
@@ -56,12 +65,12 @@ class HarnessSignalsTests(unittest.TestCase):
         os.utime(path, (old, old))
         return path
 
-    def report(self, *args):
+    def report(self, *args, zone="UTC"):
         done = subprocess.run(
             [sys.executable, str(CLI), "report", *args],
             capture_output=True,
             text=True,
-            env=dict(os.environ, HOME=str(self.home)),
+            env=dict(os.environ, HOME=str(self.home), TZ=zone),
         )
         self.assertEqual(done.returncode, 0, done.stderr)
         return done.stdout
@@ -213,6 +222,79 @@ class HarnessSignalsTests(unittest.TestCase):
     def test_should_warn_when_most_records_cannot_be_attributed(self):
         self.session("qqqqqqqq-1", [machine("origin のない発話 1"), machine("origin のない発話 2"), human("依頼")])
         self.assertIn("注意: 判別できないレコードが本人の発話より多い", self.report())
+
+    def test_should_group_hook_failures_and_show_when_each_last_happened(self):
+        prefix = "Failed with non-blocking status code: "
+        self.session(
+            "aaaaaaaa-1",
+            [
+                hook_failed("Saving memory...", prefix + "time=2026-09-15T11:04:03+09:00 level=fatal error=command is not found", "2026-09-15"),
+                hook_failed("Saving memory...", prefix + "time=2026-10-05T13:13:07+09:00 level=fatal error=command is not found", "2026-10-05"),
+            ],
+        )
+        self.session(
+            "bbbbbbbb-2",
+            [
+                hook_failed("Saving memory...", prefix + "time=2026-09-20T09:00:00+09:00 level=fatal error=command is not found", "2026-09-20"),
+                hook_failed("bash '/Users/someone/.claude/hooks/x.sh' session", prefix + "bash: /Users/someone/.claude/hooks/x.sh: No such file", "2026-09-01", "SessionStart", 127),
+            ],
+        )
+        out = self.report()
+        self.assertIn("## フックの失敗・中止・停止 4 件", out)
+        self.assertIn("- 最後 2026-10-05 / 3 回 / 2 セッション [失敗] Stop: Saving memory...（終了コード 1）level=fatal error=command is not found", out)
+        self.assertIn("- 最後 2026-09-01 / 1 回 / 1 セッション [失敗] SessionStart: bash '~/.claude/hooks/x.sh' session（終了コード 127）bash: ~/.claude/hooks/x.sh: No such file", out)
+        self.assertLess(out.index("最後 2026-10-05"), out.index("最後 2026-09-01"))
+        self.assertNotIn("/Users/someone", out)
+
+    def test_should_mask_secrets_in_hook_failures_and_report_zero_when_none(self):
+        self.session("aaaaaaaa-1", [hook_failed("curl -H 'Authorization: Bearer abc123def' https://example.test", "token=ghp_abcdefgh12345678 rejected")])
+        out = self.report()
+        self.assertNotIn("abc123def", out)
+        self.assertNotIn("ghp_abcdefgh12345678", out)
+        self.session("aaaaaaaa-1", [human("依頼"), assistant()])
+        self.assertIn("## フックの失敗・中止・停止 0 件", self.report())
+
+    def test_should_list_cancelled_and_blocking_hooks_with_their_kind(self):
+        blocked = {"blockingError": "05_log.md がない。/Users/someone/vault/.local を確かめる", "command": "bash ~/.claude/hooks/stop-check.sh"}
+        self.session(
+            "aaaaaaaa-1",
+            [
+                hook_record("hook_cancelled", event="UserPromptSubmit", command="bash ~/.claude/hooks/slow.sh", timedOut=True, timeoutMs=3000),
+                hook_record("hook_blocking_error", blockingError=blocked),
+            ],
+        )
+        out = self.report()
+        self.assertIn("[中止] UserPromptSubmit: bash ~/.claude/hooks/slow.sh 3000 ms で時間切れ", out)
+        self.assertIn("[停止] Stop: bash ~/.claude/hooks/stop-check.sh 05_log.md がない。~/vault/.local を確かめる", out)
+
+    def test_should_count_tool_calls_stopped_by_a_pre_tool_hook_as_stops(self):
+        body = "PreToolUse:Bash hook error: [python3 /Users/someone/.claude/hooks/guard.py]: [Hook] BLOCKED: 「{}」は止める"
+        records = [assistant("t1", "t2"), failed("t1", body.format("====")), failed("t2", body.format("======"))]
+        self.session("aaaaaaaa-1", records)
+        out = self.report()
+        self.assertIn("/ 2 回 / 1 セッション [停止] PreToolUse: python3 ~/.claude/hooks/guard.py [Hook] BLOCKED:", out)
+        self.assertNotIn("guard.py", out.split("## フックの失敗")[0])
+
+    def test_should_show_the_latest_record_of_a_day_and_tolerate_mixed_exit_codes(self):
+        self.session(
+            "aaaaaaaa-1",
+            [
+                hook_failed("same", "zzz first", clock="01:00:00"),
+                hook_failed("same", "aaa later", clock="09:00:00"),
+                hook_record("hook_non_blocking_error", command="other", stderr="no code"),
+                hook_failed("other", "with code", code=1),
+            ],
+        )
+        out = self.report()
+        self.assertIn("Stop: same（終了コード 1）aaa later", out)
+        self.assertIn("Stop: other no code", out)
+        self.assertIn("Stop: other（終了コード 1）with code", out)
+
+    def test_should_show_dates_in_the_local_time_zone(self):
+        late = hook_failed("x", "boom", day="2026-10-04", clock="16:00:00")
+        self.session("aaaaaaaa-1", [late, human("依頼"), assistant()])
+        self.assertIn("- 最後 2026-10-04 /", self.report())
+        self.assertIn("- 最後 2026-10-05 /", self.report(zone="Asia/Tokyo"))
 
 
 if __name__ == "__main__":
