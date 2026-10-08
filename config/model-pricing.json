@@ -1,0 +1,44 @@
+{
+  "currency": "USD",
+  "unit": "per_million_tokens",
+  "note": "モデル ID の完全一致、または末尾の日付（-YYYYMMDD）を除いた一致でだけ引く。標準の料金区分。確認していないモデルは登録しない。",
+  "models": {
+    "claude-fable-5-1": {
+      "input": 10,
+      "cache_write_5m": 12.5,
+      "cache_write_1h": 20,
+      "cache_read": 0.25,
+      "output": 50,
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "checked": "2026-10-08"
+    },
+    "claude-opus-5-5": {
+      "input": 4,
+      "cache_write_5m": 5,
+      "cache_write_1h": 8,
+      "cache_read": 0.2,
+      "output": 20,
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "checked": "2026-10-08"
+    },
+    "claude-sonnet-5-5": {
+      "input": 2,
+      "cache_write_5m": 2.5,
+      "cache_write_1h": 4,
+      "cache_read": 0.1,
+      "output": 10,
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "checked": "2026-10-08",
+      "note": "Claude Code の cost-state は読込を $0.20 で計算している（2026-10-08 に記録値から逆算）。公式の料金表は基本入力の 0.05 倍で $0.10。"
+    },
+    "claude-haiku-4-5": {
+      "input": 1,
+      "cache_write_5m": 1.25,
+      "cache_write_1h": 2,
+      "cache_read": 0.1,
+      "output": 5,
+      "source": "https://platform.claude.com/docs/en/about-claude/pricing",
+      "checked": "2026-10-08"
+    }
+  }
+}
