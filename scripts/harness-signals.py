@@ -1,0 +1,232 @@
+#!/usr/bin/env python3
+"""Claude Code の transcript から、本人の介入とツールの失敗を拾って Markdown で出す。
+
+再発防止の材料を集める道具で、判定はしない。本当の訂正かどうか、原因が何かは、
+出力を読むエージェントと本人が判断する。抜粋はこの端末の外へ出さない。
+"""
+
+from __future__ import annotations
+
+import argparse
+import collections
+import json
+import os
+import re
+import sys
+import time
+from pathlib import Path
+from typing import Optional
+
+INTERRUPT = "[Request interrupted by user"
+# ツール実行の拒否でも中断のレコードが残る。拒否として数えるので、中断には入れない。
+INTERRUPT_FOR_TOOL = "[Request interrupted by user for tool use]"
+REJECTIONS = ("The user doesn't want to proceed with this tool use", "The user doesn't want to take this action")
+REPORT_DIR = Path(".claude") / ".local" / "harness-signals"  # ホームからの相対。git の対象外。
+EXCERPT_CHARS = 160
+LABEL_MAX_CHARS = 400  # これより長い発話は貼り付けた資料が多いので、語彙を当てない。
+FAILURE_MIN_COUNT, FAILURE_MIN_SESSIONS = 3, 2
+
+# 絞り込みではなくラベルに使う。英語は単語の境界で照合する。
+# 「違う」「じゃなくて」「なんで」は内容の相談でも普通に出るので入れない（2026-10-08 の実測で適合率 12%）。
+LABELS = {
+    "出来への不満": r"好きじゃない|見づら|見にく|見えづら|読みづら|読みにく|[わ分]かりづら|[わ分]かりにく|微妙|いまいち|イマイチ|冗長|長すぎ|多すぎ",
+    "差し戻し": r"元に戻|戻して|のままで|やり直|直して|\b(?:revert|undo)\b",
+    "不要と制止": r"不要|[い要]らない|しなくていい|しないで|やめて|勝手に|だめ|ダメ|壊さず|\b(?:stop|don't)\b",
+    "指示の再掲": r"って言った|と言った|言ったよね|言ったはず|伝えた(?:よね|はず)",
+    "抜け": r"ないのかな|抜けて|漏れて|忘れて|入ってない|反映されてない|なってない",
+}
+LABEL_PATTERNS = {name: re.compile(pattern, re.IGNORECASE) for name, pattern in LABELS.items()}
+# 最善の努力であり、すべての鍵を伏せる保証ではない。
+SECRET = re.compile(
+    r"(?:sk-|sk_live_|sk_test_|ghp_|gho_|ghs_|github_pat_|xox[abprs]-|AKIA|AIza)[A-Za-z0-9_-]{8,}"
+    r"|op://\S+|\bBearer\s+\S+|\b(?:password|passwd|token|secret|api[_-]?key)\s*[=:]\s*\S+"
+    r"|\b[0-9a-fA-F]{32,}\b|\b[A-Za-z0-9+/_-]{40,}={0,2}",
+    re.IGNORECASE,
+)
+VOLATILE = re.compile(r"(?:~|\.{0,2})/[\w@.+~/-]+|\b[0-9a-f]{7,}\b|\d+")
+
+
+def mask(text: str) -> str:
+    return SECRET.sub("***", text)
+
+
+def excerpt(text: str) -> str:
+    flat = mask(" ".join(text.split()))
+    return flat if len(flat) <= EXCERPT_CHARS else flat[:EXCERPT_CHARS] + "…"
+
+
+def failure_line(body: str) -> str:
+    """失敗の型を表す1行。Bash は1行目が終了コードだけなので、原因に近い末尾の行も添える。"""
+    lines = [line.strip() for line in body.splitlines() if line.strip()]
+    if not lines:
+        return ""
+    head = f"{lines[0]} / {lines[-1]}" if lines[0].startswith("Exit code") and len(lines) > 1 else lines[0]
+    return VOLATILE.sub("<x>", mask(head)[:120])
+
+
+def block_text(body) -> str:
+    if isinstance(body, list):
+        return " ".join(part.get("text", "") for part in body if isinstance(part, dict))
+    return body if isinstance(body, str) else ""
+
+
+def scan(path: Path, signals: dict) -> None:
+    session = path.stem[:8]
+    project, tool_names = None, {}
+    seen_assistant, pending = False, None
+    with path.open(encoding="utf-8", errors="replace") as lines:
+        for line in lines:
+            try:
+                record = json.loads(line)
+            except ValueError:
+                continue
+            if not isinstance(record, dict):
+                continue
+            message = record.get("message") if isinstance(record.get("message"), dict) else {}
+            content = message.get("content")
+            blocks = [block for block in content if isinstance(block, dict)] if isinstance(content, list) else []
+            if record.get("type") == "assistant":
+                seen_assistant, pending = True, None
+                tool_names.update((b.get("id"), b.get("name")) for b in blocks if b.get("type") == "tool_use")
+                continue
+            if record.get("type") != "user":
+                continue
+            project = project or Path(record.get("cwd") or "").name or path.parent.name[-30:]
+            where = f"{(record.get('timestamp') or '')[:10]} {project}/{session}"
+            text = content if isinstance(content, str) else block_text([b for b in blocks if b.get("type") == "text"])
+            text = text.strip()
+
+            # 1. 構造の信号を先に拾う。中断のレコードは origin を持たない。
+            for block in blocks:
+                if block.get("type") != "tool_result" or not block.get("is_error"):
+                    continue
+                body = block_text(block.get("content")).strip()
+                tool = tool_names.get(block.get("tool_use_id")) or "unknown"
+                if body.startswith(INTERRUPT):
+                    continue  # 実行中の中断。下の中断のレコードで数える。
+                if body.startswith(REJECTIONS):
+                    # 拒否と同時に本人が理由を書くと、tool_result の本文に入る。
+                    said = body.partition("the user said:")[2].strip()
+                    signals["rejections"].append(f"{where} {tool}" + (f": {excerpt(said)}" if said else ""))
+                    pending = "拒否"
+                else:
+                    signals["failures"][(tool, failure_line(body))].append(session)
+            if text.startswith(INTERRUPT):
+                # 拒否と対になった「for tool use」は拒否として数え済みなので、二重に数えない。
+                if not (text.startswith(INTERRUPT_FOR_TOOL) and pending == "拒否"):
+                    signals["interrupts"].append(where)
+                    pending = "中断"
+                continue
+
+            # 2. 本人の発話を見分ける。
+            origin = record.get("origin") if isinstance(record.get("origin"), dict) else {}
+            if origin.get("kind") != "human":
+                is_known_machine = record.get("isMeta") or record.get("isCompactSummary") or origin or not text
+                if not is_known_machine and not any(b.get("type") == "tool_result" for b in blocks):
+                    signals["undetermined"] += 1
+                continue
+            if not seen_assistant:
+                signals["first_prompts"] += 1
+                continue
+            labels = [n for n, p in LABEL_PATTERNS.items() if len(text) <= LABEL_MAX_CHARS and p.search(text)]
+            if pending:
+                labels.insert(0, f"{pending}の直後")
+            target = signals["labelled"] if labels else signals["unlabelled"]
+            target.append(f"[{'、'.join(labels) or 'ラベルなし'}] {where}: {excerpt(text)}")
+            pending = None
+
+
+def render(signals: dict, days: int, files: int, seconds: float, show_all: bool) -> str:
+    labelled, unlabelled = signals["labelled"], signals["unlabelled"]
+    failures = sorted(
+        (
+            (len(sessions), len(set(sessions)), tool, line)
+            for (tool, line), sessions in signals["failures"].items()
+            if len(sessions) >= FAILURE_MIN_COUNT or len(set(sessions)) >= FAILURE_MIN_SESSIONS
+        ),
+        reverse=True,
+    )
+    out = [
+        f"# ハーネスの信号（過去 {days} 日）",
+        "",
+        f"- 集計 {time.strftime('%Y-%m-%d %H:%M')}。transcript {files} 本、所要 {seconds:.1f} 秒。",
+        "- 対象は ~/.claude/projects のセッションで、subagents は読まない。Codex のセッションは含まない。",
+        "- 期間はファイルの更新日時で絞る。再開したセッションでは、期間より前の発話も入る。",
+        f"- 本人の発話: 最初の依頼 {signals['first_prompts']} 件、続きの発話 {len(labelled) + len(unlabelled)} 件。"
+        f"本人かどうか判別できないレコード {signals['undetermined']} 件。",
+        "- ラベルは語彙の一致で付けた目印で、訂正と決まったわけではない。抜粋をこの端末の外へ転記しない。",
+        *(
+            ["- 注意: 判別できないレコードが本人の発話より多い。origin を書かない版の記録が多く、取りこぼしている。"]
+            if signals["undetermined"] > signals["first_prompts"] + len(labelled) + len(unlabelled)
+            else []
+        ),
+        "",
+        f"## 中断 {len(signals['interrupts'])} 件、拒否 {len(signals['rejections'])} 件",
+        "",
+        *[f"- 中断 {item}" for item in signals["interrupts"]],
+        *[f"- 拒否 {item}" for item in signals["rejections"]],
+        "",
+        f"## ラベルの付いた続きの発話 {len(labelled)} 件（付かなかった発話 {len(unlabelled)} 件）",
+        "",
+        *[f"- {item}" for item in labelled],
+    ]
+    if show_all:
+        out += ["", "## ラベルの付かなかった続きの発話", "", *[f"- {item}" for item in unlabelled]]
+    out += [
+        "",
+        f"## ツールの失敗（{FAILURE_MIN_COUNT} 回以上、または {FAILURE_MIN_SESSIONS} セッション以上）",
+        "",
+        *[f"- {count} 回 / {sessions} セッション {tool}: {line}" for count, sessions, tool, line in failures],
+    ]
+    return "\n".join(out) + "\n"
+
+
+def command_report(args) -> int:
+    started = time.time()
+    cutoff = started - args.days * 86400
+    root = Path.home() / ".claude" / "projects"
+    # subagents/ は親エージェントの指示が user として入るので、直下の JSONL だけを読む。
+    paths = sorted(path for path in root.glob("*/*.jsonl") if path.stat().st_mtime >= cutoff)
+    signals = {
+        "interrupts": [],
+        "rejections": [],
+        "labelled": [],
+        "unlabelled": [],
+        "failures": collections.defaultdict(list),
+        "first_prompts": 0,
+        "undetermined": 0,
+    }
+    for path in paths:
+        scan(path, signals)
+    report = render(signals, args.days, len(paths), time.time() - started, args.all)
+    if not args.out:
+        sys.stdout.write(report)
+        return 0
+    if Path(args.out).name != args.out or args.out in (".", ".."):
+        # 抜粋を含むので、git で同期される場所へ書けないよう、置き場を固定する。
+        raise SystemExit(f"harness-signals: --out はファイル名だけを受ける。置き場は ~/{REPORT_DIR} に固定している")
+    target = Path.home() / REPORT_DIR / args.out
+    target.parent.mkdir(parents=True, exist_ok=True, mode=0o700)
+    descriptor = os.open(str(target), os.O_WRONLY | os.O_CREAT, 0o600)
+    os.fchmod(descriptor, 0o600)  # 既存のファイルの権限が広くても、書く前に絞る。
+    with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+        handle.truncate()
+        handle.write(report)
+    print(f"harness-signals: {target} に書いた（{len(report)} 字）")
+    return 0
+
+
+def main(argv: Optional[list] = None) -> int:
+    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    commands = parser.add_subparsers(dest="command", required=True)
+    report = commands.add_parser("report", help="期間内のセッションを走査して Markdown で出す")
+    report.add_argument("--days", type=int, default=30, help="ファイルの更新日時で絞る日数（既定 30）")
+    report.add_argument("--all", action="store_true", help="ラベルの付かなかった発話も一覧にする")
+    report.add_argument("--out", help="stdout の代わりに、~/.claude/.local/harness-signals/ のこのファイル名へ 0600 で書く")
+    report.set_defaults(run=command_report)
+    args = parser.parse_args(argv)
+    return args.run(args)
+
+
+if __name__ == "__main__":
+    sys.exit(main())
