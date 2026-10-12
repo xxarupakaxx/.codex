@@ -69,6 +69,31 @@ class QuietRunTests(unittest.TestCase):
         self.assertTrue(log.read_text().startswith("first\n"))
         self.assertTrue(log.read_text().endswith("assertion failed\n"))
 
+    def test_diagnostic_outside_excerpt_can_be_retrieved_from_private_log(self):
+        diagnostic = "ROOT_CAUSE fixture-only diagnostic at source.ts:42"
+        result = self.run_code(
+            "import sys; "
+            f"print({diagnostic!r}); "
+            "[print('later detail', i) for i in range(500)]; "
+            "sys.exit(7)"
+        )
+        self.assertEqual(result.returncode, 7)
+        self.assertNotIn(diagnostic, result.stdout)
+        (log,) = self.logs.glob("*.log")
+        found = subprocess.run(
+            ["rg", "-n", "--fixed-strings", diagnostic, str(log)],
+            capture_output=True,
+            text=True,
+            timeout=5,
+            check=True,
+        )
+        line_number = found.stdout.split(":", 1)[0]
+        selected = subprocess.run(
+            ["sed", "-n", f"{line_number}p", str(log)],
+            capture_output=True, text=True, timeout=5, check=True
+        )
+        self.assertEqual(selected.stdout.strip(), diagnostic)
+
     def test_large_binary_line_is_preserved_but_not_echoed_in_full(self):
         result = self.run_code("import os; os.write(1, b'\\xff'*1000000)")
         self.assertEqual(result.returncode, 0)
