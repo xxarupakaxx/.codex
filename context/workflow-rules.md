@@ -24,6 +24,16 @@
 
 外部write、権限・認証・課金、不可逆操作、runtime policy変更では、規模によらず[User Validation Gate](workflow-details.md#user-validation-gate)と[Review escalation](workflow-details.md#review-escalation)を確認する。新しいUI/UX判断には同文書のUI/UX Design Approvalを適用する。
 
+## 管理taskの利用開始
+
+新しい管理taskは[memory-file-formats.mdの初期化手順](memory-file-formats.md#管理taskの初期化)でidentityを新規作成してから、明示した短い状態を保存する。cwd/worktree、session/thread、runtime homeを確認する。既存taskではmetadataを更新せず、identityを照合して継続する。通常の局所作業はtask初期化を要求しない。
+
+## 再開と証拠の再利用
+
+sessionの復元は[memory-file-formats.md](memory-file-formats.md#task-metadataとsession復元)の厳密なID・runtime・project・worktree照合に従う。短い状態は明示入力から更新し、compactや停止で計画・承認・未完了gateを落とさない。
+
+検証とreviewの再利用は、対象差分・依存・実行条件・計画・新しい失敗のfingerprintが一致する場合に限る。差分があれば関連する証拠をstaleへ戻し、照合不能ならunknownとする。古い合格で必須gateを通過させない。条件が一致し、新しい変更・失敗・懸念もなければ、同じ検証を繰り返さず次の未完了条件へ進む。
+
 ## 通常作業は必要な変更と直接検証で閉じる
 
 完了条件に沿って実装し、変更に対応する既存の検証を行い、その変更に起因する失敗を修正する。実行や画面確認を含む依頼では、起動・結果の確認・必要な修正まで続ける。調査・計画だけの依頼はその成果で完了する。
