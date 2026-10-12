@@ -1,6 +1,7 @@
 {
   "currency": "USD",
   "unit": "per_million_tokens",
+  "version": "2026-10-13",
   "note": "モデル ID の完全一致、または末尾の日付（-YYYYMMDD）を除いた一致でだけ引く。標準の料金区分。確認していないモデルは登録しない。",
   "models": {
     "claude-fable-5-1": {
@@ -9,6 +10,7 @@
       "cache_write_1h": 20,
       "cache_read": 0.25,
       "output": 50,
+      "tiers": {"standard": 1},
       "source": "https://platform.claude.com/docs/en/about-claude/pricing",
       "checked": "2026-10-08"
     },
@@ -18,6 +20,7 @@
       "cache_write_1h": 8,
       "cache_read": 0.2,
       "output": 20,
+      "tiers": {"standard": 1, "fast": 2},
       "source": "https://platform.claude.com/docs/en/about-claude/pricing",
       "checked": "2026-10-08"
     },
@@ -27,6 +30,7 @@
       "cache_write_1h": 4,
       "cache_read": 0.1,
       "output": 10,
+      "tiers": {"standard": 1},
       "source": "https://platform.claude.com/docs/en/about-claude/pricing",
       "checked": "2026-10-08",
       "note": "Claude Code の cost-state は読込を $0.20 で計算している（2026-10-08 に記録値から逆算）。公式の料金表は基本入力の 0.05 倍で $0.10。"
@@ -37,8 +41,25 @@
       "cache_write_1h": 2,
       "cache_read": 0.1,
       "output": 5,
+      "tiers": {"standard": 1},
       "source": "https://platform.claude.com/docs/en/about-claude/pricing",
       "checked": "2026-10-08"
+    },
+    "gpt-6.1-sol": {
+      "input": 2,
+      "cache_read": 0.1,
+      "cache_write": 2.5,
+      "output": 10,
+      "tiers": {"standard": 1, "fast": 2},
+      "long_context": {
+        "threshold_input_tokens": 272000,
+        "input_multiplier": 2,
+        "cache_read_multiplier": 2,
+        "cache_write_multiplier": 2,
+        "output_multiplier": 1.5
+      },
+      "source": "https://developers.openai.com/api/docs/models/gpt-6.1-sol",
+      "checked": "2026-10-13"
     }
   }
 }

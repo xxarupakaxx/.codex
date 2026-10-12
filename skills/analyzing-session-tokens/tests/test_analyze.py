@@ -133,7 +133,7 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(report["sources"][0]["requests_observed"], 2)
         self.assertEqual(report["sources"][0]["duplicates_removed"], 1)
         self.assert_tokens(
-            report["tokens"], input_tokens=150, uncached_input_tokens=90,
+            report["tokens"], input_tokens=150, uncached_input_tokens=85,
             cached_input_tokens=60, cache_write_input_tokens=5,
             output_tokens=38, reasoning_output_tokens=12, total_tokens=188,
         )
@@ -223,6 +223,20 @@ class AnalyzeCliTests(unittest.TestCase):
         self.assertEqual(report["tokens"]["input_tokens"], 3)
         self.assertEqual(report["tokens"]["output_tokens"], 1)
 
+    def test_foreign_claude_records_are_excluded_when_identity_is_present(self):
+        session = "claude-scope-foreign"
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_jsonl(directory, "claude-scope-foreign.jsonl", [
+                claude_message(session, "wanted", "wanted-req", 3, 1),
+                claude_message("other-session", "foreign", "foreign-req", 99, 9),
+            ])
+            report = self.report("--provider", "claude", "--session-id", session, "--log", path)
+
+        source = report["sources"][0]
+        self.assertEqual(source["requests_observed"], 1)
+        self.assertIn("foreign_session_record_excluded", source["warnings"])
+        self.assertEqual(report["tokens"]["input_tokens"], 3)
+
     def test_optional_breakdown_missing_makes_baseline_unusable(self):
         session = "partial-1"
         partial = {
@@ -254,6 +268,9 @@ class AnalyzeCliTests(unittest.TestCase):
 
         source = report["sources"][0]
         self.assertEqual(source["requests_observed"], 1)
+        self.assertEqual(source["bad_lines"], 2)
+        self.assertEqual(source["malformed_records"], 1)
+        self.assertEqual(source["incomplete_tail_records"], 1)
         self.assertIn("malformed_record", source["warnings"])
         self.assertIn("incomplete_tail", source["warnings"])
         self.assertEqual(report["measurement_status"], "qualified")
@@ -470,6 +487,99 @@ class AnalyzeCliTests(unittest.TestCase):
                                     "--log", path, "--baseline", snapshot,
                                     "--include-children")
             self.assertEqual(mismatch["error"], "baseline_scope_mismatch")
+
+    def test_structured_tool_outcomes_and_unmatched_results_are_separate(self):
+        session = "outcomes-1"
+        calls = [{"type": "tool_use", "id": f"t-{i}", "name": "Bash"} for i in range(5)]
+        results = [
+            {"type": "tool_result", "tool_use_id": "t-0", "is_error": False},
+            {"type": "tool_result", "tool_use_id": "t-1", "is_error": True},
+            {"type": "tool_result", "tool_use_id": "t-2", "rejection": True},
+            {"type": "tool_result", "tool_use_id": "t-3", "is_interrupt": True},
+            {"type": "tool_result", "tool_use_id": "t-4"},
+            {"type": "tool_result", "tool_use_id": "foreign", "is_error": True},
+        ]
+        usage = claude_message(session, "msg", "req", 1, 1)
+        usage["message"]["content"] = calls
+        response = {"type": "user", "sessionId": session, "message": {"content": results}}
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_jsonl(directory, "outcomes-1.jsonl", [usage, response])
+            report = self.report("--provider", "claude", "--session-id", session, "--log", path)
+
+        activity = report["sources"][0]["activity"]
+        self.assertEqual(activity["tool_results"], 6)
+        self.assertEqual(activity["tool_results_matched"], 5)
+        self.assertEqual(activity["tool_outcomes"], {
+            "success": 1, "failure": 1, "rejection": 1, "interruption": 1, "unknown": 1,
+        })
+        self.assertEqual(report["coverage"]["outcome"]["rate"], 0.8)
+
+    def test_codex_exec_json_deduplicates_usage_and_reads_exit_code(self):
+        session = "exec-1"
+        usage = {"input_tokens": 12, "cached_input_tokens": 2,
+                 "cache_write_input_tokens": 0, "output_tokens": 3,
+                 "reasoning_output_tokens": 1, "total_tokens": 15}
+        rows = [
+            {"type": "thread.started", "thread_id": session},
+            {"type": "item.started", "item": {"id": "cmd-1", "type": "command_execution"}},
+            {"type": "item.completed", "item": {"id": "cmd-1", "type": "command_execution",
+                                                   "exit_code": 7, "command": "private"}},
+            {"type": "turn.completed", "run_id": "run-1", "turn_id": "turn-1", "usage": usage},
+            {"type": "turn.completed", "run_id": "run-1", "turn_id": "turn-1", "usage": usage},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_jsonl(directory, "exec-1.jsonl", rows)
+            result = self.run_cli("--provider", "codex", "--session-id", session, "--log", path)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn("private", result.stdout)
+            report = json.loads(result.stdout)
+
+        source = report["sources"][0]
+        self.assertEqual(source["requests_observed"], 1)
+        self.assertEqual(source["duplicates_removed"], 1)
+        self.assertEqual(source["activity"]["tool_outcomes"]["failure"], 1)
+        self.assertEqual(report["coverage"]["tool_calls"]["rate"], 1.0)
+        self.assertEqual(report["coverage"]["outcome"]["rate"], 1.0)
+
+    def test_codex_exec_missing_completion_identity_reduces_usage_coverage(self):
+        session = "exec-missing-id"
+        usage = {"input_tokens": 1, "cached_input_tokens": 0,
+                 "cache_write_input_tokens": 0, "output_tokens": 1}
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_jsonl(directory, "exec-missing-id.jsonl", [
+                {"type": "thread.started", "thread_id": session},
+                {"type": "turn.completed", "run_id": "run-1", "usage": usage},
+            ])
+            report = self.report("--provider", "codex", "--session-id", session, "--log", path)
+
+        self.assertEqual(report["coverage"]["usage"], {"expected": 1, "observed": 0, "rate": 0.0})
+        self.assertIn("unidentifiable_usage_excluded", report["sources"][0]["warnings"])
+
+    def test_claude_stream_result_is_session_cumulative_estimate(self):
+        session = "stream-1"
+        raw_result = "RAW_RESULT_SECRET"
+        rows = [
+            {"type": "system", "subtype": "init", "session_id": session,
+             "model": "claude-opus-5-5", "claude_code_version": "2.1"},
+            {"type": "result", "session_id": session, "total_cost_usd": 1.25,
+             "result": raw_result, "modelUsage": {"claude-opus-5-5": {
+                 "inputTokens": 10, "cacheReadInputTokens": 20,
+                 "cacheCreationInputTokens": 5, "outputTokens": 3,
+             }}},
+        ]
+        with tempfile.TemporaryDirectory() as directory:
+            path = self.write_jsonl(directory, "stream-1.jsonl", rows)
+            result = self.run_cli("--provider", "claude", "--session-id", session, "--log", path)
+            self.assertEqual(result.returncode, 0, result.stderr)
+            self.assertNotIn(raw_result, result.stdout)
+            report = json.loads(result.stdout)
+
+        source = report["sources"][0]
+        self.assertEqual(report["latest_main_request"]["usage_scope"], "session_cumulative")
+        self.assertEqual(report["latest_main_request"]["includes_children"], "unknown")
+        self.assertEqual(source["reported_estimated_cost"], {"usd": 1.25, "basis": "claude_cli_estimate"})
+        self.assertIn("claude_stream_result_session_cumulative", source["warnings"])
+        self.assertIn("cache_write_tier_unknown_assumed_5m", source["warnings"])
 
 
 if __name__ == "__main__":
