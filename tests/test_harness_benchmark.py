@@ -1,5 +1,6 @@
 import argparse
 import contextlib
+import fcntl
 import hashlib
 import importlib.util
 import io
@@ -27,6 +28,8 @@ class HarnessBenchmarkTest(unittest.TestCase):
         self.root = Path(tempfile.mkdtemp(prefix="harness-benchmark-test-", dir="/private/tmp"))
         self.bundle = Path(tempfile.mkdtemp(prefix="harness-comparison-test-", dir="/private/tmp"))
         self.capability = self.bundle / "capabilities.json"
+        self.codex_native = self.bundle / "codex-native"
+        self.codex_native.write_bytes(b"synthetic reviewed codex native\n"); self.codex_native.chmod(0o755)
         capability_source = Path.home() / ".codex/.local/dashboards/01a12e4c-8b93-7273-b714-2ef118579c49/evidence/runtime-capabilities.md"
         source_hash = hashlib.sha256(capability_source.read_bytes()).hexdigest()
         BENCH.CAPABILITY_POLICIES[source_hash] = {
@@ -63,10 +66,93 @@ class HarnessBenchmarkTest(unittest.TestCase):
         args = argparse.Namespace(root=str(self.root), seed=17, include_i05=include_i05,
                                   capability_evidence=str(self.capability), comparison_bundle=str(self.bundle_manifest),
                                   source_change_reason="unit-test", codex_bin=sys.executable, claude_bin=sys.executable,
+                                  codex_native_bin=str(self.codex_native), tsc_bin=None,
                                   host_node_bin="/opt/homebrew/Cellar/node/25.8.2/bin/node",
                                   host_tsc_js="/Users/yoshiki/ghq/github.com/THA-inc/arupaka-test-slack/node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/lib/_tsc.js")
         with contextlib.redirect_stdout(io.StringIO()): BENCH.prepare(args)
         return BENCH.read_json(self.root / "results/manifest.json")
+
+    def test_runtime_binary_hashes_executable_and_node_without_read_bytes(self):
+        launcher = self.bundle / "node-launcher"; launcher.write_bytes(b"#!/usr/bin/env node\n"); launcher.chmod(0o755)
+        node = self.bundle / "node"; node.write_bytes(b"synthetic node\n"); node.chmod(0o755)
+        with mock.patch.object(BENCH.shutil, "which", return_value=str(node)), \
+             mock.patch.object(Path, "read_bytes", side_effect=AssertionError("whole-file read forbidden")):
+            row = BENCH.runtime_binary(str(launcher), "fixture runtime")
+        self.assertEqual(hashlib.sha256(b"#!/usr/bin/env node\n").hexdigest(), row["sha256"])
+        self.assertEqual(hashlib.sha256(b"synthetic node\n").hexdigest(), row["interpreter"]["sha256"])
+
+    def make_codex_arg0(self, manifest, suffix="A1b2C3", target=None):
+        helper = self.root / "runtime/codex/home/tmp/arg0" / f"codex-arg0{suffix}"
+        helper.mkdir(parents=True, mode=0o700)
+        for parent in (helper.parent.parent, helper.parent, helper):
+            parent.chmod(0o700)
+        lock = helper / ".lock"; lock.touch(mode=0o600); lock.chmod(0o600)
+        native = Path(target or manifest["codex_arg0_native"]["path"])
+        for name in BENCH.CODEX_ARG0_LINKS:
+            (helper / name).symlink_to(native)
+        return helper
+
+    def test_codex_arg0_cleanup_accepts_only_exact_idle_shape(self):
+        manifest = self.prepare(); helper = self.make_codex_arg0(manifest)
+        self.assertFalse(BENCH.private_tree_ok((self.root / "runtime/codex",), 4096))
+        self.assertEqual(1, BENCH.cleanup_codex_arg0_helpers(self.root, manifest))
+        self.assertFalse(helper.exists()); self.assertFalse((self.root / "runtime/codex/home/tmp").exists())
+        self.assertTrue(BENCH.private_tree_ok((self.root / "runtime/codex",), 4096))
+
+    def test_codex_arg0_cleanup_rejects_unknown_target_ancestor_and_active_lock_without_mutation(self):
+        manifest = self.prepare()
+        cases = ("unknown", "target", "ancestor", "active", "second_invalid")
+        for index, kind in enumerate(cases):
+            with self.subTest(kind=kind):
+                arg0 = self.root / "runtime/codex/home/tmp/arg0"
+                if os.path.lexists(arg0):
+                    if arg0.is_symlink(): arg0.unlink()
+                    else: shutil.rmtree(arg0.parent)
+                descriptor = None
+                if kind == "ancestor":
+                    outside = self.bundle / f"arg0-{index}"; outside.mkdir(mode=0o700)
+                    arg0.parent.mkdir(parents=True, mode=0o700); arg0.parent.chmod(0o700)
+                    arg0.symlink_to(outside, target_is_directory=True)
+                    sentinel = arg0
+                else:
+                    wrong = self.bundle / f"wrong-{index}"
+                    wrong.write_bytes(b"wrong native"); wrong.chmod(0o755)
+                    helper = self.make_codex_arg0(manifest, f"A1b2{index}Z",
+                                                   wrong if kind == "target" else None)
+                    if kind == "unknown":
+                        (helper / "unknown").write_text("x"); (helper / "unknown").chmod(0o600)
+                    if kind == "active":
+                        descriptor = os.open(helper / ".lock", os.O_RDWR)
+                        fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+                    if kind == "second_invalid":
+                        second = self.make_codex_arg0(manifest, "S2c3D4")
+                        (second / "unknown").write_text("x"); (second / "unknown").chmod(0o600)
+                    sentinel = helper
+                before = sorted(path.name for path in sentinel.iterdir()) if sentinel.is_dir() else []
+                try:
+                    with self.assertRaisesRegex(SystemExit, "Codex arg0"):
+                        BENCH.cleanup_codex_arg0_helpers(self.root, manifest)
+                    self.assertTrue(os.path.lexists(sentinel))
+                    if sentinel.is_dir() and not sentinel.is_symlink():
+                        self.assertEqual(before, sorted(path.name for path in sentinel.iterdir()))
+                    if kind == "second_invalid":
+                        self.assertTrue(second.is_dir())
+                finally:
+                    if descriptor is not None:
+                        fcntl.flock(descriptor, fcntl.LOCK_UN); os.close(descriptor)
+
+    def test_status_cleans_helpers_recreated_by_codex_probe(self):
+        manifest = self.prepare(); answers = iter([False, False, "codex-cli 0.153.4", "2.1.251 (Claude Code)"])
+        isolation = {runtime: {"qualified": False} for runtime in ("codex", "claude")}
+        def recreate(*_args, **_kwargs):
+            self.make_codex_arg0(manifest)
+            return isolation
+        with mock.patch.object(BENCH, "probe", side_effect=lambda *args, **kwargs: next(answers)), \
+             mock.patch.object(BENCH, "local_isolation_probe", side_effect=recreate):
+            with contextlib.redirect_stdout(io.StringIO()): code = BENCH.status(argparse.Namespace(root=str(self.root)))
+        self.assertEqual(3, code)
+        self.assertTrue(BENCH.read_json(self.root / "results/status.json")["private_layout"])
+        self.assertFalse((self.root / "runtime/codex/home/tmp/arg0").exists())
 
     def use_host_bundle(self):
         actual = {"handover_core": Path.home() / ".codex/scripts/session_handover.py",
@@ -302,7 +388,11 @@ class HarnessBenchmarkTest(unittest.TestCase):
                     login_cwd.chmod(0o755)
                 uid_patch = (mock.patch.object(BENCH.os, "getuid", return_value=original_uid + 1)
                              if kind == "owner" else contextlib.nullcontext())
-                with uid_patch, mock.patch.object(BENCH.os, "execve") as execute, \
+                binary_patch = (mock.patch.object(BENCH, "verify_runtime_binaries")
+                                if kind == "owner" else contextlib.nullcontext())
+                state_patch = (mock.patch.object(BENCH, "verify_runtime_state")
+                               if kind == "owner" else contextlib.nullcontext())
+                with uid_patch, binary_patch, state_patch, mock.patch.object(BENCH.os, "execve") as execute, \
                      self.assertRaisesRegex(SystemExit, "login-cwd"):
                     BENCH.login(argparse.Namespace(root=str(self.root), runtime="codex"))
                 execute.assert_not_called()
@@ -778,6 +868,7 @@ class HarnessBenchmarkTest(unittest.TestCase):
 
         def fake_finite(command, prompt, *args):
             calls.append(prompt)
+            self.make_codex_arg0(manifest, "P0sT%02d" % len(calls))
             prompt_bytes = prompt.encode()
             return {"exit_code": 0, "stop_reason": None, "process_started": True, "prompt_sent": True,
                     "materialized_prompt_sha256": hashlib.sha256(prompt_bytes).hexdigest(),
@@ -816,6 +907,38 @@ class HarnessBenchmarkTest(unittest.TestCase):
         self.assertEqual(hashlib.sha256(calls[1].encode()).hexdigest(), candidate["materialized_prompt_sha256"])
         self.assertNotEqual(candidate["materialized_prompt_sha256"], candidate["sent_prompt_sha256"])
         self.assertFalse(candidate["host_helper"]["evidence"]["model_received_helper_result"])
+        self.assertEqual("passed", baseline["process"]["codex_arg0_cleanup"])
+        self.assertFalse((self.root / "runtime/codex/home/tmp/arg0").exists())
+
+    def test_post_model_arg0_cleanup_failure_preserves_process_evidence_and_fails_run(self):
+        manifest = self.prepare(); row = next(item for item in manifest["schedule"]
+                                               if item["kind"] == "compare" and item["runtime"] == "codex")
+        config = {"runtime_versions": {"codex": "codex-test"}, "run_timeout_seconds": 10,
+                  "locked_at": "test"}
+        def fake_finite(_command, prompt, *_args):
+            helper = self.make_codex_arg0(manifest)
+            (helper / "unknown").write_text("x"); (helper / "unknown").chmod(0o600)
+            body = prompt.encode(); source_hash = hashlib.sha256(body).hexdigest()
+            return {"exit_code": 0, "stop_reason": None, "process_started": True, "prompt_sent": True,
+                    "materialized_prompt_sha256": source_hash, "materialized_prompt_bytes": len(body),
+                    "sent_prompt_sha256": source_hash, "sent_prompt_bytes": len(body),
+                    "prompt_sha256": source_hash, "model_called": True, "model_response_observed": True,
+                    "session_id": "observed-session", "hook_events": [], "rejection": False,
+                    "terminal_status": None, "elapsed_seconds": .1}
+        with mock.patch.object(BENCH, "probe", return_value="codex-test"), \
+             mock.patch.object(BENCH, "command_for", return_value=["/bin/true"]), \
+             mock.patch.object(BENCH, "run_finite", side_effect=fake_finite), \
+             mock.patch.object(BENCH, "score", return_value={"success": True}), \
+             mock.patch.object(BENCH, "confirm_runtime_identity", return_value={"confirmed": True}), \
+             mock.patch.object(BENCH, "metrics", return_value={}):
+            self.assertTrue(BENCH.run_one(self.root, row, config, manifest, 10))
+        value = BENCH.read_json(self.root / "results" / f"run-{row['run_id']}.json")
+        self.assertEqual("interruption", value["status"])
+        self.assertTrue(value["model_called"]); self.assertTrue(value["model_response_observed"])
+        self.assertEqual("observed-session", value["process"]["session_id"])
+        self.assertEqual("failed", value["process"]["codex_arg0_cleanup"])
+        self.assertEqual("codex_arg0_cleanup_failed", value["process"]["stop_reason"])
+        self.assertFalse(value["quality"]["success"])
 
     def test_report_retains_pre_model_failed_mate_as_unpaired(self):
         self.use_host_bundle(); manifest = self.prepare(True)
@@ -917,8 +1040,11 @@ class HarnessBenchmarkTest(unittest.TestCase):
         self.assertIn(BENCH.shlex.join(BENCH.runtime_argv(row)), spec["instruction"])
         with mock.patch.object(BENCH.shutil, "which", return_value=None), \
              self.assertRaisesRegex(SystemExit, "interpreter"):
-            BENCH.verify_runtime_binaries({"runtime_binaries": {"codex": row}, "fixture_tools": {}})
-        manifest = {"runtime_binaries": {}, "fixture_tools": {"python_cli": {
+            BENCH.verify_runtime_binaries({"runtime_binaries": {"codex": row}, "fixture_tools": {},
+                                             "codex_arg0_native": BENCH.pinned_executable(
+                                                 str(self.codex_native), "test native")})
+        manifest = {"runtime_binaries": {}, "codex_arg0_native": BENCH.pinned_executable(
+                        str(self.codex_native), "test native"), "fixture_tools": {"python_cli": {
             "state": "observed", "binary": BENCH.runtime_binary(sys.executable, "python_cli")}}}
         with mock.patch.object(BENCH.sys, "executable", "/bin/sh"), \
              self.assertRaisesRegex(SystemExit, "runner Python"):

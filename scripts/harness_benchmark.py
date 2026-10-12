@@ -5,6 +5,7 @@ from __future__ import annotations
 import argparse
 import ast
 import copy
+import fcntl
 import hashlib
 import importlib.util
 import json
@@ -79,6 +80,8 @@ CLAUDE_SAFETY = {"sandbox": {"enabled": True, "allowUnsandboxedCommands": False,
 CLAUDE_MARKER = "runtime/claude/config/isolation-marker.txt"
 HOST_SLOT, HOST_SOURCE_POLICY = host_helper.SLOT, host_helper.SOURCE_POLICY
 LOGIN_CWD = "runtime/login-cwd"
+CODEX_ARG0_LINKS = ("applypatch", "apply_patch", "codex-execve-wrapper")
+CODEX_ARG0_NAME = re.compile(r"codex-arg0[A-Za-z0-9]{6}\Z")
 LIVE_HOME_WRITE_PROBE = Path.home() / ".codex/.local/harness-boundary-write-probe-NONSECRET"
 FIXTURES = (
     {"id": "repo_add", "group": "repository", "instruction": "calc.pyのaddを加算へ直し、result.jsonへchecked=trueを書く。",
@@ -287,7 +290,7 @@ def pricing_identity():
     version = value.get("version")
     if not isinstance(version, str) or not version:
         raise SystemExit("pricing versionが未定義")
-    return {"path": str(path), "sha256": hashlib.sha256(path.read_bytes()).hexdigest(),
+    return {"path": str(path), "sha256": sha256_path(path),
             "version": version, "currency": "USD"}
 
 
@@ -505,7 +508,7 @@ def runtime_binary(raw, runtime):
         raise SystemExit(f"{runtime}実行fileを解決できない") from error
     if not path.is_absolute() or not real.is_file() or real.is_symlink() or not os.access(real, os.X_OK):
         raise SystemExit(f"{runtime}実行fileは実行可能なabsolute realpathに限定する")
-    row = {"path": str(real), "sha256": hashlib.sha256(real.read_bytes()).hexdigest()}
+    row = {"path": str(real), "sha256": sha256_path(real)}
     try:
         with real.open("rb") as stream:
             shebang = stream.readline(128).decode("ascii")
@@ -518,7 +521,7 @@ def runtime_binary(raw, runtime):
         node = Path(selected).resolve(strict=True)
         if not node.is_absolute() or not node.is_file() or node.is_symlink() or not os.access(node, os.X_OK):
             raise SystemExit(f"{runtime}のNode interpreterが不正")
-        row["interpreter"] = {"path": str(node), "sha256": hashlib.sha256(node.read_bytes()).hexdigest()}
+        row["interpreter"] = {"path": str(node), "sha256": sha256_path(node)}
     return row
 
 
@@ -526,7 +529,132 @@ def runtime_argv(row):
     return ([row["interpreter"]["path"]] if row.get("interpreter") else []) + [row["path"]]
 
 
+def sha256_path(path):
+    value = hashlib.sha256()
+    with Path(path).open("rb") as stream:
+        while chunk := stream.read(1024 * 1024):
+            value.update(chunk)
+    return value.hexdigest()
+
+
+def pinned_executable(raw, label):
+    """Return the immutable identity used for Codex's private arg0 symlinks."""
+    path = Path(raw)
+    try:
+        info = path.lstat(); real = path.resolve(strict=True)
+    except OSError as error:
+        raise SystemExit(f"{label}を解決できない") from error
+    if (not path.is_absolute() or real != path or stat.S_ISLNK(info.st_mode) or
+            not stat.S_ISREG(info.st_mode) or info.st_uid != os.getuid() or
+            stat.S_IMODE(info.st_mode) != 0o755 or info.st_nlink != 1 or info.st_size <= 0 or
+            not os.access(path, os.X_OK)):
+        raise SystemExit(f"{label}はowner所有0755・nlink1のabsolute regular executableに限定する")
+    return {"path": str(path), "sha256": sha256_path(path),
+            "uid": info.st_uid, "mode": stat.S_IMODE(info.st_mode), "nlink": info.st_nlink,
+            "size": info.st_size, "device": info.st_dev, "inode": info.st_ino}
+
+
+def _private_directory(path):
+    info = Path(path).lstat()
+    return (stat.S_ISDIR(info.st_mode) and not stat.S_ISLNK(info.st_mode) and
+            info.st_uid == os.getuid() and stat.S_IMODE(info.st_mode) == 0o700)
+
+
+def cleanup_codex_arg0_helpers(root, manifest):
+    """Remove only verified, idle Codex arg0 links; every unknown shape fails closed."""
+    expected = manifest.get("codex_arg0_native")
+    if not isinstance(expected, dict) or pinned_executable(expected.get("path", ""), "Codex native pin") != expected:
+        raise SystemExit("Codex native pin変更後は新しいrootを準備する")
+    home = root / "runtime/codex/home"; temp = home / "tmp"; arg0 = temp / "arg0"
+    try:
+        for directory in (root, root / "runtime", root / "runtime/codex", home):
+            if not _private_directory(directory):
+                raise SystemExit("Codex arg0 ancestorがprivateな通常directoryではない")
+        if not os.path.lexists(temp):
+            if not private_tree_ok((root / "runtime/codex",), 4096):
+                raise SystemExit("Codex runtime treeがstrict検査に失敗")
+            return 0
+        if not _private_directory(temp):
+            raise SystemExit("Codex arg0 tempがprivateな通常directoryではない")
+        if not os.path.lexists(arg0):
+            if not private_tree_ok((root / "runtime/codex",), 4096):
+                raise SystemExit("Codex runtime treeがstrict検査に失敗")
+            return 0
+        if not _private_directory(arg0):
+            raise SystemExit("Codex arg0 rootがprivateな通常directoryではない")
+        entries = list(os.scandir(arg0))
+        if len(entries) > 32:
+            raise SystemExit("Codex arg0 helper件数が上限を超えた")
+        if not entries:
+            arg0.rmdir()
+            if not any(temp.iterdir()):
+                temp.rmdir()
+            if not private_tree_ok((root / "runtime/codex",), 4096):
+                raise SystemExit("Codex arg0回収後のruntime treeがstrict検査に失敗")
+            return 0
+    except OSError as error:
+        raise SystemExit("Codex arg0 treeを検証できない") from error
+
+    locks, helpers = [], []
+    required = {".lock", *CODEX_ARG0_LINKS}
+    try:
+        for entry in entries:
+            helper = Path(entry.path)
+            if not CODEX_ARG0_NAME.fullmatch(entry.name) or not _private_directory(helper):
+                raise SystemExit("Codex arg0 helper shapeが許可外")
+            names = {item.name for item in os.scandir(helper)}
+            if names != required:
+                raise SystemExit("Codex arg0 helper entryがexact setではない")
+            lock_path = helper / ".lock"; lock_info = lock_path.lstat()
+            if (not stat.S_ISREG(lock_info.st_mode) or stat.S_ISLNK(lock_info.st_mode) or
+                    lock_info.st_uid != os.getuid() or stat.S_IMODE(lock_info.st_mode) != 0o600 or
+                    lock_info.st_nlink != 1 or lock_info.st_size != 0):
+                raise SystemExit("Codex arg0 lockが許可shapeではない")
+            descriptor = os.open(lock_path, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
+            actual = os.fstat(descriptor)
+            if (actual.st_dev, actual.st_ino) != (lock_info.st_dev, lock_info.st_ino):
+                os.close(descriptor); raise SystemExit("Codex arg0 lockが検証中に変化した")
+            try:
+                fcntl.flock(descriptor, fcntl.LOCK_EX | fcntl.LOCK_NB)
+            except OSError as error:
+                os.close(descriptor); raise SystemExit("Codex arg0 lockが使用中") from error
+            locks.append(descriptor)
+            for name in CODEX_ARG0_LINKS:
+                link = helper / name; info = link.lstat()
+                target = Path(os.readlink(link))
+                if (not stat.S_ISLNK(info.st_mode) or info.st_uid != os.getuid() or info.st_nlink != 1 or
+                        not target.is_absolute() or link.resolve(strict=True) != Path(expected["path"])):
+                    raise SystemExit("Codex arg0 linkがpin済みtargetと不一致")
+            helpers.append(helper)
+        if pinned_executable(expected["path"], "Codex native pin") != expected:
+            raise SystemExit("Codex native pinが検証中に変化した")
+        for helper in helpers:
+            if {item.name for item in os.scandir(helper)} != required:
+                raise SystemExit("Codex arg0 helperが検証中に変化した")
+        for helper in helpers:
+            for name in CODEX_ARG0_LINKS:
+                (helper / name).unlink()
+            (helper / ".lock").unlink(); helper.rmdir()
+        arg0.rmdir()
+        if not any(temp.iterdir()):
+            temp.rmdir()
+    except (OSError, RuntimeError) as error:
+        raise SystemExit("Codex arg0 helperを安全に回収できない") from error
+    finally:
+        for descriptor in locks:
+            try:
+                os.close(descriptor)
+            except OSError:
+                pass
+    if not private_tree_ok((root / "runtime/codex",), 4096):
+        raise SystemExit("Codex arg0回収後のruntime treeがstrict検査に失敗")
+    return len(helpers)
+
+
 def verify_runtime_binaries(manifest):
+    native = manifest.get("codex_arg0_native") or {}
+    if pinned_executable(native.get("path", ""), "Codex native pin") != native:
+        raise SystemExit("Codex native pin変更後は新しいrootを準備する")
     for runtime, row in manifest["runtime_binaries"].items():
         if runtime_binary(row["path"], runtime) != row:
             raise SystemExit(f"{runtime}実行file変更後は新しいrootを準備する")
@@ -547,6 +675,7 @@ def verify_runtime_binaries(manifest):
 
 def verify_runtime_state(root, manifest):
     verify_environment(manifest)
+    cleanup_codex_arg0_helpers(root, manifest)
     path = root / "runtime/codex/home/config.toml"
     expected = manifest.get("runtime_state_hashes", {}).get("codex_config")
     if (path.is_symlink() or not path.is_file() or path.stat().st_mode & 0o077 or
@@ -609,6 +738,7 @@ def prepare(args):
     candidates = ["I03", "I04"] + (["I05"] if args.include_i05 else [])
     binaries = {"codex": runtime_binary(args.codex_bin, "codex"),
                 "claude": runtime_binary(args.claude_bin, "claude")}
+    codex_arg0_native = pinned_executable(args.codex_native_bin, "Codex native pin")
     tsc_bin = getattr(args, "tsc_bin", None)
     fixture_tools = {"python_cli": {"state": "observed", "binary": runtime_binary(sys.executable, "python_cli")},
                      "typescript_cli": ({"state": "observed", "binary": runtime_binary(tsc_bin, "typescript_cli")}
@@ -645,7 +775,8 @@ def prepare(args):
                "candidates": candidates, "limits": LIMITS,
                "capabilities": capabilities, "capability_hash": digest(capabilities),
                "capability_source": {key: capability_evidence[key] for key in ("source_path", "source_hash")},
-               "comparison_bundles": bundles, "runtime_binaries": binaries, "fixture_tools": fixture_tools,
+               "comparison_bundles": bundles, "runtime_binaries": binaries,
+               "codex_arg0_native": codex_arg0_native, "fixture_tools": fixture_tools,
                "host_helper_plan": HOST_PLAN, "host_dependencies": host_dependencies,
                "runtime_state_hashes": {"codex_config": hashlib.sha256(CODEX_CONFIG.encode()).hexdigest(),
                                         "claude_marker": hashlib.sha256(marker_content.encode()).hexdigest()},
@@ -707,6 +838,7 @@ def local_isolation_probe(root, manifest):
     outside_denied = not probe(codex + ["sandbox", "-P", "harness", "-C", str(work), "--",
                                 "/usr/bin/head", "-c", "1", str(source)], env)
     write_ok = written.is_file() and not written.is_symlink() and written.read_text() == "ok"
+    cleanup_codex_arg0_helpers(root, manifest)
     return {"codex": {"configured": True, "supported": config_ok is True, "local_tested": True,
                        "inside_read_write": inside_ok is True and write_ok,
                        "outside_live_home_denied": outside_denied,
@@ -734,6 +866,8 @@ def attest_login(args):
     version = probe(runtime_argv(binary) + ["--version"], child_env(root, runtime), True)
     command = ["login", "status"] if runtime == "codex" else ["auth", "status"]
     authenticated = probe(runtime_argv(binary) + command, child_env(root, runtime))
+    if runtime == "codex":
+        cleanup_codex_arg0_helpers(root, manifest)
     if baseline.get("authenticated", {}).get(runtime) is not False or authenticated is not True or not version:
         raise SystemExit("prepare後の未認証statusから専用loginへの遷移を確認できない")
     write_json(root / "results" / f"login-attestation-{runtime}.json",
@@ -769,6 +903,7 @@ def status(args):
     versions = {runtime: probe(runtime_argv(binary) + ["--version"], child_env(root, runtime), True)
                 for runtime, binary in binaries.items()}
     isolation = local_isolation_probe(root, manifest)
+    cleanup_codex_arg0_helpers(root, manifest)
     baseline_path = root / "results/auth-baseline.json"
     if not baseline_path.exists():
         write_json(baseline_path, {"owner": OWNER, "schema": 1, "checked_at": now(),
@@ -794,6 +929,7 @@ def status(args):
 
 def source_matrix(manifest):
     matrix = {"tool_sources": manifest["tool_source_hashes"], "runtime_binaries": manifest["runtime_binaries"],
+              "codex_arg0_native": manifest["codex_arg0_native"],
               "runtime_state_hashes": manifest["runtime_state_hashes"], "fixture_tools": manifest["fixture_tools"],
               "sampling": manifest["sampling"], "environment": manifest["environment"]}
     for candidate in manifest["candidates"]:
@@ -825,6 +961,7 @@ def lock_config(root, manifest, args, required_runtimes=("codex", "claude")):
         raise SystemExit("対象runtimeの専用領域への正式loginが未確認。preflightはblocked")
     current_versions = {runtime: probe(runtime_argv(row) + ["--version"], child_env(root, runtime), True)
                         for runtime, row in manifest["runtime_binaries"].items()}
+    cleanup_codex_arg0_helpers(root, manifest)
     if current_versions != status_value.get("runtime_versions"):
         raise SystemExit("status後にruntime実体またはversionが変化した。statusを再実行する")
     config = {"owner": OWNER, "schema": 1, "runtime_versions": status_value["runtime_versions"],
@@ -1689,6 +1826,8 @@ def run_one(root, row, config, manifest, timeout):
         binary = manifest["runtime_binaries"][row["runtime"]]
         if probe(runtime_argv(binary) + ["--version"], child_env(root, row["runtime"]), True) != config["runtime_versions"][row["runtime"]]:
             raise SystemExit(f"{row['runtime']}実体またはversionがrun境界で変化した")
+        if row["runtime"] == "codex":
+            cleanup_codex_arg0_helpers(root, manifest)
     except SystemExit:
         write_json(result_path, {"owner": OWNER, "schema": 1, "completed": True, "run": row,
                                  "status": "unknown", "missing_reason": "prelaunch_validation_failed"})
@@ -1849,6 +1988,14 @@ def run_one(root, row, config, manifest, timeout):
                    "actual_tier": None, "hook_events": [], "commands": [], "denied_commands": [],
                    "unknown_item_types": [],
                    "launch_error": type(error).__name__}
+    if row["runtime"] == "codex":
+        try:
+            cleanup_codex_arg0_helpers(root, manifest)
+            process["codex_arg0_cleanup"] = "passed"
+        except SystemExit as error:
+            process["codex_arg0_cleanup"] = "failed"
+            process["codex_arg0_cleanup_reason"] = exception_reason(error)
+            process["stop_reason"] = "codex_arg0_cleanup_failed"
     model_finished_at = time.monotonic()
     sent_prompt_sha256 = process.get("sent_prompt_sha256")
     sent_prompt_bytes = process.get("sent_prompt_bytes")
@@ -1883,7 +2030,8 @@ def run_one(root, row, config, manifest, timeout):
     process["resume_used"] = bool(session and row.get("fixture") == "long_resume")
     process["runtime_identity"] = confirm_runtime_identity(row["runtime"], process, config)
     quality["runtime_effective"] = process["runtime_identity"]["confirmed"]
-    quality["success"] = quality["success"] and quality["runtime_effective"]
+    quality["success"] = (quality["success"] and quality["runtime_effective"] and
+                          process.get("codex_arg0_cleanup") != "failed")
     status_name = classify_status(process, quality)
     metric_status = "failure" if status_name == "quality_failure" else status_name
     remaining = timeout - (time.monotonic() - run_started)
@@ -2610,6 +2758,7 @@ def cli():
     command.add_argument("--capability-evidence", required=True)
     command.add_argument("--comparison-bundle", required=True)
     command.add_argument("--codex-bin", required=True); command.add_argument("--claude-bin", required=True)
+    command.add_argument("--codex-native-bin", required=True)
     command.add_argument("--tsc-bin")
     command.add_argument("--host-node-bin"); command.add_argument("--host-tsc-js")
     command.add_argument("--source-change-reason", default="initial")
