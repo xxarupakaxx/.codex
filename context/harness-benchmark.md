@@ -37,22 +37,23 @@
 - `workspace_instruction`: `AGENTS.md`または`CLAUDE.md`
 - `runtime_settings`: `overrides.json`または`settings.json`
 - `hook_adapter`: `hooks/`配下。正式に参照する`runtime_settings`も必要
+- `host_fixture_helper`: `host/handover_core`、`host/observations_core`、`host/quiet_run`の3 file。baseline/candidateで同じ検査済みbytesを使い、差分は持たせない
 
-runnerはbundleをRUNへ固定コピーし、条件間のtarget集合、固定file、候補factor、実hashを検査する。manifestは1 MiB、bundleは96 file、1 file 4 MiB、合計16 MiBを上限とし、hard linkも拒否する。baseline/candidateへ渡すprompt本文は同一にし、全runのprompt SHA-256をmanifestへ固定して実行直前に照合する。実装効果かどうかは固定controlの有無ではなく、実際に変化するfactorのclassで決める。`prepare`で指定したruntime実行fileはabsolute realpathとSHA-256を固定し、env shebangの場合は実interpreterもabsolute pathとSHA-256で固定する。`status`と各run直前に同じ実体・interpreter・versionであることを再確認する。Codex permission configもexact bytesとSHA-256をmanifestとconfig epochへ固定する。live home、dirty repository、認証・session・DBをsourceにできない。`workspace_instruction`だけのbundleは`instruction-only`となり、実装効果比較を開始できない。hookは公式sandbox外で動く可能性があるため、`hook_adapter`を含むbundleは`hook-unconfined`として、正式な隔離証拠が加わるまでモデル起動前に停止する。runnerと既存metrics adapterの実SHAもmanifestへ固定し、変更時は`--source-change-reason`を記録して新しいrootを準備する。
+runnerはbundleをRUNへ固定コピーし、条件間のtarget集合、固定file、候補factor、実hashを検査する。host modeでは、3件すべてが`host_fixture_helper`で、target集合が上記3 fileと完全一致する場合だけ受理する。`workspace_instruction`、`runtime_settings`、`hook_adapter`、重複、余分なfileを同じbundleへ混在できない。manifestは1 MiB、bundleは96 file、1 file 4 MiB、合計16 MiBを上限とし、hard linkも拒否する。baseline/candidateへ渡すprompt本文は同一にし、全runのprompt SHA-256をmanifestへ固定して実行直前に照合する。実装効果かどうかは固定controlの有無ではなく、実際に変化するfactorのclassで決める。`prepare`で指定したruntime実行fileはabsolute realpathとSHA-256を固定し、env shebangの場合は実interpreterもabsolute pathとSHA-256で固定する。`status`と各run直前に同じ実体・interpreter・versionであることを再確認する。Codex permission configもexact bytesとSHA-256をmanifestとconfig epochへ固定する。live home、dirty repository、認証・session・DBをsourceにできない。`workspace_instruction`だけのbundleは`instruction-only`となり、実装効果比較を開始できない。hookは公式sandbox外で動く可能性があるため、`hook_adapter`を含むbundleは`hook-unconfined`として、正式な隔離証拠が加わるまでモデル起動前に停止する。runnerと既存metrics adapterの実SHAもmanifestへ固定し、変更時は`--source-change-reason`を記録して新しいrootを準備する。
 
 ```sh
 RUN=/private/tmp/harness-benchmark-RUN2
 CAP=/private/tmp/harness-capabilities-v1.json
 BUNDLE=/private/tmp/harness-comparison-v1/manifest.json
-python3 ~/.codex/scripts/harness_benchmark.py prepare "$RUN" --capability-evidence "$CAP" --comparison-bundle "$BUNDLE" --codex-bin /Users/yoshiki/.local/share/npm-global/bin/codex --claude-bin /Users/yoshiki/.local/bin/claude --source-change-reason initial --include-i05
+python3 ~/.codex/scripts/harness_benchmark.py prepare "$RUN" --capability-evidence "$CAP" --comparison-bundle "$BUNDLE" --codex-bin /Users/yoshiki/.local/share/npm-global/bin/codex --claude-bin /Users/yoshiki/.local/bin/claude --host-node-bin /opt/homebrew/Cellar/node/25.8.2/bin/node --host-tsc-js /absolute/reviewed/typescript/lib/_tsc.js --source-change-reason initial --include-i05
 python3 ~/.codex/scripts/harness_benchmark.py status "$RUN"
 ```
 
-fixtureが起動するPythonもabsolute realpathとSHA-256を固定し、各境界で再照合する。`repo_tsc_once`は実TypeScript CLIを一度だけ起動する。検査済み実行fileがある場合は`prepare`へ`--tsc-bin /absolute/reviewed/tsc`を加える。env shebangの場合は固定したNodeと実tsc scriptのabsolute argvを使う。未指定時はcanned診断へ置き換えず、`typescript_cli: unsupported`として全比較をモデル起動前に止める。現fixtureのworkspace成果物とcommand eventだけでは、診断が編集前に実行されたことと、その実診断を再利用したことを証明できない。承認済みworkspace-helper evidenceが実装されるまで、このprimary outcomeは未評価として比較をHOLDする。`cli_quiet_retrieve`はrunnerと同じdirectoryの既存`quiet-run.py`を実SHAで固定コピーし、大量errorの完全logが1件だけ保存されたこと、末尾だけを再取得したこと、元commandと再取得commandがnative command eventで各1回だったことを採点する。
+fixtureが起動するPythonもabsolute realpathとSHA-256を固定し、各境界で再照合する。`repo_tsc_once`は実TypeScript CLIを一度だけ起動する。検査済み実行fileがある場合は`prepare`へ`--tsc-bin /absolute/reviewed/tsc`を加える。env shebangの場合は固定したNodeと実tsc scriptのabsolute argvを使う。未指定時はcanned診断へ置き換えず、`typescript_cli: unsupported`としてnative比較をモデル起動前に止める。native fixtureのworkspace成果物とcommand eventだけでは、診断の実行時点と診断の再利用を証明できないため、このprimary outcomeはnative 24 runで未評価のままHOLDする。v13のhost subsetは、trusted parentが固定Node shimと実tsc JSを起動し、O_EXCL marker、実argv、終了値、raw診断hashを独立に照合する。`cli_quiet_retrieve`も、検査済み`quiet-run.py`による大量errorの保存と末尾の選択再取得を、trusted parentの実process記録から採点する。
 
 ## 専用runtimeの認証
 
-最初の`status`は、専用runtimeが未認証なら終了コード3になり、そのfalse状態を非機密baselineとして保存する。利用者本人がrunnerの`login`経由で公式loginを新規に行う。このsubcommandは固定したruntime実体を使い、親processのAPI key、provider、profile、secure-storage overrideを渡さない。既存homeの認証file、Keychain entry、token、session、DBはコピーしない。login後に`attest-login`でfalseからtrueへの遷移を記録し、再度`status`を実行する。認証値は読まず、証跡にはruntime identity、版、時刻、booleanだけを残す。
+最初の`status`は、専用runtimeが未認証なら終了コード3になり、そのfalse状態を非機密baselineとして保存する。利用者本人がrunnerの`login`経由で公式loginを新規に行う。このsubcommandは固定したruntime実体を使い、親processのAPI key、provider、profile、secure-storage overrideを渡さない。起動前にRUN内の専用0700 directoryが空で、通常directoryであり、runner所有であることを再検査し、そこへ移動してから`execve`する。呼出元のproject cwdは継承しない。既存homeの認証file、Keychain entry、token、session、DBはコピーしない。login後に`attest-login`でfalseからtrueへの遷移を記録し、再度`status`を実行する。認証値は読まず、証跡にはruntime identity、版、時刻、booleanだけを残す。
 
 ```sh
 python3 ~/.codex/scripts/harness_benchmark.py login "$RUN" codex
@@ -82,7 +83,34 @@ smokeはruntimeごとに1件ずつ実行する。Codex smokeは認証、runtime�
 
 `long_compact`は実際のcompact eventをrun内でも要求する。外部証拠が`observed`でも、証拠の`trigger_method`に対応するrunner adapterが未登録なら比較を開始しない。現在は両runtimeともadapter未登録である。`long_resume`は同じcandidate、runtime、variant、repeat、config epoch、bundle hash、session identityを持つ成功済みcompact結果だけを使い、別workspaceで完全な値を復元する。
 
-各runはprivateな`O_EXCL` markerで一度だけ取得する。実行中の別processが持つrunは拒否し、終了したprocessの開始記録だけが残る場合は中断として確定する。完了済みrunは再実行しない。候補はI03、I04、必要な場合はI05の順で、前候補96件の記録が揃うまで次へ進めない。source、model、effort、runtime版を変える場合は、新しいrootを準備する。
+各runはprivateな`O_EXCL` markerで一度だけ取得する。実行中の別processが持つrunは拒否し、終了したprocessの開始記録だけが残る場合は中断として確定する。完了済みrunは再実行しない。候補はI03、I04、必要な場合はI05の順で進める。native比較は前候補96件、host subsetは前候補72件の記録が揃うまで次へ進めない。source、model、effort、runtime版を変える場合は、新しいrootを準備する。
+
+## v13 host subset
+
+v13はnative eventを置き換えず、6件の非native fixtureだけをhost-supervised方式でも評価する。候補ごとの固定分母は、6 fixture × baseline/candidate × 3回 × 2 runtimeの72 runである。`long_compact`と`long_resume`の24 runはnative subsetとしてHOLDを維持し、host subsetの成功を96 run完了やnative発火として表示しない。
+
+trusted parentは同じ`harness_fixture_helper.py`、同じsource、同じinterpreter、同じ結果schemaを両条件で使う。baseline/candidate間で変わる外側の値は、runner-private requestの`strategy: raw|improved`だけである。strategyはモデルへ渡すcanonical resultに含めず、prompt templateの`__HOST_MECHANISM_CONTEXT__` 1 slotへ、同じschemaのpayloadを1件だけ挿入する。bundleの3 sourceは両条件で同じSHA-256に固定し、モデルworkspaceへコピーしない。
+
+runnerは検証済みhelper resultのcanonical bytesからslotを親側で再構成し、helperが返す別のprompt文字列を入力に採用しない。template、materialized prompt、実送信済みpromptのSHA-256とUTF-8 byte数を分け、materialized promptと実際に`run_finite`へ渡すbytesを一致させる。process起動、prompt送信、最初のstructured model responseを独立に記録し、`model_received_helper_result`はstructured responseを観測した場合だけtrueにする。起動失敗、setup timeout、response前の終了ではfalseである。helper開始からmodel終了までのend-to-end時間も、helper時間とmodel時間とは別に全terminal resultへ記録する。
+
+helperはtrusted parent processへ直接importし、helper自身をsubprocessとして起動しない。実processとして起動できるのは、固定operation manifestに完全一致した機構commandだけである。manifestとledgerはabsolute argv、正規化argv、hash、cwd、入力、固定env、許可終了値、timeout、CPU・open file・process数を含むresource上限、検査済みsource identityを持つ。直接起動数と、quiet logまたはTSC markerで確認した機構内の子起動数を分けて記録する。I03は実`quiet-run.py`による保存と再取得を扱う。I04のrawは固定したClaude baseline commitの`stop-save-handover.sh`と`session-start-inject.sh`の実bytesを、合成`05_log.md`、`30_plan.md`、transcriptへ順に実行し、生成したHANDOVER全文と注入stdoutを親が照合する。candidateは実handover coreによるinit、save、loadと証拠失効を扱う。モデルへ渡す前に時刻と物理pathだけをlogical値へ正規化し、両条件の必須factsを構造比較する。I05は実observations core、固定Node shim、RUN内へ固定exportした実tsc JSによる診断1回とfailure resetを扱う。primary counterはrendererの申告値を採用せず、別のcalculatorがraw command ledger、終了値、完全なprivate log、reset直後のstate snapshot、O_EXCL marker、診断hashから再計算する。TSC markerはrun、task、nonce、slot、argv、shim・Node・tscのSHA-256、終了値、診断hashを親operationへ結合する。両者の不一致、余分なmarker、source drift、子processの回収不能はモデル起動前の失敗である。
+
+helper process全体は120秒、個別commandは30秒、retryは0回である。stdoutとstderrは各16 MiB、canonical requestとresultは各256 KiB、生成fileは64件、1 fileは4 MiB、生成合計は16 MiBを上限にする。macOS sandboxでnetwork、live HOME、`/private/tmp`全体をdenyした後、当該runのworkと検査済みsourceだけを許可する。HOMEは置き換えずidentityだけを照合し、子環境は固定PATHとlocaleに限定してparentのcredential、provider、profile、proxy、preloadを渡さない。I04の実path、canonical marker、artifact hashはprivate evidenceだけに保存し、モデルへ渡すcontextはlogical pathと検証済み必須factsから構造化して再生成する。raw controlはbaselineのCodex `51ee53e`、Claude `7152ca3`、計画SHA、埋込みcontrol blob SHAへ結合する。失敗、欠測、上限超過、source driftはclaimへ記録し、最終treeの予約込み検査後に、返却resultと同じhashを持つterminal ledgerを一度だけ確定する。状態は`pre_model_failed`となり、当該pairをモデル起動前に停止する。残りの同candidateは`pending_helper_blocked`として残す。
+
+host subsetは、専用loginとruntime別隔離smokeが完了した後、次のように候補ごとに実行する。現時点ではloginとsmokeを実行していないため、コマンドは再開手順であり、実行済み証拠ではない。
+
+```sh
+python3 ~/.codex/scripts/harness_benchmark.py run "$RUN" --candidate I03 --host-subset "${COMMON[@]}"
+python3 ~/.codex/scripts/harness_benchmark.py run "$RUN" --candidate I04 --host-subset "${COMMON[@]}"
+python3 ~/.codex/scripts/harness_benchmark.py run "$RUN" --candidate I05 --host-subset "${COMMON[@]}"
+python3 ~/.codex/scripts/harness_benchmark.py report "$RUN"
+```
+
+各host runは`helper_mechanism_observed`、`model_received_helper_result`、`task_outcome_passed`を別々に記録する。一般taskの成功やhelper機構の成功だけでは、モデルが結果を受け取ったことや課題を解決したことにしない。helperのwall/CPU/process数、request・operation input、operation output、model result、private raw bytesはmodelのelapsed、token、tool、USDと分けて記録する。report schema 5は候補ごとにhost 72件とnative 24件を別分母で集計し、target fixtureは機構観測を期待数と照合し、neutral fixtureはhelper観測の期待数を0としてcall 0を照合する。host探索選別は、72件すべてのpairが成功分類まで完了し、usage、tool、outcomeが100% qualifiedで、runtimeごとのtargetとneutralの成功件数がそれぞれ減らず、品質・境界違反が0件で、target input token中央値が10%以上減った場合だけ通過する。費用coverageやactual tierの欠測はUSDをNAにして本採用をHOLDするが、上記の探索指標を一律に無効にしない。`pre_model_failed`はrun記録へ残してもcomplete pairへ数えない。`native_effect: false`と`adopted: false`は固定し、host subsetは探索証拠として本採用判定に使わない。
+
+v13の変更量目標は、runner統合60〜100行、runner test 80〜140行、helper 400〜500行、helper test 240〜320行、config 0件だった。実測は、runnerが2,636 physical行、1,795 AST statementで、v13差分はphysical純増814行、AST statement純増468件、diffは+862/-48行である。runner testは1,242 physical行、1,029 AST statementで、physical純増685行、AST statement純増533件、diffは+688/-3行だった。新規helperは1,414 physical行、949 AST statement、helper testは542 physical行、475 AST statementである。上限との差は、runner統合physical +714行、AST +368件、runner test physical +545行、AST +393件、helper physical +914行、AST +449件、helper test physical +222行、AST +155件となり、4 pathすべてが25%を超える。config追加は0件である。
+
+runnerの増分は、72件と24件の分母分離、host専用bundleの排他検査、materialized・sent promptのhashとbyte数、process起動・入力送信・structured responseの三段階、pre-model failureのterminal記録、end-to-end時間、探索selection gateを既存のrun/report lifecycleへ接続するために必要だった。helperは、独立counter、OS sandbox、有限process回収、durable terminal、source identity、固定baselineの全文生成・注入、I04のlogical context、TSC marker結合、reset snapshotを同じ信頼境界で検証する。両testの超過は、launch failure、欠測coverage、source drift、counter偽装、全candidateと8 fixtureのneutral組合せを削らずに固定するために生じた。この設計は、大きな2つのtrusted moduleを同時に確認する保守負担があり、prompt・result・report schemaの変更には両moduleの再レビューが必要になる。次版では、認証・モデル実行・native fixtureをhelperへ移さず、report集計とprompt provenanceを独立したreview済みmoduleへ分け、重複する負例をparameter化する余地がある。分割は新しい計画と開始審査を通すまで行わず、安全処理や負例を行数調整のために削除しない。この超過は目標の変更ではなく、v13だけの設計varianceとして独立完了レビューの対象にする。
 
 ## 結果の判定
 

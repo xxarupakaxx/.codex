@@ -4,7 +4,9 @@ from __future__ import annotations
 
 import argparse
 import ast
+import copy
 import hashlib
+import importlib.util
 import json
 import os
 import random
@@ -22,8 +24,13 @@ import uuid
 from datetime import datetime, timezone
 from pathlib import Path
 
+_HELPER_SPEC = importlib.util.spec_from_file_location("harness_fixture_helper", Path(__file__).with_name("harness_fixture_helper.py"))
+host_helper = importlib.util.module_from_spec(_HELPER_SPEC)
+_HELPER_SPEC.loader.exec_module(host_helper)
+
 OWNER = "harness-benchmark-v1"
 PLAN = {"version": "v8", "sha256": "45986dad51cf2c4c83bb49fb575f704e8ecf3f963ffd23cd05063503099fa3e3"}
+HOST_PLAN = host_helper.PLAN
 BASELINES = {"codex": "51ee53ed72eec0f7184c0699d244d2329d8e93bd", "claude": "7152ca3d5e05529f04018b59c0f40c668b8567aa"}
 LIMITS = {"run_seconds": 600, "total_seconds": 49 * 3600, "retry": 0,
           "codex_tool_events": 40, "claude_turns": 20, "claude_output_tokens": 8192,
@@ -37,6 +44,7 @@ SECRET_ENV = re.compile(r"(?:API_KEY|TOKEN|OAUTH|PASSWORD|SECRET|CREDENTIAL)", r
 FIXED_ENV = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "C", "LC_ALL": "C",
              "TERM": "dumb", "SHELL": "/bin/sh"}
 FULL_HASH = re.compile(r"[0-9a-f]{40,64}\Z")
+HASH64 = re.compile(r"[0-9a-f]{64}\Z")
 MODEL_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._:/-]{0,127}\Z")
 EFFORTS = {"low", "medium", "high", "xhigh", "max"}
 TIERS = {None, "standard", "priority", "flex"}
@@ -69,6 +77,8 @@ enabled = false
 CLAUDE_SAFETY = {"sandbox": {"enabled": True, "allowUnsandboxedCommands": False,
                               "failIfUnavailable": True}}
 CLAUDE_MARKER = "runtime/claude/config/isolation-marker.txt"
+HOST_SLOT, HOST_SOURCE_POLICY = host_helper.SLOT, host_helper.SOURCE_POLICY
+LOGIN_CWD = "runtime/login-cwd"
 LIVE_HOME_WRITE_PROBE = Path.home() / ".codex/.local/harness-boundary-write-probe-NONSECRET"
 FIXTURES = (
     {"id": "repo_add", "group": "repository", "instruction": "calc.pyのaddを加算へ直し、result.jsonへchecked=trueを書く。",
@@ -179,6 +189,22 @@ def private_tree_ok(bases, maximum=16384):
     return True
 
 
+def private_empty_dir(path, label):
+    """Validate a known owner-only empty directory before using it as cwd."""
+    path = Path(path)
+    try:
+        info = path.lstat()
+        if (not stat.S_ISDIR(info.st_mode) or stat.S_ISLNK(info.st_mode) or
+                stat.S_IMODE(info.st_mode) != 0o700 or info.st_uid != os.getuid()):
+            raise SystemExit(f"{label}がowner専用directoryではない")
+        with os.scandir(path) as entries:
+            if next(entries, None) is not None:
+                raise SystemExit(f"{label}がemptyではない")
+    except OSError as error:
+        raise SystemExit(f"{label}を検証できない") from error
+    return path
+
+
 def write_json(path, value):
     generated_root(path)
     if path.exists():
@@ -268,6 +294,7 @@ def pricing_identity():
 def tool_source_hashes():
     paths = {"runner": Path(__file__), "metrics": Path(__file__).with_name("session-metrics.py"),
              "quiet_run": Path(__file__).with_name("quiet-run.py"),
+             "host_helper": Path(__file__).with_name("harness_fixture_helper.py"),
              "pricing": Path(__file__).resolve().parents[1] / "config/model-pricing.json"}
     if not all(path.is_file() and not path.is_symlink() for path in paths.values()):
         raise SystemExit("runner/metrics sourceが通常fileではない")
@@ -351,7 +378,7 @@ def load_comparison_bundle(raw, candidates):
         value = json.loads(manifest_bytes.decode("utf-8"))
     except (OSError, ValueError) as error:
         raise SystemExit("comparison bundle manifestを読めない") from error
-    bundles = {}; file_count = total_bytes = 0
+    bundles = {}; file_count = total_bytes = 0; counted_sources = set()
     for row in value.get("bundles", []):
         key = (row.get("candidate"), row.get("runtime"), row.get("variant"))
         if key[0] not in ("I03", "I04", "I05") or key[1] not in ("codex", "claude") or key[2] not in ("baseline", "candidate"):
@@ -381,19 +408,22 @@ def load_comparison_bundle(raw, candidates):
                     source.stat().st_mode & 0o077 or
                     target.is_absolute() or ".." in target.parts or forbidden.search(str(source)) or forbidden.search(str(target))):
                 raise SystemExit(f"comparison bundle file境界違反: {source}")
-            allowed = ((class_name == "workspace_instruction" and target.name in ("AGENTS.md", "CLAUDE.md")) or
-                       (class_name == "runtime_settings" and target.name in ("overrides.json", "settings.json")) or
-                       (class_name == "hook_adapter" and target.parts and target.parts[0] == "hooks"))
             try:
                 with source.open("rb") as stream:
                     content = stream.read(LIMITS["comparison_file_bytes"] + 1)
             except OSError as error:
                 raise SystemExit(f"comparison bundle fileを読めない: {source}") from error
-            total_bytes += len(content)
+            actual = hashlib.sha256(content).hexdigest()
+            source_identity = (str(source.resolve()), actual)
+            if source_identity not in counted_sources:
+                total_bytes += len(content); counted_sources.add(source_identity)
             if (len(content) > LIMITS["comparison_file_bytes"] or
                     total_bytes > LIMITS["comparison_bytes"]):
                 raise SystemExit("comparison bundle生成量が上限を超える")
-            actual = hashlib.sha256(content).hexdigest()
+            host_allowed = host_helper.bundle_file_allowed(class_name, target, actual, factor)
+            allowed = (host_allowed or (class_name == "workspace_instruction" and target.name in ("AGENTS.md", "CLAUDE.md")) or
+                       (class_name == "runtime_settings" and target.name in ("overrides.json", "settings.json")) or
+                       (class_name == "hook_adapter" and target.parts and target.parts[0] == "hooks"))
             if not allowed or actual != item.get("sha256") or factor not in ("fixed", key[0]):
                 raise SystemExit(f"comparison bundle file契約違反: {source}")
             files.append({"class": class_name, "source": item["source"], "target": str(target),
@@ -405,16 +435,30 @@ def load_comparison_bundle(raw, candidates):
         raise SystemExit("candidate/runtime/variantごとのcomparison bundleが必要")
     for candidate in candidates:
         for runtime in ("codex", "claude"):
-            before = {(row["class"], row["target"]): row for row in bundles[candidate, runtime, "baseline"]["files"]}
-            after = {(row["class"], row["target"]): row for row in bundles[candidate, runtime, "candidate"]["files"]}
+            baseline_entries = bundles[candidate, runtime, "baseline"]["files"]
+            candidate_entries = bundles[candidate, runtime, "candidate"]["files"]
+            host_seen = any(item["class"] == "host_fixture_helper"
+                            for item in (*baseline_entries, *candidate_entries))
+            expected_host_keys = {("host_fixture_helper", f"host/{role}")
+                                  for role in HOST_SOURCE_POLICY}
+            if host_seen:
+                for variant, entries in (("baseline", baseline_entries), ("candidate", candidate_entries)):
+                    entry_keys = [(item["class"], item["target"]) for item in entries]
+                    if len(entry_keys) != len(expected_host_keys) or set(entry_keys) != expected_host_keys:
+                        raise SystemExit(f"host bundle entry契約違反: {candidate}:{runtime}:{variant}")
+            before = {(row["class"], row["target"]): row for row in baseline_entries}
+            after = {(row["class"], row["target"]): row for row in candidate_entries}
             if set(before) != set(after):
                 raise SystemExit(f"bundle target集合が不一致: {candidate}:{runtime}")
             changed = [key for key in before if before[key]["sha256"] != after[key]["sha256"]]
-            if not changed or any(before[key]["factor"] != candidate or after[key]["factor"] != candidate for key in changed):
+            host_mode = host_helper.host_bundle_mode(before, after, changed)
+            if host_seen and not host_mode:
+                raise SystemExit(f"host bundle mode契約違反: {candidate}:{runtime}")
+            if not host_mode and (not changed or any(before[key]["factor"] != candidate or after[key]["factor"] != candidate for key in changed)):
                 raise SystemExit(f"bundle差分factorが一要素でない: {candidate}:{runtime}")
             if any(before[key]["factor"] == "fixed" and before[key]["sha256"] != after[key]["sha256"] for key in before):
                 raise SystemExit(f"bundle fixed条件が不一致: {candidate}:{runtime}")
-            change_classes = sorted({before[key]["class"] for key in changed})
+            change_classes = ["host_fixture_helper"] if host_mode else sorted({before[key]["class"] for key in changed})
             bundles[candidate, runtime, "baseline"]["change_classes"] = change_classes
             bundles[candidate, runtime, "candidate"]["change_classes"] = change_classes
             for rows in (before.values(), after.values()):
@@ -430,11 +474,20 @@ def stage_bundles(root, bundles):
         files = source_bundle["files"]
         candidate, runtime, variant = key; staged = []
         for item in files:
-            target = root / "runtime/bundles" / candidate / runtime / variant / item["target"]
-            write_private_bytes(target, item["content"])
+            target = (root / "runtime/host-sources" / Path(item["target"]).name
+                      if item["class"] == "host_fixture_helper" else
+                      root / "runtime/bundles" / candidate / runtime / variant / item["target"])
+            if target.exists():
+                if target.is_symlink() or hashlib.sha256(target.read_bytes()).hexdigest() != item["sha256"]:
+                    raise SystemExit("共有host sourceが不一致")
+            else:
+                write_private_bytes(target, item["content"])
+            if item["class"] == "host_fixture_helper" and item["target"] == "host/node":
+                os.chmod(target, 0o700)
             staged.append({name: item[name] for name in ("class", "target", "sha256", "factor")})
         classes = set(source_bundle["change_classes"])
-        kind = ("hook-unconfined" if "hook_adapter" in classes else
+        kind = ("host-supervised-helper" if classes == {"host_fixture_helper"} else
+                "hook-unconfined" if "hook_adapter" in classes else
                 "implementation" if "runtime_settings" in classes and
                 (candidate, runtime) in RUNTIME_SETTING_ALLOWLISTS else
                 "settings-unreviewed" if "runtime_settings" in classes else "instruction-only")
@@ -483,6 +536,13 @@ def verify_runtime_binaries(manifest):
     python = (manifest.get("fixture_tools") or {}).get("python_cli") or {}
     if python.get("state") != "observed" or runtime_binary(sys.executable, "python_cli") != python.get("binary"):
         raise SystemExit("runner Python変更後は新しいrootを準備する")
+    host = manifest.get("host_dependencies") or {}
+    if host:
+        node, tsc = host.get("node") or {}, host.get("tsc_js") or {}
+        path = Path(tsc.get("path", ""))
+        if runtime_binary(node.get("path"), "host_node") != node or path.is_symlink() or not path.is_file() or \
+                hashlib.sha256(path.read_bytes()).hexdigest() != tsc.get("sha256"):
+            raise SystemExit("host helper dependency変更後は新しいrootを準備する")
 
 
 def verify_runtime_state(root, manifest):
@@ -500,6 +560,7 @@ def verify_runtime_state(root, manifest):
                 root / "runtime/codex/tmp", root / "runtime/claude/tmp")
     if any(item.is_symlink() or not item.is_dir() or item.stat().st_mode & 0o077 for item in required):
         raise SystemExit("専用runtime state directoryがprivateな通常directoryではない")
+    private_empty_dir(root / LOGIN_CWD, "login-cwd")
     marker = root / CLAUDE_MARKER
     expected_marker = manifest.get("runtime_state_hashes", {}).get("claude_marker")
     if (marker.is_symlink() or not marker.is_file() or marker.stat().st_mode & 0o077 or
@@ -540,6 +601,8 @@ def prepare(args):
                  root / "runtime/claude/home/.local/transcripts", root / "runtime/claude/home/.local/plans",
                  root / "runtime/codex/tmp", root / "runtime/claude/tmp"):
         mkdir(path)
+    mkdir(root / LOGIN_CWD)
+    mkdir(root / "runtime/host-helper")
     write_private(root / "runtime/codex/home/config.toml", CODEX_CONFIG)
     marker_content = "synthetic nonsecret isolation marker\n"
     write_private(root / CLAUDE_MARKER, marker_content)
@@ -554,6 +617,13 @@ def prepare(args):
     capability_evidence = load_capabilities(args.capability_evidence)
     capabilities = capability_evidence["runtimes"]
     bundles = stage_bundles(root, load_comparison_bundle(args.comparison_bundle, candidates))
+    host_active = any(row["evaluation_kind"] == "host-supervised-helper" for row in bundles.values())
+    host_dependencies = {}
+    if host_active:
+        try:
+            host_dependencies = host_helper.validate_dependencies(args.host_node_bin, args.host_tsc_js)
+        except host_helper.HelperError as error:
+            raise SystemExit("host helper dependencyがreview済みallowlistと不一致") from error
     for base_fixture in FIXTURES:
         fixture = resolved_fixture(base_fixture["id"], fixture_tools)
         directory = root / "fixtures" / fixture["id"]
@@ -563,7 +633,9 @@ def prepare(args):
     prompt_hashes = {}
     for row in rows:
         spec = resolved_fixture(row["fixture"], fixture_tools) if row["kind"] == "compare" else None
-        prompt = prompt_for(row, spec, root / CLAUDE_MARKER)
+        key = ":".join((row.get("candidate", ""), row["runtime"], row.get("variant", "")))
+        mechanism = HOST_SLOT if row["kind"] == "compare" and bundles[key]["evaluation_kind"] == "host-supervised-helper" else None
+        prompt = prompt_for(row, spec, root / CLAUDE_MARKER, mechanism)
         prompt_hashes[row["run_id"]] = hashlib.sha256(prompt.encode()).hexdigest()
     write_json(root / "results/manifest.json", {"owner": OWNER, "schema": 1, "prepared_at": prepared_at, "plan": PLAN,
                "schedule_seed": args.seed,
@@ -574,6 +646,7 @@ def prepare(args):
                "capabilities": capabilities, "capability_hash": digest(capabilities),
                "capability_source": {key: capability_evidence[key] for key in ("source_path", "source_hash")},
                "comparison_bundles": bundles, "runtime_binaries": binaries, "fixture_tools": fixture_tools,
+               "host_helper_plan": HOST_PLAN, "host_dependencies": host_dependencies,
                "runtime_state_hashes": {"codex_config": hashlib.sha256(CODEX_CONFIG.encode()).hexdigest(),
                                         "claude_marker": hashlib.sha256(marker_content.encode()).hexdigest()},
                "tool_source_hashes": sources, "pricing": pricing_identity(), "environment": environment_identity(),
@@ -679,8 +752,10 @@ def login(args):
     baseline = read_json(root / "results/auth-baseline.json"); runtime = args.runtime
     if baseline.get("authenticated", {}).get(runtime) is not False:
         raise SystemExit("専用領域の未認証baselineがないためloginを開始できない")
+    login_cwd = private_empty_dir(root / LOGIN_CWD, "login-cwd")
     base = runtime_argv(manifest["runtime_binaries"][runtime])
     command = base + (["login"] if runtime == "codex" else ["auth", "login"])
+    os.chdir(str(login_cwd))
     os.execve(command[0], command, child_env(root, runtime))
 
 
@@ -819,6 +894,8 @@ def observe(runtime, line, seen):
         if row.get("type") == "thread.started":
             seen["session_id"] = row.get("thread_id")
         item = row.get("item") if isinstance(row.get("item"), dict) else {}
+        if row.get("type") == "item.completed" and item.get("type") == "agent_message":
+            seen["model_response_observed"] = True
         if row.get("type") == "item.started":
             item_type = item.get("type")
             if item_type in ("command_execution", "file_change", "mcp_tool_call", "web_search"):
@@ -840,6 +917,7 @@ def observe(runtime, line, seen):
         seen["session_id"] = row.get("session_id") or row.get("sessionId")
     content = message.get("content", []) if isinstance(message.get("content"), list) else []
     if row.get("type") == "assistant":
+        seen["model_response_observed"] = True
         seen["turn_ids"].add(message.get("id") or digest(message))
         for block in content:
             if isinstance(block, dict) and block.get("type") == "tool_use" and block.get("name") == "Bash":
@@ -944,11 +1022,16 @@ def apply_child_limits(timeout):
 
 def run_finite(command, prompt, env, stdout_path, stderr_path, runtime, timeout, cwd):
     start, process, selector, reason = time.monotonic(), None, selectors.DefaultSelector(), None
+    prompt_bytes = prompt.encode()
+    process_started = prompt_sent = False
+    launch_error = None; exit_code = None
+    targets = {}; totals = {}
     seen = {"tool_ids": set(), "turn_ids": set(), "models": set(), "efforts": set(), "tiers": set(),
             "unknown_item_types": set(), "hook_events": set(), "commands": [], "bash_tools": {},
             "denied_commands": [], "output_tokens": 0, "usage_observed": False,
             "session_output_tokens": 0, "session_usage_observed": False, "compact_events": 0,
             "session_id": None, "rejection": False, "terminal_status": None}
+    seen["model_response_observed"] = False
     for path in (stdout_path, stderr_path):
         generated_root(path)
         descriptor = os.open(path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600); os.close(descriptor)
@@ -956,14 +1039,16 @@ def run_finite(command, prompt, env, stdout_path, stderr_path, runtime, timeout,
         process = subprocess.Popen(command, env=env, cwd=cwd, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                    stderr=subprocess.PIPE, start_new_session=True, umask=0o077,
                                    preexec_fn=lambda: apply_child_limits(timeout))
+        process_started = True
         try:
-            process.stdin.write(prompt.encode())
-        except BrokenPipeError:
-            pass
-        finally:
+            written = process.stdin.write(prompt_bytes)
+            process.stdin.close()
+            prompt_sent = written == len(prompt_bytes)
+        except (BrokenPipeError, OSError):
+            prompt_sent = False
             try:
                 process.stdin.close()
-            except BrokenPipeError:
+            except (BrokenPipeError, OSError):
                 pass
         selector.register(process.stdout, selectors.EVENT_READ); selector.register(process.stderr, selectors.EVENT_READ)
         targets = {process.stdout: stdout_path, process.stderr: stderr_path}
@@ -1009,6 +1094,9 @@ def run_finite(command, prompt, env, stdout_path, stderr_path, runtime, timeout,
             except OSError:
                 pass
             exit_code = process.wait(timeout=max(.01, absolute_deadline - time.monotonic()))
+    except OSError as error:
+        launch_error = type(error).__name__
+        reason = "launch_error" if not process_started else "io_error"
     except BaseException:
         if process is not None:
             stop_group(process, start + timeout)
@@ -1028,11 +1116,22 @@ def run_finite(command, prompt, env, stdout_path, stderr_path, runtime, timeout,
                         os.killpg(process.pid, signal.SIGKILL)
                     except OSError:
                         pass
+    elapsed_seconds = round(time.monotonic() - start, 3)
     return {"exit_code": exit_code, "stop_reason": reason, "session_id": seen["session_id"],
+            "process_started": process_started, "prompt_sent": prompt_sent,
+            "materialized_prompt_sha256": hashlib.sha256(prompt_bytes).hexdigest(),
+            "materialized_prompt_bytes": len(prompt_bytes),
+            "sent_prompt_sha256": hashlib.sha256(prompt_bytes).hexdigest() if prompt_sent else None,
+            "sent_prompt_bytes": len(prompt_bytes) if prompt_sent else None,
+            "prompt_sha256": hashlib.sha256(prompt_bytes).hexdigest() if prompt_sent else None,
+            "model_called": bool(process_started and prompt_sent),
+            "model_response_observed": seen["model_response_observed"],
+            "launch_error": launch_error,
             "tool_events": len(seen["tool_ids"]), "turns": len(seen["turn_ids"]),
             "output_tokens": seen["output_tokens"], "compact_events": seen["compact_events"],
             "session_output_tokens": seen["session_output_tokens"],
-            "stdout_bytes": totals[process.stdout], "stderr_bytes": totals[process.stderr],
+            "stdout_bytes": totals.get(process.stdout, 0) if process is not None else 0,
+            "stderr_bytes": totals.get(process.stderr, 0) if process is not None else 0,
             "rejection": seen["rejection"], "terminal_status": seen["terminal_status"],
             "effective_model": next(iter(seen["models"])) if len(seen["models"]) == 1 else None,
             "effective_effort": next(iter(seen["efforts"])) if len(seen["efforts"]) == 1 else None,
@@ -1041,7 +1140,8 @@ def run_finite(command, prompt, env, stdout_path, stderr_path, runtime, timeout,
             "hook_events": sorted(seen["hook_events"]), "commands": seen["commands"],
             "denied_commands": seen["denied_commands"],
             "unknown_item_types": sorted(seen["unknown_item_types"]),
-            "elapsed_seconds": round(time.monotonic() - start, 3)}
+            "elapsed_seconds": elapsed_seconds,
+            "elapsed_ms": round(elapsed_seconds * 1000, 3)}
 
 
 def resolved_fixture(fixture_id, fixture_tools=None):
@@ -1089,11 +1189,16 @@ def materialize_smoke(root, row):
 
 def materialize_bundle(root, row, work, manifest):
     key = ":".join((row["candidate"], row["runtime"], row["variant"]))
-    bundle = manifest["comparison_bundles"][key]; controls = {}
+    bundle = manifest["comparison_bundles"][key]; controls = {}; host_sources = {}
     for item in bundle["files"]:
-        source = root / "runtime/bundles" / row["candidate"] / row["runtime"] / row["variant"] / item["target"]
+        source = (root / "runtime/host-sources" / Path(item["target"]).name
+                  if item["class"] == "host_fixture_helper" else
+                  root / "runtime/bundles" / row["candidate"] / row["runtime"] / row["variant"] / item["target"])
         if source.is_symlink() or not source.is_file() or hashlib.sha256(source.read_bytes()).hexdigest() != item["sha256"]:
             raise SystemExit(f"staged comparison bundleが変化した: {key}:{item['target']}")
+        if item["class"] == "host_fixture_helper":
+            host_sources[Path(item["target"]).name] = source
+            continue
         relative = Path(item["target"]) if item["class"] == "workspace_instruction" else Path(".runtime-bundle") / item["target"]
         target = work / relative
         if target.exists() or target.is_symlink():
@@ -1105,7 +1210,8 @@ def materialize_bundle(root, row, work, manifest):
         raise SystemExit(f"runtime settingsが複数: {key}")
     return {"bundle_hash": bundle["bundle_hash"], "control_hashes": controls,
             "runtime_settings": str(runtime_settings[0]) if runtime_settings else None,
-            "evaluation_kind": bundle["evaluation_kind"], "candidate": row["candidate"]}
+            "evaluation_kind": bundle["evaluation_kind"], "candidate": row["candidate"],
+            "host_sources": host_sources}
 
 
 def same_content(path, expected):
@@ -1243,7 +1349,7 @@ def command_for(runtime, config, work, resume, bundle, required_commands=()):
     return base + (["--resume", resume] if resume else [])
 
 
-def prompt_for(row, spec, outside_marker=None):
+def prompt_for(row, spec, outside_marker=None, mechanism=None):
     if row["kind"] == "smoke" and row["runtime"] == "claude":
         commands = [shlex.join(command) for command in claude_smoke_commands(generated_root(outside_marker))]
         return ("境界検証専用の合成fixtureです。Bashで次の4 commandを順に各1回、そのまま実行する。"
@@ -1251,7 +1357,198 @@ def prompt_for(row, spec, outside_marker=None):
                 "後の3件の拒否を回避せず、結果を短く返す。")
     if row["kind"] == "smoke":
         return '合成fixtureの接続確認です。編集や外部アクセスをせず、{"ok":true}だけを返してください。'
-    return f"隔離した合成fixtureです。外部通信、認証操作、commit、削除を行わない。{spec['instruction']}"
+    base = f"隔離した合成fixtureです。外部通信、認証操作、commit、削除を行わない。{spec['instruction']}"
+    return base + (("\n" + mechanism) if mechanism else "")
+
+
+def run_host_helper(root, row, spec, bundle, manifest):
+    if bundle["evaluation_kind"] != "host-supervised-helper":
+        return None
+    base = root / "runtime/host-helper" / row["run_id"]
+    python = manifest["fixture_tools"]["python_cli"]["binary"]
+    # HOME itself is a live boundary input.  The prepared manifest carries
+    # only its digest; pass that existing binding and never persist the path.
+    home_sha256 = (manifest.get("environment") or {}).get("home_sha256")
+    if not isinstance(home_sha256, str) or len(home_sha256) != 64:
+        raise host_helper.HelperError("home_identity_unavailable")
+    dependencies = (manifest.get("host_dependencies") or {}) if row.get("fixture") == "repo_tsc_once" else {}
+    host = host_helper.supervise(base, row, spec, bundle["host_sources"], dependencies,
+                                 python, home_sha256)
+    try:
+        return validate_host_hashes(row, spec, host)
+    except host_helper.HelperError as error:
+        error.host = host
+        raise
+
+
+def host_pre_model_failure(row, reason, elapsed_ms=0, host=None, binding_valid=None, normalized=None):
+    """Close a helper preflight failure as one consumed, model-free attempt."""
+    reason = str(reason)[:256]
+    try:
+        elapsed_ms = max(0, round(float(elapsed_ms), 3))
+    except (TypeError, ValueError):
+        elapsed_ms = 0
+    if (isinstance(host, dict) and isinstance(host.get("result"), dict) and
+            isinstance(host.get("evidence"), dict)):
+        preserved = copy.deepcopy(host)
+        evidence = preserved["evidence"]
+        evidence.update(model_received_helper_result=False, task_outcome_passed=False,
+                        failure_reason=reason, pre_model_failed=True, pair_stop=True)
+        if normalized is False:
+            evidence.setdefault("raw_helper_mechanism_observed",
+                                evidence.get("helper_mechanism_observed"))
+            evidence["helper_mechanism_observed"] = False
+            evidence["normalized"] = False
+        elif normalized is True:
+            evidence["normalized"] = True
+        if binding_valid is False:
+            evidence.setdefault("raw_helper_mechanism_observed",
+                                evidence.get("helper_mechanism_observed"))
+            evidence["helper_mechanism_observed"] = False
+            evidence["binding_valid"] = False
+        elif binding_valid is True:
+            evidence["binding_valid"] = True
+        preserved["pair_stop"] = True
+        return preserved
+    owner = getattr(host_helper, "RESULT_OWNER", "harness-host-helper-result-v1")
+    schema = getattr(host_helper, "SCHEMA", 1)
+    result = {"owner": owner, "schema": schema, "candidate": row["candidate"],
+              "fixture": row["fixture"], "status": "failed", "mechanism": "host-helper",
+              "payload": {"context": "", "facts": {"failure_reason": reason}, "diagnostics": []},
+              "references": []}
+    result["content_hash"] = host_helper.digest(result)
+    evidence = {"helper_mechanism_observed": False, "model_received_helper_result": False,
+                "task_outcome_passed": False, "request_hash": None,
+                "result_hash": result["content_hash"], "operations": [], "operation_count": 0,
+                "elapsed_ms": elapsed_ms, "generated": {"files": None, "bytes": None},
+                "failure_reason": reason, "pre_model_failed": True, "pair_stop": True,
+                "binding_valid": False, "normalized": False}
+    return {"result": result, "evidence": evidence, "pair_stop": True}
+
+
+def exception_reason(error):
+    reason = getattr(error, "reason", None)
+    if reason is None:
+        reason = str(error)
+    return str(reason or type(error).__name__)[:256]
+
+
+def host_contract_error(reason, host, binding_valid=False):
+    error = host_helper.HelperError(reason)
+    error.host, error.binding_valid = host, binding_valid
+    return error
+
+
+def host_request(row, spec):
+    request_row = dict(row)
+    request_row.setdefault("variant", "baseline")
+    return host_helper.make_request(request_row, spec)
+
+
+def valid_hash64(value):
+    return isinstance(value, str) and HASH64.fullmatch(value) is not None
+
+
+def validate_host_hashes(row, spec, host):
+    """Require the helper's signed request/result hashes before model launch."""
+    if not isinstance(host, dict) or not isinstance(host.get("result"), dict) or \
+            not isinstance(host.get("evidence"), dict):
+        raise host_contract_error("helper_result_schema_invalid", host)
+    result, evidence = host["result"], host["evidence"]
+    request_hash = evidence.get("request_hash")
+    if not valid_hash64(request_hash):
+        raise host_contract_error("helper_request_hash_invalid", host)
+    result_hash = evidence.get("result_hash")
+    if not valid_hash64(result_hash):
+        raise host_contract_error("helper_result_hash_invalid", host)
+    content_hash = result.get("content_hash")
+    if not valid_hash64(content_hash):
+        raise host_contract_error("helper_result_content_hash_invalid", host)
+    if result_hash != content_hash:
+        raise host_contract_error("helper_result_hash_mismatch", host)
+    unsigned = dict(result)
+    unsigned.pop("content_hash", None)
+    if host_helper.digest(unsigned) != content_hash:
+        raise host_contract_error("helper_result_content_hash_mismatch", host)
+    expected_request_hash = host_helper.digest(host_request(row, spec))
+    if request_hash != expected_request_hash:
+        raise host_contract_error("helper_request_hash_mismatch", host)
+    evidence["binding_valid"] = True
+    return host
+
+
+def write_host_pre_model_result(root, result_path, row, template_sha256, prompt_audit, host,
+                                run_started, helper_started_at, model_finished_at,
+                                helper_wall_elapsed_ms, process=None):
+    end_to_end = (max(0, round((model_finished_at - helper_started_at) * 1000, 3))
+                  if helper_started_at is not None and model_finished_at is not None else None)
+    run_elapsed = (max(0, round((model_finished_at - run_started) * 1000, 3))
+                   if model_finished_at is not None else None)
+    reason = host["evidence"].get("failure_reason")
+    timing = {"run_elapsed_ms": run_elapsed,
+              "helper_elapsed_ms": host["evidence"].get("elapsed_ms"),
+              "helper_wall_elapsed_ms": helper_wall_elapsed_ms, "model_elapsed_ms": None,
+              "helper_to_model_end_elapsed_ms": end_to_end, "end_to_end_elapsed_ms": end_to_end}
+    write_json(root / f"results/host-blocked-{row['candidate']}.json",
+               {"owner": OWNER, "schema": 1, "candidate": row["candidate"], "run_id": row["run_id"],
+                "status": "pending_helper_blocked", "reason": reason})
+    write_json(result_path, {"owner": OWNER, "schema": 1, "completed": True, "run": row,
+                             "status": "pre_model_failed", "missing_reason": "pre_model_helper_failed",
+                             "failure_reason": reason, "model_called": False, "prompt_sent": False,
+                             "model_received_helper_result": False, "template_sha256": template_sha256,
+                             "materialized_prompt_sha256": prompt_audit["materialized_prompt_sha256"],
+                             "materialized_prompt_bytes": prompt_audit["materialized_prompt_bytes"],
+                             "sent_prompt_sha256": None, "sent_prompt_bytes": None,
+                             "model_response_observed": False, "process": process or {
+                                 "process_started": False, "prompt_sent": False, "model_called": False,
+                                 "model_response_observed": False, "stop_reason": "pre_model_failed"},
+                             "prompt": prompt_audit, "timing": timing,
+                             "end_to_end_elapsed_ms": end_to_end, "host_helper": host})
+    return True
+
+
+def normalize_host_result(row, host, spec=None):
+    """Validate the cross-process result contract before model invocation."""
+    validate_host_hashes(row, spec or fixture(row["fixture"]), host)
+    result, evidence = host["result"], host["evidence"]
+    if result.get("owner") != getattr(host_helper, "RESULT_OWNER", "harness-host-helper-result-v1") or \
+            result.get("schema") != getattr(host_helper, "SCHEMA", 1) or \
+            result.get("candidate") != row.get("candidate") or result.get("fixture") != row.get("fixture"):
+        raise host_helper.HelperError("helper_result_identity_invalid")
+    payload = result.get("payload")
+    unsigned = dict(result); claimed_hash = unsigned.pop("content_hash", None)
+    if (not isinstance(payload, dict) or set(payload) != {"context", "facts", "diagnostics"} or
+            not isinstance(payload["context"], str) or not isinstance(payload["facts"], dict) or
+            not isinstance(payload["diagnostics"], list) or
+            not isinstance(claimed_hash, str) or host_helper.digest(unsigned) != claimed_hash):
+        raise host_helper.HelperError("helper_result_payload_invalid")
+    try:
+        encoded_result = host_helper.canonical(result).decode("utf-8")
+    except (UnicodeDecodeError, TypeError, ValueError) as error:
+        raise host_helper.HelperError("helper_result_canonical_invalid") from error
+    expected_prompt_context = f'<mechanism-context schema="host-helper-result-v1">{encoded_result}</mechanism-context>'
+    if "prompt_context" in host and host["prompt_context"] != expected_prompt_context:
+        raise host_helper.HelperError("helper_prompt_context_invalid")
+    host["prompt_context"] = expected_prompt_context
+    required = {"helper_mechanism_observed", "failure_reason", "operation_count"}
+    if not required <= set(evidence) or not isinstance(host.get("pair_stop"), bool) or \
+            not isinstance(evidence.get("helper_mechanism_observed"), bool) or \
+            not isinstance(evidence.get("operation_count"), int) or evidence["operation_count"] < 0:
+        raise host_helper.HelperError("helper_evidence_schema_invalid")
+    evidence["pair_stop"] = host["pair_stop"]
+    target = row.get("fixture") in getattr(host_helper, "FIXTURE_TARGETS", {}).get(row.get("candidate"), set())
+    if target and result.get("status") not in {"observed", "failed"}:
+        raise host_helper.HelperError("target_result_status_invalid")
+    if not target and (evidence.get("operation_count") != 0 or evidence.get("helper_mechanism_observed") is not False):
+        raise host_helper.HelperError("neutral_helper_observation_invalid")
+    if target and result.get("status") == "observed" and evidence.get("helper_mechanism_observed") is not True:
+        raise host_helper.HelperError("target_helper_observation_missing")
+    if not target and result.get("status") != "neutral":
+        raise host_helper.HelperError("neutral_result_status_invalid")
+    if result.get("status") == "failed" and host["pair_stop"] is not True:
+        raise host_helper.HelperError("failed_result_not_pair_stop")
+    evidence["normalized"] = True
+    return host
 
 
 def smoke_quality(root, row, work, process, manifest):
@@ -1396,31 +1693,155 @@ def run_one(root, row, config, manifest, timeout):
         write_json(result_path, {"owner": OWNER, "schema": 1, "completed": True, "run": row,
                                  "status": "unknown", "missing_reason": "prelaunch_validation_failed"})
         raise
-    work = materialize(root, row, manifest) if row["kind"] == "compare" else materialize_smoke(root, row)
-    bundle = (materialize_bundle(root, row, work, manifest) if row["kind"] == "compare" else
-              {"bundle_hash": None, "control_hashes": {}, "runtime_settings": None, "evaluation_kind": "smoke"})
+    bundle_key = ":".join((row["candidate"], row["runtime"], row["variant"])) if row["kind"] == "compare" else None
+    declared_bundle = (manifest.get("comparison_bundles", {}).get(bundle_key) or {}) if bundle_key else {}
+    host_manifest_expected = declared_bundle.get("evaluation_kind") == "host-supervised-helper"
+    try:
+        work = materialize(root, row, manifest) if row["kind"] == "compare" else materialize_smoke(root, row)
+        bundle = (materialize_bundle(root, row, work, manifest) if row["kind"] == "compare" else
+                  {"bundle_hash": None, "control_hashes": {}, "runtime_settings": None,
+                   "evaluation_kind": "smoke", "host_sources": {}})
+    except (Exception, SystemExit) as error:
+        if not host_manifest_expected:
+            raise
+        finished_at = time.monotonic()
+        reason = exception_reason(error)
+        elapsed_ms = max(0, round((finished_at - run_started) * 1000, 3))
+        template_sha256 = (manifest.get("prompt_hashes", {}) or {}).get(row["run_id"])
+        if not isinstance(template_sha256, str):
+            template_sha256 = None
+        prompt_audit = {"template_sha256": template_sha256, "materialized_prompt_sha256": None,
+                        "materialized_prompt_bytes": None, "sent_prompt_sha256": None,
+                        "sent_prompt_bytes": None, "materialized_prompt_status": "not_materialized",
+                        "materialized_prompt_reason": reason,
+                        "helper_result_sha256": None, "helper_context_sha256": None}
+        host = host_pre_model_failure(row, reason, elapsed_ms)
+        prompt_audit["helper_result_sha256"] = host["result"]["content_hash"]
+        return write_host_pre_model_result(root, result_path, row, template_sha256, prompt_audit, host,
+                                           run_started, run_started, finished_at, elapsed_ms)
     stdout = root / "logs" / f"{row['run_id']}.jsonl"; stderr = root / "logs" / f"{row['run_id']}.stderr.log"
     spec = fixture(row["fixture"], manifest) if row["kind"] == "compare" else None
+    host_expected = bool(spec and bundle["evaluation_kind"] == "host-supervised-helper")
+    template = prompt_for(row, spec, root / CLAUDE_MARKER, HOST_SLOT if host_expected else None)
+    template_sha256 = hashlib.sha256(template.encode()).hexdigest()
+    prompt_audit = {"template_sha256": template_sha256, "materialized_prompt_sha256": None,
+                    "materialized_prompt_bytes": None, "sent_prompt_sha256": None,
+                    "sent_prompt_bytes": None, "materialized_prompt_status": "not_materialized",
+                    "materialized_prompt_reason": "pending",
+                    "helper_result_sha256": None, "helper_context_sha256": None}
+    host = None
+    helper_started_at = helper_finished_at = model_finished_at = None
+    helper_wall_elapsed_ms = None
+    if host_expected:
+        helper_started_at = time.monotonic()
+        raw_host = None
+        try:
+            raw_host = run_host_helper(root, row, spec, bundle, manifest)
+            host = normalize_host_result(row, raw_host, spec)
+        except Exception as error:
+            # Helper validation is a pre-model gate.  It consumes this attempt
+            # and closes the result locally so no model can run on unverified
+            # evidence and no retry can silently change the denominator.
+            helper_finished_at = time.monotonic()
+            helper_wall_elapsed_ms = max(0, round((helper_finished_at - helper_started_at) * 1000, 3))
+            reason = exception_reason(error)
+            preserved_host = getattr(error, "host", None)
+            if preserved_host is None:
+                preserved_host = raw_host
+            binding_valid = getattr(error, "binding_valid", None)
+            if binding_valid is None:
+                binding_valid = bool(isinstance(preserved_host, dict) and
+                                     isinstance(preserved_host.get("evidence"), dict) and
+                                     preserved_host["evidence"].get("binding_valid") is True)
+            host = host_pre_model_failure(row, reason, helper_wall_elapsed_ms, preserved_host,
+                                          binding_valid=binding_valid, normalized=False)
+            prompt_audit["materialized_prompt_reason"] = reason
+        else:
+            helper_finished_at = time.monotonic()
+            helper_wall_elapsed_ms = max(0, round((helper_finished_at - helper_started_at) * 1000, 3))
+        prompt_audit["helper_result_sha256"] = (host.get("result") or {}).get("content_hash")
+        if isinstance(host.get("prompt_context"), str):
+            prompt_audit["helper_context_sha256"] = hashlib.sha256(host["prompt_context"].encode()).hexdigest()
+    if host and host["pair_stop"]:
+        model_finished_at = helper_finished_at
+        return write_host_pre_model_result(root, result_path, row, template_sha256, prompt_audit, host,
+                                           run_started, helper_started_at, model_finished_at,
+                                           helper_wall_elapsed_ms)
     try:
         required = (spec.get("required_commands", []) if spec else
                     claude_smoke_commands(root) if row["runtime"] == "claude" else [])
         command = command_for(row["runtime"], config, work,
                               session if row.get("fixture") == "long_resume" else None, bundle, required)
-    except SystemExit:
+    except SystemExit as error:
+        model_finished_at = time.monotonic()
+        if host_expected:
+            reason = exception_reason(error)
+            elapsed_ms = (max(0, round((model_finished_at - helper_started_at) * 1000, 3))
+                          if helper_started_at is not None else max(0, round((model_finished_at - run_started) * 1000, 3)))
+            host = host_pre_model_failure(row, reason, elapsed_ms, host)
+            prompt_audit.update(materialized_prompt_reason=reason,
+                                helper_result_sha256=(host.get("result") or {}).get("content_hash"),
+                                helper_context_sha256=(hashlib.sha256(host["prompt_context"].encode()).hexdigest()
+                                                       if isinstance(host.get("prompt_context"), str) else None))
+            return write_host_pre_model_result(root, result_path, row, template_sha256, prompt_audit, host,
+                                               run_started, helper_started_at, model_finished_at,
+                                               helper_wall_elapsed_ms)
+        end_to_end = (max(0, round((model_finished_at - helper_started_at) * 1000, 3))
+                      if helper_started_at is not None else None)
         write_json(result_path, {"owner": OWNER, "schema": 1, "completed": True, "run": row,
-                                 "status": "unknown", "missing_reason": "runtime_settings_invalid"})
+                                 "status": "unknown", "missing_reason": "runtime_settings_invalid",
+                                 "model_called": False, "template_sha256": template_sha256,
+                                 "materialized_prompt_sha256": None, "materialized_prompt_bytes": None,
+                                 "sent_prompt_sha256": None, "sent_prompt_bytes": None,
+                                 "model_response_observed": False, "prompt": {**prompt_audit,
+                                     "materialized_prompt_reason": "runtime_settings_invalid"},
+                                 "timing": {"run_elapsed_ms": round((model_finished_at - run_started) * 1000, 3),
+                                            "helper_elapsed_ms": (host["evidence"].get("elapsed_ms") if host else None),
+                                            "helper_wall_elapsed_ms": helper_wall_elapsed_ms,
+                                            "model_elapsed_ms": None, "helper_to_model_end_elapsed_ms": end_to_end,
+                                            "end_to_end_elapsed_ms": end_to_end},
+                                 "end_to_end_elapsed_ms": end_to_end})
         return True
+    prompt = None; materialized_sha256 = None; materialized_prompt_bytes = None
     try:
         process_timeout = timeout - (time.monotonic() - run_started)
         if process_timeout <= 0:
             raise subprocess.TimeoutExpired("run setup", timeout)
-        prompt = prompt_for(row, spec, root / CLAUDE_MARKER)
-        if hashlib.sha256(prompt.encode()).hexdigest() != manifest["prompt_hashes"].get(row["run_id"]):
+        context = host["prompt_context"] if host else None
+        prompt = prompt_for(row, spec, root / CLAUDE_MARKER, context)
+        materialized_prompt_bytes = prompt.encode()
+        materialized_sha256 = hashlib.sha256(materialized_prompt_bytes).hexdigest()
+        prompt_audit.update(materialized_prompt_sha256=materialized_sha256,
+                            materialized_prompt_bytes=len(materialized_prompt_bytes),
+                            materialized_prompt_status="materialized")
+        if template_sha256 != manifest["prompt_hashes"].get(row["run_id"]):
             raise SystemExit("promptが準備時から変化した")
         process = run_finite(command, prompt, child_env(root, row["runtime"], work), stdout, stderr,
                              row["runtime"], process_timeout, work)
+    except SystemExit as error:
+        if not host_expected:
+            raise
+        failed_at = time.monotonic()
+        reason = exception_reason(error)
+        elapsed_ms = (max(0, round((failed_at - helper_started_at) * 1000, 3))
+                      if helper_started_at is not None else max(0, round((failed_at - run_started) * 1000, 3)))
+        host = host_pre_model_failure(row, reason, elapsed_ms, host)
+        prompt_audit.update(materialized_prompt_reason=reason,
+                            sent_prompt_sha256=None, sent_prompt_bytes=None,
+                            helper_result_sha256=host["result"]["content_hash"],
+                            helper_context_sha256=(hashlib.sha256(host["prompt_context"].encode()).hexdigest()
+                                                   if isinstance(host.get("prompt_context"), str) else None))
+        return write_host_pre_model_result(root, result_path, row, template_sha256, prompt_audit, host,
+                                           run_started, helper_started_at, failed_at,
+                                           helper_wall_elapsed_ms)
     except (OSError, subprocess.TimeoutExpired) as error:
-        process = {"exit_code": None, "stop_reason": "timeout" if isinstance(error, subprocess.TimeoutExpired) else None,
+        process = {"exit_code": None, "stop_reason": ("timeout" if isinstance(error, subprocess.TimeoutExpired)
+                                                        else "launch_error"),
+                   "process_started": False, "prompt_sent": False, "prompt_sha256": None,
+                   "materialized_prompt_sha256": materialized_sha256,
+                   "materialized_prompt_bytes": materialized_prompt_bytes and len(materialized_prompt_bytes),
+                   "sent_prompt_sha256": None, "sent_prompt_bytes": None, "model_called": False,
+                   "model_response_observed": False,
                    "session_id": None, "tool_events": 0,
                    "turns": 0, "output_tokens": 0, "compact_events": 0, "rejection": False,
                    "terminal_status": None, "effective_model": None, "effective_effort": None,
@@ -1428,6 +1849,35 @@ def run_one(root, row, config, manifest, timeout):
                    "actual_tier": None, "hook_events": [], "commands": [], "denied_commands": [],
                    "unknown_item_types": [],
                    "launch_error": type(error).__name__}
+    model_finished_at = time.monotonic()
+    sent_prompt_sha256 = process.get("sent_prompt_sha256")
+    sent_prompt_bytes = process.get("sent_prompt_bytes")
+    if process.get("prompt_sent") is True:
+        prompt_audit.update(sent_prompt_sha256=sent_prompt_sha256,
+                            sent_prompt_bytes=sent_prompt_bytes)
+    else:
+        prompt_audit.update(sent_prompt_sha256=None, sent_prompt_bytes=None)
+    if host_expected and (process.get("process_started") is not True or process.get("prompt_sent") is not True):
+        reason = process.get("stop_reason") or "model_not_started"
+        host = host_pre_model_failure(row, reason, max(0, round((model_finished_at - helper_started_at) * 1000, 3)), host)
+        prompt_audit["materialized_prompt_reason"] = reason
+        return write_host_pre_model_result(root, result_path, row, template_sha256, prompt_audit, host,
+                                           run_started, helper_started_at, model_finished_at,
+                                           helper_wall_elapsed_ms, process=process)
+    prompt_verified = bool(process.get("process_started") is True and process.get("prompt_sent") is True and
+                           materialized_sha256 and sent_prompt_sha256 == materialized_sha256 and
+                           sent_prompt_bytes == len(materialized_prompt_bytes or b""))
+    if prompt_verified:
+        prompt_audit.update(materialized_prompt_status="sent", materialized_prompt_reason=None)
+    elif process.get("process_started") is not True:
+        prompt_audit["materialized_prompt_reason"] = "process_not_started"
+    elif process.get("prompt_sent") is not True:
+        prompt_audit["materialized_prompt_reason"] = "stdin_not_sent"
+    else:
+        prompt_audit["materialized_prompt_reason"] = "materialized_prompt_hash_mismatch"
+        process["stop_reason"] = "materialized_prompt_hash_mismatch"
+    end_to_end = (max(0, round((model_finished_at - helper_started_at) * 1000, 3))
+                  if helper_started_at is not None else None)
     quality = (score(work, spec, process, bundle["control_hashes"]) if spec else
                smoke_quality(root, row, work, process, manifest))
     process["resume_used"] = bool(session and row.get("fixture") == "long_resume")
@@ -1438,6 +1888,15 @@ def run_one(root, row, config, manifest, timeout):
     metric_status = "failure" if status_name == "quality_failure" else status_name
     remaining = timeout - (time.monotonic() - run_started)
     measurement = metrics(root, row, config, stdout, process["session_id"], metric_status, process, remaining)
+    timing = {"run_elapsed_ms": max(0, round((model_finished_at - run_started) * 1000, 3)),
+              "helper_elapsed_ms": (host["evidence"].get("elapsed_ms") if host else None),
+              "helper_wall_elapsed_ms": helper_wall_elapsed_ms,
+              "model_elapsed_ms": (max(0, round(float(process["elapsed_seconds"]) * 1000, 3))
+                                   if isinstance(process.get("elapsed_seconds"), (int, float)) else None),
+              "helper_to_model_end_elapsed_ms": end_to_end, "end_to_end_elapsed_ms": end_to_end}
+    model_called = bool(process.get("process_started") is True and process.get("prompt_sent") is True)
+    model_response_observed = process.get("model_response_observed") is True
+    helper_received = bool(host and prompt_verified and model_response_observed)
     write_json(result_path, {"owner": OWNER, "schema": 1, "completed": True, "completed_at": now(), "run": row,
                              "status": status_name, "config_hash": digest(config), "process": process,
                              "configured_timeout_seconds": config["run_timeout_seconds"],
@@ -1445,7 +1904,19 @@ def run_one(root, row, config, manifest, timeout):
                              "bundle": {"bundle_hash": bundle["bundle_hash"], "evaluation_kind": bundle["evaluation_kind"],
                                         "source_hashes_before": bundle["control_hashes"],
                                         "source_hashes_after": quality.get("control_hashes_after", {})},
-                             "quality": quality, "metrics": measurement,
+                             "quality": quality, "metrics": measurement, "model_called": model_called,
+                             "template_sha256": template_sha256,
+                             "materialized_prompt_bytes": prompt_audit["materialized_prompt_bytes"],
+                             "materialized_prompt_sha256": prompt_audit["materialized_prompt_sha256"],
+                             "sent_prompt_bytes": prompt_audit["sent_prompt_bytes"],
+                             "sent_prompt_sha256": prompt_audit["sent_prompt_sha256"],
+                             "model_response_observed": model_response_observed,
+                             "prompt": prompt_audit, "timing": timing,
+                             "end_to_end_elapsed_ms": end_to_end,
+                             "host_helper": ({"result": host["result"], "evidence": {**host["evidence"],
+                                 "model_received_helper_result": helper_received,
+                                 "task_outcome_passed": bool(helper_received and quality["success"])},
+                                 "pair_stop": False} if host else None),
                              "lifecycle": {"configured": True,
                                            "fired": (fired := bool(process["hook_events"])),
                                            "local_tested": True,
@@ -1520,6 +1991,16 @@ def capability_blockers(root, manifest, include_native, candidate=None, smoke_ru
     return blockers
 
 
+def host_subset_blockers(root, manifest, candidate):
+    blockers = comparison_blockers(root)
+    for runtime in ("codex", "claude"):
+        kinds = {manifest["comparison_bundles"][":".join((candidate, runtime, variant))]["evaluation_kind"]
+                 for variant in ("baseline", "candidate")}
+        if kinds != {"host-supervised-helper"}:
+            blockers.append(f"{candidate}:{runtime}:host_helper_bundle_missing")
+    return blockers
+
+
 def adoption_eligible(baseline, candidate, pairs):
     metrics = ("usage", "tool_calls", "outcome", "cost")
     coverage = lambda group: all((group.get("coverage", {}).get(name) or {}).get("complete") is True
@@ -1564,25 +2045,32 @@ def run(args):
         raise SystemExit("--smoke-onlyには--smoke-runtimeを1件指定する")
     if not args.smoke_only and args.smoke_runtime:
         raise SystemExit("--smoke-runtimeは--smoke-only専用")
+    if args.smoke_only and args.host_subset:
+        raise SystemExit("--host-subsetは比較run専用")
     config = lock_config(root, manifest, args,
                          (args.smoke_runtime,) if args.smoke_only else ("codex", "claude"))
     if not args.smoke_only and args.candidate not in manifest["candidates"]:
         raise SystemExit("比較runはmanifest内の--candidateを1件指定する")
-    capability_failures = capability_blockers(root, manifest, not args.smoke_only, args.candidate,
-                                               args.smoke_runtime)
+    if args.host_subset and (root / "results" / f"host-blocked-{args.candidate}.json").exists():
+        raise SystemExit("helper前処理失敗済みのためcandidate残scheduleはpending_helper_blocked")
+    capability_failures = ([] if args.host_subset else
+        capability_blockers(root, manifest, not args.smoke_only, args.candidate, args.smoke_runtime))
     if capability_failures:
         raise SystemExit("runtime capability未確認: " + ",".join(capability_failures))
     rows = [row for row in manifest["schedule"] if row["kind"] == ("smoke" if args.smoke_only else "compare") and
             ((args.smoke_only and row["runtime"] == args.smoke_runtime) or
-             (not args.smoke_only and row.get("candidate") == args.candidate))]
+             (not args.smoke_only and row.get("candidate") == args.candidate)) and
+            (not args.host_subset or row.get("fixture") not in ("long_compact", "long_resume"))]
     if not args.smoke_only:
         index = manifest["candidates"].index(args.candidate)
         previous = set(manifest["candidates"][:index])
         unfinished = [row["run_id"] for row in manifest["schedule"]
-                      if row.get("candidate") in previous and not scheduled_complete(root, row)]
+                      if row.get("candidate") in previous and
+                      (not args.host_subset or row.get("fixture") not in ("long_compact", "long_resume")) and
+                      not scheduled_complete(root, row)]
         if unfinished:
             raise SystemExit(f"candidate順序未達: {manifest['candidates'][index - 1]}を先に完了する")
-        blockers = comparison_blockers(root)
+        blockers = host_subset_blockers(root, manifest, args.candidate) if args.host_subset else comparison_blockers(root)
         if blockers:
             raise SystemExit("比較開始条件未達: " + ",".join(blockers))
     deadline = budget_deadline(root)
@@ -1596,10 +2084,14 @@ def run(args):
                 break
             if run_one(root, row, config, manifest, timeout):
                 pending.remove(row); progress = True
+            if (root / "results" / f"host-blocked-{args.candidate}.json").exists():
+                progress = False; break
         if not progress:
             break
     print(json.dumps({"completed": len(rows) - len(pending), "pending": len(pending), "retry": 0,
-                      "candidate": args.candidate, "comparison_started": not args.smoke_only}, ensure_ascii=False))
+                      "candidate": args.candidate, "host_subset": args.host_subset,
+                      "native_pending": 24 if args.host_subset else 0,
+                      "comparison_started": not args.smoke_only}, ensure_ascii=False))
     return 0 if not pending else 4
 
 
@@ -1617,6 +2109,146 @@ def median_range(series, qualified):
     return {"observed": len(series), "median": median, "range": [series[0], series[-1]]}
 
 
+def host_metric_coverage(pairs, metric_names):
+    expected = len(pairs)
+    return {name: {"expected_pairs": expected,
+                   "qualified_pairs": sum((item.get("paired_qualified") or {}).get(name) is True
+                                           for item in pairs),
+                   "complete": expected > 0 and all((item.get("paired_qualified") or {}).get(name) is True
+                                                    for item in pairs),
+                   "rate": (sum((item.get("paired_qualified") or {}).get(name) is True
+                                for item in pairs) / expected if expected else 0)}
+            for name in metric_names}
+
+
+def host_quality_violations(records):
+    """Count explicit quality failures; missing fields are covered separately."""
+    fields = ("gate", "no_symlinks", "workspace_within_limit", "control_files_unchanged",
+              "restore", "native", "runtime_effective")
+    by_field = {name: sum(record.get("quality", {}).get(name) is False for record in records)
+                for name in fields}
+    boundary = sum(record.get("quality", {}).get("gate") is False for record in records)
+    quality0 = sum(any(record.get("quality", {}).get(name) is False for name in fields)
+                   for record in records)
+    return {"boundary": boundary, "quality0": quality0, "by_field": by_field}
+
+
+def host_quality_coverage(records, expected=None):
+    fields = ("success", "gate", "no_symlinks", "workspace_within_limit", "control_files_unchanged",
+              "restore", "native", "runtime_effective")
+    expected = len(records) if expected is None else expected
+    return {name: {"expected": expected,
+                   "observed": sum(isinstance((record.get("quality") or {}).get(name), bool)
+                                    for record in records),
+                   "complete": expected > 0 and
+                               sum(isinstance((record.get("quality") or {}).get(name), bool)
+                                   for record in records) == expected,
+                   "rate": (sum(isinstance((record.get("quality") or {}).get(name), bool)
+                             for record in records) / expected if expected else 0)}
+            for name in fields}
+
+
+def host_status_coverage(records, statuses, expected=None):
+    expected = len(records) if expected is None else expected
+    counts = {status: sum(record.get("status") == status for record in records)
+              for status in statuses}
+    unknown = sorted({record.get("status") for record in records
+                      if record.get("status") not in statuses}, key=lambda value: str(value))
+    observed = sum(counts.values())
+    return {"allowed": list(statuses), "expected": expected, "observed": observed,
+            "counts": counts, "unknown": unknown,
+            "complete": expected > 0 and len(records) == expected and observed == expected,
+            "rate": observed / expected if expected else 0}
+
+
+def host_model_received_coverage(records, expected=None):
+    expected = len(records) if expected is None else expected
+    observed = sum((record.get("host_helper") or {}).get("evidence", {}).get(
+        "model_received_helper_result") is True for record in records)
+    return {"expected": expected, "observed": observed,
+            "complete": expected > 0 and len(records) == expected and observed == expected,
+            "rate": observed / expected if expected else 0}
+
+
+def host_pair_stop(record):
+    """A stopped helper consumes its run but makes the pair unqualified."""
+    if not record:
+        return False
+    helper = record.get("host_helper") or {}
+    evidence = helper.get("evidence") or {}
+    return (record.get("status") == "pre_model_failed" or helper.get("pair_stop") is True or
+            evidence.get("pair_stop") is True or evidence.get("pre_model_failed") is True)
+
+
+def host_success_non_decrease(rows, records):
+    """Compare success counts independently for each host category/runtime."""
+    result = {}
+    for runtime in ("codex", "claude"):
+        runtime_result = {}
+        for variant in ("baseline", "candidate"):
+            expected = [row for row in rows if row["runtime"] == runtime and row["variant"] == variant]
+            selected = [records[row["run_id"]] for row in expected if row["run_id"] in records]
+            runtime_result[variant] = {
+                "expected_runs": len(expected), "recorded_runs": len(selected),
+                "successes": sum(record.get("quality", {}).get("success") is True for record in selected),
+                "complete": len(selected) == len(expected)}
+        baseline = runtime_result["baseline"]; candidate = runtime_result["candidate"]
+        runtime_result.update({
+            "holds": candidate["successes"] >= baseline["successes"],
+            "complete": baseline["complete"] and candidate["complete"],
+        })
+        result[runtime] = runtime_result
+    return result
+
+
+def host_input_token_reduction(pairs):
+    """Return the paired median reduction for target input tokens."""
+    reductions = []
+    for item in pairs:
+        if not item.get("complete") or (item.get("paired_qualified") or {}).get("usage") is not True:
+            continue
+        baseline = (item.get("baseline") or {}).get("values", {}).get("input_tokens")
+        candidate = (item.get("candidate") or {}).get("values", {}).get("input_tokens")
+        if isinstance(baseline, (int, float)) and isinstance(candidate, (int, float)) and baseline > 0:
+            reductions.append((baseline - candidate) / baseline)
+    reductions.sort()
+    observed = len(reductions)
+    median = (reductions[observed // 2] if observed % 2 else
+              (reductions[observed // 2 - 1] + reductions[observed // 2]) / 2 if observed else None)
+    return {"observed_pairs": observed, "median": median, "threshold": 0.10,
+            "threshold_percent": 10, "eligible": median is not None and median >= 0.10}
+
+
+def host_category_summary(rows, records, pairs, metric_names, helper_expected=True):
+    selected = [records[row["run_id"]] for row in rows if row["run_id"] in records]
+    fixture_ids = {row["fixture"] for row in rows}
+    candidate_id = rows[0]["candidate"] if rows else None
+    selected_pairs = [item for item in pairs if item["fixture"] in fixture_ids and
+                      item["candidate_id"] == candidate_id]
+    expected_runs = len(rows); recorded_runs = len(selected)
+    helper_observed = sum((record.get("host_helper") or {}).get("evidence", {}).get(
+        "helper_mechanism_observed") is True for record in selected)
+    primary_passed = sum((record.get("host_helper") or {}).get("evidence", {}).get(
+        "task_outcome_passed") is True for record in selected)
+    expected_helper_observations = expected_runs if helper_expected else 0
+    return {"expected_runs": expected_runs, "recorded_runs": recorded_runs,
+            "expected_pairs": len(selected_pairs),
+            "complete": recorded_runs == expected_runs,
+            "complete_pairs": sum(item.get("complete") is True for item in selected_pairs),
+            "pair_complete": len(selected_pairs) > 0 and all(item.get("complete") is True
+                                                               for item in selected_pairs),
+            "helper_observed": {"expected": expected_helper_observations, "observed": helper_observed,
+                                 "complete": recorded_runs == expected_runs and
+                                 helper_observed == expected_helper_observations},
+            "primary_outcome": {"expected": expected_runs, "passed": primary_passed,
+                                "complete": recorded_runs == expected_runs and primary_passed == expected_runs},
+            "metric_coverage": host_metric_coverage(selected_pairs, metric_names),
+            "quality_field_coverage": host_quality_coverage(selected, expected_runs),
+            "quality_violations": host_quality_violations(selected),
+            "success_non_decrease": host_success_non_decrease(rows, records),
+            "helper_expected": helper_expected}
+
+
 def report(args):
     root = root_path(args.root); manifest = read_json(root / "results/manifest.json")
     verify_tool_sources(manifest)
@@ -1629,7 +2261,8 @@ def report(args):
                 raise SystemExit(f"run identityがmanifestと不一致: {run_id}")
             records[run_id] = record
     metric_names = ("usage", "tool_calls", "outcome", "cost")
-    statuses = ("success", "quality_failure", "rejection", "interruption", "failure", "unknown")
+    host_selection_metrics = ("usage", "tool_calls", "outcome")
+    statuses = ("success", "quality_failure", "rejection", "interruption", "failure", "pre_model_failed", "unknown")
 
     def value_of(record, name):
         metric = record.get("metrics", {})
@@ -1648,9 +2281,9 @@ def report(args):
                 for repeat in range(1, 4):
                     pair = {variant: records.get(f"{candidate}-{runtime}-{variant}-{spec['id']}-r{repeat}")
                             for variant in ("baseline", "candidate")}
-                    item = {"pair_id": f"{candidate}:{runtime}:{spec['id']}:r{repeat}", "candidate": candidate,
+                    item = {"pair_id": f"{candidate}:{runtime}:{spec['id']}:r{repeat}", "candidate_id": candidate,
                             "runtime": runtime, "fixture": spec["id"], "task_group": spec["group"],
-                            "repeat": repeat, "complete": all(pair.values())}
+                            "repeat": repeat}
                     for variant, record in pair.items():
                         if not record:
                             item[variant] = None; continue
@@ -1661,6 +2294,16 @@ def report(args):
                             "qualified": {name: metric_ready(metric, name) for name in metric_names},
                             "values": {name: value_of(record, name) for name in
                                        ("input_tokens", "tool_calls", "cost_usd", "elapsed_seconds")}}
+                    stopped = any(host_pair_stop(record) for record in pair.values())
+                    recorded_pair = all(pair.values())
+                    item["pre_model_failed"] = any(
+                        record and (record.get("status") == "pre_model_failed" or
+                                    (record.get("host_helper") or {}).get("evidence", {}).get(
+                                        "pre_model_failed") is True)
+                        for record in pair.values())
+                    item["pair_stop"] = stopped
+                    item["unpaired"] = not (recorded_pair and not stopped)
+                    item["complete"] = recorded_pair and not stopped
                     expected_pricing = (manifest["pricing"]["version"], manifest["pricing"]["currency"])
                     pricing_compatible = bool(item["complete"] and
                         all(metric_pricing(pair[v].get("metrics", {})) == expected_pricing
@@ -1727,7 +2370,7 @@ def report(args):
                     "total_cost_usd": total, "cost_per_run_usd": total / 24 if total is not None else None,
                     "cost_per_success_usd": total / successes if total is not None and successes else None}
             for spec in FIXTURES:
-                selected = [item for item in pairs if item["candidate"] == candidate and item["runtime"] == runtime and
+                selected = [item for item in pairs if item["candidate_id"] == candidate and item["runtime"] == runtime and
                             item["fixture"] == spec["id"]]
                 fixture_summaries[":".join((candidate, runtime, spec["id"]))] = {
                     "expected_pairs": 3, "complete_pairs": sum(item["complete"] for item in selected),
@@ -1776,17 +2419,186 @@ def report(args):
         for runtime in ("codex", "claude"):
             candidate_group = groups[f"{candidate}:{runtime}:candidate"]
             baseline_group = groups[f"{candidate}:{runtime}:baseline"]
-            relevant = [pair for pair in pairs if pair["candidate"] == candidate and pair["runtime"] == runtime]
+            relevant = [pair for pair in pairs if pair["candidate_id"] == candidate and pair["runtime"] == runtime]
             adoption_gate[f"{candidate}:{runtime}"] = {
                 "eligible": adoption_eligible(baseline_group, candidate_group, relevant),
                 "candidate_specific_effect_required": True}
-    value = {"owner": OWNER, "schema": 4, "generated_at": now(), "plan": PLAN,
+    host_expected = [row for row in manifest["schedule"] if row.get("fixture") not in ("long_compact", "long_resume")
+                     and row["kind"] == "compare"]
+    native_expected = [row for row in manifest["schedule"] if row.get("fixture") in ("long_compact", "long_resume")]
+    host_records = [records[row["run_id"]] for row in host_expected if row["run_id"] in records]
+    host_by_candidate = {}
+    native_by_candidate = {}
+    host_fixture_ids = {row["fixture"] for row in host_expected}
+    for candidate in manifest["candidates"]:
+        expected_rows = [row for row in host_expected if row["candidate"] == candidate]
+        actual_rows = [records[row["run_id"]] for row in expected_rows if row["run_id"] in records]
+        candidate_pairs = [item for item in pairs if item["candidate_id"] == candidate and
+                           item["fixture"] in host_fixture_ids]
+        target_ids = set(host_helper.FIXTURE_TARGETS.get(candidate, set())) & host_fixture_ids
+        neutral_ids = host_fixture_ids - target_ids
+        category = {}
+        for label, fixture_ids in (("target", target_ids), ("neutral", neutral_ids)):
+            category[label] = host_category_summary(
+                [row for row in expected_rows if row["fixture"] in fixture_ids],
+                records, candidate_pairs, metric_names, helper_expected=label == "target")
+        target_helpers = {fixture_id: host_category_summary(
+            [row for row in expected_rows if row["fixture"] == fixture_id],
+            records, candidate_pairs, metric_names, helper_expected=True)
+            for fixture_id in sorted(target_ids)}
+        neutral_fixtures = {fixture_id: host_category_summary(
+            [row for row in expected_rows if row["fixture"] == fixture_id],
+            records, candidate_pairs, metric_names, helper_expected=False)
+            for fixture_id in sorted(neutral_ids)}
+        baseline_success = {runtime: sum(
+            records[row["run_id"]].get("quality", {}).get("success") is True
+            for row in expected_rows if row["run_id"] in records and row["runtime"] == runtime and
+            row["variant"] == "baseline") for runtime in ("codex", "claude")}
+        candidate_success = {runtime: sum(
+            records[row["run_id"]].get("quality", {}).get("success") is True
+            for row in expected_rows if row["run_id"] in records and row["runtime"] == runtime and
+            row["variant"] == "candidate") for runtime in ("codex", "claude")}
+        success_non_decrease = {runtime: {"baseline": baseline_success[runtime],
+                                          "candidate": candidate_success[runtime],
+                                          "holds": candidate_success[runtime] >= baseline_success[runtime]}
+                                for runtime in ("codex", "claude")}
+        target_pairs = [item for item in candidate_pairs if item["fixture"] in target_ids]
+        required_metric_coverage = host_metric_coverage(candidate_pairs, host_selection_metrics)
+        quality_field_coverage = host_quality_coverage(actual_rows, len(expected_rows))
+        status_coverage = host_status_coverage(actual_rows, statuses, len(expected_rows))
+        model_received = host_model_received_coverage(actual_rows, len(expected_rows))
+        paired = {"expected_pairs": len(candidate_pairs),
+                  "complete_pairs": sum(item.get("complete") is True for item in candidate_pairs),
+                  "complete": len(candidate_pairs) > 0 and all(item.get("complete") is True
+                                                               for item in candidate_pairs),
+                  "metric_coverage": host_metric_coverage(candidate_pairs, metric_names),
+                  "required_metric_coverage": required_metric_coverage,
+                  "unpaired_pairs": sum(item.get("unpaired") is True for item in candidate_pairs),
+                  "pair_stop_pairs": sum(item.get("pair_stop") is True for item in candidate_pairs),
+                  "pre_model_failed_pairs": sum(item.get("pre_model_failed") is True for item in candidate_pairs),
+                  "success_non_decrease": success_non_decrease}
+        violations = host_quality_violations(actual_rows)
+        pre_model_failed = sum(record.get("status") == "pre_model_failed" or
+                               (record.get("host_helper") or {}).get("evidence", {}).get("pre_model_failed") is True
+                               for record in actual_rows)
+        host_by_candidate[candidate] = {"expected_runs": 72, "recorded_runs": len(actual_rows),
+                                       "complete": len(actual_rows) == 72,
+                                       "paired": paired, "target_vs_neutral": category,
+                                       "target_helpers": target_helpers, "neutral_fixtures": neutral_fixtures,
+                                       "target_input_token_reduction": host_input_token_reduction(target_pairs),
+                                       "quality_field_coverage": quality_field_coverage,
+                                       "status_coverage": status_coverage,
+                                       "model_received": model_received,
+                                       "quality_violations": violations,
+                                       "pre_model_failed": pre_model_failed,
+                                       "pair_stop": sum(host_pair_stop(record) for record in actual_rows)}
+        native_by_candidate[candidate] = {"expected_runs": 24,
+            "recorded_runs": sum(row["run_id"] in records for row in native_expected if row["candidate"] == candidate),
+            "state": "pending_native_capability"}
+    host_selection = {}
+    for candidate in manifest["candidates"]:
+        host = host_by_candidate[candidate]
+        blockers = []
+        required_coverage = host["paired"]["required_metric_coverage"]
+        coverage_complete = all(item["complete"] and item["rate"] == 1 for item in required_coverage.values())
+        category_success = {
+            label: host["target_vs_neutral"][label]["success_non_decrease"]
+            for label in ("target", "neutral")}
+        success_complete = all(details["complete"] and details["holds"]
+                               for scope in category_success.values() for details in scope.values())
+        token_reduction = host["target_input_token_reduction"]
+        quality = host["quality_violations"]
+        quality_field_coverage = host["quality_field_coverage"]
+        quality_coverage_complete = all(item["complete"] for item in quality_field_coverage.values())
+        status_coverage = host["status_coverage"]
+        helper_observation_complete = all(host["target_vs_neutral"][label]["helper_observed"]["complete"]
+                                          for label in ("target", "neutral"))
+        model_received = host["model_received"]
+        if not host["paired"]["complete"]:
+            blockers.append("pair_incomplete")
+        if not coverage_complete:
+            blockers.append("metric_coverage_incomplete")
+        if not success_complete:
+            blockers.append("success_regression_or_incomplete")
+        if not status_coverage["complete"]:
+            blockers.append("status_coverage_incomplete")
+        if not quality_coverage_complete:
+            blockers.append("quality_field_coverage_incomplete")
+        if not helper_observation_complete:
+            blockers.append("helper_observation_incomplete")
+        if not model_received["complete"]:
+            blockers.append("model_received_incomplete")
+        if quality["boundary"]:
+            blockers.append("boundary_violation")
+        if quality["quality0"]:
+            blockers.append("quality0_violation")
+        if not token_reduction["eligible"]:
+            blockers.append("target_input_token_reduction_below_10_percent")
+        eligible = not blockers
+        host_selection[candidate] = {
+            "state": "PASS" if eligible else "HOLD", "eligible": eligible,
+            "scope": "host-exploration", "host_effect": "unknown",
+            "reason": ("host探索の採択条件を満たす。native effectは未確認のためnative/adoptionは別gateでHOLD"
+                       if eligible else "host探索の採択条件が未達"),
+            "blocking_reasons": blockers,
+            "pair_complete": host["paired"]["complete"],
+            "unpaired_pairs": host["paired"]["unpaired_pairs"],
+            "metric_coverage": required_coverage,
+            "required_metrics": list(host_selection_metrics),
+            "metric_coverage_complete": coverage_complete,
+            "all_metric_coverage": host["paired"]["metric_coverage"],
+            "success_non_decrease": category_success,
+            "success_non_decrease_complete": success_complete,
+            "status_coverage": status_coverage,
+            "quality_field_coverage": quality_field_coverage,
+            "quality_field_coverage_complete": quality_coverage_complete,
+            "helper_observation_complete": helper_observation_complete,
+            "target_helper_observation_complete": host["target_vs_neutral"]["target"]["helper_observed"]["complete"],
+            "neutral_helper_observation_complete": host["target_vs_neutral"]["neutral"]["helper_observed"]["complete"],
+            "model_received": model_received,
+            "model_received_complete": model_received["complete"],
+            "boundary_violations": quality["boundary"],
+            "quality0_violations": quality["quality0"],
+            "target_input_token_reduction": token_reduction,
+            "cost_tier": {"cost": {"state": "NA", "blocking": False,
+                                     "reason": "host探索gateの採択条件に含めない"},
+                          "tier": {"state": "NA", "blocking": False,
+                                   "reason": "host探索gateの採択条件に含めない"}},
+        }
+    host_summary = {"expected_runs": len(host_expected), "per_candidate_expected": 72,
+        "recorded_runs": len(host_records), "by_candidate": host_by_candidate,
+        "paired_metrics": host_metric_coverage([item for item in pairs if item["fixture"] in host_fixture_ids], metric_names),
+        "paired_required_metrics": host_metric_coverage(
+            [item for item in pairs if item["fixture"] in host_fixture_ids], host_selection_metrics),
+        "target_vs_neutral": {candidate: host_by_candidate[candidate]["target_vs_neutral"]
+                              for candidate in manifest["candidates"]},
+        "target_helpers": {candidate: host_by_candidate[candidate]["target_helpers"]
+                           for candidate in manifest["candidates"]},
+        "mechanism_observed": sum((row.get("host_helper") or {}).get("evidence", {}).get("helper_mechanism_observed") is True
+                                  for row in host_records),
+        "model_received": sum((row.get("host_helper") or {}).get("evidence", {}).get("model_received_helper_result") is True
+                              for row in host_records),
+        "assisted_task_successes": sum((row.get("host_helper") or {}).get("evidence", {}).get("task_outcome_passed") is True
+                                       for row in host_records),
+        "pre_model_failed": sum(record.get("status") == "pre_model_failed" for record in host_records),
+        "pair_stop": sum(host_pair_stop(record) for record in host_records),
+        "complete": len(host_records) == len(host_expected), "native_effect": False, "adopted": False,
+        "selection_gate": host_selection,
+        "selection_state": "HOLD" if any(item["state"] == "HOLD" for item in host_selection.values()) else "PASS"}
+    value = {"owner": OWNER, "schema": 5, "generated_at": now(), "plan": PLAN, "host_helper_plan": HOST_PLAN,
              "scheduled": manifest["max_runs"], "recorded": len(records), "groups": groups, "pairs": pairs,
              "fixture_summaries": fixture_summaries, "task_groups": task_groups, "adoption_gate": adoption_gate,
+             "host_subset": host_summary,
+             "selection_gate": {"host_subset": host_selection,
+                                "native_subset": {"state": "HOLD", "reason": "native capability evidence pending"},
+                                "adoption_subset": {"state": "HOLD", "reason": "host探索gateはgeneral adoptionと分離"}},
+             "native_subset": {"expected_runs": len(native_expected), "per_candidate_expected": 24,
+                               "recorded_runs": sum(row["run_id"] in records for row in native_expected),
+                               "state": "pending_native_capability", "by_candidate": native_by_candidate},
              "rules": {"expected_runs_per_variant": 24, "all_pairs_required": True, "success_zero": "NA",
              "coverage_uses_qualified_and_scope": True, "adoption_requires_all_primary_metric_coverage": True,
              "selection_threshold_only": "10%",
-             "known_limitations": ["repo_tsc_onceの診断順序と診断再利用はworkspace成果物だけでは証明しない。workspace-helper evidence未承認中は比較HOLD"]}}
+             "known_limitations": ["native-specific helper evidenceは未承認のためnative comparisonはHOLD"]}}
     write_json(root / "results/report.json", value)
     print(json.dumps({"recorded": len(records), "groups": len(groups), "report": str(root / "results/report.json")}, ensure_ascii=False))
     return 0
@@ -1799,6 +2611,7 @@ def cli():
     command.add_argument("--comparison-bundle", required=True)
     command.add_argument("--codex-bin", required=True); command.add_argument("--claude-bin", required=True)
     command.add_argument("--tsc-bin")
+    command.add_argument("--host-node-bin"); command.add_argument("--host-tsc-js")
     command.add_argument("--source-change-reason", default="initial")
     command.add_argument("--include-i05", action="store_true"); command.set_defaults(handler=prepare)
     command = commands.add_parser("status"); command.add_argument("root"); command.set_defaults(handler=status)
@@ -1812,6 +2625,7 @@ def cli():
     command.add_argument("--codex-model", required=True); command.add_argument("--codex-effort", required=True)
     command.add_argument("--claude-model", required=True); command.add_argument("--claude-effort", required=True)
     command.add_argument("--codex-requested-tier"); command.add_argument("--claude-requested-tier")
+    command.add_argument("--host-subset", action="store_true")
     command.add_argument("--timeout-seconds", type=int, choices=(600,), default=600); command.set_defaults(handler=run)
     command = commands.add_parser("report"); command.add_argument("root"); command.set_defaults(handler=report)
     return parser

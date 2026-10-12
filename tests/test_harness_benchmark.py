@@ -16,7 +16,7 @@ from pathlib import Path
 from unittest import mock
 
 
-SOURCE = Path.home() / ".codex/scripts/harness_benchmark.py"
+SOURCE = Path(os.environ.get("HARNESS_BENCHMARK_SOURCE", Path.home() / ".codex/scripts/harness_benchmark.py"))
 SPEC = importlib.util.spec_from_file_location("harness_benchmark", SOURCE)
 BENCH = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BENCH)
@@ -62,9 +62,85 @@ class HarnessBenchmarkTest(unittest.TestCase):
     def prepare(self, include_i05=False):
         args = argparse.Namespace(root=str(self.root), seed=17, include_i05=include_i05,
                                   capability_evidence=str(self.capability), comparison_bundle=str(self.bundle_manifest),
-                                  source_change_reason="unit-test", codex_bin=sys.executable, claude_bin=sys.executable)
+                                  source_change_reason="unit-test", codex_bin=sys.executable, claude_bin=sys.executable,
+                                  host_node_bin="/opt/homebrew/Cellar/node/25.8.2/bin/node",
+                                  host_tsc_js="/Users/yoshiki/ghq/github.com/THA-inc/arupaka-test-slack/node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/lib/_tsc.js")
         with contextlib.redirect_stdout(io.StringIO()): BENCH.prepare(args)
         return BENCH.read_json(self.root / "results/manifest.json")
+
+    def use_host_bundle(self):
+        actual = {"handover_core": Path.home() / ".codex/scripts/session_handover.py",
+                  "observations_core": Path.home() / ".claude/scripts/hook_observations.py",
+                  "quiet_run": Path.home() / ".codex/scripts/quiet-run.py"}
+        files = []
+        for role, source in actual.items():
+            target = self.bundle / role; shutil.copy2(source, target); target.chmod(0o600)
+            files.append({"class": "host_fixture_helper", "source": role, "target": f"host/{role}",
+                          "sha256": hashlib.sha256(target.read_bytes()).hexdigest(), "factor": "fixed"})
+        bundles = [{"candidate": candidate, "runtime": runtime, "variant": variant,
+                    "baseline_commit": BENCH.BASELINES[runtime], "source_dirty": False, "files": files}
+                   for candidate in ("I03", "I04", "I05") for runtime in ("codex", "claude")
+                   for variant in ("baseline", "candidate")]
+        self.private_write(self.bundle_manifest, {"bundles": bundles})
+
+    def use_mixed_host_bundle(self, class_name):
+        self.use_host_bundle()
+        targets = {"workspace_instruction": "AGENTS.md",
+                   "runtime_settings": "overrides.json", "hook_adapter": "hooks/adapter.py"}
+        source_name = f"mixed-{class_name}.txt"
+        content = f"mixed {class_name}\n".encode()
+        source = self.bundle / source_name
+        source.write_bytes(content); source.chmod(0o600)
+        value = json.loads(self.bundle_manifest.read_text())
+        for row in value["bundles"]:
+            row["files"].append({"class": class_name, "source": source_name,
+                                  "target": targets[class_name],
+                                  "sha256": hashlib.sha256(content).hexdigest(), "factor": "fixed"})
+        self.private_write(self.bundle_manifest, value)
+
+    def use_candidate_mixed_host_bundle(self, class_name):
+        self.use_host_bundle()
+        targets = {"workspace_instruction": "AGENTS.md",
+                   "runtime_settings": "overrides.json", "hook_adapter": "hooks/adapter.py"}
+        sources = {}
+        for variant in ("baseline", "candidate"):
+            source_name = f"candidate-mixed-{class_name}-{variant}.txt"
+            content = f"candidate mixed {class_name} {variant}\n".encode()
+            source = self.bundle / source_name
+            source.write_bytes(content); source.chmod(0o600)
+            sources[variant] = (source_name, hashlib.sha256(content).hexdigest())
+        value = json.loads(self.bundle_manifest.read_text())
+        for row in value["bundles"]:
+            source_name, source_hash = sources[row["variant"]]
+            row["files"].append({"class": class_name, "source": source_name,
+                                  "target": targets[class_name], "sha256": source_hash,
+                                  "factor": row["candidate"]})
+        self.private_write(self.bundle_manifest, value)
+
+    def use_partial_host_bundle(self, variant):
+        self.use_host_bundle()
+        value = json.loads(self.bundle_manifest.read_text())
+        for row in value["bundles"]:
+            if row["variant"] == variant:
+                row["files"] = row["files"][:-1]
+        self.private_write(self.bundle_manifest, value)
+
+    @staticmethod
+    def neutral_host_result(row):
+        request_row = dict(row); request_row.setdefault("variant", "baseline")
+        request = BENCH.host_helper.make_request(request_row, BENCH.fixture(row["fixture"]))
+        result = {"owner": BENCH.host_helper.RESULT_OWNER, "schema": BENCH.host_helper.SCHEMA,
+                  "candidate": row["candidate"], "fixture": row["fixture"], "status": "neutral",
+                  "mechanism": "neutral", "payload": {"context": "", "facts": {"neutral": True},
+                  "diagnostics": []}, "references": []}
+        result["content_hash"] = BENCH.host_helper.digest(result)
+        encoded = BENCH.host_helper.canonical(result).decode()
+        return {"result": result,
+                "evidence": {"helper_mechanism_observed": False, "operation_count": 0,
+                             "failure_reason": None,
+                             "request_hash": BENCH.host_helper.digest(request),
+                             "result_hash": result["content_hash"]}, "pair_stop": False,
+                "prompt_context": f'<mechanism-context schema="host-helper-result-v1">{encoded}</mechanism-context>'}
 
     def test_prepare_is_private_finite_and_immutable(self):
         manifest = self.prepare(True)
@@ -193,15 +269,49 @@ class HarnessBenchmarkTest(unittest.TestCase):
     def test_login_exec_uses_fixed_binary_and_sanitized_environment(self):
         manifest = self.prepare(); BENCH.write_json(self.root / "results/auth-baseline.json",
             {"owner": BENCH.OWNER, "authenticated": {"codex": False, "claude": False}})
+        original_cwd = os.getcwd()
         with mock.patch.dict(os.environ, {"HOME": str(Path.home()), "PATH": "/bin", "ANTHROPIC_API_KEY": "secret",
                                           "ANTHROPIC_PROFILE": "external"}, clear=True), \
              mock.patch.object(BENCH.os, "execve", side_effect=RuntimeError("captured")) as execute, \
              self.assertRaisesRegex(RuntimeError, "captured"):
-            BENCH.login(argparse.Namespace(root=str(self.root), runtime="claude"))
+            try:
+                BENCH.login(argparse.Namespace(root=str(self.root), runtime="claude"))
+            finally:
+                observed_cwd = os.getcwd()
+                os.chdir(original_cwd)
         executable, argv, env = execute.call_args.args
         self.assertEqual(BENCH.runtime_argv(manifest["runtime_binaries"]["claude"])[0], executable)
         self.assertEqual(["auth", "login"], argv[-2:]); self.assertEqual(str(Path.home()), env["HOME"])
         self.assertNotIn("ANTHROPIC_API_KEY", env); self.assertNotIn("ANTHROPIC_PROFILE", env)
+        self.assertEqual(str(self.root / BENCH.LOGIN_CWD), observed_cwd)
+
+    def test_login_rejects_nonprivate_or_nonempty_login_cwd_before_exec(self):
+        self.prepare(); BENCH.write_json(self.root / "results/auth-baseline.json",
+            {"owner": BENCH.OWNER, "authenticated": {"codex": False, "claude": False}})
+        login_cwd = self.root / BENCH.LOGIN_CWD
+        original_uid = os.getuid()
+        cases = ("nonempty", "symlink", "mode", "owner")
+        for kind in cases:
+            with self.subTest(kind=kind):
+                if kind == "nonempty":
+                    BENCH.write_private(login_cwd / "sentinel", "login cwd must stay empty\n")
+                elif kind == "symlink":
+                    login_cwd.rmdir()
+                    login_cwd.symlink_to(self.root / "runtime/codex/home", target_is_directory=True)
+                elif kind == "mode":
+                    login_cwd.chmod(0o755)
+                uid_patch = (mock.patch.object(BENCH.os, "getuid", return_value=original_uid + 1)
+                             if kind == "owner" else contextlib.nullcontext())
+                with uid_patch, mock.patch.object(BENCH.os, "execve") as execute, \
+                     self.assertRaisesRegex(SystemExit, "login-cwd"):
+                    BENCH.login(argparse.Namespace(root=str(self.root), runtime="codex"))
+                execute.assert_not_called()
+                if login_cwd.is_symlink():
+                    login_cwd.unlink()
+                elif (login_cwd / "sentinel").exists():
+                    (login_cwd / "sentinel").unlink()
+                login_cwd.mkdir(exist_ok=True)
+                login_cwd.chmod(0o700)
 
     def test_preflight_blocks_login_capability_and_instruction_only_bundle(self):
         manifest = self.prepare()
@@ -251,6 +361,526 @@ class HarnessBenchmarkTest(unittest.TestCase):
                         ids = [f"{candidate}-{runtime}-{variant}-{spec['id']}-r{repeat}"
                                for variant in ("baseline", "candidate")]
                         self.assertEqual(manifest["prompt_hashes"][ids[0]], manifest["prompt_hashes"][ids[1]])
+
+    def test_host_bundle_has_no_file_delta_and_stays_outside_model_workspace(self):
+        self.use_host_bundle(); manifest = self.prepare(True)
+        self.assertTrue(all(row["evaluation_kind"] == "host-supervised-helper"
+                            for row in manifest["comparison_bundles"].values()))
+        self.assertEqual(BENCH.HOST_PLAN, manifest["host_helper_plan"])
+        row = next(row for row in manifest["schedule"] if row.get("candidate") == "I03" and
+                   row.get("fixture") == "repo_add")
+        work = BENCH.materialize(self.root, row, manifest)
+        bundle = BENCH.materialize_bundle(self.root, row, work, manifest)
+        self.assertEqual(set(BENCH.HOST_SOURCE_POLICY), set(bundle["host_sources"]))
+        self.assertFalse((work / ".runtime-bundle/host").exists())
+        self.assertEqual(BENCH.HOST_SOURCE_POLICY,
+                         {name: hashlib.sha256(path.read_bytes()).hexdigest()
+                          for name, path in bundle["host_sources"].items()})
+
+    def test_host_bundle_rejects_mixed_workspace_instruction(self):
+        self.use_mixed_host_bundle("workspace_instruction")
+        with self.assertRaisesRegex(SystemExit, "host bundle entry"):
+            self.prepare()
+
+    def test_host_bundle_rejects_mixed_runtime_settings(self):
+        self.use_mixed_host_bundle("runtime_settings")
+        with self.assertRaisesRegex(SystemExit, "host bundle entry"):
+            self.prepare()
+
+    def test_host_bundle_rejects_mixed_hook_adapter(self):
+        self.use_mixed_host_bundle("hook_adapter")
+        with self.assertRaisesRegex(SystemExit, "host bundle entry"):
+            self.prepare()
+
+    def test_host_bundle_rejects_candidate_workspace_delta(self):
+        self.use_candidate_mixed_host_bundle("workspace_instruction")
+        with self.assertRaisesRegex(SystemExit, "host bundle"):
+            self.prepare()
+
+    def test_host_bundle_rejects_candidate_runtime_delta(self):
+        self.use_candidate_mixed_host_bundle("runtime_settings")
+        with self.assertRaisesRegex(SystemExit, "host bundle"):
+            self.prepare()
+
+    def test_host_bundle_rejects_candidate_hook_delta(self):
+        self.use_candidate_mixed_host_bundle("hook_adapter")
+        with self.assertRaisesRegex(SystemExit, "host bundle"):
+            self.prepare()
+
+    def test_host_bundle_rejects_baseline_partial_roles(self):
+        self.use_partial_host_bundle("baseline")
+        with self.assertRaisesRegex(SystemExit, "host bundle entry"):
+            self.prepare()
+
+    def test_host_bundle_rejects_candidate_partial_roles(self):
+        self.use_partial_host_bundle("candidate")
+        with self.assertRaisesRegex(SystemExit, "host bundle entry"):
+            self.prepare()
+
+    def test_host_prompt_has_one_slot_and_only_payload_materializes(self):
+        self.use_host_bundle(); manifest = self.prepare()
+        rows = [row for row in manifest["schedule"] if row.get("candidate") == "I03" and
+                row.get("runtime") == "codex" and row.get("fixture") == "repo_add" and row.get("repeat") == 1]
+        prompts = []
+        for row in rows:
+            spec = BENCH.fixture(row["fixture"], manifest)
+            template = BENCH.prompt_for(row, spec, self.root / BENCH.CLAUDE_MARKER, BENCH.HOST_SLOT)
+            prompts.append(template)
+            self.assertEqual(1, template.count(BENCH.HOST_SLOT))
+            self.assertEqual(manifest["prompt_hashes"][row["run_id"]], hashlib.sha256(template.encode()).hexdigest())
+        self.assertEqual(prompts[0], prompts[1])
+
+    def test_host_parent_executes_neutral_once_and_hides_strategy(self):
+        self.use_host_bundle(); manifest = self.prepare()
+        results = []
+        for variant in ("baseline", "candidate"):
+            row = next(row for row in manifest["schedule"] if row.get("candidate") == "I03" and
+                       row.get("runtime") == "codex" and row.get("variant") == variant and
+                       row.get("fixture") == "repo_add" and row.get("repeat") == 1)
+            work = BENCH.materialize(self.root, row, manifest)
+            bundle = BENCH.materialize_bundle(self.root, row, work, manifest)
+            results.append(BENCH.run_host_helper(self.root, row, BENCH.fixture("repo_add", manifest), bundle, manifest))
+        self.assertEqual(results[0]["result"], results[1]["result"])
+        self.assertTrue(all(item["evidence"]["operation_count"] == 0 for item in results))
+        self.assertTrue(all(item["evidence"]["helper_mechanism_observed"] is False for item in results))
+        self.assertNotIn("strategy", json.dumps(results[0]["result"]))
+
+    def test_host_report_keeps_72_and_24_denominators_separate(self):
+        self.use_host_bundle(); manifest = self.prepare(True)
+        with contextlib.redirect_stdout(io.StringIO()): BENCH.report(argparse.Namespace(root=str(self.root)))
+        report = BENCH.read_json(self.root / "results/report.json")
+        self.assertEqual((216, 0), (report["host_subset"]["expected_runs"], report["host_subset"]["recorded_runs"]))
+        self.assertEqual(72, report["host_subset"]["per_candidate_expected"])
+        self.assertEqual((72, "pending_native_capability"),
+                         (report["native_subset"]["expected_runs"], report["native_subset"]["state"]))
+        self.assertEqual(24, report["native_subset"]["per_candidate_expected"])
+        self.assertFalse(report["host_subset"]["native_effect"]); self.assertFalse(report["host_subset"]["adopted"])
+        self.assertEqual("HOLD", report["host_subset"]["selection_state"])
+        self.assertEqual("HOLD", report["selection_gate"]["native_subset"]["state"])
+        host = report["host_subset"]["by_candidate"]["I03"]
+        self.assertEqual(72, host["expected_runs"])
+        self.assertEqual(36, host["paired"]["expected_pairs"])
+        self.assertFalse(host["paired"]["complete"])
+        self.assertEqual(12, host["target_vs_neutral"]["target"]["expected_runs"])
+        self.assertEqual(60, host["target_vs_neutral"]["neutral"]["expected_runs"])
+        self.assertEqual(12, host["target_vs_neutral"]["target"]["helper_observed"]["expected"])
+        self.assertEqual(0, host["target_vs_neutral"]["neutral"]["helper_observed"]["expected"])
+        self.assertEqual(0, host["target_vs_neutral"]["target"]["helper_observed"]["observed"])
+        self.assertIn("cli_quiet_retrieve", host["target_helpers"])
+        self.assertEqual(6, host["target_helpers"]["cli_quiet_retrieve"]["expected_pairs"])
+
+    def test_host_selection_ignores_missing_cost_and_tier(self):
+        self.use_host_bundle(); manifest = self.prepare(True)
+        target_ids = set(BENCH.host_helper.FIXTURE_TARGETS["I03"])
+        rows = [row for row in manifest["schedule"] if row.get("candidate") == "I03" and
+                row.get("fixture") not in ("long_compact", "long_resume") and row["kind"] == "compare"]
+        for row in rows:
+            target = row["fixture"] in target_ids
+            input_tokens = 80 if target and row["variant"] == "candidate" else 100
+            coverage = {"usage": {"qualified": True, "scope": "parent_claim"},
+                        "tool_calls": {"qualified": True, "scope": "main"},
+                        "outcome": {"qualified": True, "scope": "main"}}
+            quality = {name: True for name in ("success", "gate", "no_symlinks", "workspace_within_limit",
+                                               "control_files_unchanged", "restore", "native", "runtime_effective")}
+            BENCH.write_json(self.root / "results" / f"run-{row['run_id']}.json", {
+                "owner": BENCH.OWNER, "schema": 1, "completed": True, "run": row,
+                "status": "success", "quality": quality,
+                "process": {"elapsed_seconds": 1},
+                "metrics": {"coverage": coverage, "tokens": {"input_total": input_tokens},
+                             "tool_calls": {"total": 1}},
+                "host_helper": {"evidence": {"helper_mechanism_observed": target,
+                                                "model_received_helper_result": True,
+                                                "task_outcome_passed": True}}})
+        with contextlib.redirect_stdout(io.StringIO()): BENCH.report(argparse.Namespace(root=str(self.root)))
+        report = BENCH.read_json(self.root / "results/report.json")
+        gate = report["selection_gate"]["host_subset"]["I03"]
+        self.assertEqual("PASS", gate["state"])
+        self.assertTrue(gate["eligible"])
+        self.assertTrue(gate["metric_coverage_complete"])
+        self.assertTrue(gate["target_input_token_reduction"]["eligible"])
+        self.assertEqual("NA", gate["cost_tier"]["cost"]["state"])
+        self.assertEqual("NA", gate["cost_tier"]["tier"]["state"])
+        self.assertEqual("HOLD", report["selection_gate"]["native_subset"]["state"])
+
+    def test_host_selection_holds_for_missing_quality_status_observation(self):
+        self.use_host_bundle(); manifest = self.prepare(True)
+        target_ids = set(BENCH.host_helper.FIXTURE_TARGETS["I03"])
+        rows = [row for row in manifest["schedule"] if row.get("candidate") == "I03" and
+                row.get("fixture") not in ("long_compact", "long_resume") and row["kind"] == "compare"]
+        quality = {name: True for name in ("success", "gate", "no_symlinks", "workspace_within_limit",
+                                           "control_files_unchanged", "restore", "native", "runtime_effective")}
+        originals = {}
+        for row in rows:
+            target = row["fixture"] in target_ids
+            input_tokens = 80 if target and row["variant"] == "candidate" else 100
+            value = {"owner": BENCH.OWNER, "schema": 1, "completed": True, "run": row,
+                     "status": "success", "quality": dict(quality), "process": {"elapsed_seconds": 1},
+                     "metrics": {"coverage": {"usage": {"qualified": True, "scope": "parent_claim"},
+                                                 "tool_calls": {"qualified": True, "scope": "main"},
+                                                 "outcome": {"qualified": True, "scope": "main"}},
+                                 "tokens": {"input_total": input_tokens}, "tool_calls": {"total": 1}},
+                     "host_helper": {"evidence": {"helper_mechanism_observed": target,
+                                                    "model_received_helper_result": True,
+                                                    "task_outcome_passed": True}}}
+            path = self.root / "results" / f"run-{row['run_id']}.json"
+            BENCH.write_json(path, value); originals[row["run_id"]] = value
+
+        def gate():
+            with contextlib.redirect_stdout(io.StringIO()):
+                BENCH.report(argparse.Namespace(root=str(self.root)))
+            return BENCH.read_json(self.root / "results/report.json")["selection_gate"]["host_subset"]["I03"]
+
+        self.assertEqual("PASS", gate()["state"])
+        target_row = next(row for row in rows if row["fixture"] in target_ids)
+        neutral_row = next(row for row in rows if row["fixture"] not in target_ids)
+        cases = (
+            ("quality", target_row, lambda value: value["quality"].pop("restore"),
+             "quality_field_coverage_incomplete"),
+            ("status", target_row, lambda value: value.update(status="outside_enum"),
+             "status_coverage_incomplete"),
+            ("model", target_row, lambda value: value["host_helper"]["evidence"].update(
+                model_received_helper_result=False), "model_received_incomplete"),
+            ("target-helper", target_row, lambda value: value["host_helper"]["evidence"].update(
+                helper_mechanism_observed=False), "helper_observation_incomplete"),
+            ("neutral-helper", neutral_row, lambda value: value["host_helper"]["evidence"].update(
+                helper_mechanism_observed=True), "helper_observation_incomplete"),
+        )
+        for name, row, mutate, blocker in cases:
+            with self.subTest(name=name):
+                path = self.root / "results" / f"run-{row['run_id']}.json"
+                value = json.loads(json.dumps(originals[row["run_id"]]))
+                mutate(value); BENCH.write_json(path, value)
+                failed = gate()
+                self.assertEqual("HOLD", failed["state"])
+                self.assertIn(blocker, failed["blocking_reasons"])
+                BENCH.write_json(path, originals[row["run_id"]])
+
+    def test_host_source_hash_drift_is_rejected(self):
+        self.use_host_bundle(); target = self.bundle / "quiet_run"
+        target.write_text("changed\n"); target.chmod(0o600)
+        with self.assertRaisesRegex(SystemExit, "契約違反"):
+            self.prepare()
+
+    def test_helper_pre_model_failure_consumes_attempt_and_holds_pair(self):
+        row = {"candidate": "I03", "fixture": "repo_add", "run_id": "I03-codex-baseline-repo_add-r1"}
+        value = BENCH.host_pre_model_failure(row, "source_hash_mismatch")
+        self.assertTrue(value["pair_stop"])
+        self.assertEqual("failed", value["result"]["status"])
+        self.assertFalse(value["evidence"]["helper_mechanism_observed"])
+        self.assertTrue(value["evidence"]["pre_model_failed"])
+        self.assertEqual("source_hash_mismatch", value["evidence"]["failure_reason"])
+
+    def test_run_one_records_helper_outer_elapsed_without_sleep(self):
+        self.use_host_bundle(); manifest = self.prepare()
+        row = next(item for item in manifest["schedule"] if item.get("candidate") == "I03" and
+                   item.get("runtime") == "codex" and item.get("variant") == "baseline" and
+                   item.get("fixture") == "repo_add" and item.get("repeat") == 1)
+        config = {"runtime_versions": {"codex": "codex-test"}}
+        with mock.patch.object(BENCH, "probe", return_value="codex-test"), \
+             mock.patch.object(BENCH, "run_host_helper",
+                               side_effect=BENCH.host_helper.HelperError("source_hash_mismatch")), \
+             mock.patch.object(BENCH.time, "monotonic", side_effect=[10.0, 20.0, 20.25]):
+            self.assertTrue(BENCH.run_one(self.root, row, config, manifest, 10))
+        value = BENCH.read_json(self.root / "results" / f"run-{row['run_id']}.json")
+        self.assertEqual("pre_model_failed", value["status"])
+        self.assertEqual(250.0, value["host_helper"]["evidence"]["elapsed_ms"])
+        self.assertEqual(250.0, value["timing"]["helper_to_model_end_elapsed_ms"])
+        self.assertEqual(250.0, value["end_to_end_elapsed_ms"])
+        self.assertIsNone(value["materialized_prompt_sha256"])
+        self.assertEqual("source_hash_mismatch", value["prompt"]["materialized_prompt_reason"])
+
+    def test_host_stage_failure_after_claim_closes_pair_and_blocks_candidate(self):
+        self.use_host_bundle(); manifest = self.prepare()
+        row = next(item for item in manifest["schedule"] if item.get("candidate") == "I03" and
+                   item.get("runtime") == "codex" and item.get("variant") == "baseline" and
+                   item.get("fixture") == "repo_add" and item.get("repeat") == 1)
+        staged = self.root / "runtime/host-sources/quiet_run"
+        staged.unlink()
+        config = {"runtime_versions": {"codex": "codex-test"}}
+        with mock.patch.object(BENCH, "probe", return_value="codex-test"):
+            self.assertTrue(BENCH.run_one(self.root, row, config, manifest, 10))
+        reason = f"staged comparison bundleが変化した: I03:codex:baseline:host/quiet_run"
+        value = BENCH.read_json(self.root / "results" / f"run-{row['run_id']}.json")
+        marker = BENCH.read_json(self.root / "results/host-blocked-I03.json")
+        self.assertTrue(value["completed"]); self.assertEqual("pre_model_failed", value["status"])
+        self.assertEqual(reason, value["failure_reason"])
+        self.assertFalse(value["model_called"]); self.assertFalse(value["prompt_sent"])
+        self.assertFalse(value["model_received_helper_result"])
+        self.assertIsNone(value["materialized_prompt_sha256"]); self.assertIsNone(value["sent_prompt_sha256"])
+        self.assertEqual(reason, value["host_helper"]["evidence"]["failure_reason"])
+        self.assertTrue(value["host_helper"]["evidence"]["pre_model_failed"])
+        self.assertTrue(value["host_helper"]["evidence"]["pair_stop"])
+        self.assertGreaterEqual(value["timing"]["run_elapsed_ms"], 0)
+        self.assertEqual(("pending_helper_blocked", reason), (marker["status"], marker["reason"]))
+
+    def test_host_template_hash_drift_after_helper_closes_pair(self):
+        self.use_host_bundle(); manifest = self.prepare()
+        row = next(item for item in manifest["schedule"] if item.get("candidate") == "I03" and
+                   item.get("runtime") == "codex" and item.get("variant") == "baseline" and
+                   item.get("fixture") == "repo_add" and item.get("repeat") == 1)
+        manifest["prompt_hashes"][row["run_id"]] = "0" * 64
+        config = {"runtime_versions": {"codex": "codex-test"}}
+        with mock.patch.object(BENCH, "probe", return_value="codex-test"), \
+             mock.patch.object(BENCH, "run_host_helper",
+                               side_effect=lambda *args: self.neutral_host_result(args[1])), \
+             mock.patch.object(BENCH, "command_for", return_value=["/bin/true"]), \
+             mock.patch.object(BENCH, "run_finite") as execute:
+            self.assertTrue(BENCH.run_one(self.root, row, config, manifest, 10))
+        execute.assert_not_called()
+        value = BENCH.read_json(self.root / "results" / f"run-{row['run_id']}.json")
+        self.assertTrue(value["completed"]); self.assertEqual("pre_model_failed", value["status"])
+        self.assertEqual("promptが準備時から変化した", value["failure_reason"])
+        self.assertFalse(value["model_called"]); self.assertFalse(value["prompt_sent"])
+        self.assertFalse(value["model_received_helper_result"])
+        self.assertIsNotNone(value["materialized_prompt_sha256"])
+        self.assertIsNone(value["sent_prompt_sha256"]); self.assertIsNone(value["sent_prompt_bytes"])
+        self.assertEqual("promptが準備時から変化した", value["prompt"]["materialized_prompt_reason"])
+        self.assertTrue(value["host_helper"]["evidence"]["pair_stop"])
+
+    def test_host_hash_fields_are_required_and_bound_to_request_result(self):
+        row = {"candidate": "I03", "fixture": "repo_add", "variant": "baseline"}
+        original = self.neutral_host_result(row)
+        cases = (("request", "request_hash", "helper_request_hash_mismatch"),
+                 ("result", "result_hash", "helper_result_hash_mismatch"),
+                 ("request-missing", "request_hash", "helper_request_hash_invalid"),
+                 ("result-missing", "result_hash", "helper_result_hash_invalid"))
+        for name, field, reason in cases:
+            with self.subTest(name=name):
+                value = json.loads(json.dumps(original))
+                if name.endswith("missing"):
+                    value["evidence"].pop(field)
+                else:
+                    value["evidence"][field] = "0" * 64
+                with self.assertRaisesRegex(BENCH.host_helper.HelperError, reason):
+                    BENCH.normalize_host_result(row, value)
+        value = json.loads(json.dumps(original))
+        value["result"]["payload"]["facts"]["tampered"] = True
+        with self.assertRaisesRegex(BENCH.host_helper.HelperError, "helper_result_content_hash_mismatch"):
+            BENCH.normalize_host_result(row, value)
+        self.assertFalse(value["evidence"].get("binding_valid", False))
+
+    def test_valid_hash_normalization_failure_keeps_binding_but_unqualified(self):
+        self.use_host_bundle(); manifest = self.prepare()
+        rows = [row for row in manifest["schedule"] if row.get("candidate") == "I03" and
+                row.get("runtime") == "codex" and row.get("variant") == "baseline" and
+                row.get("fixture") == "cli_quiet_retrieve" and row.get("repeat") in (1, 2)]
+        cases = ((rows[0], "payload", "helper_result_payload_invalid"),
+                 (rows[1], "context", "helper_prompt_context_invalid"))
+        for row, failure, expected_reason in cases:
+            with self.subTest(failure=failure):
+                helper_row = dict(row); helper_row["run_id"] = row["run_id"] + "-helper"
+                work = BENCH.materialize(self.root, helper_row, manifest)
+                bundle = BENCH.materialize_bundle(self.root, helper_row, work, manifest)
+                observed = BENCH.run_host_helper(self.root, helper_row,
+                                                 BENCH.fixture(row["fixture"], manifest), bundle, manifest)
+                self.assertTrue(observed["evidence"]["helper_mechanism_observed"])
+                self.assertTrue(observed["evidence"]["binding_valid"])
+                supplied = json.loads(json.dumps(observed))
+                if failure == "payload":
+                    supplied["result"]["payload"]["extra"] = True
+                    unsigned = dict(supplied["result"])
+                    unsigned.pop("content_hash", None)
+                    content_hash = BENCH.host_helper.digest(unsigned)
+                    supplied["result"]["content_hash"] = content_hash
+                    supplied["evidence"]["result_hash"] = content_hash
+                else:
+                    supplied["prompt_context"] += "\n"
+                config = {"runtime_versions": {"codex": "codex-test"}}
+                with mock.patch.object(BENCH, "probe", return_value="codex-test"), \
+                     mock.patch.object(BENCH, "run_host_helper", return_value=supplied), \
+                     mock.patch.object(BENCH, "run_finite") as execute:
+                    self.assertTrue(BENCH.run_one(self.root, row, config, manifest, 10))
+                value = BENCH.read_json(self.root / "results" / f"run-{row['run_id']}.json")
+                evidence = value["host_helper"]["evidence"]
+                self.assertEqual("pre_model_failed", value["status"])
+                self.assertEqual(expected_reason, value["failure_reason"])
+                self.assertFalse(value["model_called"]); self.assertFalse(value["prompt_sent"])
+                self.assertFalse(value["model_received_helper_result"])
+                self.assertTrue(evidence["binding_valid"])
+                self.assertFalse(evidence["normalized"])
+                self.assertFalse(evidence["helper_mechanism_observed"])
+                self.assertTrue(evidence["raw_helper_mechanism_observed"])
+                self.assertEqual(supplied["evidence"]["request_hash"], evidence["request_hash"])
+                self.assertEqual(supplied["evidence"]["result_hash"], evidence["result_hash"])
+                self.assertEqual(supplied["evidence"]["metrics"], evidence["metrics"])
+                self.assertTrue(evidence["pre_model_failed"]); self.assertTrue(evidence["pair_stop"])
+                execute.assert_not_called()
+
+    def test_target_helper_evidence_survives_pre_model_hash_and_command_failures(self):
+        self.use_host_bundle(); manifest = self.prepare()
+        rows = [row for row in manifest["schedule"] if row.get("candidate") == "I03" and
+                row.get("runtime") == "codex" and row.get("variant") == "baseline" and
+                row.get("fixture") == "cli_quiet_retrieve" and row.get("repeat") in (1, 2, 3)]
+        cases = ((rows[0], "hash", "helper_request_hash_mismatch"),
+                 (rows[1], "command", "command_pre_model_failure"),
+                 (rows[2], "launch", "launch_error"))
+        for row, failure, expected_reason in cases:
+            with self.subTest(failure=failure):
+                helper_row = dict(row); helper_row["run_id"] = row["run_id"] + "-helper"
+                work = BENCH.materialize(self.root, helper_row, manifest)
+                bundle = BENCH.materialize_bundle(self.root, helper_row, work, manifest)
+                observed = BENCH.run_host_helper(self.root, helper_row,
+                                                 BENCH.fixture(row["fixture"], manifest), bundle, manifest)
+                self.assertTrue(observed["evidence"]["helper_mechanism_observed"])
+                original = json.loads(json.dumps(observed))
+                supplied = json.loads(json.dumps(observed))
+                if failure == "hash":
+                    supplied["evidence"]["request_hash"] = "0" * 64
+                config = {"runtime_versions": {"codex": "codex-test"}}
+                command_patch = (mock.patch.object(BENCH, "command_for",
+                                                   side_effect=SystemExit(expected_reason))
+                                 if failure == "command" else
+                                 mock.patch.object(BENCH, "command_for", return_value=["/bin/true"])
+                                 if failure == "launch" else contextlib.nullcontext())
+                with mock.patch.object(BENCH, "probe", return_value="codex-test"), \
+                     mock.patch.object(BENCH, "run_host_helper", return_value=supplied), \
+                     mock.patch.object(BENCH, "run_finite") as execute, command_patch:
+                    if failure == "launch":
+                        execute.side_effect = OSError("blocked")
+                    self.assertTrue(BENCH.run_one(self.root, row, config, manifest, 10))
+                value = BENCH.read_json(self.root / "results" / f"run-{row['run_id']}.json")
+                self.assertEqual("pre_model_failed", value["status"])
+                self.assertEqual(expected_reason, value["failure_reason"])
+                self.assertFalse(value["model_called"]); self.assertFalse(value["prompt_sent"])
+                self.assertFalse(value["model_received_helper_result"])
+                self.assertEqual(original["result"], value["host_helper"]["result"])
+                actual_evidence = value["host_helper"]["evidence"]
+                expected_evidence = supplied["evidence"]
+                for field in ("request_hash", "result_hash", "operations",
+                              "operation_count", "metrics", "artifacts", "elapsed_ms"):
+                    self.assertEqual(expected_evidence.get(field), actual_evidence.get(field), field)
+                if failure == "hash":
+                    self.assertFalse(actual_evidence["helper_mechanism_observed"])
+                    self.assertFalse(actual_evidence["binding_valid"])
+                    self.assertTrue(actual_evidence["raw_helper_mechanism_observed"])
+                    self.assertFalse(actual_evidence["normalized"])
+                else:
+                    self.assertTrue(actual_evidence["helper_mechanism_observed"])
+                    self.assertTrue(actual_evidence["binding_valid"])
+                    self.assertTrue(actual_evidence["normalized"])
+                self.assertFalse(actual_evidence["model_received_helper_result"])
+                self.assertFalse(actual_evidence["task_outcome_passed"])
+                self.assertTrue(actual_evidence["pre_model_failed"])
+                self.assertTrue(actual_evidence["pair_stop"])
+                if failure == "launch":
+                    self.assertEqual("OSError", value["process"]["launch_error"])
+                    execute.assert_called_once()
+                else:
+                    execute.assert_not_called()
+
+    def test_run_one_records_materialized_prompt_and_rejects_hash_mismatch(self):
+        self.use_host_bundle(); manifest = self.prepare()
+        rows = {item["variant"]: item for item in manifest["schedule"]
+                if item.get("candidate") == "I03" and item.get("runtime") == "codex" and
+                item.get("fixture") == "repo_add" and item.get("repeat") == 1}
+        config = {"runtime_versions": {"codex": "codex-test"}, "run_timeout_seconds": 10, "locked_at": "test"}
+        calls = []
+
+        def fake_finite(command, prompt, *args):
+            calls.append(prompt)
+            prompt_bytes = prompt.encode()
+            return {"exit_code": 0, "stop_reason": None, "process_started": True, "prompt_sent": True,
+                    "materialized_prompt_sha256": hashlib.sha256(prompt_bytes).hexdigest(),
+                    "materialized_prompt_bytes": len(prompt_bytes),
+                    "sent_prompt_sha256": (hashlib.sha256(prompt_bytes).hexdigest()
+                                            if len(calls) == 1 else "0" * 64),
+                    "sent_prompt_bytes": len(prompt_bytes),
+                    "prompt_sha256": (hashlib.sha256(prompt_bytes).hexdigest() if len(calls) == 1 else "0" * 64),
+                    "model_called": True, "model_response_observed": True,
+                    "session_id": None, "hook_events": [], "rejection": False, "terminal_status": None,
+                    "elapsed_seconds": 0.25}
+
+        with mock.patch.object(BENCH, "probe", return_value="codex-test"), \
+             mock.patch.object(BENCH, "run_host_helper", side_effect=lambda *args: self.neutral_host_result(args[1])), \
+             mock.patch.object(BENCH, "command_for", return_value=["/bin/true"]), \
+             mock.patch.object(BENCH, "run_finite", side_effect=fake_finite), \
+             mock.patch.object(BENCH, "score", return_value={"success": True}), \
+             mock.patch.object(BENCH, "confirm_runtime_identity", return_value={"confirmed": True}), \
+             mock.patch.object(BENCH, "metrics", return_value={}):
+            self.assertTrue(BENCH.run_one(self.root, rows["baseline"], config, manifest, 10))
+            self.assertTrue(BENCH.run_one(self.root, rows["candidate"], config, manifest, 10))
+        spec = BENCH.fixture("repo_add", manifest)
+        template = BENCH.prompt_for(rows["baseline"], spec, self.root / BENCH.CLAUDE_MARKER, BENCH.HOST_SLOT)
+        context = self.neutral_host_result(rows["baseline"])["prompt_context"]
+        expected = template.replace(BENCH.HOST_SLOT, context)
+        baseline = BENCH.read_json(self.root / "results" / f"run-{rows['baseline']['run_id']}.json")
+        candidate = BENCH.read_json(self.root / "results" / f"run-{rows['candidate']['run_id']}.json")
+        self.assertEqual(baseline["template_sha256"], candidate["template_sha256"])
+        self.assertEqual(hashlib.sha256(template.encode()).hexdigest(), baseline["template_sha256"])
+        self.assertEqual(hashlib.sha256(expected.encode()).hexdigest(), baseline["materialized_prompt_sha256"])
+        self.assertEqual(len(expected.encode()), baseline["materialized_prompt_bytes"])
+        self.assertEqual(baseline["materialized_prompt_sha256"], baseline["sent_prompt_sha256"])
+        self.assertEqual(baseline["materialized_prompt_bytes"], baseline["sent_prompt_bytes"])
+        self.assertTrue(baseline["host_helper"]["evidence"]["model_received_helper_result"])
+        self.assertEqual("materialized_prompt_hash_mismatch", candidate["prompt"]["materialized_prompt_reason"])
+        self.assertEqual(hashlib.sha256(calls[1].encode()).hexdigest(), candidate["materialized_prompt_sha256"])
+        self.assertNotEqual(candidate["materialized_prompt_sha256"], candidate["sent_prompt_sha256"])
+        self.assertFalse(candidate["host_helper"]["evidence"]["model_received_helper_result"])
+
+    def test_report_retains_pre_model_failed_mate_as_unpaired(self):
+        self.use_host_bundle(); manifest = self.prepare(True)
+        rows = {row["variant"]: row for row in manifest["schedule"]
+                if row.get("candidate") == "I03" and row.get("runtime") == "codex" and
+                row.get("fixture") == "repo_add" and row.get("repeat") == 1}
+        failed = BENCH.host_pre_model_failure(rows["baseline"], "source_hash_mismatch")
+        BENCH.write_json(self.root / "results" / f"run-{rows['baseline']['run_id']}.json",
+                         {"owner": BENCH.OWNER, "schema": 1, "completed": True,
+                          "run": rows["baseline"], "status": "pre_model_failed",
+                          "model_called": False, "host_helper": failed})
+        BENCH.write_json(self.root / "results" / f"run-{rows['candidate']['run_id']}.json",
+                         {"owner": BENCH.OWNER, "schema": 1, "completed": True,
+                          "run": rows["candidate"], "status": "success",
+                          "quality": {"success": True}, "metrics": {}, "model_called": True})
+        with contextlib.redirect_stdout(io.StringIO()): BENCH.report(argparse.Namespace(root=str(self.root)))
+        report = BENCH.read_json(self.root / "results/report.json")
+        pair = next(item for item in report["pairs"]
+                    if item["pair_id"] == "I03:codex:repo_add:r1")
+        self.assertEqual("pre_model_failed", pair["baseline"]["status"])
+        self.assertFalse(pair["complete"])
+        self.assertTrue(pair["unpaired"])
+        self.assertTrue(pair["pair_stop"])
+        self.assertTrue(pair["pre_model_failed"])
+
+    def test_host_token_reduction_negative_is_not_eligible(self):
+        pairs = [{"complete": True, "paired_qualified": {"usage": True},
+                  "baseline": {"values": {"input_tokens": 100}},
+                  "candidate": {"values": {"input_tokens": 95}}}]
+        reduction = BENCH.host_input_token_reduction(pairs)
+        self.assertEqual(0.05, reduction["median"])
+        self.assertFalse(reduction["eligible"])
+
+    def test_neutral_result_contract_rejects_observed_mechanism(self):
+        row = {"candidate": "I03", "fixture": "repo_add"}
+        result = {"owner": BENCH.host_helper.RESULT_OWNER, "schema": BENCH.host_helper.SCHEMA,
+                  "candidate": "I03", "fixture": "repo_add", "status": "neutral",
+                  "mechanism": "neutral", "payload": {"context": "", "facts": {"neutral": True},
+                  "diagnostics": []}, "references": []}
+        result["content_hash"] = BENCH.host_helper.digest(result)
+        request = BENCH.host_helper.make_request({**row, "variant": "baseline"}, BENCH.fixture(row["fixture"]))
+        neutral = {"result": result,
+                   "evidence": {"helper_mechanism_observed": False, "operation_count": 0,
+                                "failure_reason": None,
+                                "request_hash": BENCH.host_helper.digest(request),
+                                "result_hash": result["content_hash"]}, "pair_stop": False}
+        self.assertIs(BENCH.normalize_host_result(row, neutral), neutral)
+        neutral["evidence"]["helper_mechanism_observed"] = True
+        with self.assertRaisesRegex(BENCH.host_helper.HelperError, "neutral_helper_observation_invalid"):
+            BENCH.normalize_host_result(row, neutral)
+        target_row = {"candidate": "I03", "fixture": "cli_quiet_retrieve"}
+        target = self.neutral_host_result(target_row)
+        with self.assertRaisesRegex(BENCH.host_helper.HelperError, "target_result_status_invalid"):
+            BENCH.normalize_host_result(target_row, target)
+
+    def test_host_prompt_context_is_reconstructed_and_wrapper_drift_rejected(self):
+        row = {"candidate": "I03", "fixture": "repo_add"}
+        value = self.neutral_host_result(row)
+        value.pop("prompt_context")
+        normalized = BENCH.normalize_host_result(row, value)
+        expected = f'<mechanism-context schema="host-helper-result-v1">{BENCH.host_helper.canonical(value["result"]).decode()}</mechanism-context>'
+        self.assertEqual(expected, normalized["prompt_context"])
+        value["prompt_context"] = expected + "\n"
+        with self.assertRaisesRegex(BENCH.host_helper.HelperError, "helper_prompt_context_invalid"):
+            BENCH.normalize_host_result(row, value)
 
     def test_runtime_settings_reject_environment_injection(self):
         config = {"models": {"codex": "c", "claude": "a"},
@@ -435,10 +1065,65 @@ class HarnessBenchmarkTest(unittest.TestCase):
                                        logs / "three.jsonl", logs / "three.err", "codex", .4, self.root)
         self.assertEqual("timeout", timed["stop_reason"]); self.assertLess(time.monotonic() - start, 2)
         self.assertEqual("timeout", ignored["stop_reason"]); self.assertLess(time.monotonic() - start_ignore, .4)
+        self.assertTrue(limited["process_started"] and limited["prompt_sent"])
+        self.assertTrue(timed["process_started"] and timed["prompt_sent"])
         self.assertIsNone(BENCH.executable_window(10, 100)); self.assertIsNone(BENCH.executable_window(600, 10))
         self.assertIsNone(BENCH.executable_window(600, 610))
         self.assertEqual(600, BENCH.executable_window(600, 611))
         self.assertEqual(12, BENCH.executable_window(12, 100))
+
+    def test_finite_launch_oserror_returns_completed_unproven_result(self):
+        logs = self.root / "logs"; logs.mkdir(mode=0o700)
+        with mock.patch.object(BENCH.subprocess, "Popen", side_effect=OSError("blocked")):
+            value = BENCH.run_finite([sys.executable, "-c", "pass"], "x", os.environ.copy(),
+                                     logs / "launch.jsonl", logs / "launch.err", "codex", 2, self.root)
+        self.assertEqual("launch_error", value["stop_reason"])
+        self.assertFalse(value["process_started"]); self.assertFalse(value["prompt_sent"])
+        self.assertFalse(value["model_called"]); self.assertFalse(value["model_response_observed"])
+        self.assertIsNone(value["sent_prompt_sha256"]); self.assertIsNone(value["sent_prompt_bytes"])
+        self.assertEqual(hashlib.sha256(b"x").hexdigest(), value["materialized_prompt_sha256"])
+        self.assertEqual(1, value["materialized_prompt_bytes"])
+        self.assertEqual("OSError", value["launch_error"])
+        self.assertGreaterEqual(value["elapsed_ms"], 0)
+        self.assertEqual(0, value["stdout_bytes"]); self.assertEqual(0, value["stderr_bytes"])
+
+    def test_run_one_setup_timeout_keeps_model_unproven(self):
+        manifest = self.prepare()
+        row = next(item for item in manifest["schedule"]
+                   if item["kind"] == "smoke" and item["runtime"] == "codex")
+        config = {"runtime_versions": {"codex": "codex-test"},
+                  "models": {"codex": "model"}, "efforts": {"codex": "high"},
+                  "requested_tiers": {"codex": None}, "fixture_tools": manifest["fixture_tools"],
+                  "run_timeout_seconds": 10, "locked_at": "test"}
+        with mock.patch.object(BENCH, "verify_runtime_binaries"), \
+             mock.patch.object(BENCH, "verify_runtime_state"), \
+             mock.patch.object(BENCH, "probe", return_value="codex-test"), \
+             mock.patch.object(BENCH, "command_for", return_value=["/bin/true"]), \
+             mock.patch.object(BENCH, "run_finite") as execute, \
+             mock.patch.object(BENCH, "smoke_quality", return_value={"success": False}), \
+             mock.patch.object(BENCH, "confirm_runtime_identity", return_value={"confirmed": False}), \
+             mock.patch.object(BENCH, "metrics", return_value={}), \
+             mock.patch.object(BENCH.time, "monotonic", side_effect=[10.0, 20.0, 20.0, 20.0]):
+            self.assertTrue(BENCH.run_one(self.root, row, config, manifest, 10))
+        execute.assert_not_called()
+        value = BENCH.read_json(self.root / "results" / f"run-{row['run_id']}.json")
+        self.assertTrue(value["completed"])
+        self.assertFalse(value["model_called"]); self.assertFalse(value["model_response_observed"])
+        self.assertIsNone(value["materialized_prompt_sha256"])
+        self.assertEqual("timeout", value["process"]["stop_reason"])
+        self.assertFalse(value["process"]["process_started"])
+        self.assertFalse(value["process"]["prompt_sent"])
+
+    def test_finite_model_response_requires_structured_event(self):
+        logs = self.root / "logs"; logs.mkdir(mode=0o700)
+        response = json.dumps({"type": "item.completed", "item": {"type": "agent_message",
+                                                                        "text": "done"}})
+        observed = BENCH.run_finite([sys.executable, "-c", f"print({response!r})"], "x", os.environ.copy(),
+                                    logs / "response.jsonl", logs / "response.err", "codex", 10, self.root)
+        self.assertTrue(observed["model_response_observed"])
+        crash = BENCH.run_finite([sys.executable, "-c", "import json; print(json.dumps({'type':'turn.failed'}))"],
+                                 "x", os.environ.copy(), logs / "crash.jsonl", logs / "crash.err", "codex", 10, self.root)
+        self.assertFalse(crash["model_response_observed"])
 
     def test_resume_requires_exact_predecessor_identity_and_separate_workspace(self):
         manifest = self.prepare(); config = {"owner": BENCH.OWNER, "locked_at": "epoch"}
