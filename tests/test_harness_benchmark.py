@@ -99,6 +99,69 @@ class HarnessBenchmarkTest(unittest.TestCase):
         self.assertFalse(helper.exists()); self.assertFalse((self.root / "runtime/codex/home/tmp").exists())
         self.assertTrue(BENCH.private_tree_ok((self.root / "runtime/codex",), 4096))
 
+    def test_file_fd_root_move_refuses_before_fchmod(self):
+        base = self.root / "runtime"
+        BENCH.mkdir(base)
+        before = BENCH.runtime_private_snapshot(base)
+        target = base / "fresh.log"
+        target.write_bytes(b"fresh\n"); target.chmod(0o644)
+        old = base.with_name(base.name + "-old")
+        moved = {"done": False}
+        original_visible = BENCH._runtime_visible_matches
+
+        def race_visible(path, expected, descriptor, label):
+            if not moved["done"] and label == "file":
+                moved["done"] = True
+                base.rename(old)
+                BENCH.mkdir(base)
+                os.rename(old / target.name, base / target.name)
+            return original_visible(path, expected, descriptor, label)
+
+        with mock.patch.object(BENCH, "_runtime_visible_matches", side_effect=race_visible):
+            with self.assertRaisesRegex(SystemExit, "base pathが検証中に変化"):
+                BENCH.tighten_fresh_runtime_files(base, before, True)
+        self.assertTrue(moved["done"])
+        self.assertEqual(0o644, stat.S_IMODE((base / target.name).stat().st_mode))
+        self.assertFalse((old / target.name).exists())
+
+    def test_codex_cleanup_runs_fresh_file_tightening_after_helper_removal(self):
+        manifest = self.prepare()
+        runtime = self.root / "runtime/codex"
+        before = BENCH.runtime_private_snapshot(runtime)
+        helper = self.make_codex_arg0(manifest)
+        fresh = runtime / "generated.log"
+        fresh.write_text("generated\n"); fresh.chmod(0o644)
+        observed = []
+
+        def after_cleanup():
+            observed.append(helper.exists())
+            observed.append(BENCH.tighten_fresh_runtime_files(runtime, before, True))
+
+        self.assertEqual(1, BENCH.cleanup_codex_arg0_helpers(manifest=manifest, root=self.root,
+                                                             after_cleanup=after_cleanup))
+        self.assertEqual([False, {"status": "passed", "fresh_dirs": 0, "fresh_files": 1,
+                                  "fresh_bytes": len(b"generated\n"), "files_tightened": 1}], observed)
+        self.assertEqual(0o600, stat.S_IMODE(fresh.stat().st_mode))
+        self.assertTrue(BENCH.private_tree_ok((runtime,), 4096))
+
+    def test_fresh_file_tightening_checks_base_fd_identity(self):
+        base = self.root / "runtime/codex"
+        base.mkdir(parents=True, mode=0o700)
+        base.chmod(0o700)
+        nested = base / "cache"
+        nested.mkdir(mode=0o700)
+        nested.chmod(0o700)
+        before = BENCH.runtime_private_snapshot(base)
+        fresh = nested / "fresh.log"
+        fresh.write_text("fresh\n"); fresh.chmod(0o644)
+        after = BENCH.runtime_private_snapshot(base, expected=before, allow_public_regular=True)
+        tampered = dict(after)
+        observed = tampered[base]
+        tampered[base] = (observed[0], observed[1] + 1, *observed[2:])
+        with self.assertRaises(SystemExit):
+            BENCH._tighten_runtime_file(fresh, tampered[fresh], tampered[nested], tampered, base)
+        self.assertEqual(0o644, stat.S_IMODE(fresh.stat().st_mode))
+
     def test_codex_arg0_cleanup_rejects_unknown_target_ancestor_and_active_lock_without_mutation(self):
         manifest = self.prepare()
         cases = ("unknown", "target", "ancestor", "active", "second_invalid")
@@ -567,7 +630,9 @@ class HarnessBenchmarkTest(unittest.TestCase):
         for row in rows:
             target = row["fixture"] in target_ids
             input_tokens = 80 if target and row["variant"] == "candidate" else 100
-            coverage = {"usage": {"qualified": True, "scope": "parent_claim"},
+            model = "gpt-6.1-sol" if row["runtime"] == "codex" else "claude-sonnet-5"
+            coverage = {"usage": {"qualified": True, "scope": "parent_claim",
+                                   "expected": 1, "observed": 1, "rate": 1, "reasons": []},
                         "tool_calls": {"qualified": True, "scope": "main"},
                         "outcome": {"qualified": True, "scope": "main"}}
             quality = {name: True for name in ("success", "gate", "no_symlinks", "workspace_within_limit",
@@ -575,8 +640,10 @@ class HarnessBenchmarkTest(unittest.TestCase):
             BENCH.write_json(self.root / "results" / f"run-{row['run_id']}.json", {
                 "owner": BENCH.OWNER, "schema": 1, "completed": True, "run": row,
                 "status": "success", "quality": quality,
-                "process": {"elapsed_seconds": 1},
-                "metrics": {"coverage": coverage, "tokens": {"input_total": input_tokens},
+                "process": {"elapsed_seconds": 1,
+                            "runtime_identity": {"model": {"confirmed": True, "value": model}}},
+                "metrics": {"coverage": coverage, "model": model,
+                             "tokens": {"input_total": input_tokens, "output_tokens": 10},
                              "tool_calls": {"total": 1}},
                 "host_helper": {"evidence": {"helper_mechanism_observed": target,
                                                 "model_received_helper_result": True,
@@ -603,12 +670,18 @@ class HarnessBenchmarkTest(unittest.TestCase):
         for row in rows:
             target = row["fixture"] in target_ids
             input_tokens = 80 if target and row["variant"] == "candidate" else 100
+            model = "gpt-6.1-sol" if row["runtime"] == "codex" else "claude-sonnet-5"
             value = {"owner": BENCH.OWNER, "schema": 1, "completed": True, "run": row,
-                     "status": "success", "quality": dict(quality), "process": {"elapsed_seconds": 1},
-                     "metrics": {"coverage": {"usage": {"qualified": True, "scope": "parent_claim"},
+                     "status": "success", "quality": dict(quality),
+                     "process": {"elapsed_seconds": 1,
+                                 "runtime_identity": {"model": {"confirmed": True, "value": model}}},
+                     "metrics": {"model": model,
+                                 "coverage": {"usage": {"qualified": True, "scope": "parent_claim",
+                                                         "expected": 1, "observed": 1, "rate": 1, "reasons": []},
                                                  "tool_calls": {"qualified": True, "scope": "main"},
                                                  "outcome": {"qualified": True, "scope": "main"}},
-                                 "tokens": {"input_total": input_tokens}, "tool_calls": {"total": 1}},
+                                 "tokens": {"input_total": input_tokens, "output_tokens": 10},
+                                 "tool_calls": {"total": 1}},
                      "host_helper": {"evidence": {"helper_mechanism_observed": target,
                                                     "model_received_helper_result": True,
                                                     "task_outcome_passed": True}}}
@@ -1357,11 +1430,186 @@ class HarnessBenchmarkTest(unittest.TestCase):
             f"{row['candidate']}:{row['runtime']}:{row['variant']}:repository"]
         self.assertIsNone(task["total_cost_usd"]); self.assertIsNone(task["cost_per_success_usd"])
 
+    def test_child_nofile_limit_uses_parent_hard_cap(self):
+        calls = []
+        with mock.patch.object(BENCH.resource, "getrlimit", return_value=(64, 4096)), \
+             mock.patch.object(BENCH.resource, "setrlimit",
+                               side_effect=lambda resource_id, value: calls.append((resource_id, value))):
+            BENCH.apply_child_limits(10)
+        values = [value for resource_id, value in calls
+                  if resource_id == BENCH.resource.RLIMIT_NOFILE]
+        self.assertEqual([(1024, 1024)], values)
+        calls.clear()
+        with mock.patch.object(BENCH.resource, "getrlimit", return_value=(64, 64)), \
+             mock.patch.object(BENCH.resource, "setrlimit",
+                               side_effect=lambda resource_id, value: calls.append((resource_id, value))):
+            BENCH.apply_child_limits(10)
+        values = [value for resource_id, value in calls
+                  if resource_id == BENCH.resource.RLIMIT_NOFILE]
+        self.assertEqual([(64, 64)], values)
+
+    def test_fresh_runtime_public_file_is_tightened_after_reap(self):
+        base = self.root / "runtime/codex"
+        base.mkdir(parents=True, mode=0o700)
+        base.chmod(0o700)
+        existing = base / "existing.log"
+        existing.write_text("existing")
+        existing.chmod(0o600)
+        before = BENCH.runtime_private_snapshot(base)
+        fresh = base / "fresh.log"
+        fresh.write_text("fresh")
+        fresh.chmod(0o644)
+        result = BENCH.tighten_fresh_runtime_files(base, before, True)
+        self.assertEqual(1, result["files_tightened"])
+        self.assertEqual(0o600, stat.S_IMODE(fresh.stat().st_mode))
+        self.assertEqual(before[existing], BENCH.runtime_private_snapshot(base)[existing])
+
     def test_budget_deadline_persists_across_invocations(self):
         (self.root / "results").mkdir(mode=0o700)
         first = BENCH.budget_deadline(self.root)
         with mock.patch.object(BENCH.time, "time", return_value=first + 1000):
             self.assertEqual(first, BENCH.budget_deadline(self.root))
+
+    def test_host_parent_usage_contract_and_per_runtime_smoke_gate(self):
+        model = "gpt-6.1-sol"
+
+        def usage_case(runtime="codex", unknown=False, input_total=120, output_tokens=40):
+            coverage = {"qualified": not unknown, "scope": "parent_claim",
+                        "expected": 2, "observed": 2, "rate": 1,
+                        "reasons": ["includes_children_unknown"] if unknown else []}
+            metrics = {"model": model, "includes_children": "unknown" if unknown else "no",
+                       "comparison_qualified": False,
+                       "tokens": {"input_total": input_total, "output_tokens": output_tokens},
+                       "coverage": {"usage": coverage}}
+            record = {"owner": BENCH.OWNER, "schema": 1, "completed": True,
+                      "run": {"run_id": f"usage-{runtime}", "kind": "smoke", "runtime": runtime},
+                      "status": "success",
+                      "process": {"runtime_identity": {
+                          "model": {"confirmed": True, "value": model},
+                          "effort": {"confirmed": True, "value": "medium"}}},
+                      "metrics": metrics}
+            return metrics, record
+
+        strict_metrics, strict_record = usage_case(unknown=False)
+        unknown_metrics, unknown_record = usage_case(unknown=True)
+        self.assertTrue(BENCH.metric_ready(strict_metrics, "usage"))
+        self.assertTrue(BENCH.host_parent_usage_ready(strict_metrics, strict_record))
+        self.assertFalse(BENCH.metric_ready(unknown_metrics, "usage"))
+        self.assertTrue(BENCH.host_parent_usage_ready(unknown_metrics, unknown_record))
+        self.assertFalse(BENCH.metric_ready(unknown_metrics, "cost"))
+
+        rejects = (
+            ("runtime_missing", lambda value: value["record"]["run"].pop("runtime")),
+            ("runtime_null", lambda value: value["record"]["run"].update(runtime=None)),
+            ("runtime_not_codex", lambda value: value["record"]["run"].update(runtime="claude")),
+            ("boolean_rate", lambda value: value["metrics"]["coverage"]["usage"].update(rate=True)),
+            ("boolean_expected", lambda value: value["metrics"]["coverage"]["usage"].update(expected=True)),
+            ("negative_input", lambda value: value["metrics"]["tokens"].update(input_total=-1)),
+            ("negative_output", lambda value: value["metrics"]["tokens"].update(output_tokens=-1)),
+            ("boolean_input", lambda value: value["metrics"]["tokens"].update(input_total=True)),
+            ("boolean_output", lambda value: value["metrics"]["tokens"].update(output_tokens=True)),
+            ("unknown_warning", lambda value: value["metrics"]["coverage"]["usage"].update(
+                reasons=["includes_children_unknown", "unknown_warning"])),
+            ("scope_mismatch", lambda value: value["metrics"]["coverage"]["usage"].update(scope="main")),
+        )
+        for name, mutate in rejects:
+            with self.subTest(name=name):
+                value = json.loads(json.dumps({"metrics": unknown_metrics, "record": unknown_record}))
+                mutate(value)
+                self.assertFalse(BENCH.host_parent_usage_ready(value["metrics"], value["record"]))
+
+        smoke_root = self.root / "host-smoke"; smoke_root.mkdir(mode=0o700)
+        results = smoke_root / "results"; results.mkdir(mode=0o700)
+
+        def smoke(runtime, metrics):
+            return {"owner": BENCH.OWNER, "schema": 1, "completed": True,
+                    "run": {"run_id": f"smoke-{runtime}", "kind": "smoke", "runtime": runtime},
+                    "status": "success", "quality": {"boundary_isolation": True},
+                    "process": {"runtime_identity": {
+                        "model": {"confirmed": True, "value": metrics["model"]},
+                        "effort": {"confirmed": True, "value": "medium"}}},
+                    "metrics": metrics}
+
+        self.private_write(results / "run-smoke-codex.json", smoke("codex", unknown_metrics))
+        self.private_write(results / "run-smoke-claude.json", smoke("claude", strict_metrics))
+        self.assertEqual(["codex:usage_or_scope_unqualified"],
+                         BENCH.comparison_blockers(smoke_root))
+        self.assertEqual([], BENCH.comparison_blockers(smoke_root, allow_host_parent_usage=True))
+        host_manifest = {"comparison_bundles": {
+            f"I03:{runtime}:{variant}": {"evaluation_kind": "host-supervised-helper"}
+            for runtime in ("codex", "claude") for variant in ("baseline", "candidate")}}
+        self.assertEqual([], BENCH.host_subset_blockers(smoke_root, host_manifest, "I03"))
+
+    def test_host_report_separates_strict_pairs_host_deltas_and_adoption_hold(self):
+        schedule = [
+            {"run_id": "I03-codex-baseline-repo_add-r1", "kind": "compare", "candidate": "I03",
+             "runtime": "codex", "variant": "baseline", "fixture": "repo_add", "repeat": 1},
+            {"run_id": "I03-codex-candidate-repo_add-r1", "kind": "compare", "candidate": "I03",
+             "runtime": "codex", "variant": "candidate", "fixture": "repo_add", "repeat": 1},
+            {"run_id": "I03-codex-baseline-cli_failure_reset-r1", "kind": "compare", "candidate": "I03",
+             "runtime": "codex", "variant": "baseline", "fixture": "cli_failure_reset", "repeat": 1},
+            {"run_id": "I03-codex-candidate-cli_failure_reset-r1", "kind": "compare", "candidate": "I03",
+             "runtime": "codex", "variant": "candidate", "fixture": "cli_failure_reset", "repeat": 1},
+            {"run_id": "I03-codex-baseline-long_compact-r1", "kind": "compare", "candidate": "I03",
+             "runtime": "codex", "variant": "baseline", "fixture": "long_compact", "repeat": 1},
+            {"run_id": "I03-codex-candidate-long_compact-r1", "kind": "compare", "candidate": "I03",
+             "runtime": "codex", "variant": "candidate", "fixture": "long_compact", "repeat": 1},
+        ]
+        for variant in ("baseline", "candidate"):
+            for fixture_id in ("repo_add", "cli_failure_reset", "long_compact"):
+                schedule.append({"run_id": f"I03-claude-{variant}-{fixture_id}-r1", "kind": "compare",
+                                 "candidate": "I03", "runtime": "claude", "variant": variant,
+                                 "fixture": fixture_id, "repeat": 1})
+        manifest = {"owner": BENCH.OWNER, "schema": 1, "plan": BENCH.PLAN,
+                    "candidates": ["I03"], "schedule": schedule, "max_runs": len(schedule),
+                    "pricing": {"version": "unit-test", "currency": "USD"},
+                    "host_helper_plan": BENCH.HOST_PLAN}
+        results = self.root / "results"; results.mkdir(mode=0o700)
+        rows = [row for row in schedule if row.get("candidate") == "I03" and row["runtime"] == "codex" and
+                row["fixture"] == "repo_add" and row["repeat"] == 1]
+        self.assertEqual({"baseline", "candidate"}, {row["variant"] for row in rows})
+        self.private_write(results / "manifest.json", manifest)
+        quality = {name: True for name in ("success", "gate", "no_symlinks", "workspace_within_limit",
+                                           "control_files_unchanged", "restore", "native", "runtime_effective")}
+
+        for row in rows:
+            input_total = 100 if row["variant"] == "baseline" else 80
+            metrics = {"model": "gpt-6.1-sol", "includes_children": "unknown",
+                       "comparison_qualified": False,
+                       "tokens": {"input_total": input_total, "output_tokens": 40},
+                       "coverage": {
+                           "usage": {"qualified": False, "scope": "parent_claim", "expected": 2,
+                                     "observed": 2, "rate": 1,
+                                     "reasons": ["includes_children_unknown"]},
+                           "tool_calls": {"qualified": True, "scope": "main"},
+                           "outcome": {"qualified": True, "scope": "main"}},
+                       "tool_calls": {"total": 1}}
+            value = {"owner": BENCH.OWNER, "schema": 1, "completed": True, "run": row,
+                     "status": "success", "quality": quality,
+                     "process": {"elapsed_seconds": 1,
+                                 "runtime_identity": {
+                                     "model": {"confirmed": True, "value": "gpt-6.1-sol"},
+                                     "effort": {"confirmed": True, "value": "medium"}}},
+                     "metrics": metrics,
+                     "host_helper": {"evidence": {
+                         "helper_mechanism_observed": False,
+                         "model_received_helper_result": True,
+                         "task_outcome_passed": True}}}
+            self.private_write(results / f"run-{row['run_id']}.json", value)
+
+        with mock.patch.object(BENCH, "verify_tool_sources"):
+            with contextlib.redirect_stdout(io.StringIO()):
+                BENCH.report(argparse.Namespace(root=str(self.root)))
+        report = BENCH.read_json(results / "report.json")
+        pair = next(item for item in report["pairs"]
+                    if item["pair_id"] == "I03:codex:repo_add:r1")
+        self.assertTrue(pair["complete"])
+        self.assertFalse(pair["paired_qualified"]["usage"])
+        self.assertTrue(pair["host_paired_qualified"]["usage"])
+        self.assertIsNone(pair["deltas"]["input_tokens"])
+        self.assertEqual(-20, pair["host_deltas"]["input_tokens"])
+        self.assertEqual("HOLD", report["selection_gate"]["host_subset"]["I03"]["state"])
+        self.assertFalse(report["adoption_gate"]["I03:codex"]["eligible"])
 
 
 if __name__ == "__main__":

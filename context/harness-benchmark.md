@@ -99,7 +99,7 @@ helperはtrusted parent processへ直接importし、helper自身をsubprocessと
 
 helper process全体は120秒、個別commandは30秒、retryは0回である。stdoutとstderrは各16 MiB、canonical requestとresultは各256 KiB、生成fileは64件、1 fileは4 MiB、生成合計は16 MiBを上限にする。macOS sandboxでnetwork、live HOME、`/private/tmp`全体をdenyした後、当該runのworkと検査済みsourceだけを許可する。HOMEは置き換えずidentityだけを照合し、子環境は固定PATHとlocaleに限定してparentのcredential、provider、profile、proxy、preloadを渡さない。I04の実path、canonical marker、artifact hashはprivate evidenceだけに保存し、モデルへ渡すcontextはlogical pathと検証済み必須factsから構造化して再生成する。raw controlはbaselineのCodex `51ee53e`、Claude `7152ca3`、計画SHA、埋込みcontrol blob SHAへ結合する。失敗、欠測、上限超過、source driftはclaimへ記録し、最終treeの予約込み検査後に、返却resultと同じhashを持つterminal ledgerを一度だけ確定する。状態は`pre_model_failed`となり、当該pairをモデル起動前に停止する。残りの同candidateは`pending_helper_blocked`として残す。
 
-host subsetは、専用loginとruntime別隔離smokeが完了した後、次のように候補ごとに実行する。現時点ではloginとsmokeを実行していないため、コマンドは再開手順であり、実行済み証拠ではない。
+host subsetは、専用loginとruntime別隔離smokeが完了した後、次のように候補ごとに実行する。コマンドはrun rootごとの再開手順である。実行済みかどうかは、そのrootの公式認証確認、smoke record、reportで確認する。
 
 ```sh
 python3 ~/.codex/scripts/harness_benchmark.py run "$RUN" --candidate I03 --host-subset "${COMMON[@]}"
@@ -114,10 +114,32 @@ v13の変更量目標は、runner統合60〜100行、runner test 80〜140行、h
 
 runnerの増分は、72件と24件の分母分離、host専用bundleの排他検査、materialized・sent promptのhashとbyte数、process起動・入力送信・structured responseの三段階、pre-model failureのterminal記録、end-to-end時間、探索selection gateを既存のrun/report lifecycleへ接続するために必要だった。実runtimeで追加した差分は、native実体のpin、既知arg0 shapeの全件事前検証、nonblocking lock、probeとrun後のstrict tree再検査、無変更で拒否する負例である。helperは、独立counter、OS sandbox、有限process回収、durable terminal、source identity、固定baselineの全文生成・注入、I04のlogical context、TSC marker結合、reset snapshotを同じ信頼境界で検証する。両testの超過は、launch failure、欠測coverage、source drift、counter偽装、全candidateと8 fixtureのneutral組合せ、未知arg0 entry・target drift・symlink ancestor・active lockを削らずに固定するために生じた。この設計は、大きな2つのtrusted moduleを同時に確認する保守負担があり、prompt・result・report schemaの変更には両moduleの再レビューが必要になる。次版では、認証・モデル実行・native fixtureをhelperへ移さず、report集計とprompt provenanceを独立したreview済みmoduleへ分け、重複する負例をparameter化する余地がある。分割は新しい計画と開始審査を通すまで行わず、安全処理や負例を行数調整のために削除しない。この超過は目標の変更ではなく、v13だけの設計varianceとして独立完了レビューの対象にする。
 
+## v18 起動とruntime stateの検査
+
+子CLIのopen file上限は1024とし、親の有限hard limitが小さければその値までにする。CPU、file size、出力、時間の既存上限は維持する。公式loginは専用cwdへ移動し、`umask(0o077)`を設定してから固定CLIを実行する。
+
+モデル実行前後には専用runtime treeのmetadataを取得する。本文、認証値、session本文を読んだりコピーしたりしない。終了後は子processをwaitし、残存process groupを回収する。`killpg(pid, 0)`の`ESRCH`だけをgroup不在の根拠とし、`EPERM`、残存、unknownを成功扱いにしない。Codexの既知arg0 helperは既存のshape・lock検査を通してから回収する。
+
+固定native CLIは専用runtime内の可変stateへ通常の追記、regular fileの削除、同じpathへの置換を行える。SQLiteのWAL sidecar消失・再生成もこの範囲に含める。起動前のprivate regular fileから許可inventoryを作り、Codex permission configとClaudeの境界markerは除外して固定検査を維持する。directoryのidentity変更、symlink、special file、hardlink、owner変更、公開modeは拒否する。実際のregular file削除・置換は1run64件以下、inventoryを含むsnapshot全体は4096 entry以下とする。本文digestやvendor固有のファイル名一覧は記録しない。
+
+postprocessorは既存の同一inodeへ書き込まず、削除もしない。process group回収後、新規生成またはnativeが置換したinodeだけを検査する。regular fileは現在UID、nlink 1、0600または0644、1file4 MiB以下、合計16 MiB以下とし、新規fileは64件以下に限る。新規directoryは現在UIDの通常0700 directoryを64件以下で保持する。rootと全ancestorのpath・held FDのidentity、dirent・file FDのdevice/inode/UID/mode/nlink/size/mtimeを再照合し、0644 fileだけをheld FDで0600へ変更する。最終treeを再検査し、差し替えや同時変更を失敗として残す。
+
+terminal recordはprocess groupの回収、metadata検査、生成directory/file数、生成bytes、権限変更数、native削除・置換数、failure reasonを保存する。pathや本文は公開しない。正常なruntime stateは次runへ保持する。同じruntime rootでrun IDを変えた3連続lifecycleのfixtureを使い、追記、WAL、置換、生成と終了後検査の両立を検証する。source変更時は旧ROOT・失敗record・認証を保持し、新ROOTを準備して両runtimeの公式loginから開始する。
+
+## v18 host探索での親usage
+
+`host_parent_usage_ready`はhost subsetのusageだけを判定する。`coverage.usage.scope == "parent_claim"`、expectedが0より大きくobservedと一致、rateが1で、これらがbooleanでない有限非負数値であることを要求する。input/output tokenもbooleanでない有限非負数値とし、確認済みeffective modelとmetricsのmodelを一致させる。
+
+reasonsが空なら既存strict usageの資格を要求する。唯一の例外は、reasonsが厳密に`["includes_children_unknown"]`で、`record.run.runtime == "codex"`の場合である。runtime欠測、null、Claudeの同じreason、別reason、scope/model不一致、NaN/Infinity、負値は拒否する。collectorや通常の`metric_ready`の契約は変えない。
+
+reportは`host_paired_qualified`と`host_deltas`をstrictな`paired_qualified`・`deltas`から分ける。host探索の開始、coverage、親input tokenの差分・削減率だけにこの例外を使う。親usageをinclusive cost、actual tier、実請求額、native effect、general adoptionの資格へ広げない。これらは必要な実測がそろうまでHOLDを維持する。
+
+I03/I04/I05すべてを含むmanifestでは、hostは6fixture × 2runtime × 2variant × 3repeat × 3candidateの216run、全scheduleは290runである。既存manifest・source pin・run identity・pair照合を使い、欠落、重複、失敗、unpairedを完了へ補完しない。両runtimeのsuccessful smokeを確認してから、retry 0、1run600秒、全体49時間の既存制約で実行する。
+
 ## 結果の判定
 
 `results/report.json`は、candidate × runtime × variantごとに期待数24を固定分母として、fixture × repeatのbaseline/candidate pairを保存する。I03のquiet失敗・保存済み結果取得とI04のgate確認は、合成scriptのcounterと正規化したnative command argvの完全一致が各1回のときだけ品質合格にする。I05は固定した実TypeScript CLIのnative command argvが1回で、機能testも通る場合だけ合格にする。`echo`などにcommand文字列を含めただけでは合格しない。部分実行を100%として表示せず、全pairの完了と各metricsの`coverage.<metric>.qualified`、scopeを別々に判定する。tool callが0件でも、collectorが0件を完全観測した場合は有効である。
 
-input tokenはusage、tool回数はtool_calls、終了分類はoutcome、USDはcostとoutcomeの資格に加え、親子を含むtop-level `comparison_qualified`が24件すべて揃った場合だけ`estimated_usd_with_subagents`から集計する。ClaudeはAgent toolを許可せず空のMCP設定を使うため`includes_children=no`、Codexは子実行を否定する正式証拠がないため`unknown`としてusageと費用を保留する。fixtureごとの3 pairは差分の中央値と範囲を、repository・CLI・longのtask群は期待数と終了分類を保存する。actual tierまたは費用coverageが不明でも、条件を満たすinput/tool指標まで一律に無効にしない。成功0件または費用欠測時の成功単価はNAである。10%減は探索候補の選別にだけ使い、本採用の根拠にしない。
+input tokenはusage、tool回数はtool_calls、終了分類はoutcome、USDはcostとoutcomeの資格に加え、親子を含むtop-level `comparison_qualified`が24件すべて揃った場合だけ`estimated_usd_with_subagents`から集計する。ClaudeはAgent toolを許可せず空のMCP設定を使うため`includes_children=no`、Codexは子実行を否定する正式証拠がないため`unknown`としてstrict usageとinclusive costを保留する。host探索では、上記v18の条件を満たす親usageだけを別資格で評価できる。fixtureごとの3 pairは差分の中央値と範囲を、repository・CLI・longのtask群は期待数と終了分類を保存する。actual tierまたは費用coverageが不明でも、条件を満たすinput/tool指標まで一律に無効にしない。成功0件または費用欠測時の成功単価はNAである。10%減は探索候補の選別にだけ使い、本採用の根拠にしない。
 
 各runは`configured`、`fired`、`local_tested`、`effective`、`adopted`を分けて記録する。一般taskの成功だけでは候補固有の効果を観測したことにしない。候補runtimeの24件すべてで登録済みのnative effect evidenceが確認され、全pairのusage、tool_calls、outcome、inclusive cost coverageが揃い、candidateの成功件数がbaseline以上で必須品質違反が0件の場合だけ`adoption_gate.eligible`をtrueにできる。actual tierや親子費用が欠測なら、input/toolの探索結果は表示しても採用判定はHOLDする。現時点ではeffect adapter未登録のためfalseである。採用判断と本番反映はrunnerの責務外である。

@@ -5,10 +5,12 @@ from __future__ import annotations
 import argparse
 import ast
 import copy
+import errno
 import fcntl
 import hashlib
 import importlib.util
 import json
+import math
 import os
 import random
 import re
@@ -40,7 +42,12 @@ LIMITS = {"run_seconds": 600, "total_seconds": 49 * 3600, "retry": 0,
           "workspace_file_bytes": 4 * 1024 * 1024, "workspace_files": 128,
           "workspace_entries": 256, "comparison_manifest_bytes": 1024 * 1024,
           "comparison_file_bytes": 4 * 1024 * 1024, "comparison_files": 96,
-          "comparison_bytes": 16 * 1024 * 1024, "term_grace_seconds": 5}
+          "comparison_bytes": 16 * 1024 * 1024, "term_grace_seconds": 5,
+          "child_nofile_cap": 1024,
+          "runtime_generated_files": 64,
+          "runtime_generated_dirs": 64,
+          "runtime_native_changes": 64,
+          "runtime_generated_bytes": 16 * 1024 * 1024}
 SECRET_ENV = re.compile(r"(?:API_KEY|TOKEN|OAUTH|PASSWORD|SECRET|CREDENTIAL)", re.I)
 FIXED_ENV = {"PATH": "/usr/bin:/bin:/usr/sbin:/sbin", "LANG": "C", "LC_ALL": "C",
              "TERM": "dumb", "SHELL": "/bin/sh"}
@@ -190,6 +197,348 @@ def private_tree_ok(bases, maximum=16384):
     except OSError:
         return False
     return True
+
+
+def _runtime_entry(path, allow_public_regular=False, expected=None, allow_public_paths=None):
+    try:
+        info = Path(path).lstat()
+    except OSError as error:
+        raise SystemExit("runtime metadataを検証できない") from error
+    mode = info.st_mode
+    kind = "directory" if stat.S_ISDIR(mode) else "regular" if stat.S_ISREG(mode) else None
+    public_regular = stat.S_ISREG(mode) and stat.S_IMODE(mode) == 0o644
+    allowlisted_public = allow_public_paths is not None and path in allow_public_paths
+    if (kind is None or stat.S_ISLNK(mode) or info.st_uid != os.getuid() or
+            (kind == "regular" and info.st_nlink != 1) or
+            (stat.S_IMODE(mode) & 0o077 and
+             not (allow_public_regular and public_regular and expected is not None and
+                  (path not in expected or allowlisted_public)))):
+        raise SystemExit("runtime metadataがprivateな通常treeではない")
+    return (kind, info.st_dev, info.st_ino, info.st_uid, stat.S_IMODE(mode),
+            info.st_nlink, info.st_size, info.st_mtime_ns)
+
+
+def runtime_private_snapshot(base, expected=None, allow_public_regular=False,
+                             allow_public_paths=None, maximum=4096):
+    """Capture metadata only; file bodies and names never leave this process."""
+    base = Path(base)
+    if base.is_symlink() or not base.is_dir():
+        raise SystemExit("runtime rootを検証できない")
+    allow_public_paths = None if allow_public_paths is None else set(allow_public_paths)
+    pending = [base]; snapshot = {}
+    try:
+        while pending:
+            path = pending.pop()
+            if path in snapshot or len(snapshot) >= maximum:
+                raise SystemExit("runtime metadata件数が上限を超えた")
+            snapshot[path] = _runtime_entry(path, allow_public_regular, expected, allow_public_paths)
+            if snapshot[path][0] == "directory":
+                with os.scandir(path) as entries:
+                    for entry in entries:
+                        pending.append(Path(entry.path))
+    except OSError as error:
+        raise SystemExit("runtime metadataを検証できない") from error
+    return snapshot
+
+
+def runtime_protected_paths(runtime_root):
+    """Return the one parent-managed path belonging to this runtime tree."""
+    runtime_root = Path(runtime_root)
+    root = runtime_root.parent.parent
+    protected = {root / "runtime/codex/home/config.toml", root / CLAUDE_MARKER}
+    selected = {path for path in protected if runtime_root in path.parents}
+    if selected != ({root / "runtime/codex/home/config.toml"} if runtime_root.name == "codex"
+                    else {root / CLAUDE_MARKER} if runtime_root.name == "claude" else set()):
+        raise SystemExit("runtime parent-managed pathの構成が許可外")
+    return selected
+
+
+def runtime_native_inventory(before, protected_paths):
+    """Build a bounded inventory of private regular native state without reading bodies."""
+    protected_paths = {Path(path) for path in protected_paths}
+    if not protected_paths or any(not path.is_absolute() or path not in before for path in protected_paths):
+        raise SystemExit("runtime parent-managed pathが起動前snapshotにない")
+    for path in protected_paths:
+        if before[path][0] != "regular" or before[path][5] != 1:
+            raise SystemExit("runtime parent-managed pathのshapeが許可外")
+    inventory = {path for path, metadata in before.items()
+                 if metadata[0] == "regular" and path not in protected_paths}
+    if len(before) > 4096:
+        raise SystemExit("runtime metadata件数が上限を超えた")
+    return inventory
+
+
+def _runtime_same_entry(before, after):
+    if before[0] != after[0] or before[1:5] != after[1:5]:
+        return False
+    if before[0] == "regular":
+        return before[5:] == after[5:]
+    return True
+
+
+def _runtime_existing_entry(before, after):
+    """Preserve existing identity and mode while allowing normal runtime writes."""
+    if before[0] != after[0] or before[1:5] != after[1:5]:
+        return False
+    return before[0] != "regular" or before[5] == after[5]
+
+
+def _runtime_ancestors_private(path, base, before, after):
+    parent = Path(path).parent
+    while parent != base:
+        if parent not in after or after[parent][0] != "directory":
+            return False
+        if (parent in before and not _runtime_existing_entry(before[parent], after[parent])):
+            return False
+        if after[parent][3] != os.getuid() or after[parent][4] != 0o700:
+            return False
+        parent = parent.parent
+    return (parent == base and base in before and base in after and
+            _runtime_existing_entry(before[base], after[base]) and
+            after[base][0] == "directory" and after[base][3] == os.getuid() and
+            after[base][4] == 0o700)
+
+
+def _runtime_visible_matches(path, expected, descriptor, label):
+    """Bind a visible NOFOLLOW path to its already-held descriptor."""
+    try:
+        visible = os.stat(path, follow_symlinks=False)
+        held = os.fstat(descriptor)
+    except OSError as error:
+        raise SystemExit(f"runtime {label} pathを再検証できない") from error
+    if (visible.st_dev, visible.st_ino, visible.st_uid, stat.S_IMODE(visible.st_mode),
+            visible.st_nlink, visible.st_mtime_ns) != expected:
+        raise SystemExit(f"runtime {label} pathが検証中に変化した")
+    if (held.st_dev, held.st_ino, held.st_uid, stat.S_IMODE(held.st_mode),
+            held.st_nlink, held.st_mtime_ns) != expected:
+        raise SystemExit(f"runtime {label} descriptorが検証中に変化した")
+
+
+def _tighten_runtime_file(path, observed, parent_observed, after, base):
+    if observed[0] != "regular" or observed[3] != os.getuid() or observed[5] != 1:
+        raise SystemExit("runtime generated fileのshapeが許可外")
+    if observed[4] not in (0o600, 0o644) or observed[6] > LIMITS["comparison_file_bytes"]:
+        raise SystemExit("runtime generated fileのmodeまたはsizeが許可外")
+    directory_fds = []; directory_paths = []; descriptor = None
+    try:
+        relative_parent = Path(path).parent.relative_to(Path(base))
+        current_fd = os.open(base, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC)
+        directory_fds.append(current_fd)
+        directory_paths.append(Path(base))
+        base_observed = after.get(Path(base))
+        opened_base = os.fstat(current_fd)
+        if (base_observed is None or base_observed[0] != "directory" or
+                (opened_base.st_dev, opened_base.st_ino, opened_base.st_uid,
+                 stat.S_IMODE(opened_base.st_mode)) !=
+                (base_observed[1], base_observed[2], os.getuid(), 0o700)):
+            raise SystemExit("runtime base directoryが検証中に変化した")
+        _runtime_visible_matches(Path(base),
+                                 (base_observed[1], base_observed[2], os.getuid(), 0o700,
+                                  base_observed[5], base_observed[7]),
+                                 directory_fds[0], "base")
+        current = Path(base)
+        for part in relative_parent.parts:
+            child = current / part
+            current_fd = os.open(part, os.O_RDONLY | os.O_DIRECTORY | os.O_NOFOLLOW | os.O_CLOEXEC,
+                                 dir_fd=current_fd)
+            directory_fds.append(current_fd)
+            current = child
+            directory_paths.append(current)
+            expected_dir = after.get(current)
+            opened_dir = os.fstat(current_fd)
+            if (expected_dir is None or expected_dir[0] != "directory" or
+                    (opened_dir.st_dev, opened_dir.st_ino, opened_dir.st_uid,
+                     stat.S_IMODE(opened_dir.st_mode)) !=
+                    (expected_dir[1], expected_dir[2], os.getuid(), 0o700)):
+                raise SystemExit("runtime generated fileのancestorが検証中に変化した")
+            _runtime_visible_matches(current,
+                                     (expected_dir[1], expected_dir[2], os.getuid(), 0o700,
+                                      expected_dir[5], expected_dir[7]),
+                                     current_fd, "ancestor")
+        parent_fd = directory_fds[-1]
+        parent_info = os.fstat(parent_fd)
+        if (parent_info.st_dev, parent_info.st_ino, parent_info.st_uid,
+                stat.S_IMODE(parent_info.st_mode)) != (parent_observed[1], parent_observed[2],
+                                                       os.getuid(), 0o700):
+            raise SystemExit("runtime generated fileのparentが検証中に変化した")
+        dirent = os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+        if (dirent.st_dev, dirent.st_ino, dirent.st_uid, stat.S_IMODE(dirent.st_mode),
+                dirent.st_nlink, dirent.st_size, dirent.st_mtime_ns) != (observed[1], observed[2], observed[3],
+                                                                           observed[4], observed[5], observed[6], observed[7]):
+            raise SystemExit("runtime generated fileが検証中に変化した")
+        descriptor = os.open(path.name, os.O_RDONLY | os.O_NOFOLLOW | os.O_CLOEXEC, dir_fd=parent_fd)
+        held = os.fstat(descriptor)
+        if (held.st_dev, held.st_ino, held.st_uid, stat.S_IMODE(held.st_mode),
+                held.st_nlink, held.st_size, held.st_mtime_ns) != (observed[1], observed[2], observed[3],
+                                                                    observed[4], observed[5], observed[6], observed[7]):
+            raise SystemExit("runtime generated fileのidentityが検証中に変化した")
+        _runtime_visible_matches(path,
+                                 (observed[1], observed[2], observed[3], observed[4],
+                                  observed[5], observed[7]),
+                                 descriptor, "file")
+        # Rebind every visible root/ancestor after the file FD check and
+        # immediately before fchmod; a moved inode must not follow a new root.
+        for index, directory_path in enumerate(directory_paths):
+            expected_dir = after.get(directory_path)
+            if expected_dir is None or expected_dir[0] != "directory":
+                raise SystemExit("runtime generated fileのancestorが検証中に変化した")
+            _runtime_visible_matches(
+                directory_path,
+                (expected_dir[1], expected_dir[2], os.getuid(), 0o700,
+                 expected_dir[5], expected_dir[7]),
+                directory_fds[index], "base" if index == 0 else "ancestor")
+        if observed[4] == 0o644:
+            os.fchmod(descriptor, 0o600)
+        os.fsync(descriptor)
+        final = os.fstat(descriptor)
+        if (final.st_dev, final.st_ino, final.st_uid, final.st_nlink, final.st_size,
+                final.st_mtime_ns, stat.S_IMODE(final.st_mode)) != (observed[1], observed[2], observed[3],
+                                                                      observed[5], observed[6], observed[7], 0o600):
+            raise SystemExit("runtime generated fileのtighten後検証に失敗した")
+        dirent_after = os.stat(path.name, dir_fd=parent_fd, follow_symlinks=False)
+        if (dirent_after.st_dev, dirent_after.st_ino, dirent_after.st_uid,
+                stat.S_IMODE(dirent_after.st_mode), dirent_after.st_nlink,
+                dirent_after.st_size, dirent_after.st_mtime_ns) != (observed[1], observed[2], observed[3], 0o600,
+                                                                      observed[5], observed[6], observed[7]):
+            raise SystemExit("runtime generated fileのdirentが検証中に変化した")
+        _runtime_visible_matches(path,
+                                 (observed[1], observed[2], observed[3], 0o600,
+                                  observed[5], observed[7]),
+                                 descriptor, "file")
+    except (OSError, ValueError) as error:
+        raise SystemExit("runtime generated fileを安全にtightenできない") from error
+    finally:
+        if descriptor is not None:
+            os.close(descriptor)
+        for directory_fd in reversed(directory_fds):
+            os.close(directory_fd)
+    return observed[4] == 0o644
+
+
+def _validate_native_replacement(path, observed, before, after, base):
+    """Validate a trusted native regular replacement without reading its body."""
+    if (observed[0] != "regular" or observed[3] != os.getuid() or observed[5] != 1 or
+            observed[4] not in (0o600, 0o644) or observed[6] > LIMITS["comparison_file_bytes"]):
+        raise SystemExit("native replacementのshapeが許可外")
+    if not _runtime_ancestors_private(path, Path(base), before, after):
+        raise SystemExit("native replacementのancestorがprivateではない")
+
+
+def tighten_fresh_runtime_files(base, before, process_group_reaped, native_paths=(), protected_paths=()):
+    """Preserve normal writes and tighten fresh files plus explicitly trusted native changes."""
+    if process_group_reaped is not True:
+        raise SystemExit("child process groupの回収を確認できない")
+    native_paths = {Path(path) for path in native_paths}
+    protected_paths = {Path(path) for path in protected_paths}
+    if native_paths & protected_paths:
+        raise SystemExit("parent-managed pathをnative inventoryへ含められない")
+    if any((not path.is_absolute() or path != path.resolve(strict=False) or
+            path not in before or before[path][0] != "regular") for path in native_paths):
+        raise SystemExit("native pathが起動前のregular fileではない")
+    if any((not path.is_absolute() or path not in before or before[path][0] != "regular" or
+            before[path][5] != 1) for path in protected_paths):
+        raise SystemExit("parent-managed pathが起動前のregular fileではない")
+    after = runtime_private_snapshot(base, expected=before, allow_public_regular=True,
+                                     allow_public_paths=native_paths)
+    for path in protected_paths:
+        if path not in after or not _runtime_same_entry(before[path], after[path]):
+            raise SystemExit("parent-managed runtime pathが変化した")
+    missing = set(before) - set(after)
+    native_removed = sorted(missing & native_paths, key=str)
+    if missing - set(native_removed):
+        raise SystemExit("runtimeの既存entryが失われた")
+    native_replacements = []
+    for path in sorted(native_paths, key=str):
+        if path not in after:
+            continue
+        old = before[path]; new = after[path]
+        if old[0] != new[0]:
+            raise SystemExit("native pathのtypeが変化した")
+        if old[1] != new[1] or old[2] != new[2]:
+            native_replacements.append(path)
+    if len(native_removed) + len(native_replacements) > LIMITS["runtime_native_changes"]:
+        raise SystemExit("native metadata change件数が上限を超えた")
+    for path in before:
+        if path in protected_paths:
+            continue
+        if path in native_removed:
+            continue
+        if path in native_replacements:
+            _validate_native_replacement(path, after[path], before, after, base)
+        elif not _runtime_existing_entry(before[path], after[path]):
+            raise SystemExit("runtimeの既存entryが変化した")
+    native_bytes = 0
+    for path in native_replacements:
+        native_bytes += after[path][6]
+        if native_bytes > LIMITS["runtime_generated_bytes"]:
+            raise SystemExit("native replacement合計sizeが上限を超えた")
+    fresh = sorted(set(after) - set(before), key=str)
+    fresh_dirs = [path for path in fresh if after[path][0] == "directory"]
+    fresh_files = [path for path in fresh if after[path][0] == "regular"]
+    if len(fresh_dirs) > LIMITS["runtime_generated_dirs"]:
+        raise SystemExit("runtime generated directory件数が上限を超えた")
+    for path in fresh_dirs:
+        observed = after[path]
+        if (observed[3] != os.getuid() or observed[4] != 0o700 or
+                not _runtime_ancestors_private(path, Path(base), before, after)):
+            raise SystemExit("runtime generated directoryのshapeが許可外")
+    total_bytes = native_bytes; tightened = 0; native_tightened = 0
+    if len(fresh_files) > LIMITS["runtime_generated_files"]:
+        raise SystemExit("runtime generated file件数が上限を超えた")
+    fresh_entries = []
+    for path in fresh_files:
+        observed = after[path]
+        if (observed[0] != "regular" or observed[3] != os.getuid() or observed[5] != 1 or
+                observed[4] not in (0o600, 0o644) or observed[6] > LIMITS["comparison_file_bytes"]):
+            raise SystemExit("runtime generated fileのshapeが許可外")
+        if not _runtime_ancestors_private(path, Path(base), before, after):
+            raise SystemExit("runtime generated fileのancestorがprivateではない")
+        total_bytes += observed[6]
+        if total_bytes > LIMITS["runtime_generated_bytes"]:
+            raise SystemExit("runtime generated file合計sizeが上限を超えた")
+        fresh_entries.append((path, observed))
+    for path in native_replacements:
+        native_tightened += _tighten_runtime_file(path, after[path], after[path.parent], after, Path(base))
+    for path, observed in fresh_entries:
+        tightened += _tighten_runtime_file(path, observed, after[path.parent], after, Path(base))
+    final = runtime_private_snapshot(base, expected=before)
+    expected_paths = (set(before) - set(native_removed)) | set(fresh)
+    if set(final) != expected_paths:
+        raise SystemExit("runtime generated fileの最終treeが変化した")
+    replacement_set = set(native_replacements)
+    for path in before:
+        if path in native_removed:
+            continue
+        if path in replacement_set:
+            observed = after[path]; current = final[path]
+            if (current[0] != "regular" or current[1:4] != observed[1:4] or
+                    current[5] != observed[5] or current[6] != observed[6] or
+                    current[7] != observed[7] or current[4] != 0o600):
+                raise SystemExit("native replacementの最終metadataが変化した")
+        elif path in protected_paths:
+            if not _runtime_same_entry(before[path], final[path]):
+                raise SystemExit("parent-managed runtime pathの最終metadataが変化した")
+        elif not _runtime_existing_entry(before[path], final[path]):
+            raise SystemExit("runtimeの既存entryが最終検証で変化した")
+    for path in fresh_dirs:
+        if not _runtime_same_entry(after[path], final[path]) or final[path][4] != 0o700:
+            raise SystemExit("runtime generated directoryの最終treeが変化した")
+    for path in fresh_files:
+        if (final[path][0] != "regular" or final[path][1:4] != after[path][1:4] or
+                final[path][5] != after[path][5] or final[path][6] != after[path][6] or
+                final[path][7] != after[path][7] or
+                final[path][4] != 0o600):
+            raise SystemExit("runtime generated fileがowner専用modeではない")
+    result = {"status": "passed", "fresh_dirs": len(fresh_dirs), "fresh_files": len(fresh_files),
+              "fresh_bytes": sum(after[path][6] for path in fresh_files),
+              "files_tightened": tightened + native_tightened}
+    if native_paths:
+        result["native_inventory_count"] = len(native_paths)
+        result["native_changes"] = {"removed": len(native_removed),
+                                     "replaced": len(native_replacements),
+                                     "total": len(native_removed) + len(native_replacements)}
+        result["native_replaced_bytes"] = native_bytes
+    return result
 
 
 def private_empty_dir(path, label):
@@ -560,25 +909,30 @@ def _private_directory(path):
             info.st_uid == os.getuid() and stat.S_IMODE(info.st_mode) == 0o700)
 
 
-def cleanup_codex_arg0_helpers(root, manifest):
+def cleanup_codex_arg0_helpers(root, manifest, after_cleanup=None):
     """Remove only verified, idle Codex arg0 links; every unknown shape fails closed."""
     expected = manifest.get("codex_arg0_native")
     if not isinstance(expected, dict) or pinned_executable(expected.get("path", ""), "Codex native pin") != expected:
         raise SystemExit("Codex native pin変更後は新しいrootを準備する")
     home = root / "runtime/codex/home"; temp = home / "tmp"; arg0 = temp / "arg0"
+
+    def finish():
+        if after_cleanup is not None:
+            after_cleanup()
+        if not private_tree_ok((root / "runtime/codex",), 4096):
+            raise SystemExit("Codex arg0回収後のruntime treeがstrict検査に失敗")
+
     try:
         for directory in (root, root / "runtime", root / "runtime/codex", home):
             if not _private_directory(directory):
                 raise SystemExit("Codex arg0 ancestorがprivateな通常directoryではない")
         if not os.path.lexists(temp):
-            if not private_tree_ok((root / "runtime/codex",), 4096):
-                raise SystemExit("Codex runtime treeがstrict検査に失敗")
+            finish()
             return 0
         if not _private_directory(temp):
             raise SystemExit("Codex arg0 tempがprivateな通常directoryではない")
         if not os.path.lexists(arg0):
-            if not private_tree_ok((root / "runtime/codex",), 4096):
-                raise SystemExit("Codex runtime treeがstrict検査に失敗")
+            finish()
             return 0
         if not _private_directory(arg0):
             raise SystemExit("Codex arg0 rootがprivateな通常directoryではない")
@@ -589,8 +943,7 @@ def cleanup_codex_arg0_helpers(root, manifest):
             arg0.rmdir()
             if not any(temp.iterdir()):
                 temp.rmdir()
-            if not private_tree_ok((root / "runtime/codex",), 4096):
-                raise SystemExit("Codex arg0回収後のruntime treeがstrict検査に失敗")
+            finish()
             return 0
     except OSError as error:
         raise SystemExit("Codex arg0 treeを検証できない") from error
@@ -646,8 +999,7 @@ def cleanup_codex_arg0_helpers(root, manifest):
                 os.close(descriptor)
             except OSError:
                 pass
-    if not private_tree_ok((root / "runtime/codex",), 4096):
-        raise SystemExit("Codex arg0回収後のruntime treeがstrict検査に失敗")
+    finish()
     return len(helpers)
 
 
@@ -889,6 +1241,7 @@ def login(args):
     login_cwd = private_empty_dir(root / LOGIN_CWD, "login-cwd")
     base = runtime_argv(manifest["runtime_binaries"][runtime])
     command = base + (["login"] if runtime == "codex" else ["auth", "login"])
+    os.umask(0o077)
     os.chdir(str(login_cwd))
     os.execve(command[0], command, child_env(root, runtime))
 
@@ -1114,8 +1467,9 @@ def stop_group(process, absolute_deadline=None):
         process.poll()
         try:
             os.killpg(process.pid, 0)
-        except OSError:
-            return
+        except OSError as error:
+            if error.errno == errno.ESRCH:
+                return
         time.sleep(0.05)
     try:
         os.killpg(process.pid, signal.SIGKILL)
@@ -1153,12 +1507,18 @@ def workspace_within_limits(work):
 def apply_child_limits(timeout):
     resource.setrlimit(resource.RLIMIT_CORE, (0, 0))
     resource.setrlimit(resource.RLIMIT_FSIZE, (LIMITS["workspace_file_bytes"], LIMITS["workspace_file_bytes"]))
-    resource.setrlimit(resource.RLIMIT_NOFILE, (64, 64))
+    parent_hard = resource.getrlimit(resource.RLIMIT_NOFILE)[1]
+    nofile_cap = LIMITS["child_nofile_cap"] if parent_hard == resource.RLIM_INFINITY else min(
+        LIMITS["child_nofile_cap"], parent_hard)
+    if not isinstance(nofile_cap, int) or nofile_cap < 1:
+        raise RuntimeError("parent RLIMIT_NOFILE hard limitが不正")
+    resource.setrlimit(resource.RLIMIT_NOFILE, (nofile_cap, nofile_cap))
     cpu = max(1, min(605, int(timeout) + 5))
     resource.setrlimit(resource.RLIMIT_CPU, (cpu, cpu))
 
 def run_finite(command, prompt, env, stdout_path, stderr_path, runtime, timeout, cwd):
     start, process, selector, reason = time.monotonic(), None, selectors.DefaultSelector(), None
+    process_group_reaped = True
     prompt_bytes = prompt.encode()
     process_started = prompt_sent = False
     launch_error = None; exit_code = None
@@ -1253,6 +1613,12 @@ def run_finite(command, prompt, env, stdout_path, stderr_path, runtime, timeout,
                         os.killpg(process.pid, signal.SIGKILL)
                     except OSError:
                         pass
+            try:
+                os.killpg(process.pid, 0)
+            except OSError as error:
+                process_group_reaped = error.errno == errno.ESRCH
+            else:
+                process_group_reaped = False
     elapsed_seconds = round(time.monotonic() - start, 3)
     return {"exit_code": exit_code, "stop_reason": reason, "session_id": seen["session_id"],
             "process_started": process_started, "prompt_sent": prompt_sent,
@@ -1278,7 +1644,8 @@ def run_finite(command, prompt, env, stdout_path, stderr_path, runtime, timeout,
             "denied_commands": seen["denied_commands"],
             "unknown_item_types": sorted(seen["unknown_item_types"]),
             "elapsed_seconds": elapsed_seconds,
-            "elapsed_ms": round(elapsed_seconds * 1000, 3)}
+            "elapsed_ms": round(elapsed_seconds * 1000, 3),
+            "process_group_reaped": process_group_reaped}
 
 
 def resolved_fixture(fixture_id, fixture_tools=None):
@@ -1955,6 +2322,10 @@ def run_one(root, row, config, manifest, timeout):
                             materialized_prompt_status="materialized")
         if template_sha256 != manifest["prompt_hashes"].get(row["run_id"]):
             raise SystemExit("promptが準備時から変化した")
+        runtime_root = root / "runtime" / row["runtime"]
+        runtime_before = runtime_private_snapshot(runtime_root)
+        protected_runtime_paths = runtime_protected_paths(runtime_root)
+        native_runtime_inventory = runtime_native_inventory(runtime_before, protected_runtime_paths)
         process = run_finite(command, prompt, child_env(root, row["runtime"], work), stdout, stderr,
                              row["runtime"], process_timeout, work)
     except SystemExit as error:
@@ -1988,7 +2359,25 @@ def run_one(root, row, config, manifest, timeout):
                    "actual_tier": None, "hook_events": [], "commands": [], "denied_commands": [],
                    "unknown_item_types": [],
                    "launch_error": type(error).__name__}
-    if row["runtime"] == "codex":
+    actual_runtime_post = "runtime_before" in locals() and "process_group_reaped" in process
+    if actual_runtime_post:
+        try:
+            if row["runtime"] == "codex":
+                def tighten_after_cleanup():
+                    process["runtime_metadata_tightening"] = tighten_fresh_runtime_files(
+                        runtime_root, runtime_before, process["process_group_reaped"],
+                        native_runtime_inventory, protected_runtime_paths)
+                cleanup_codex_arg0_helpers(root, manifest, after_cleanup=tighten_after_cleanup)
+                process["codex_arg0_cleanup"] = "passed"
+            else:
+                process["runtime_metadata_tightening"] = tighten_fresh_runtime_files(
+                    runtime_root, runtime_before, process["process_group_reaped"],
+                    native_runtime_inventory, protected_runtime_paths)
+        except SystemExit as error:
+            process["runtime_metadata_tightening"] = "failed"
+            process["runtime_metadata_tightening_reason"] = exception_reason(error)
+            process["stop_reason"] = "runtime_metadata_tightening_failed"
+    elif row["runtime"] == "codex":
         try:
             cleanup_codex_arg0_helpers(root, manifest)
             process["codex_arg0_cleanup"] = "passed"
@@ -2031,7 +2420,8 @@ def run_one(root, row, config, manifest, timeout):
     process["runtime_identity"] = confirm_runtime_identity(row["runtime"], process, config)
     quality["runtime_effective"] = process["runtime_identity"]["confirmed"]
     quality["success"] = (quality["success"] and quality["runtime_effective"] and
-                          process.get("codex_arg0_cleanup") != "failed")
+                          process.get("codex_arg0_cleanup") != "failed" and
+                          process.get("runtime_metadata_tightening") != "failed")
     status_name = classify_status(process, quality)
     metric_status = "failure" if status_name == "quality_failure" else status_name
     remaining = timeout - (time.monotonic() - run_started)
@@ -2084,7 +2474,53 @@ def metric_ready(metric, name):
     return field_ready and (name != "cost" or metric.get("comparison_qualified") is True)
 
 
-def comparison_blockers(root):
+HOST_PARENT_USAGE_REASON = "includes_children_unknown"
+
+
+def _actual_number(value):
+    return (isinstance(value, (int, float)) and not isinstance(value, bool)
+            and math.isfinite(value) and value >= 0)
+
+
+def host_parent_usage_ready(metric, record):
+    """Allow only complete parent usage when child scope is the sole unknown."""
+    coverage = (metric.get("coverage") or {}).get("usage") or {}
+    identity = (record.get("process") or {}).get("runtime_identity") or {}
+    model = identity.get("model") or {}
+    if (model.get("confirmed") is not True or not isinstance(model.get("value"), str)
+            or metric.get("model") != model.get("value")):
+        return False
+    tokens = metric.get("tokens")
+    if not isinstance(tokens, dict):
+        return False
+    input_tokens = tokens.get("input_total")
+    if input_tokens is None:
+        input_tokens = tokens.get("input_tokens")
+    output_tokens = tokens.get("output_tokens")
+    if not (_actual_number(input_tokens) and _actual_number(output_tokens)):
+        return False
+    if coverage.get("scope") != "parent_claim":
+        return False
+    expected = coverage.get("expected")
+    observed = coverage.get("observed")
+    rate = coverage.get("rate")
+    if not (_actual_number(expected) and expected > 0 and _actual_number(observed)
+            and observed == expected and _actual_number(rate) and rate == 1):
+        return False
+    reasons = coverage.get("reasons")
+    if metric_ready(metric, "usage") and reasons == []:
+        return True
+    return (reasons == [HOST_PARENT_USAGE_REASON]
+            and (record.get("run") or {}).get("runtime") == "codex")
+
+
+def host_selection_metric_ready(metric, name, record):
+    if name == "usage":
+        return host_parent_usage_ready(metric, record)
+    return metric_ready(metric, name)
+
+
+def comparison_blockers(root, allow_host_parent_usage=False):
     blockers = []
     for runtime in ("codex", "claude"):
         path = root / "results" / f"run-smoke-{runtime}.json"
@@ -2101,7 +2537,9 @@ def comparison_blockers(root):
             blockers.append(f"{runtime}:model_unknown")
         if (identity.get("effort") or {}).get("confirmed") is not True:
             blockers.append(f"{runtime}:effort_unknown_or_mismatch")
-        if not metric_ready(metric, "usage"):
+        usage_ready = (host_parent_usage_ready(metric, smoke)
+                       if allow_host_parent_usage else metric_ready(metric, "usage"))
+        if not usage_ready:
             blockers.append(f"{runtime}:usage_or_scope_unqualified")
     return blockers
 
@@ -2140,7 +2578,7 @@ def capability_blockers(root, manifest, include_native, candidate=None, smoke_ru
 
 
 def host_subset_blockers(root, manifest, candidate):
-    blockers = comparison_blockers(root)
+    blockers = comparison_blockers(root, allow_host_parent_usage=True)
     for runtime in ("codex", "claude"):
         kinds = {manifest["comparison_bundles"][":".join((candidate, runtime, variant))]["evaluation_kind"]
                  for variant in ("baseline", "candidate")}
@@ -2257,15 +2695,13 @@ def median_range(series, qualified):
     return {"observed": len(series), "median": median, "range": [series[0], series[-1]]}
 
 
-def host_metric_coverage(pairs, metric_names):
+def host_metric_coverage(pairs, metric_names, qualification_key="paired_qualified"):
     expected = len(pairs)
+    qualified = lambda item, name: (item.get(qualification_key) or {}).get(name) is True
     return {name: {"expected_pairs": expected,
-                   "qualified_pairs": sum((item.get("paired_qualified") or {}).get(name) is True
-                                           for item in pairs),
-                   "complete": expected > 0 and all((item.get("paired_qualified") or {}).get(name) is True
-                                                    for item in pairs),
-                   "rate": (sum((item.get("paired_qualified") or {}).get(name) is True
-                                for item in pairs) / expected if expected else 0)}
+                   "qualified_pairs": sum(qualified(item, name) for item in pairs),
+                   "complete": expected > 0 and all(qualified(item, name) for item in pairs),
+                   "rate": (sum(qualified(item, name) for item in pairs) / expected if expected else 0)}
             for name in metric_names}
 
 
@@ -2349,11 +2785,11 @@ def host_success_non_decrease(rows, records):
     return result
 
 
-def host_input_token_reduction(pairs):
+def host_input_token_reduction(pairs, qualification_key="paired_qualified"):
     """Return the paired median reduction for target input tokens."""
     reductions = []
     for item in pairs:
-        if not item.get("complete") or (item.get("paired_qualified") or {}).get("usage") is not True:
+        if not item.get("complete") or (item.get(qualification_key) or {}).get("usage") is not True:
             continue
         baseline = (item.get("baseline") or {}).get("values", {}).get("input_tokens")
         candidate = (item.get("candidate") or {}).get("values", {}).get("input_tokens")
@@ -2367,7 +2803,8 @@ def host_input_token_reduction(pairs):
             "threshold_percent": 10, "eligible": median is not None and median >= 0.10}
 
 
-def host_category_summary(rows, records, pairs, metric_names, helper_expected=True):
+def host_category_summary(rows, records, pairs, metric_names, helper_expected=True,
+                          qualification_key="paired_qualified"):
     selected = [records[row["run_id"]] for row in rows if row["run_id"] in records]
     fixture_ids = {row["fixture"] for row in rows}
     candidate_id = rows[0]["candidate"] if rows else None
@@ -2390,7 +2827,7 @@ def host_category_summary(rows, records, pairs, metric_names, helper_expected=Tr
                                  helper_observed == expected_helper_observations},
             "primary_outcome": {"expected": expected_runs, "passed": primary_passed,
                                 "complete": recorded_runs == expected_runs and primary_passed == expected_runs},
-            "metric_coverage": host_metric_coverage(selected_pairs, metric_names),
+            "metric_coverage": host_metric_coverage(selected_pairs, metric_names, qualification_key),
             "quality_field_coverage": host_quality_coverage(selected, expected_runs),
             "quality_violations": host_quality_violations(selected),
             "success_non_decrease": host_success_non_decrease(rows, records),
@@ -2440,6 +2877,8 @@ def report(args):
                             "quality_success": record.get("quality", {}).get("success") is True,
                             "runtime_identity": (record.get("process") or {}).get("runtime_identity"),
                             "qualified": {name: metric_ready(metric, name) for name in metric_names},
+                            "host_qualified": {name: host_selection_metric_ready(metric, name, record)
+                                                for name in metric_names},
                             "values": {name: value_of(record, name) for name in
                                        ("input_tokens", "tool_calls", "cost_usd", "elapsed_seconds")}}
                     stopped = any(host_pair_stop(record) for record in pair.values())
@@ -2463,6 +2902,14 @@ def report(args):
                                                        (name == "outcome" or all(item[v]["qualified"]["outcome"]
                                                                                  for v in ("baseline", "candidate"))))
                                                   for name in metric_names}
+                    item["host_paired_qualified"] = {name: bool(item["complete"] and
+                                                            all(item[v]["host_qualified"][name]
+                                                                for v in ("baseline", "candidate")) and
+                                                            (name != "cost" or pricing_compatible) and
+                                                            (name == "outcome" or all(
+                                                                item[v]["host_qualified"]["outcome"]
+                                                                for v in ("baseline", "candidate"))))
+                                                       for name in metric_names}
                     item["deltas"] = {}
                     qualification = {"input_tokens": "usage", "tool_calls": "tool_calls", "cost_usd": "cost"}
                     for name in ("input_tokens", "tool_calls", "cost_usd", "elapsed_seconds"):
@@ -2470,6 +2917,15 @@ def report(args):
                         before = item["baseline"]["values"][name] if item["complete"] else None
                         after = item["candidate"]["values"][name] if item["complete"] else None
                         item["deltas"][name] = after - before if valid and all(isinstance(v, (int, float)) for v in (before, after)) else None
+                    item["host_deltas"] = {}
+                    for name in ("input_tokens", "tool_calls", "cost_usd", "elapsed_seconds"):
+                        valid = item["complete"] and (name == "elapsed_seconds" or
+                                                        item["host_paired_qualified"][qualification[name]])
+                        before = item["baseline"]["values"][name] if item["complete"] else None
+                        after = item["candidate"]["values"][name] if item["complete"] else None
+                        item["host_deltas"][name] = (after - before
+                                                       if valid and all(_actual_number(v) for v in (before, after))
+                                                       else None)
                     pairs.append(item)
 
     groups, fixture_summaries, task_groups = {}, {}, {}
@@ -2589,14 +3045,17 @@ def report(args):
         for label, fixture_ids in (("target", target_ids), ("neutral", neutral_ids)):
             category[label] = host_category_summary(
                 [row for row in expected_rows if row["fixture"] in fixture_ids],
-                records, candidate_pairs, metric_names, helper_expected=label == "target")
+                records, candidate_pairs, metric_names, helper_expected=label == "target",
+                qualification_key="host_paired_qualified")
         target_helpers = {fixture_id: host_category_summary(
             [row for row in expected_rows if row["fixture"] == fixture_id],
-            records, candidate_pairs, metric_names, helper_expected=True)
+            records, candidate_pairs, metric_names, helper_expected=True,
+            qualification_key="host_paired_qualified")
             for fixture_id in sorted(target_ids)}
         neutral_fixtures = {fixture_id: host_category_summary(
             [row for row in expected_rows if row["fixture"] == fixture_id],
-            records, candidate_pairs, metric_names, helper_expected=False)
+            records, candidate_pairs, metric_names, helper_expected=False,
+            qualification_key="host_paired_qualified")
             for fixture_id in sorted(neutral_ids)}
         baseline_success = {runtime: sum(
             records[row["run_id"]].get("quality", {}).get("success") is True
@@ -2611,7 +3070,8 @@ def report(args):
                                           "holds": candidate_success[runtime] >= baseline_success[runtime]}
                                 for runtime in ("codex", "claude")}
         target_pairs = [item for item in candidate_pairs if item["fixture"] in target_ids]
-        required_metric_coverage = host_metric_coverage(candidate_pairs, host_selection_metrics)
+        required_metric_coverage = host_metric_coverage(candidate_pairs, host_selection_metrics,
+                                                        "host_paired_qualified")
         quality_field_coverage = host_quality_coverage(actual_rows, len(expected_rows))
         status_coverage = host_status_coverage(actual_rows, statuses, len(expected_rows))
         model_received = host_model_received_coverage(actual_rows, len(expected_rows))
@@ -2619,7 +3079,8 @@ def report(args):
                   "complete_pairs": sum(item.get("complete") is True for item in candidate_pairs),
                   "complete": len(candidate_pairs) > 0 and all(item.get("complete") is True
                                                                for item in candidate_pairs),
-                  "metric_coverage": host_metric_coverage(candidate_pairs, metric_names),
+                  "metric_coverage": host_metric_coverage(candidate_pairs, metric_names,
+                                                          "host_paired_qualified"),
                   "required_metric_coverage": required_metric_coverage,
                   "unpaired_pairs": sum(item.get("unpaired") is True for item in candidate_pairs),
                   "pair_stop_pairs": sum(item.get("pair_stop") is True for item in candidate_pairs),
@@ -2633,7 +3094,10 @@ def report(args):
                                        "complete": len(actual_rows) == 72,
                                        "paired": paired, "target_vs_neutral": category,
                                        "target_helpers": target_helpers, "neutral_fixtures": neutral_fixtures,
-                                       "target_input_token_reduction": host_input_token_reduction(target_pairs),
+                                       "target_input_token_reduction": host_input_token_reduction(
+                                           target_pairs, "host_paired_qualified"),
+                                       "host_deltas": {item["pair_id"]: item.get("host_deltas", {})
+                                                       for item in candidate_pairs},
                                        "quality_field_coverage": quality_field_coverage,
                                        "status_coverage": status_coverage,
                                        "model_received": model_received,
@@ -2715,9 +3179,12 @@ def report(args):
         }
     host_summary = {"expected_runs": len(host_expected), "per_candidate_expected": 72,
         "recorded_runs": len(host_records), "by_candidate": host_by_candidate,
-        "paired_metrics": host_metric_coverage([item for item in pairs if item["fixture"] in host_fixture_ids], metric_names),
+        "paired_metrics": host_metric_coverage(
+            [item for item in pairs if item["fixture"] in host_fixture_ids], metric_names,
+            "host_paired_qualified"),
         "paired_required_metrics": host_metric_coverage(
-            [item for item in pairs if item["fixture"] in host_fixture_ids], host_selection_metrics),
+            [item for item in pairs if item["fixture"] in host_fixture_ids], host_selection_metrics,
+            "host_paired_qualified"),
         "target_vs_neutral": {candidate: host_by_candidate[candidate]["target_vs_neutral"]
                               for candidate in manifest["candidates"]},
         "target_helpers": {candidate: host_by_candidate[candidate]["target_helpers"]
