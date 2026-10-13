@@ -488,6 +488,8 @@ class HarnessBenchmarkTest(unittest.TestCase):
         codex = BENCH.command_for("codex", config, self.root, None, bundle)
         claude = BENCH.command_for("claude", config, self.root, None, bundle)
         self.assertIn("--strict-config", codex); self.assertNotIn("--sandbox", codex); self.assertNotIn("--approve-for-me", codex)
+        self.assertEqual(1, BENCH.CODEX_CONFIG.count("[features]\nplugins = false"))
+        self.assertNotIn("--disable", codex)
         self.assertIn("--restricted", claude); self.assertIn("--strict-mcp-config", claude)
         self.assertIn("Bash,Read,Edit,Write,Glob,Grep", claude)
         self.assertEqual("dontAsk", claude[claude.index("--permission-mode") + 1])
@@ -1134,6 +1136,12 @@ class HarnessBenchmarkTest(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "capability source"):
             BENCH.verify_capability_source(manifest)
 
+    def test_01591_capability_policy_remains_unknown_only(self):
+        source_hash = "4e7dc9dc4f113ec43c63decbf25313e95b3e1e9de6102cce124dd39c506bf17b"
+        self.assertEqual({runtime: {name: "unknown" for name in BENCH.CAPABILITIES}
+                          for runtime in ("codex", "claude")},
+                         BENCH.CAPABILITY_POLICIES[source_hash])
+
     def test_adoption_rejects_success_regression_and_quality_gap(self):
         metrics = ("usage", "tool_calls", "outcome", "cost")
         pairs = [{"complete": True, "paired_qualified": {name: True for name in metrics}} for _ in range(24)]
@@ -1323,6 +1331,63 @@ class HarnessBenchmarkTest(unittest.TestCase):
         crash = BENCH.run_finite([sys.executable, "-c", "import json; print(json.dumps({'type':'turn.failed'}))"],
                                  "x", os.environ.copy(), logs / "crash.jsonl", logs / "crash.err", "codex", 10, self.root)
         self.assertFalse(crash["model_response_observed"])
+        self.assertEqual("failure", BENCH.classify_status(crash, {"success": True}))
+
+    def test_codex_error_item_is_counted_without_message_exposure(self):
+        logs = self.root / "logs"; logs.mkdir(mode=0o700)
+        sentinel = "PRIVATE PROVIDER MESSAGE"
+        response = json.dumps({"type": "item.completed", "item": {"type": "error",
+                                                                      "message": sentinel}})
+        observed = BENCH.run_finite([sys.executable, "-c", f"print({response!r})"], "x",
+                                    os.environ.copy(), logs / "error.jsonl", logs / "error.err",
+                                    "codex", 10, self.root)
+        self.assertIsNone(observed["terminal_status"])
+        self.assertEqual(1, observed["warning_items"])
+        self.assertEqual("incomplete_turn", observed["stop_reason"])
+        self.assertEqual("unknown", BENCH.classify_status(observed, {"success": True}))
+        quality = {"success": True, "runtime_effective": True}
+        quality["success"] = BENCH.final_quality_success(observed, quality)
+        self.assertFalse(quality["success"])
+        self.assertFalse(bool(True and quality["success"]))  # host task_outcome_passed
+        self.assertNotIn(sentinel, json.dumps(observed))
+
+    def test_codex_warning_with_completed_turn_can_succeed(self):
+        logs = self.root / "logs"; logs.mkdir(mode=0o700)
+        rows = [{"type": "item.completed", "item": {"type": "error", "message": "PRIVATE"}},
+                {"type": "item.completed", "item": {"type": "agent_message", "text": "done"}},
+                {"type": "turn.completed"}]
+        script = "import json; rows=" + repr(rows) + "; [print(json.dumps(row)) for row in rows]"
+        observed = BENCH.run_finite([sys.executable, "-c", script], "x", os.environ.copy(),
+                                    logs / "warning.jsonl", logs / "warning.err", "codex", 10, self.root)
+        self.assertEqual(1, observed["warning_items"])
+        self.assertTrue(observed["turn_completed"])
+        self.assertTrue(observed["model_response_observed"])
+        self.assertIsNone(observed["stop_reason"])
+        quality = {"success": True, "runtime_effective": True}
+        quality["success"] = BENCH.final_quality_success(observed, quality)
+        self.assertTrue(quality["success"])
+        self.assertEqual("success", BENCH.classify_status(observed, quality))
+        self.assertNotIn("PRIVATE", json.dumps(observed))
+
+    def test_nonobject_top_level_json_is_fixed_unknown(self):
+        logs = self.root / "logs"; logs.mkdir(mode=0o700)
+        for index, value in enumerate(([], "text", None, 7)):
+            with self.subTest(value=value):
+                response = json.dumps(value)
+                observed = BENCH.run_finite([sys.executable, "-c", f"print({response!r})"], "x",
+                                            os.environ.copy(), logs / f"schema-{index}.jsonl",
+                                            logs / f"schema-{index}.err", "codex", 10, self.root)
+                self.assertEqual("critical_schema_type", observed["stop_reason"])
+                self.assertEqual("unknown", BENCH.classify_status(observed, {"success": True}))
+
+    def test_metadata_failure_preserves_primary_terminal_cause(self):
+        provider = {"terminal_status": "failure", "stop_reason": None}
+        BENCH.record_metadata_failure(provider, "runtime_metadata_tightening_failed")
+        self.assertIsNone(provider["stop_reason"])
+        self.assertEqual("runtime_metadata_tightening_failed", provider["metadata_failure"])
+        standalone = {"terminal_status": None, "stop_reason": None}
+        BENCH.record_metadata_failure(standalone, "runtime_metadata_tightening_failed")
+        self.assertEqual("runtime_metadata_tightening_failed", standalone["stop_reason"])
 
     def test_resume_requires_exact_predecessor_identity_and_separate_workspace(self):
         manifest = self.prepare(); config = {"owner": BENCH.OWNER, "locked_at": "epoch"}

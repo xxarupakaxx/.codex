@@ -67,6 +67,9 @@ CAPABILITY_POLICIES = {
         "claude": {name: "unknown" for name in CAPABILITIES}},
     "ce471fd3105e522ed50e864223ec4386d4a4a8c9af6c470401b2967b12f8b787": {
         "codex": {name: "unknown" for name in CAPABILITIES},
+        "claude": {name: "unknown" for name in CAPABILITIES}},
+    "4e7dc9dc4f113ec43c63decbf25313e95b3e1e9de6102cce124dd39c506bf17b": {
+        "codex": {name: "unknown" for name in CAPABILITIES},
         "claude": {name: "unknown" for name in CAPABILITIES}}}
 CODEX_CONFIG = '''cli_auth_credentials_store = "keyring"
 default_permissions = "harness"
@@ -81,6 +84,9 @@ approval_policy = "never"
 
 [permissions.harness.network]
 enabled = false
+
+[features]
+plugins = false
 '''
 CLAUDE_SAFETY = {"sandbox": {"enabled": True, "allowUnsandboxedCommands": False,
                               "failIfUnavailable": True}}
@@ -1369,6 +1375,8 @@ def observe(runtime, line, seen):
         row = json.loads(line)
     except (UnicodeDecodeError, ValueError):
         return None
+    if not isinstance(row, dict):
+        return "critical_schema_type"
     event = row.get("hook_event_name") or row.get("hookEventName")
     if isinstance(event, str) and event:
         seen["hook_events"].add(event)
@@ -1384,8 +1392,11 @@ def observe(runtime, line, seen):
         if row.get("type") == "thread.started":
             seen["session_id"] = row.get("thread_id")
         item = row.get("item") if isinstance(row.get("item"), dict) else {}
-        if row.get("type") == "item.completed" and item.get("type") == "agent_message":
-            seen["model_response_observed"] = True
+        if row.get("type") == "item.completed":
+            if item.get("type") == "agent_message":
+                seen["model_response_observed"] = True
+            elif item.get("type") == "error":
+                seen["warning_items"] += 1
         if row.get("type") == "item.started":
             item_type = item.get("type")
             if item_type in ("command_execution", "file_change", "mcp_tool_call", "web_search"):
@@ -1399,6 +1410,8 @@ def observe(runtime, line, seen):
             seen["terminal_status"] = "failure"
         elif row.get("type") in ("turn.interrupted", "interrupt"):
             seen["terminal_status"] = "interruption"
+        elif row.get("type") == "turn.completed":
+            seen["turn_completed"] = True
         return "event_limit" if len(seen["tool_ids"]) > LIMITS["codex_tool_events"] else None
     if row.get("permission_denials"):
         seen["rejection"] = True
@@ -1434,6 +1447,9 @@ def observe(runtime, line, seen):
 
 
 def usage_limit_reason(runtime, seen):
+    if (runtime == "codex" and not seen.get("terminal_status") and
+            (not seen.get("turn_completed") or not seen.get("model_response_observed"))):
+        return "incomplete_turn"
     if runtime == "claude" and not seen.get("usage_observed"):
         return "output_usage_unknown"
     if runtime == "claude" and seen.get("output_tokens", 0) > LIMITS["claude_output_tokens"]:
@@ -1442,18 +1458,34 @@ def usage_limit_reason(runtime, seen):
 
 
 def classify_status(process, quality):
-    if quality.get("success"):
-        return "success"
     if process.get("rejection") or process.get("terminal_status") == "rejection":
         return "rejection"
-    if process.get("terminal_status") == "failure" or (isinstance(process.get("exit_code"), int) and
-                                                         process["exit_code"] != 0):
+    if process.get("terminal_status") == "failure":
         return "failure"
-    if process.get("stop_reason") in ("unknown_event_type", "output_usage_unknown"):
+    if process.get("stop_reason") in ("unknown_event_type", "critical_schema_type",
+                                      "output_usage_unknown", "incomplete_turn"):
         return "unknown"
+    if isinstance(process.get("exit_code"), int) and process["exit_code"] != 0:
+        return "failure"
     if process.get("stop_reason") or process.get("terminal_status") == "interruption":
         return "interruption"
+    if quality.get("success"):
+        return "success"
     return "quality_failure" if process.get("exit_code") == 0 else "unknown"
+
+
+def record_metadata_failure(process, reason):
+    """Keep a provider/runtime cause primary while recording fixed metadata failure labels."""
+    process["metadata_failure"] = reason
+    if not process.get("stop_reason") and not process.get("terminal_status"):
+        process["stop_reason"] = reason
+
+
+def final_quality_success(process, quality):
+    return bool(quality.get("success") and quality.get("runtime_effective") and
+                not process.get("stop_reason") and not process.get("terminal_status") and
+                process.get("codex_arg0_cleanup") != "failed" and
+                process.get("runtime_metadata_tightening") != "failed")
 
 def stop_group(process, absolute_deadline=None):
     try:
@@ -1527,7 +1559,8 @@ def run_finite(command, prompt, env, stdout_path, stderr_path, runtime, timeout,
             "unknown_item_types": set(), "hook_events": set(), "commands": [], "bash_tools": {},
             "denied_commands": [], "output_tokens": 0, "usage_observed": False,
             "session_output_tokens": 0, "session_usage_observed": False, "compact_events": 0,
-            "session_id": None, "rejection": False, "terminal_status": None}
+            "session_id": None, "rejection": False, "terminal_status": None,
+            "warning_items": 0, "turn_completed": False}
     seen["model_response_observed"] = False
     for path in (stdout_path, stderr_path):
         generated_root(path)
@@ -1636,6 +1669,7 @@ def run_finite(command, prompt, env, stdout_path, stderr_path, runtime, timeout,
             "stdout_bytes": totals.get(process.stdout, 0) if process is not None else 0,
             "stderr_bytes": totals.get(process.stderr, 0) if process is not None else 0,
             "rejection": seen["rejection"], "terminal_status": seen["terminal_status"],
+            "warning_items": seen["warning_items"], "turn_completed": seen["turn_completed"],
             "effective_model": next(iter(seen["models"])) if len(seen["models"]) == 1 else None,
             "effective_effort": next(iter(seen["efforts"])) if len(seen["efforts"]) == 1 else None,
             "observed_models": sorted(seen["models"]), "observed_efforts": sorted(seen["efforts"]),
@@ -2376,7 +2410,7 @@ def run_one(root, row, config, manifest, timeout):
         except SystemExit as error:
             process["runtime_metadata_tightening"] = "failed"
             process["runtime_metadata_tightening_reason"] = exception_reason(error)
-            process["stop_reason"] = "runtime_metadata_tightening_failed"
+            record_metadata_failure(process, "runtime_metadata_tightening_failed")
     elif row["runtime"] == "codex":
         try:
             cleanup_codex_arg0_helpers(root, manifest)
@@ -2419,9 +2453,7 @@ def run_one(root, row, config, manifest, timeout):
     process["resume_used"] = bool(session and row.get("fixture") == "long_resume")
     process["runtime_identity"] = confirm_runtime_identity(row["runtime"], process, config)
     quality["runtime_effective"] = process["runtime_identity"]["confirmed"]
-    quality["success"] = (quality["success"] and quality["runtime_effective"] and
-                          process.get("codex_arg0_cleanup") != "failed" and
-                          process.get("runtime_metadata_tightening") != "failed")
+    quality["success"] = final_quality_success(process, quality)
     status_name = classify_status(process, quality)
     metric_status = "failure" if status_name == "quality_failure" else status_name
     remaining = timeout - (time.monotonic() - run_started)

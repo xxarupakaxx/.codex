@@ -136,6 +136,37 @@ reportは`host_paired_qualified`と`host_deltas`をstrictな`paired_qualified`�
 
 I03/I04/I05すべてを含むmanifestでは、hostは6fixture × 2runtime × 2variant × 3repeat × 3candidateの216run、全scheduleは290runである。既存manifest・source pin・run identity・pair照合を使い、欠落、重複、失敗、unpairedを完了へ補完しない。両runtimeのsuccessful smokeを確認してから、retry 0、1run600秒、全体49時間の既存制約で実行する。
 
+## v19 Codex event判定とtoolchain候補
+
+v19候補のCodex JSONL集計では、`item.completed` の `item.type=error`（および同形のerror item）を非終端warningとして扱う。warningは `process.warning_items` の件数だけに反映し、warning本文から終了理由や原因を推定しない。
+
+正常完了の条件は次のとおりである。
+
+- 当該invocationで `turn.completed` と `item.completed` の `item.type=agent_message` を両方観測すること。
+- どちらかが欠け、優先すべきterminal reasonもない場合は `stop_reason=incomplete_turn`、statusは `unknown`、qualityはfalseとする。
+- top-level `error`、`turn.failed`、rejection、中断、その他のstop reasonは品質判定より先に主原因として確定する。
+- 主原因をwarningだけの成功判定で上書きせず、既存の `terminal_status` と `stop_reason` を保全する。
+- top-level JSONがobjectでない場合は、`critical_schema_type` として停止し、判定を `unknown` にする。公式の任意nested fieldは許容するが、raw本文は公開集計へ追加しない。
+
+runtime metadataの検査に失敗したときは、`metadata_failure=runtime_metadata_tightening_failed` を副次codeとして保存する。主原因がない場合だけmetadata failureをstop reasonへ設定し、既存status vocabularyと採用gateは変更しない。
+
+toolchainの候補は、公式 `@openai/codex@0.159.1` とDarwin arm64のplatform version `@openai/codex@0.159.1-darwin-arm64` を分離した環境で固定する。
+
+- 指定済みの `gpt-6.1-sol` と `effort=medium` を両Codex variantで維持する。
+- 専用設定の `CODEX_CONFIG[features] plugins=false` を両variantへ同じ条件で適用する。
+- Claude側のparityは `unknown` とし、Codexの設定から推測しない。
+
+source/config/runtime pinが変わった場合は旧ROOTを再利用しない。新ROOTでは現在のsourceとtoolをmanifestへ固定して準備する。認証・session・DBは持ち込まない。
+
+global CLIの更新や `--no-daemon` の追加はこの候補の範囲に含めず、既存のdaemon分離の扱いを維持する。0.159.1は公式isolated toolchainの候補であり、install、bootstrap、login、CLI実行をこの文書からは証明しない。
+
+旧smokeのcauseは `UNKNOWN` のままで、plugin bootstrapが停止したことも未証明である。したがって、原因の再分類、実行成功、採用を先取りしない。
+
+既存のbounded条件と採用gateは変えない。
+
+- retry 0、1run 600秒、全体49時間、全schedule 290runを維持する。
+- native/hostの分母・HOLD条件と `adoption_gate` の判定を維持する。
+
 ## 結果の判定
 
 `results/report.json`は、candidate × runtime × variantごとに期待数24を固定分母として、fixture × repeatのbaseline/candidate pairを保存する。I03のquiet失敗・保存済み結果取得とI04のgate確認は、合成scriptのcounterと正規化したnative command argvの完全一致が各1回のときだけ品質合格にする。I05は固定した実TypeScript CLIのnative command argvが1回で、機能testも通る場合だけ合格にする。`echo`などにcommand文字列を含めただけでは合格しない。部分実行を100%として表示せず、全pairの完了と各metricsの`coverage.<metric>.qualified`、scopeを別々に判定する。tool callが0件でも、collectorが0件を完全観測した場合は有効である。
