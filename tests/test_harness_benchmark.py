@@ -302,6 +302,7 @@ class HarnessBenchmarkTest(unittest.TestCase):
                             for row in manifest["comparison_bundles"].values()))
         self.assertEqual(BENCH.CODEX_CONFIG,
                          (self.root / "runtime/codex/home/config.toml").read_text())
+        self.assertEqual(1, BENCH.CODEX_CONFIG.count("[skills.bundled]\nenabled = false"))
         self.assertEqual("unsupported", manifest["fixture_tools"]["typescript_cli"]["state"])
         self.assertEqual("observed", manifest["fixture_tools"]["python_cli"]["state"])
         self.assertEqual(BENCH.FIXED_ENV, manifest["environment"]["fixed"])
@@ -377,6 +378,20 @@ class HarnessBenchmarkTest(unittest.TestCase):
         state = self.root / "runtime/claude/home/.local/hooks/state"
         state.rmdir(); state.symlink_to(self.root / "runtime/claude/home/.local/memory", target_is_directory=True)
         with self.assertRaisesRegex(SystemExit, "runtime state"):
+            BENCH.verify_runtime_state(self.root, manifest)
+
+    def test_runtime_state_rejects_old_codex_config_and_hash_drift(self):
+        manifest = self.prepare()
+        path = self.root / "runtime/codex/home/config.toml"
+        stanza = "\n[skills.bundled]\nenabled = false\n"
+        old_config = BENCH.CODEX_CONFIG.replace(stanza, "\n")
+        self.assertNotEqual(BENCH.CODEX_CONFIG, old_config)
+        path.write_text(old_config)
+        with self.assertRaisesRegex(SystemExit, "permission config"):
+            BENCH.verify_runtime_state(self.root, manifest)
+        path.write_text(BENCH.CODEX_CONFIG)
+        manifest["runtime_state_hashes"]["codex_config"] = hashlib.sha256(old_config.encode()).hexdigest()
+        with self.assertRaisesRegex(SystemExit, "permission config"):
             BENCH.verify_runtime_state(self.root, manifest)
 
     def test_private_tree_rejects_nested_public_file_and_special_entry(self):

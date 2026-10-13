@@ -153,14 +153,14 @@ runtime metadataの検査に失敗したときは、`metadata_failure=runtime_me
 toolchainの候補は、公式 `@openai/codex@0.159.1` とDarwin arm64のplatform version `@openai/codex@0.159.1-darwin-arm64` を分離した環境で固定する。
 
 - 指定済みの `gpt-6.1-sol` と `effort=medium` を両Codex variantで維持する。
-- 専用設定の `CODEX_CONFIG[features] plugins=false` を両variantへ同じ条件で適用する。
-- Claude側のparityは `unknown` とし、Codexの設定から推測しない。
+- 専用設定の `[features] plugins=false` と `[skills.bundled] enabled=false` を両Codex variantへ同じ条件で適用する。これは内蔵Skill seedを抑制する候補であり、既存の64 file capを保全するが、実smokeの成功や効果確認を意味しない。
+- Claudeの設定は変更せず、parityは `unknown` とし、Codexの設定から推測しない。
 
 source/config/runtime pinが変わった場合は旧ROOTを再利用しない。新ROOTでは現在のsourceとtoolをmanifestへ固定して準備する。認証・session・DBは持ち込まない。
 
 global CLIの更新や `--no-daemon` の追加はこの候補の範囲に含めず、既存のdaemon分離の扱いを維持する。0.159.1は公式isolated toolchainの候補であり、install、bootstrap、login、CLI実行をこの文書からは証明しない。
 
-旧smokeのcauseは `UNKNOWN` のままで、plugin bootstrapが停止したことも未証明である。したがって、原因の再分類、実行成功、採用を先取りしない。
+旧smokeのprimary causeとeffectは `UNKNOWN` のままで、plugin bootstrapが停止したことも未証明である。したがって、原因の再分類、実行成功、採用を先取りしない。
 
 既存のbounded条件と採用gateは変えない。
 

@@ -87,6 +87,9 @@ enabled = false
 
 [features]
 plugins = false
+
+[skills.bundled]
+enabled = false
 '''
 CLAUDE_SAFETY = {"sandbox": {"enabled": True, "allowUnsandboxedCommands": False,
                               "failIfUnavailable": True}}
