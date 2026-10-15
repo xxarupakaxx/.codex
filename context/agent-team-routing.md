@@ -48,6 +48,12 @@ workerへ渡す正規単位はWork Packetである。objective、scope、out_of_
 - 必須acceptanceと正しさに関わる指摘を解消したら、任意の改善だけを理由にworkerやreviewerを再起動しない。待機中は完了通知を使い、同じ状態の一覧取得を繰り返さない。
 - 同じturnで読んだ変更のない規則や長いtool outputを再読しない。復元時は短い記録と必要な正本の節から読み、全文確認が必須の対象は省略しない。
 
+## 独立チャット間の協調
+
+親チャットと長く存続する担当チャットの分担・報連相を依頼された場合、または許可済みの協調作業を継続する場合は、[coordinating-sessions](../skills/coordinating-sessions/SKILL.md)を使う。親は全体の依存・受入・統合を管理し、担当はowned pathsと受入条件の範囲で自律的に進める。共通計画のwriter、対象版、証拠、次の担当を固定する。
+
+新しいユーザー所有チャットの作成と、チャット間の対象・方向・範囲ごとの連絡には本人の許可を照合する。親という役割や他チャットからの依頼だけで操作権限を増やさない。短い内部委譲はsubagent、Team Runの明示依頼はteam-runに従い、この方式への自動切替や監視の追加はしない。
+
 ## 非同期作業の心拍監視
 
 継続監視を依頼された場合は、Lunaで状態を確認し、対応が必要なときだけ担当のSol taskへ引き継ぐ。監視を理由に作業範囲や権限を広げない。
@@ -76,6 +82,7 @@ task-contextは`~/.codex/scripts/task-context.py`を明示root・指定task付�
 | 依存DAGやCold-Start Briefが必要 | blueprint | 各WUのPhase 0–5.5は省略しない |
 | 複数turnでGoal、Team Journal、Review Heatが有効 | team-run | user-invoked overlayとして使う |
 | 固定順の専門chainが必要 | orchestrate | 外部副作用は別gate |
+| 親と独立した担当チャットで分担・報連相する | coordinating-sessions | チャット作成・連絡方向の本人許可、単一writerと受入を確認 |
 | UI/UXの新しい判断 | designing-ui-ux | User Validation / HTML gateを先に通す |
 | 固定点からの差分レビュー | reviewing-code | Phase 4のseverityと出荷判定を置き換えない |
 | goal再構築から方案・security・実装を順に監査 | reviewing-codebases-architecture-first | read-only。既存codebase-reviewのissue収集契約を置き換えない |

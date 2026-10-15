@@ -52,6 +52,7 @@ Skillは明示指定、または現在の作業に固有の知識・手順が役
 | 作業規模や完了境界を判断する | `context/workflow-rules.md` |
 | Phase記録、計画、引継ぎを管理する | `context/workflow-phases.md`、`context/memory-file-formats.md` |
 | 委譲・専門Skillを選ぶ | `context/agent-team-routing.md`、`rules/model-routing.md` |
+| 親と独立した担当チャットで分担・報連相する、または許可済みの協調作業を継続する | `skills/coordinating-sessions/SKILL.md` |
 | 複数moduleの影響を地図で追う | `context/codemap.md` |
 | 毎セッションの計画・費用・進捗を表示する | `context/session-dashboard.md`、`skills/viewing-plans/SKILL.md` |
 | Team Runを使う | `context/team-run.md`、`skills/team-run/SKILL.md` |
