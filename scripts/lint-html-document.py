@@ -4,6 +4,7 @@
 creating-html-documents で作る文書が対象である。既存の html_artifact_contract の検査
 （strict-self-contained）に、文書向けの検査を足す。描画や意味の判断が要る項目
 （強調した要素のラベル、はみ出し、SVG の文字の実寸、件数の一致、数値の根拠など）は調べない。
+外側へ描く outline は、箱の入れ子を追わずに、overflow を切る CSS がある文書で「要確認」にする。
 誤りがあれば終了コード 1、「要確認」だけなら 0 で終わる。
 """
 
@@ -32,6 +33,10 @@ CONTENT_FUNCTION = re.compile(r"\b(counters?|attr)\(")
 TEXT_ELEMENT_SELECTOR = re.compile(r"(?:^|[ >+~])text$")  # 修飾のない text 要素で終わるセレクタ
 UNSCOPED_TEXT_SELECTOR = re.compile(r"^(?:(?:svg|g)[ >])*text$")  # どの図の text にも当たるセレクタ
 FILL_DECLARATION = re.compile(r"(?:^|[;\s])fill\s*:")
+OUTLINE_DECLARATION = re.compile(r"(?:^|[;\s])outline(?:-style)?\s*:([^;]*)")
+OUTLINE_REMOVED = re.compile(r"\s*(?:none|0(?:px)?)\s*(?:!important)?\s*")
+INNER_OUTLINE_OFFSET = re.compile(r"(?:^|[;\s])outline-offset\s*:\s*-")
+CLIPPING_OVERFLOW = re.compile(r"(?:^|[;\s{])overflow(?:-[xy])?\s*:\s*(?:hidden|auto|scroll|clip)\b")
 
 
 class DocumentScanner(HTMLParser):
@@ -114,13 +119,30 @@ def pseudo_findings(selector: str, body: str) -> list[tuple]:
     return []
 
 
+def draws_outside_outline(selector: str, body: str) -> bool:
+    """focus の枠は外側に描く決まりなので除く。負の outline-offset なら枠の内側に収まる。"""
+    if ":focus" in selector:
+        return False
+    values = OUTLINE_DECLARATION.findall(body)
+    if not values or all(OUTLINE_REMOVED.fullmatch(value) for value in values):
+        return False
+    return not INNER_OUTLINE_OFFSET.search(body)
+
+
 def css_findings(css: str, text_fill: list[int]) -> list[tuple]:
-    findings, everywhere, scoped = [], [], []
-    for selectors, body in CSS_RULE.findall(CSS_COMMENT.sub("", css)):
+    findings, everywhere, scoped, outside = [], [], [], []
+    css = CSS_COMMENT.sub("", css)
+    for selectors, body in CSS_RULE.findall(css):
         for selector in (re.sub(r"\s*>\s*", ">", " ".join(part.split())) for part in selectors.split(",")):
             findings += pseudo_findings(selector, body)
+            if draws_outside_outline(selector, body):
+                outside.append(selector)
             if TEXT_ELEMENT_SELECTOR.search(selector) and FILL_DECLARATION.search(body):
                 (everywhere if UNSCOPED_TEXT_SELECTOR.match(selector) else scoped).append(selector)
+    if outside and CLIPPING_OVERFLOW.search(css):
+        message = (f"outline を外側へ描く規則「{outside[0]}」が {len(outside)} 個あり、overflow を切る CSS もある。"
+                   "overflow で切れる箱の中なら、outline-offset を線幅と同じ負の値にして内側に描く。")
+        findings.append((None, CHECK, "outline-outside", message))
     if not text_fill:
         return findings
     if everywhere:

@@ -125,6 +125,20 @@ class LintHtmlDocumentTests(unittest.TestCase):
     def test_should_pass_svg_text_coloured_by_class(self):
         self.assert_clean(page(SVG_TEXT.format(attrs='class="ink"'), css="svg text{fill:#111} .ink{fill:#222}"))
 
+    def test_should_flag_outlines_drawn_outside_when_the_document_clips_overflow(self):
+        out = self.assert_clean(page(css=".wf{overflow:hidden} .hl{outline:2px solid #176b34;outline-offset:1px}"), checks=1)
+        self.assertIn("要確認 outline-outside:", out)
+        self.assertIn(".hl", out)
+        self.assert_clean(page(css=".rows{overflow-x:auto} .hl.del{outline:2px dashed #a3302d}"), checks=1)
+
+    def test_should_pass_inner_focus_and_removed_outlines(self):
+        css = (".wf{overflow:hidden} .hl{outline:2px solid red;outline-offset:-2px} "
+               "a:focus-visible, summary:focus-visible{outline:3px solid blue;outline-offset:3px} .x{outline:none} .y{outline:0}")
+        self.assert_clean(page(css=css))
+
+    def test_should_not_flag_outlines_when_nothing_clips_overflow(self):
+        self.assert_clean(page(css=".hl{outline:2px solid red} .box{overflow:visible}"))
+
     def test_should_skip_artifacts_owned_by_other_skills(self):
         for kind, owner in (("session-dashboard", "session-dashboard"), ("html-plan", "viewing-plans"), ("html-prototype", "designing-ui-ux")):
             with self.subTest(kind):
