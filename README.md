@@ -58,6 +58,13 @@ commands/team-run.md と prompts/team-run.md は入口shimであり、正本を�
 
 skills/ask-skill-router/SKILL.mdで、user-invokedの進路変更とmodel-invokedの局所disciplineを分ける。Superpowers、team-run、orchestrate、blueprint、外部Skillの導入・更新は既定にせず、明示要求または条件付きgateで使う。必要なSkillだけを読み、成果とfresh検証を残す。
 
+## pstack
+
+poteto氏のpstack（cursor/plugins、MIT）を skills/pstack/ にvendorしている。入口は `$poteto-mode`、Cursor名からCodexへの読替えは skills/pstack/docs/harness/codex.md、固定commitと名前の対応は skills/pstack/UPSTREAM.md を見る。既存Skillと衝突する `tdd`、`teach`、`why` は `$pstack-tdd`、`$pstack-teach`、`$pstack-why` になる。pstackのSkillは明示呼び出し専用で、既定routeにしない。
+
+    python3 ~/.codex/scripts/sync-pstack.py           # upstream mainで再生成
+    python3 ~/.codex/scripts/sync-pstack.py --check   # 固定commitとの差分確認
+
 ## Codemap
 
 code-changing taskは最初のedit前にtask-local Codemapをrefresh / checkし、編集後もfreshnessを確認する。workspaceを検査し、codemap.json、codemap.lock、roadmap.htmlはtask memoryに置く。verified relationにはpath:line evidenceを付け、unknown relationを推測で埋めない。
