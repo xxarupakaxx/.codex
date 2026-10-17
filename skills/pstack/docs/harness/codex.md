@@ -25,6 +25,7 @@ Codex lists skills by the frontmatter `name`. Three pstack names collide with sk
 | Open a todolist | `update_plan`. Otherwise keep the list in your reply and update it at each phase. |
 | Run another pstack skill (`/name` or "the **name** skill") | Read `<pstack>/skills/<name>/SKILL.md` and follow it. When you tell the user to type it, write the Codex name from the table above, such as `$pstack-why`. |
 | `Grep`, `Glob` | `rg` and `rg --files` in the shell. |
+| List MCPs from the `mcps/` directory Cursor exposes | Use the MCP tools this Codex session offers and the `[mcp_servers]` tables in `~/.codex/config.toml`. Codex has no `mcps/` directory. |
 
 ## Subagent fields
 
