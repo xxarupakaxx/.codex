@@ -16,31 +16,31 @@ SPEC.loader.exec_module(browser)
 
 
 class OpenDefaultBrowserTest(unittest.TestCase):
-    def test_macos_resolves_https_handler_and_opens_file_with_that_app(self) -> None:
-        probe = subprocess.CompletedProcess([], 0, stdout="/Applications/Arc.app\n")
+    def test_macos_opens_file_in_existing_arc_without_new_instance(self) -> None:
         with (
             mock.patch.object(browser.sys, "platform", "darwin"),
-            mock.patch.object(browser.subprocess, "run", side_effect=[probe, probe]) as run,
+            mock.patch.object(browser.subprocess, "run") as run,
             mock.patch.object(Path, "resolve", return_value=Path("/tmp/dashboard.html")),
         ):
             self.assertTrue(browser.open_default_browser("/tmp/dashboard.html"))
 
-        self.assertEqual(
-            run.call_args_list[0].args[0][:3],
-            ["/usr/bin/osascript", "-l", "JavaScript"],
+        run.assert_called_once_with(
+            ["/usr/bin/open", "-a", "Arc", "file:///tmp/dashboard.html"],
+            check=True,
         )
-        self.assertEqual(
-            run.call_args_list[1],
-            mock.call(
-                [
-                    "/usr/bin/open",
-                    "-a",
-                    "/Applications/Arc.app",
-                    "file:///tmp/dashboard.html",
-                ],
-                check=True,
+
+    def test_arc_launch_failure_does_not_fall_back_to_another_browser(self) -> None:
+        with (
+            mock.patch.object(browser.sys, "platform", "darwin"),
+            mock.patch.object(
+                browser.subprocess, "run",
+                side_effect=subprocess.CalledProcessError(1, ["open", "-a", "Arc"]),
             ),
-        )
+            mock.patch.object(browser.webbrowser, "open") as fallback,
+        ):
+            with self.assertRaises(subprocess.CalledProcessError):
+                browser.open_default_browser("https://example.com/dashboard")
+        fallback.assert_not_called()
 
     def test_non_macos_uses_platform_default_browser(self) -> None:
         with (
