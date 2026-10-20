@@ -16,7 +16,7 @@ SPEC.loader.exec_module(browser)
 
 
 class OpenDefaultBrowserTest(unittest.TestCase):
-    def test_macos_opens_file_in_existing_arc_without_new_instance(self) -> None:
+    def test_macos_opens_file_without_selecting_an_app_or_new_instance(self) -> None:
         with (
             mock.patch.object(browser.sys, "platform", "darwin"),
             mock.patch.object(browser.subprocess, "run") as run,
@@ -25,16 +25,16 @@ class OpenDefaultBrowserTest(unittest.TestCase):
             self.assertTrue(browser.open_default_browser("/tmp/dashboard.html"))
 
         run.assert_called_once_with(
-            ["/usr/bin/open", "-a", "Arc", "file:///tmp/dashboard.html"],
+            ["/usr/bin/open", "file:///tmp/dashboard.html"],
             check=True,
         )
 
-    def test_arc_launch_failure_does_not_fall_back_to_another_browser(self) -> None:
+    def test_default_browser_launch_failure_does_not_silently_fall_back(self) -> None:
         with (
             mock.patch.object(browser.sys, "platform", "darwin"),
             mock.patch.object(
                 browser.subprocess, "run",
-                side_effect=subprocess.CalledProcessError(1, ["open", "-a", "Arc"]),
+                side_effect=subprocess.CalledProcessError(1, ["open", "https://example.com/dashboard"]),
             ),
             mock.patch.object(browser.webbrowser, "open") as fallback,
         ):

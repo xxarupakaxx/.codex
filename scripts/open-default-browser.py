@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Open a URL or local file in Arc on macOS, or the platform browser elsewhere."""
+"""Open a URL or local file with the platform default browser."""
 
 from __future__ import annotations
 
@@ -9,9 +9,6 @@ from pathlib import Path
 import subprocess
 import sys
 import webbrowser
-
-
-MACOS_BROWSER_APP = "Arc"
 
 
 def normalize_target(target: str) -> str:
@@ -24,7 +21,7 @@ def open_default_browser(target: str) -> bool:
     normalized = normalize_target(target)
     if sys.platform == "darwin":
         subprocess.run(
-            ["/usr/bin/open", "-a", MACOS_BROWSER_APP, normalized], check=True
+            ["/usr/bin/open", normalized], check=True
         )
         return True
     if os.name == "nt":
@@ -35,7 +32,7 @@ def open_default_browser(target: str) -> bool:
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        description="Open a target in the existing Arc app on macOS."
+        description="Open a target using the platform default browser."
     )
     parser.add_argument("target", help="URL or existing local file")
     args = parser.parse_args(argv)
