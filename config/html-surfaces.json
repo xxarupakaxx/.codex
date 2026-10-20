@@ -299,6 +299,19 @@
       "artifactKind": "html-document",
       "staticProfile": "strict-self-contained",
       "browserProfile": "html-document-matrix"
+    },
+    {
+      "id": "imozuru-report",
+      "route": "html",
+      "owner": "imozuru",
+      "source": "skills/imozuru/scripts/report.py",
+      "templates": [],
+      "outputPatterns": [
+        "~/.local/share/imozuru/topics/<topic>/report.html"
+      ],
+      "artifactKind": "html-document",
+      "staticProfile": "strict-self-contained",
+      "browserProfile": "html-document-matrix"
     }
   ],
   "surfaces": [
@@ -384,6 +397,7 @@
     {"path": "scripts/sync-roadmap.py", "contains": "30_plan.html", "reason": "canonical HTML plan input used by the sync gate", "removeWhen": "source resolver is moved to a manifest-driven contract"},
     {"path": "scripts/task-context.py", "contains": "30_plan.html", "reason": "canonical HTML plan input used by read-only context", "removeWhen": "source resolver is moved to a manifest-driven contract"},
     {"path": "scripts/task_completion.py", "contains": "30_plan.html", "reason": "canonical HTML plan input used by Phase 5 completion", "removeWhen": "source resolver is moved to a manifest-driven contract"},
-    {"path": "scripts/validate-agent-harness.py", "contains": "30_plan.html", "reason": "canonical HTML plan artifact validation", "removeWhen": "HTML plan validation is moved to a manifest-driven contract"}
+    {"path": "scripts/validate-agent-harness.py", "contains": "30_plan.html", "reason": "canonical HTML plan artifact validation", "removeWhen": "HTML plan validation is moved to a manifest-driven contract"},
+    {"path": "skills/imozuru/SKILL.md", "contains": "report.html", "reason": "Instructions reference the imozuru-report producer output; this guide does not generate HTML.", "removeWhen": "The contract scanner resolves producer ownership for guide references."}
   ]
 }
