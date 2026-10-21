@@ -18,6 +18,17 @@ Codex で sub-agent を起動する際のモデル/role選択ルール。
 
 圧縮後は要件・未完了Task・根拠の参照を短い記録から復元する。文脈不足や修正回数が増えた場合は、対象taskに限って必要な文脈とeffortを見直し、全taskを一律にmaxへ戻さない。同時起動上限は瞬間的な並列消費を抑える設定であり、総token削減率を保証しない。
 
+## 推論量と文脈の使い方
+
+通常の`codex`は既存のmaxを維持する。短い低リスク作業は`codex -p fast`（medium）、検証方法が明確な低リスクの通常実装は`codex -p balanced`（high）で新規起動できる。重要判断・承認・最終レビューに軽量profileを使わず、通常設定と既存のcapability class・専門roleを適用する。
+
+- 固定の共通指示とtool定義を安定させ、作業path・時刻・差分などの可変情報は作業入力へ置く。必要なSkillの指示は保持し、無関係なSkill一覧を毎回追加しない。
+- 必要な参照先が分かる場合は最初に渡し、独立した検索・読込を出力量の範囲内でまとめる。保存済み原典と同じ版の資料を再利用し、変更があれば該当箇所と依存を読み直す。
+- effortとモデルは作業開始時に選ぶ。重要判断・セキュリティ・最終レビューの品質を下げず、セッション途中の不要な切替でキャッシュを壊さない。
+- timeoutとproviderの失敗を区別し、有限のtimeout・retryとその理由を記録する。cancel時は停止手段のある子処理も止め、残った処理は明記する。完了条件を満たした後に新しい目的のない追加turnを作らない。
+
+起動方法と効果の確かめ方は[推論最適化の手引き](../context/inference-optimization.md)を参照する。profileは親セッションのeffort選択であり、sub-agentのmodel routingを置き換えない。
+
 ## Capability classesとruntime roster
 
 Workflow routeとmodel capability classは別軸である。
