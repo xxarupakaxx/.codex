@@ -13,25 +13,46 @@ import unittest
 from pathlib import Path
 from unittest import mock
 
-MODULE = Path(os.environ.get("HARNESS_HELPER_SOURCE", Path(__file__).resolve().parents[1] / "scripts/harness_fixture_helper.py"))
+REPO_ROOT = Path(__file__).resolve().parents[1]
+CLAUDE_ROOT = Path.home() / ".claude"
+MODULE = Path(os.environ.get("HARNESS_HELPER_SOURCE", REPO_ROOT / "scripts/harness_fixture_helper.py"))
 SPEC = importlib.util.spec_from_file_location("harness_fixture_helper", MODULE)
 helper = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(helper)
-
-SOURCES = {
-    "python": Path(sys.executable).resolve(),
-    "quiet_run": Path("/Users/yoshiki/ghq/github.com/xxarupakaxx/.codex/scripts/quiet-run.py"),
-    "handover_core": Path("/Users/yoshiki/ghq/github.com/xxarupakaxx/.codex/scripts/session_handover.py"),
-    "observations_core": Path("/Users/yoshiki/.claude/scripts/hook_observations.py"),
-    "node": Path("/opt/homebrew/Cellar/node/25.8.2/bin/node"),
-    "tsc_js": Path("/Users/yoshiki/ghq/github.com/THA-inc/arupaka-test-slack/node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/lib/_tsc.js"),
-}
 
 
 def sha(path):
     return hashlib.sha256(path.read_bytes()).hexdigest()
 
 
+# SOURCE_POLICY pins these files; they live in this repo and the sibling ~/.claude checkout.
+SOURCES = {
+    "python": Path(sys.executable).resolve(),
+    "quiet_run": REPO_ROOT / "scripts/quiet-run.py",
+    "handover_core": REPO_ROOT / "scripts/session_handover.py",
+    "observations_core": CLAUDE_ROOT / "scripts/hook_observations.py",
+}
+
+
+def reviewed_typescript():
+    # DEPENDENCY_POLICY pins exact node/tsc builds, so they are optional and overridable per machine.
+    paths = {"node": Path(os.environ.get("HARNESS_NODE_BIN", "/opt/homebrew/Cellar/node/25.8.2/bin/node")),
+             "tsc_js": Path(os.environ.get("HARNESS_TSC_JS", Path.home() / "ghq/github.com/THA-inc/arupaka-test-slack/"
+                                           "node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/lib/_tsc.js"))}
+    for role, path in paths.items():
+        if not path.is_file():
+            return {}, f"{role} not found at {path}; set HARNESS_NODE_BIN and HARNESS_TSC_JS"
+        if sha(path) != helper.DEPENDENCY_POLICY[role]:
+            return {}, f"{role} at {path} does not match DEPENDENCY_POLICY; set HARNESS_NODE_BIN and HARNESS_TSC_JS"
+    return paths, ""
+
+
+TYPESCRIPT, TYPESCRIPT_SKIP_REASON = reviewed_typescript()
+requires_typescript = unittest.skipUnless(TYPESCRIPT, TYPESCRIPT_SKIP_REASON)
+
+
+@unittest.skipUnless(SOURCES["observations_core"].is_file(),
+                     f"{SOURCES['observations_core']} is required by SOURCE_POLICY")
 class HelperTest(unittest.TestCase):
     def setUp(self):
         self.temp = tempfile.TemporaryDirectory(prefix="host-helper-", dir="/private/tmp")
@@ -39,10 +60,11 @@ class HelperTest(unittest.TestCase):
         for name in ("work", "raw", "ledger", "fake-home", "exports"):
             (self.root / name).mkdir(mode=0o700)
         source_rows = {}
-        for role, source in SOURCES.items():
-            target = source if role == "node" else self.root / "exports" / role
+        for role, source in {**SOURCES, **TYPESCRIPT}.items():
+            # Interpreters stay in place like supervise(); framework Pythons break when copied.
+            target = source if role in {"python", "node"} else self.root / "exports" / role
             if target != source:
-                shutil.copy2(source, target); os.chmod(target, 0o700 if role == "python" else 0o600)
+                shutil.copy2(source, target); os.chmod(target, 0o600)
             source_rows[role] = {"path": str(target), "sha256": sha(target), "role": role}
         self.binding = {"root": str(self.root), "run_id": "run-1", "nonce": "nonce-1",
                         "work_dir": str(self.root / "work"), "raw_dir": str(self.root / "raw"),
@@ -67,7 +89,7 @@ class HelperTest(unittest.TestCase):
             "ledger_dir": str(target / "ledger")})
         exports = target / "exports"; shutil.copytree(self.root / "exports", exports)
         for path in exports.iterdir():
-            os.chmod(path, 0o700 if path.name in {"python", "node"} else 0o600)
+            os.chmod(path, 0o600)
             value["sources"][path.name] = {"path": str(path), "sha256": sha(path), "role": path.name}
         return value
 
@@ -97,19 +119,20 @@ class HelperTest(unittest.TestCase):
         self.assertFalse(helper.bundle_file_allowed("host_fixture_helper", Path("host/unknown"),
                                                     "0" * 64, "fixed"))
 
+    @requires_typescript
     def test_dependencies_are_exact_absolute_reviewed_files(self):
-        node = Path("/opt/homebrew/Cellar/node/25.8.2/bin/node")
-        rows = helper.validate_dependencies(node, SOURCES["tsc_js"])
+        rows = helper.validate_dependencies(TYPESCRIPT["node"], TYPESCRIPT["tsc_js"])
         self.assertEqual(set(rows), {"node", "tsc_js"})
         bad = self.root / "wrong-node"; bad.write_bytes(b"not node"); os.chmod(bad, 0o700)
         with self.assertRaisesRegex(helper.HelperError, "source_hash_mismatch"):
-            helper.validate_dependencies(bad, SOURCES["tsc_js"])
+            helper.validate_dependencies(bad, TYPESCRIPT["tsc_js"])
 
+    @requires_typescript
     def test_supervise_exports_tsc_to_private_run_root(self):
         base = self.root / "supervised"
         staged = {role: Path(self.binding["sources"][role]["path"])
                   for role in ("quiet_run", "handover_core", "observations_core")}
-        dependencies = helper.validate_dependencies(SOURCES["node"], SOURCES["tsc_js"])
+        dependencies = helper.validate_dependencies(TYPESCRIPT["node"], TYPESCRIPT["tsc_js"])
         python = self.binding["sources"]["python"]
         row = {"candidate": "I05", "variant": "candidate", "fixture": "repo_tsc_once", "run_id": "supervised-tsc"}
         result = helper.supervise(base, row, {"files": {"component.ts": "const value: = ;\n"}},
@@ -247,6 +270,7 @@ class HelperTest(unittest.TestCase):
         self.assertEqual(9, result["evidence"]["operation_count"])
         self.assertEqual(9, len(result["evidence"]["operations"]))
 
+    @requires_typescript
     def test_typescript_shim_proves_two_runs_to_one_and_reuses_diagnostic(self):
         inputs = {"source": "const value: = ;\n"}
         raw = helper.run(self.request("I05", "repo_tsc_once", "raw", inputs), self.binding)
@@ -264,6 +288,7 @@ class HelperTest(unittest.TestCase):
         self.assertEqual(len(evidence["actual_exit_codes"]), 1)
         self.assertEqual(evidence["raw_diagnostic_sha256"], [facts["diagnostic_sha256"]])
 
+    @requires_typescript
     def test_process_counts_use_unique_observed_pids_only(self):
         inputs = {"source": "const value: = ;\n"}
         raw = helper.run(self.request("I05", "repo_tsc_once", "raw", inputs), self.binding)
@@ -276,6 +301,7 @@ class HelperTest(unittest.TestCase):
                           improved_counts["total_verified"]), (1, 2, 3))
         self.assertFalse(raw_counts["unverified_children_possible"])
 
+    @requires_typescript
     def test_tsc_marker_binds_run_task_nonce_and_rejects_tamper(self):
         helper.run(self.request("I05", "repo_tsc_once", inputs={"source": "const value: = ;\n"}), self.binding)
         marker = self.root / "work/shim-markers/1.complete.json"
@@ -285,12 +311,14 @@ class HelperTest(unittest.TestCase):
         with self.assertRaisesRegex(helper.HelperError, "tsc_completion_invalid"):
             helper._shim_records(helper.validate_binding(self.binding), ("1",))
 
+    @requires_typescript
     def test_tsc_marker_set_rejects_extra_file(self):
         helper.run(self.request("I05", "repo_tsc_once", inputs={"source": "const value: = ;\n"}), self.binding)
         extra = self.root / "work/shim-markers/extra"; extra.write_bytes(b""); extra.chmod(0o600)
         with self.assertRaisesRegex(helper.HelperError, "tsc_marker_set_invalid"):
             helper._shim_records(helper.validate_binding(self.binding), ("1",))
 
+    @requires_typescript
     def test_tsc_completion_exit_must_join_parent_operation(self):
         result = helper.run(self.request("I05", "repo_tsc_once", "raw",
                                         {"source": "const value: = ;\n"}), self.binding)
@@ -515,8 +543,7 @@ class HelperTest(unittest.TestCase):
         self.assertTrue(helper.BASELINE_PROVENANCE["codex_commit"].startswith("51ee53e"))
         self.assertTrue(helper.BASELINE_PROVENANCE["claude_commit"].startswith("7152ca3"))
         self.assertEqual(helper.BASELINE_POLICY, helper.BASELINE_PROVENANCE["control_hashes"])
-        roots = {"codex": Path("/Users/yoshiki/ghq/github.com/xxarupakaxx/.codex"),
-                 "claude": Path("/Users/yoshiki/.claude")}
+        roots = {"codex": REPO_ROOT, "claude": CLAUDE_ROOT}
         commits = {"codex": helper.BASELINE_PROVENANCE["codex_commit"],
                    "claude": helper.BASELINE_PROVENANCE["claude_commit"]}
         for fixture in helper.BASELINE_GOLDEN.values():
