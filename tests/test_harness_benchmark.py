@@ -21,6 +21,26 @@ SOURCE = Path(os.environ.get("HARNESS_BENCHMARK_SOURCE", Path.home() / ".codex/s
 SPEC = importlib.util.spec_from_file_location("harness_benchmark", SOURCE)
 BENCH = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(BENCH)
+# verify_capability_source() accepts capability sources only under this live-home directory.
+CAPABILITY_DASHBOARDS = Path.home() / ".codex/.local/dashboards"
+# DEPENDENCY_POLICY pins exact node/tsc builds; point these at matching builds on other machines.
+HOST_DEPENDENCIES = {
+    "node": Path(os.environ.get("HARNESS_NODE_BIN", "/opt/homebrew/Cellar/node/25.8.2/bin/node")),
+    "tsc_js": Path(os.environ.get("HARNESS_TSC_JS", Path.home() / "ghq/github.com/THA-inc/arupaka-test-slack/"
+                                  "node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/lib/_tsc.js"))}
+
+
+def host_dependency_skip_reason():
+    try:
+        BENCH.host_helper.validate_dependencies(HOST_DEPENDENCIES["node"], HOST_DEPENDENCIES["tsc_js"])
+    except BENCH.host_helper.HelperError as error:
+        return f"node/tsc_js do not match DEPENDENCY_POLICY ({error}); set HARNESS_NODE_BIN and HARNESS_TSC_JS"
+    return ""
+
+
+HOST_DEPENDENCY_SKIP_REASON = host_dependency_skip_reason()
+# Only tests whose prepare() validates host-helper dependencies need the reviewed node/tsc builds.
+requires_typescript = unittest.skipIf(bool(HOST_DEPENDENCY_SKIP_REASON), HOST_DEPENDENCY_SKIP_REASON)
 
 
 class HarnessBenchmarkTest(unittest.TestCase):
@@ -30,7 +50,12 @@ class HarnessBenchmarkTest(unittest.TestCase):
         self.capability = self.bundle / "capabilities.json"
         self.codex_native = self.bundle / "codex-native"
         self.codex_native.write_bytes(b"synthetic reviewed codex native\n"); self.codex_native.chmod(0o755)
-        capability_source = Path.home() / ".codex/.local/dashboards/01a12e4c-8b93-7273-b714-2ef118579c49/evidence/runtime-capabilities.md"
+        # The policy below is keyed by whatever this file hashes to, so a synthetic private file suffices.
+        CAPABILITY_DASHBOARDS.mkdir(parents=True, exist_ok=True)
+        capability_dir = Path(tempfile.mkdtemp(prefix="harness-benchmark-test-", dir=CAPABILITY_DASHBOARDS))
+        self.addCleanup(shutil.rmtree, capability_dir, ignore_errors=True)
+        capability_source = capability_dir / "runtime-capabilities.md"
+        capability_source.write_text("synthetic nonsecret runtime capability evidence\n"); capability_source.chmod(0o600)
         source_hash = hashlib.sha256(capability_source.read_bytes()).hexdigest()
         BENCH.CAPABILITY_POLICIES[source_hash] = {
             runtime: {name: "unknown" for name in BENCH.CAPABILITIES} for runtime in ("codex", "claude")}
@@ -67,8 +92,8 @@ class HarnessBenchmarkTest(unittest.TestCase):
                                   capability_evidence=str(self.capability), comparison_bundle=str(self.bundle_manifest),
                                   source_change_reason="unit-test", codex_bin=sys.executable, claude_bin=sys.executable,
                                   codex_native_bin=str(self.codex_native), tsc_bin=None,
-                                  host_node_bin="/opt/homebrew/Cellar/node/25.8.2/bin/node",
-                                  host_tsc_js="/Users/yoshiki/ghq/github.com/THA-inc/arupaka-test-slack/node_modules/.pnpm/typescript@5.9.3/node_modules/typescript/lib/_tsc.js")
+                                  host_node_bin=str(HOST_DEPENDENCIES["node"]),
+                                  host_tsc_js=str(HOST_DEPENDENCIES["tsc_js"]))
         with contextlib.redirect_stdout(io.StringIO()): BENCH.prepare(args)
         return BENCH.read_json(self.root / "results/manifest.json")
 
@@ -532,6 +557,7 @@ class HarnessBenchmarkTest(unittest.TestCase):
                                for variant in ("baseline", "candidate")]
                         self.assertEqual(manifest["prompt_hashes"][ids[0]], manifest["prompt_hashes"][ids[1]])
 
+    @requires_typescript
     def test_host_bundle_has_no_file_delta_and_stays_outside_model_workspace(self):
         self.use_host_bundle(); manifest = self.prepare(True)
         self.assertTrue(all(row["evaluation_kind"] == "host-supervised-helper"
@@ -587,6 +613,7 @@ class HarnessBenchmarkTest(unittest.TestCase):
         with self.assertRaisesRegex(SystemExit, "host bundle entry"):
             self.prepare()
 
+    @requires_typescript
     def test_host_prompt_has_one_slot_and_only_payload_materializes(self):
         self.use_host_bundle(); manifest = self.prepare()
         rows = [row for row in manifest["schedule"] if row.get("candidate") == "I03" and
@@ -600,6 +627,7 @@ class HarnessBenchmarkTest(unittest.TestCase):
             self.assertEqual(manifest["prompt_hashes"][row["run_id"]], hashlib.sha256(template.encode()).hexdigest())
         self.assertEqual(prompts[0], prompts[1])
 
+    @requires_typescript
     def test_host_parent_executes_neutral_once_and_hides_strategy(self):
         self.use_host_bundle(); manifest = self.prepare()
         results = []
@@ -615,6 +643,7 @@ class HarnessBenchmarkTest(unittest.TestCase):
         self.assertTrue(all(item["evidence"]["helper_mechanism_observed"] is False for item in results))
         self.assertNotIn("strategy", json.dumps(results[0]["result"]))
 
+    @requires_typescript
     def test_host_report_keeps_72_and_24_denominators_separate(self):
         self.use_host_bundle(); manifest = self.prepare(True)
         with contextlib.redirect_stdout(io.StringIO()): BENCH.report(argparse.Namespace(root=str(self.root)))
@@ -639,6 +668,7 @@ class HarnessBenchmarkTest(unittest.TestCase):
         self.assertIn("cli_quiet_retrieve", host["target_helpers"])
         self.assertEqual(6, host["target_helpers"]["cli_quiet_retrieve"]["expected_pairs"])
 
+    @requires_typescript
     def test_host_selection_ignores_missing_cost_and_tier(self):
         self.use_host_bundle(); manifest = self.prepare(True)
         target_ids = set(BENCH.host_helper.FIXTURE_TARGETS["I03"])
@@ -676,6 +706,7 @@ class HarnessBenchmarkTest(unittest.TestCase):
         self.assertEqual("NA", gate["cost_tier"]["tier"]["state"])
         self.assertEqual("HOLD", report["selection_gate"]["native_subset"]["state"])
 
+    @requires_typescript
     def test_host_selection_holds_for_missing_quality_status_observation(self):
         self.use_host_bundle(); manifest = self.prepare(True)
         target_ids = set(BENCH.host_helper.FIXTURE_TARGETS["I03"])
@@ -750,6 +781,7 @@ class HarnessBenchmarkTest(unittest.TestCase):
         self.assertTrue(value["evidence"]["pre_model_failed"])
         self.assertEqual("source_hash_mismatch", value["evidence"]["failure_reason"])
 
+    @requires_typescript
     def test_run_one_records_helper_outer_elapsed_without_sleep(self):
         self.use_host_bundle(); manifest = self.prepare()
         row = next(item for item in manifest["schedule"] if item.get("candidate") == "I03" and
@@ -769,6 +801,7 @@ class HarnessBenchmarkTest(unittest.TestCase):
         self.assertIsNone(value["materialized_prompt_sha256"])
         self.assertEqual("source_hash_mismatch", value["prompt"]["materialized_prompt_reason"])
 
+    @requires_typescript
     def test_host_stage_failure_after_claim_closes_pair_and_blocks_candidate(self):
         self.use_host_bundle(); manifest = self.prepare()
         row = next(item for item in manifest["schedule"] if item.get("candidate") == "I03" and
@@ -793,6 +826,7 @@ class HarnessBenchmarkTest(unittest.TestCase):
         self.assertGreaterEqual(value["timing"]["run_elapsed_ms"], 0)
         self.assertEqual(("pending_helper_blocked", reason), (marker["status"], marker["reason"]))
 
+    @requires_typescript
     def test_host_template_hash_drift_after_helper_closes_pair(self):
         self.use_host_bundle(); manifest = self.prepare()
         row = next(item for item in manifest["schedule"] if item.get("candidate") == "I03" and
@@ -839,6 +873,7 @@ class HarnessBenchmarkTest(unittest.TestCase):
             BENCH.normalize_host_result(row, value)
         self.assertFalse(value["evidence"].get("binding_valid", False))
 
+    @requires_typescript
     def test_valid_hash_normalization_failure_keeps_binding_but_unqualified(self):
         self.use_host_bundle(); manifest = self.prepare()
         rows = [row for row in manifest["schedule"] if row.get("candidate") == "I03" and
@@ -886,6 +921,7 @@ class HarnessBenchmarkTest(unittest.TestCase):
                 self.assertTrue(evidence["pre_model_failed"]); self.assertTrue(evidence["pair_stop"])
                 execute.assert_not_called()
 
+    @requires_typescript
     def test_target_helper_evidence_survives_pre_model_hash_and_command_failures(self):
         self.use_host_bundle(); manifest = self.prepare()
         rows = [row for row in manifest["schedule"] if row.get("candidate") == "I03" and
@@ -948,6 +984,7 @@ class HarnessBenchmarkTest(unittest.TestCase):
                 else:
                     execute.assert_not_called()
 
+    @requires_typescript
     def test_run_one_records_materialized_prompt_and_rejects_hash_mismatch(self):
         self.use_host_bundle(); manifest = self.prepare()
         rows = {item["variant"]: item for item in manifest["schedule"]
@@ -1030,6 +1067,7 @@ class HarnessBenchmarkTest(unittest.TestCase):
         self.assertEqual("codex_arg0_cleanup_failed", value["process"]["stop_reason"])
         self.assertFalse(value["quality"]["success"])
 
+    @requires_typescript
     def test_report_retains_pre_model_failed_mate_as_unpaired(self):
         self.use_host_bundle(); manifest = self.prepare(True)
         rows = {row["variant"]: row for row in manifest["schedule"]
