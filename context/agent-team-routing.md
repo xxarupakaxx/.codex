@@ -34,6 +34,8 @@ worker / implementer / reviewerを起動する前に、次の全条件を評価�
 
 同一fileの密結合作業、逐次依存、低価値の要約はleadが行う。Gateを満たした非自明な実装は、sessionのcollaboration capabilityがあればworker / implementerへ委任する。capabilityがないときは弱いmodelへfallbackせずleadが逐次実行し、不在理由を記録する。
 
+Agent()／subagentを足す前に、独自の文脈とloopが本当に要るかを問う。分け方は問題種別でなく文脈で切り、並列の独立作業・独立検証・文脈隔離のどれにも当たらない手順や領域知識はSkillとしてleadが読む。foldの基準と確認手順は `rules/agent-architecture.md`。
+
 ### Delegation Decision
 
 管理する作業では、route、実装単位、acceptance、write scopeを決めた直後、対象成果物への最初のwriteより前に、05_log.mdへDecisionを保存する。decision_unit、gate、passed_conditions、failed_conditions、local_first_evidence、reason、write_scope、acceptance、lead_retainsを含める。lead実装、read-only、capability不在も理由を省略しない。material change後は旧判断をsupersedesで参照し、write再開前に再評価する。
